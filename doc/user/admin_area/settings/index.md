@@ -17,7 +17,7 @@ documentation for all current settings and limits on the GitLab.com instance.
 
 To access the default page for Admin Area settings:
 
-1. On the top bar, select **Menu >** **{admin}** **Admin**.
+1. On the top bar, select **Menu > Admin**.
 1. In the left sidebar, select **Settings > General**.
 
 | Option | Description |
@@ -96,9 +96,10 @@ To access the default page for Admin Area settings:
 | Performance optimization | [Write to "authorized_keys" file](../../../administration/operations/fast_ssh_key_lookup.md#setting-up-fast-lookup-via-gitlab-shell) and [Push event activities limit and bulk push events](push_event_activities_limit.md). Various settings that affect GitLab performance. |
 | [User and IP rate limits](user_and_ip_rate_limits.md) | Configure limits for web and API requests. |
 | [Package Registry Rate Limits](package_registry_rate_limits.md) | Configure specific limits for Packages API requests that supersede the user and IP rate limits. |
+| [Git LFS Rate Limits](git_lfs_rate_limits.md) | Configure specific limits for Git LFS requests that supersede the user and IP rate limits. |
 | [Outbound requests](../../../security/webhooks.md) | Allow requests to the local network from hooks and services. |
 | [Protected Paths](protected_paths.md) | Configure paths to be protected by Rack Attack. |
-| [Incident Management](../../../operations/incident_management/index.md) Limits | Configure limits on the number of inbound alerts able to be sent to a project. |
+| [Incident Management](../../../operations/incident_management/index.md) Limits | Limit the number of inbound alerts that can be sent to a project. |
 | [Notes creation limit](rate_limit_on_notes_creation.md)| Set a rate limit on the note creation requests. |
 
 ## Geo
@@ -124,6 +125,6 @@ To access the default page for Admin Area settings:
 You can change the [Default first day of the week](../../profile/preferences.md)
 for the entire GitLab instance:
 
-1. On the top bar, select **Menu >** **{admin}** **Admin**.
+1. On the top bar, select **Menu > Admin**.
 1. In the left sidebar, select **Settings > Preferences**.
 1. Scroll to the **Localization** section, and select your desired first day of the week.

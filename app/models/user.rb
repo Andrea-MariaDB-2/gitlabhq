@@ -352,6 +352,10 @@ class User < ApplicationRecord
       transition active: :banned
     end
 
+    event :unban do
+      transition banned: :active
+    end
+
     event :deactivate do
       # Any additional changes to this event should be also
       # reflected in app/workers/users/deactivate_dormant_users_worker.rb
@@ -996,7 +1000,11 @@ class User < ApplicationRecord
 
   # Returns the groups a user is a member of, either directly or through a parent group
   def membership_groups
-    Gitlab::ObjectHierarchy.new(groups).base_and_descendants
+    if Feature.enabled?(:linear_user_membership_groups, self, default_enabled: :yaml)
+      groups.self_and_descendants
+    else
+      Gitlab::ObjectHierarchy.new(groups).base_and_descendants
+    end
   end
 
   # Returns a relation of groups the user has access to, including their parent
@@ -1542,7 +1550,11 @@ class User < ApplicationRecord
   end
 
   def manageable_groups(include_groups_with_developer_maintainer_access: false)
-    owned_and_maintainer_group_hierarchy = Gitlab::ObjectHierarchy.new(owned_or_maintainers_groups).base_and_descendants
+    owned_and_maintainer_group_hierarchy = if Feature.enabled?(:linear_user_manageable_groups, self, default_enabled: :yaml)
+                                             owned_or_maintainers_groups.self_and_descendants
+                                           else
+                                             Gitlab::ObjectHierarchy.new(owned_or_maintainers_groups).base_and_descendants
+                                           end
 
     if include_groups_with_developer_maintainer_access
       union_sql = ::Gitlab::SQL::Union.new(
@@ -2105,9 +2117,12 @@ class User < ApplicationRecord
       project_creation_levels << nil
     end
 
-    developer_groups_hierarchy = ::Gitlab::ObjectHierarchy.new(developer_groups).base_and_descendants
-    ::Group.where(id: developer_groups_hierarchy.select(:id),
-                  project_creation_level: project_creation_levels)
+    if Feature.enabled?(:linear_user_groups_with_developer_maintainer_project_access, self, default_enabled: :yaml)
+      developer_groups.self_and_descendants.where(project_creation_level: project_creation_levels)
+    else
+      developer_groups_hierarchy = ::Gitlab::ObjectHierarchy.new(developer_groups).base_and_descendants
+      ::Group.where(id: developer_groups_hierarchy.select(:id), project_creation_level: project_creation_levels)
+    end
   end
 
   def no_recent_activity?

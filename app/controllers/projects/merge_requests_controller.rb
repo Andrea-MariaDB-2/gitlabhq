@@ -35,12 +35,12 @@ class Projects::MergeRequestsController < Projects::MergeRequests::ApplicationCo
     push_frontend_feature_flag(:merge_request_widget_graphql, @project, default_enabled: :yaml)
     push_frontend_feature_flag(:default_merge_ref_for_diffs, @project, default_enabled: :yaml)
     push_frontend_feature_flag(:core_security_mr_widget_counts, @project)
-    push_frontend_feature_flag(:local_file_reviews, default_enabled: :yaml)
     push_frontend_feature_flag(:paginated_notes, @project, default_enabled: :yaml)
     push_frontend_feature_flag(:confidential_notes, @project, default_enabled: :yaml)
     push_frontend_feature_flag(:usage_data_i_testing_summary_widget_total, @project, default_enabled: :yaml)
     push_frontend_feature_flag(:improved_emoji_picker, project, default_enabled: :yaml)
     push_frontend_feature_flag(:diffs_virtual_scrolling, project, default_enabled: :yaml)
+    push_frontend_feature_flag(:restructured_mr_widget, project, default_enabled: :yaml)
 
     # Usage data feature flags
     push_frontend_feature_flag(:users_expanding_widgets_usage_data, @project, default_enabled: :yaml)
@@ -175,7 +175,7 @@ class Projects::MergeRequestsController < Projects::MergeRequests::ApplicationCo
     # or from cache if already merged
     @commits =
       set_commits_for_rendering(
-        @merge_request.recent_commits.with_latest_pipeline(@merge_request.source_branch).with_markdown_cache,
+        @merge_request.recent_commits(load_from_gitaly: true).with_latest_pipeline(@merge_request.source_branch).with_markdown_cache,
         commits_count: @merge_request.commits_count
       )
 

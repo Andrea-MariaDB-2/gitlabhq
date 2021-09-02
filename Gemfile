@@ -18,7 +18,7 @@ gem 'default_value_for', '~> 3.4.0'
 gem 'pg', '~> 1.1'
 
 gem 'rugged', '~> 1.1'
-gem 'grape-path-helpers', '~> 1.6.3'
+gem 'grape-path-helpers', '~> 1.7.0'
 
 gem 'faraday', '~> 1.0'
 gem 'marginalia', '~> 1.10.0'
@@ -101,7 +101,7 @@ gem 'graphql', '~> 1.11.8'
 # TODO: remove app/views/graphiql/rails/editors/show.html.erb when https://github.com/rmosolgo/graphiql-rails/pull/71 is released:
 # https://gitlab.com/gitlab-org/gitlab/issues/31747
 gem 'graphiql-rails', '~> 1.4.10'
-gem 'apollo_upload_server', '~> 2.0.2'
+gem 'apollo_upload_server', '~> 2.1.0'
 gem 'graphql-docs', '~> 1.6.0', group: [:development, :test]
 gem 'graphlient', '~> 0.4.0' # Used by BulkImport feature (group::import)
 
@@ -310,7 +310,7 @@ gem 'pg_query', '~> 2.1'
 gem 'premailer-rails', '~> 1.10.3'
 
 # LabKit: Tracing and Correlation
-gem 'gitlab-labkit', '~> 0.21.0'
+gem 'gitlab-labkit', '~> 0.21.1'
 # Thrift is a dependency of gitlab-labkit, we want a version higher than 0.14.0
 # because of https://gitlab.com/gitlab-org/gitlab/-/issues/321900
 gem 'thrift', '>= 0.14.0'
@@ -333,7 +333,7 @@ gem 'snowplow-tracker', '~> 0.6.1'
 # Metrics
 gem 'method_source', '~> 1.0', require: false
 gem 'webrick', '~> 1.6.1', require: false
-gem 'prometheus-client-mmap', '~> 0.12.0', require: 'prometheus/client'
+gem 'prometheus-client-mmap', '~> 0.14.0', require: 'prometheus/client'
 
 gem 'warning', '~> 1.2.0'
 
@@ -474,12 +474,12 @@ end
 gem 'spamcheck', '~> 0.1.0'
 
 # Gitaly GRPC protocol definitions
-gem 'gitaly', '~> 14.2.0.pre.rc2'
+gem 'gitaly', '~> 14.3.0.pre.rc1'
 
 # KAS GRPC protocol definitions
 gem 'kas-grpc', '~> 0.0.2'
 
-gem 'grpc', '~> 1.38.0'
+gem 'grpc', '~> 1.30.2'
 
 gem 'google-protobuf', '~> 3.17.1'
 

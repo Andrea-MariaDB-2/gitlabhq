@@ -14,53 +14,8 @@ CREATE FUNCTION integrations_set_type_new() RETURNS trigger
     LANGUAGE plpgsql
     AS $$
 BEGIN
-WITH mapping(old_type, new_type) AS (VALUES
-  ('AsanaService',                   'Integrations::Asana'),
-  ('AssemblaService',                'Integrations::Assembla'),
-  ('BambooService',                  'Integrations::Bamboo'),
-  ('BugzillaService',                'Integrations::Bugzilla'),
-  ('BuildkiteService',               'Integrations::Buildkite'),
-  ('CampfireService',                'Integrations::Campfire'),
-  ('ConfluenceService',              'Integrations::Confluence'),
-  ('CustomIssueTrackerService',      'Integrations::CustomIssueTracker'),
-  ('DatadogService',                 'Integrations::Datadog'),
-  ('DiscordService',                 'Integrations::Discord'),
-  ('DroneCiService',                 'Integrations::DroneCi'),
-  ('EmailsOnPushService',            'Integrations::EmailsOnPush'),
-  ('EwmService',                     'Integrations::Ewm'),
-  ('ExternalWikiService',            'Integrations::ExternalWiki'),
-  ('FlowdockService',                'Integrations::Flowdock'),
-  ('HangoutsChatService',            'Integrations::HangoutsChat'),
-  ('IrkerService',                   'Integrations::Irker'),
-  ('JenkinsService',                 'Integrations::Jenkins'),
-  ('JiraService',                    'Integrations::Jira'),
-  ('MattermostService',              'Integrations::Mattermost'),
-  ('MattermostSlashCommandsService', 'Integrations::MattermostSlashCommands'),
-  ('MicrosoftTeamsService',          'Integrations::MicrosoftTeams'),
-  ('MockCiService',                  'Integrations::MockCi'),
-  ('MockMonitoringService',          'Integrations::MockMonitoring'),
-  ('PackagistService',               'Integrations::Packagist'),
-  ('PipelinesEmailService',          'Integrations::PipelinesEmail'),
-  ('PivotaltrackerService',          'Integrations::Pivotaltracker'),
-  ('PrometheusService',              'Integrations::Prometheus'),
-  ('PushoverService',                'Integrations::Pushover'),
-  ('RedmineService',                 'Integrations::Redmine'),
-  ('SlackService',                   'Integrations::Slack'),
-  ('SlackSlashCommandsService',      'Integrations::SlackSlashCommands'),
-  ('TeamcityService',                'Integrations::Teamcity'),
-  ('UnifyCircuitService',            'Integrations::UnifyCircuit'),
-  ('YoutrackService',                'Integrations::Youtrack'),
-  ('WebexTeamsService',              'Integrations::WebexTeams'),
-
-  -- EE-only integrations
-  ('GithubService',                  'Integrations::Github'),
-  ('GitlabSlackApplicationService',  'Integrations::GitlabSlackApplication')
-)
-
-UPDATE integrations SET type_new = mapping.new_type
-FROM mapping
-WHERE integrations.id = NEW.id
-  AND mapping.old_type = NEW.type;
+UPDATE integrations SET type_new = regexp_replace(NEW.type, '\A(.+)Service\Z', 'Integrations::\1')
+WHERE integrations.id = NEW.id;
 RETURN NULL;
 
 END
@@ -264,6 +219,16 @@ CREATE TABLE incident_management_pending_alert_escalations (
     created_at timestamp with time zone NOT NULL,
     updated_at timestamp with time zone NOT NULL,
     status smallint
+)
+PARTITION BY RANGE (process_at);
+
+CREATE TABLE incident_management_pending_issue_escalations (
+    id bigint NOT NULL,
+    rule_id bigint NOT NULL,
+    issue_id bigint NOT NULL,
+    process_at timestamp with time zone NOT NULL,
+    created_at timestamp with time zone NOT NULL,
+    updated_at timestamp with time zone NOT NULL
 )
 PARTITION BY RANGE (process_at);
 
@@ -9641,9 +9606,22 @@ CREATE TABLE application_settings (
     encrypted_customers_dot_jwt_signing_key bytea,
     encrypted_customers_dot_jwt_signing_key_iv bytea,
     pypi_package_requests_forwarding boolean DEFAULT true NOT NULL,
+    max_yaml_size_bytes bigint DEFAULT 1048576 NOT NULL,
+    max_yaml_depth integer DEFAULT 100 NOT NULL,
+    throttle_unauthenticated_files_api_requests_per_period integer DEFAULT 125 NOT NULL,
+    throttle_unauthenticated_files_api_period_in_seconds integer DEFAULT 15 NOT NULL,
+    throttle_authenticated_files_api_requests_per_period integer DEFAULT 500 NOT NULL,
+    throttle_authenticated_files_api_period_in_seconds integer DEFAULT 15 NOT NULL,
+    throttle_unauthenticated_files_api_enabled boolean DEFAULT false NOT NULL,
+    throttle_authenticated_files_api_enabled boolean DEFAULT false NOT NULL,
+    throttle_authenticated_git_lfs_requests_per_period integer DEFAULT 1000 NOT NULL,
+    throttle_authenticated_git_lfs_period_in_seconds integer DEFAULT 60 NOT NULL,
+    throttle_authenticated_git_lfs_enabled boolean DEFAULT false NOT NULL,
     CONSTRAINT app_settings_container_reg_cleanup_tags_max_list_size_positive CHECK ((container_registry_cleanup_tags_service_max_list_size >= 0)),
     CONSTRAINT app_settings_ext_pipeline_validation_service_url_text_limit CHECK ((char_length(external_pipeline_validation_service_url) <= 255)),
     CONSTRAINT app_settings_registry_exp_policies_worker_capacity_positive CHECK ((container_registry_expiration_policies_worker_capacity >= 0)),
+    CONSTRAINT app_settings_yaml_max_depth_positive CHECK ((max_yaml_depth > 0)),
+    CONSTRAINT app_settings_yaml_max_size_positive CHECK ((max_yaml_size_bytes > 0)),
     CONSTRAINT check_17d9558205 CHECK ((char_length((kroki_url)::text) <= 1024)),
     CONSTRAINT check_2dba05b802 CHECK ((char_length(gitpod_url) <= 255)),
     CONSTRAINT check_51700b31b5 CHECK ((char_length(default_branch_name) <= 255)),
@@ -12118,7 +12096,11 @@ CREATE TABLE dast_profile_schedules (
     updated_at timestamp with time zone NOT NULL,
     active boolean DEFAULT true NOT NULL,
     cron text NOT NULL,
-    CONSTRAINT check_86531ea73f CHECK ((char_length(cron) <= 255))
+    cadence jsonb DEFAULT '{}'::jsonb NOT NULL,
+    timezone text NOT NULL,
+    starts_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT check_86531ea73f CHECK ((char_length(cron) <= 255)),
+    CONSTRAINT check_be4d1c3af1 CHECK ((char_length(timezone) <= 255))
 );
 
 COMMENT ON TABLE dast_profile_schedules IS '{"owner":"group::dynamic analysis","description":"Scheduling for scans using DAST Profiles"}';
@@ -12394,6 +12376,14 @@ CREATE SEQUENCE dependency_proxy_group_settings_id_seq
     CACHE 1;
 
 ALTER SEQUENCE dependency_proxy_group_settings_id_seq OWNED BY dependency_proxy_group_settings.id;
+
+CREATE TABLE dependency_proxy_image_ttl_group_policies (
+    created_at timestamp with time zone NOT NULL,
+    updated_at timestamp with time zone NOT NULL,
+    group_id bigint NOT NULL,
+    ttl integer DEFAULT 90,
+    enabled boolean DEFAULT false NOT NULL
+);
 
 CREATE TABLE dependency_proxy_manifests (
     id bigint NOT NULL,
@@ -12950,7 +12940,7 @@ CREATE TABLE error_tracking_error_events (
     payload jsonb DEFAULT '{}'::jsonb NOT NULL,
     created_at timestamp with time zone NOT NULL,
     updated_at timestamp with time zone NOT NULL,
-    CONSTRAINT check_92ecc3077b CHECK ((char_length(description) <= 255)),
+    CONSTRAINT check_92ecc3077b CHECK ((char_length(description) <= 1024)),
     CONSTRAINT check_c67d5b8007 CHECK ((char_length(level) <= 255)),
     CONSTRAINT check_f4b52474ad CHECK ((char_length(environment) <= 255))
 );
@@ -12993,7 +12983,7 @@ CREATE SEQUENCE error_tracking_errors_id_seq
 ALTER SEQUENCE error_tracking_errors_id_seq OWNED BY error_tracking_errors.id;
 
 CREATE TABLE events (
-    id integer NOT NULL,
+    id_convert_to_bigint integer DEFAULT 0 NOT NULL,
     project_id integer,
     author_id integer NOT NULL,
     target_id integer,
@@ -13003,7 +12993,7 @@ CREATE TABLE events (
     target_type character varying,
     group_id bigint,
     fingerprint bytea,
-    id_convert_to_bigint bigint DEFAULT 0 NOT NULL,
+    id bigint NOT NULL,
     CONSTRAINT check_97e06e05ad CHECK ((octet_length(fingerprint) <= 128))
 );
 
@@ -14184,6 +14174,15 @@ CREATE SEQUENCE incident_management_pending_alert_escalations_id_seq
 
 ALTER SEQUENCE incident_management_pending_alert_escalations_id_seq OWNED BY incident_management_pending_alert_escalations.id;
 
+CREATE SEQUENCE incident_management_pending_issue_escalations_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+ALTER SEQUENCE incident_management_pending_issue_escalations_id_seq OWNED BY incident_management_pending_issue_escalations.id;
+
 CREATE TABLE index_statuses (
     id integer NOT NULL,
     project_id integer NOT NULL,
@@ -14874,7 +14873,8 @@ CREATE TABLE members (
     requested_at timestamp without time zone,
     expires_at date,
     ldap boolean DEFAULT false NOT NULL,
-    override boolean DEFAULT false NOT NULL
+    override boolean DEFAULT false NOT NULL,
+    state smallint DEFAULT 0
 );
 
 CREATE SEQUENCE members_id_seq
@@ -15381,6 +15381,8 @@ CREATE TABLE namespace_settings (
     lock_delayed_project_removal boolean DEFAULT false NOT NULL,
     prevent_sharing_groups_outside_hierarchy boolean DEFAULT false NOT NULL,
     new_user_signups_cap integer,
+    setup_for_company boolean,
+    jobs_to_be_done smallint,
     CONSTRAINT check_0ba93c78c7 CHECK ((char_length(default_branch_name) <= 255))
 );
 
@@ -16996,7 +16998,7 @@ CREATE TABLE project_ci_cd_settings (
     auto_rollback_enabled boolean DEFAULT false NOT NULL,
     keep_latest_artifact boolean DEFAULT true NOT NULL,
     restrict_user_defined_variables boolean DEFAULT false NOT NULL,
-    job_token_scope_enabled boolean DEFAULT false NOT NULL
+    job_token_scope_enabled boolean DEFAULT true NOT NULL
 );
 
 CREATE SEQUENCE project_ci_cd_settings_id_seq
@@ -17342,7 +17344,6 @@ CREATE TABLE project_settings (
     squash_option smallint DEFAULT 3,
     has_confluence boolean DEFAULT false NOT NULL,
     has_vulnerabilities boolean DEFAULT false NOT NULL,
-    allow_editing_commit_messages boolean DEFAULT false NOT NULL,
     prevent_merge_without_jira_issue boolean DEFAULT false NOT NULL,
     cve_id_request_enabled boolean DEFAULT true NOT NULL,
     mr_default_target_self boolean DEFAULT false NOT NULL,
@@ -18329,7 +18330,8 @@ CREATE TABLE service_desk_settings (
     project_id bigint NOT NULL,
     issue_template_key character varying(255),
     outgoing_name character varying(255),
-    project_key character varying(255)
+    project_key character varying(255),
+    file_template_project_id bigint
 );
 
 CREATE TABLE shards (
@@ -20566,6 +20568,8 @@ ALTER TABLE ONLY incident_management_oncall_shifts ALTER COLUMN id SET DEFAULT n
 
 ALTER TABLE ONLY incident_management_pending_alert_escalations ALTER COLUMN id SET DEFAULT nextval('incident_management_pending_alert_escalations_id_seq'::regclass);
 
+ALTER TABLE ONLY incident_management_pending_issue_escalations ALTER COLUMN id SET DEFAULT nextval('incident_management_pending_issue_escalations_id_seq'::regclass);
+
 ALTER TABLE ONLY index_statuses ALTER COLUMN id SET DEFAULT nextval('index_statuses_id_seq'::regclass);
 
 ALTER TABLE ONLY insights ALTER COLUMN id SET DEFAULT nextval('insights_id_seq'::regclass);
@@ -21723,6 +21727,9 @@ ALTER TABLE ONLY dependency_proxy_blobs
 ALTER TABLE ONLY dependency_proxy_group_settings
     ADD CONSTRAINT dependency_proxy_group_settings_pkey PRIMARY KEY (id);
 
+ALTER TABLE ONLY dependency_proxy_image_ttl_group_policies
+    ADD CONSTRAINT dependency_proxy_image_ttl_group_policies_pkey PRIMARY KEY (group_id);
+
 ALTER TABLE ONLY dependency_proxy_manifests
     ADD CONSTRAINT dependency_proxy_manifests_pkey PRIMARY KEY (id);
 
@@ -21998,6 +22005,9 @@ ALTER TABLE ONLY incident_management_oncall_shifts
 
 ALTER TABLE ONLY incident_management_pending_alert_escalations
     ADD CONSTRAINT incident_management_pending_alert_escalations_pkey PRIMARY KEY (id, process_at);
+
+ALTER TABLE ONLY incident_management_pending_issue_escalations
+    ADD CONSTRAINT incident_management_pending_issue_escalations_pkey PRIMARY KEY (id, process_at);
 
 ALTER TABLE ONLY index_statuses
     ADD CONSTRAINT index_statuses_pkey PRIMARY KEY (id);
@@ -23814,9 +23824,9 @@ CREATE UNIQUE INDEX index_daily_build_group_report_results_unique_columns ON ci_
 
 CREATE INDEX index_dast_profile_schedules_active_next_run_at ON dast_profile_schedules USING btree (active, next_run_at);
 
-CREATE INDEX index_dast_profile_schedules_on_dast_profile_id ON dast_profile_schedules USING btree (dast_profile_id);
+CREATE UNIQUE INDEX index_dast_profile_schedules_on_dast_profile_id ON dast_profile_schedules USING btree (dast_profile_id);
 
-CREATE UNIQUE INDEX index_dast_profile_schedules_on_project_id_and_dast_profile_id ON dast_profile_schedules USING btree (project_id, dast_profile_id);
+CREATE INDEX index_dast_profile_schedules_on_project_id ON dast_profile_schedules USING btree (project_id);
 
 CREATE INDEX index_dast_profile_schedules_on_user_id ON dast_profile_schedules USING btree (user_id);
 
@@ -24045,6 +24055,14 @@ CREATE INDEX index_esc_protected_branches_on_protected_branch_id ON external_sta
 CREATE UNIQUE INDEX index_escalation_rules_on_all_attributes ON incident_management_escalation_rules USING btree (policy_id, oncall_schedule_id, status, elapsed_time_seconds, user_id);
 
 CREATE INDEX index_escalation_rules_on_user ON incident_management_escalation_rules USING btree (user_id);
+
+CREATE INDEX index_et_errors_on_project_id_and_status_and_events_count ON error_tracking_errors USING btree (project_id, status, events_count);
+
+CREATE INDEX index_et_errors_on_project_id_and_status_and_first_seen_at ON error_tracking_errors USING btree (project_id, status, first_seen_at);
+
+CREATE INDEX index_et_errors_on_project_id_and_status_and_id ON error_tracking_errors USING btree (project_id, status, id);
+
+CREATE INDEX index_et_errors_on_project_id_and_status_and_last_seen_at ON error_tracking_errors USING btree (project_id, status, last_seen_at);
 
 CREATE INDEX index_events_on_action ON events USING btree (action);
 
@@ -24297,6 +24315,10 @@ CREATE INDEX index_incident_management_pending_alert_escalations_on_alert_id ON 
 CREATE INDEX index_incident_management_pending_alert_escalations_on_rule_id ON ONLY incident_management_pending_alert_escalations USING btree (rule_id);
 
 CREATE INDEX index_incident_management_pending_alert_escalations_on_schedule ON ONLY incident_management_pending_alert_escalations USING btree (schedule_id);
+
+CREATE INDEX index_incident_management_pending_issue_escalations_on_issue_id ON ONLY incident_management_pending_issue_escalations USING btree (issue_id);
+
+CREATE INDEX index_incident_management_pending_issue_escalations_on_rule_id ON ONLY incident_management_pending_issue_escalations USING btree (rule_id);
 
 CREATE UNIQUE INDEX index_index_statuses_on_project_id ON index_statuses USING btree (project_id);
 
@@ -25394,6 +25416,8 @@ CREATE INDEX index_serverless_domain_cluster_on_pages_domain_id ON serverless_do
 
 CREATE INDEX index_service_desk_enabled_projects_on_id_creator_id_created_at ON projects USING btree (id, creator_id, created_at) WHERE (service_desk_enabled = true);
 
+CREATE INDEX index_service_desk_settings_on_file_template_project_id ON service_desk_settings USING btree (file_template_project_id);
+
 CREATE UNIQUE INDEX index_shards_on_name ON shards USING btree (name);
 
 CREATE UNIQUE INDEX index_site_profile_secret_variables_on_site_profile_id_and_key ON dast_site_profile_secret_variables USING btree (dast_site_profile_id, key);
@@ -25904,8 +25928,6 @@ CREATE INDEX tmp_idx_deduplicate_vulnerability_occurrences ON vulnerability_occu
 
 CREATE INDEX tmp_idx_on_namespaces_delayed_project_removal ON namespaces USING btree (id) WHERE (delayed_project_removal = true);
 
-CREATE INDEX tmp_index_approval_project_rules_scanners ON approval_project_rules USING gin (scanners) WHERE (scanners @> '{cluster_image_scanning}'::text[]);
-
 CREATE INDEX tmp_index_namespaces_empty_traversal_ids_with_child_namespaces ON namespaces USING btree (id) WHERE ((parent_id IS NOT NULL) AND (traversal_ids = '{}'::integer[]));
 
 CREATE INDEX tmp_index_namespaces_empty_traversal_ids_with_root_namespaces ON namespaces USING btree (id) WHERE ((parent_id IS NULL) AND (traversal_ids = '{}'::integer[]));
@@ -26256,6 +26278,9 @@ ALTER TABLE ONLY clusters_applications_runners
 
 ALTER TABLE ONLY incident_management_escalation_rules
     ADD CONSTRAINT fk_0314ee86eb FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE;
+
+ALTER TABLE ONLY service_desk_settings
+    ADD CONSTRAINT fk_03afb71f06 FOREIGN KEY (file_template_project_id) REFERENCES projects(id) ON DELETE SET NULL;
 
 ALTER TABLE ONLY design_management_designs_versions
     ADD CONSTRAINT fk_03c671965c FOREIGN KEY (design_id) REFERENCES design_management_designs(id) ON DELETE CASCADE;
@@ -27106,6 +27131,9 @@ ALTER TABLE ONLY incident_management_oncall_participants
 ALTER TABLE ONLY events
     ADD CONSTRAINT fk_rails_0434b48643 FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE;
 
+ALTER TABLE incident_management_pending_issue_escalations
+    ADD CONSTRAINT fk_rails_0470889ee5 FOREIGN KEY (rule_id) REFERENCES incident_management_escalation_rules(id) ON DELETE CASCADE;
+
 ALTER TABLE ONLY ip_restrictions
     ADD CONSTRAINT fk_rails_04a93778d5 FOREIGN KEY (group_id) REFERENCES namespaces(id) ON DELETE CASCADE;
 
@@ -27360,6 +27388,9 @@ ALTER TABLE ONLY reviews
 
 ALTER TABLE ONLY draft_notes
     ADD CONSTRAINT fk_rails_2a8dac9901 FOREIGN KEY (author_id) REFERENCES users(id) ON DELETE CASCADE;
+
+ALTER TABLE ONLY dependency_proxy_image_ttl_group_policies
+    ADD CONSTRAINT fk_rails_2b1896d021 FOREIGN KEY (group_id) REFERENCES namespaces(id) ON DELETE CASCADE;
 
 ALTER TABLE ONLY group_group_links
     ADD CONSTRAINT fk_rails_2b2353ca49 FOREIGN KEY (shared_with_group_id) REFERENCES namespaces(id) ON DELETE CASCADE;
@@ -27711,6 +27742,9 @@ ALTER TABLE ONLY status_page_published_incidents
 
 ALTER TABLE ONLY deployment_clusters
     ADD CONSTRAINT fk_rails_6359a164df FOREIGN KEY (deployment_id) REFERENCES deployments(id) ON DELETE CASCADE;
+
+ALTER TABLE incident_management_pending_issue_escalations
+    ADD CONSTRAINT fk_rails_636678b3bd FOREIGN KEY (issue_id) REFERENCES issues(id) ON DELETE CASCADE;
 
 ALTER TABLE ONLY evidences
     ADD CONSTRAINT fk_rails_6388b435a6 FOREIGN KEY (release_id) REFERENCES releases(id) ON DELETE CASCADE;

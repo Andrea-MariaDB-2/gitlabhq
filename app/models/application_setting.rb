@@ -343,6 +343,8 @@ class ApplicationSetting < ApplicationRecord
 
   validates :snippet_size_limit, numericality: { only_integer: true, greater_than: 0 }
   validates :wiki_page_max_content_bytes, numericality: { only_integer: true, greater_than_or_equal_to: 1.kilobytes }
+  validates :max_yaml_size_bytes, numericality: { only_integer: true, greater_than: 0 }, presence: true
+  validates :max_yaml_depth, numericality: { only_integer: true, greater_than: 0 }, presence: true
 
   validates :email_restrictions, untrusted_regexp: true
 
@@ -479,11 +481,27 @@ class ApplicationSetting < ApplicationRecord
             presence: true,
             numericality: { only_integer: true, greater_than: 0 }
 
+  validates :throttle_unauthenticated_files_api_requests_per_period,
+            presence: true,
+            numericality: { only_integer: true, greater_than: 0 }
+
+  validates :throttle_unauthenticated_files_api_period_in_seconds,
+            presence: true,
+            numericality: { only_integer: true, greater_than: 0 }
+
   validates :throttle_authenticated_api_requests_per_period,
             presence: true,
             numericality: { only_integer: true, greater_than: 0 }
 
   validates :throttle_authenticated_api_period_in_seconds,
+            presence: true,
+            numericality: { only_integer: true, greater_than: 0 }
+
+  validates :throttle_authenticated_git_lfs_requests_per_period,
+            presence: true,
+            numericality: { only_integer: true, greater_than: 0 }
+
+  validates :throttle_authenticated_git_lfs_period_in_seconds,
             presence: true,
             numericality: { only_integer: true, greater_than: 0 }
 
@@ -500,6 +518,14 @@ class ApplicationSetting < ApplicationRecord
             numericality: { only_integer: true, greater_than: 0 }
 
   validates :throttle_authenticated_packages_api_period_in_seconds,
+            presence: true,
+            numericality: { only_integer: true, greater_than: 0 }
+
+  validates :throttle_authenticated_files_api_requests_per_period,
+            presence: true,
+            numericality: { only_integer: true, greater_than: 0 }
+
+  validates :throttle_authenticated_files_api_period_in_seconds,
             presence: true,
             numericality: { only_integer: true, greater_than: 0 }
 

@@ -1,3 +1,5 @@
+export const MINIMUM_SEARCH_LENGTH = 3;
+
 export const TYPE_CI_RUNNER = 'Ci::Runner';
 export const TYPE_EPIC = 'Epic';
 export const TYPE_GROUP = 'Group';
@@ -12,3 +14,4 @@ export const TYPE_SITE_PROFILE = 'DastSiteProfile';
 export const TYPE_USER = 'User';
 export const TYPE_VULNERABILITY = 'Vulnerability';
 export const TYPE_NOTE = 'Note';
+export const TYPE_DISCUSSION = 'Discussion';

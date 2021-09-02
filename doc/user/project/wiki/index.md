@@ -105,7 +105,7 @@ Wiki pages are stored as files in a Git repository, so certain characters have a
 
 ### Length restrictions for file and directory names
 
-> - [Introduced](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/24364) in GitLab 12.8.
+> [Introduced](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/24364) in GitLab 12.8.
 
 Many common file systems have a [limit of 255 bytes](https://en.wikipedia.org/wiki/Comparison_of_file_systems#Limits)
 for file and directory names. Git and GitLab both support paths exceeding
@@ -123,7 +123,7 @@ may not be able to check out the wiki locally afterward.
 
 ## Edit a wiki page
 
-You need the [Developer role](../../permissions.md) or higher to edit a wiki page:
+You need at least the [Developer role](../../permissions.md) to edit a wiki page:
 
 1. Go to your project or group and select **Wiki**.
 1. Go to the page you want to edit.
@@ -138,7 +138,7 @@ For an example, read [Table of contents](../../markdown.md#table-of-contents).
 
 ## Delete a wiki page
 
-You need the [Maintainer role](../../permissions.md) or higher to delete a wiki page:
+You need at least the [Maintainer role](../../permissions.md) to delete a wiki page:
 
 1. Go to your project or group and select **Wiki**.
 1. Go to the page you want to delete.
@@ -148,7 +148,7 @@ You need the [Maintainer role](../../permissions.md) or higher to delete a wiki 
 
 ## Move a wiki page
 
-You need the [Developer role](../../permissions.md) or higher to move a wiki page:
+You need at least the [Developer role](../../permissions.md) to move a wiki page:
 
 1. Go to your project or group and select **Wiki**.
 1. Go to the page you want to move.
@@ -175,7 +175,7 @@ From the history page you can see:
 
 ### View changes between page versions
 
-> - [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/15242) in GitLab 13.2.
+> [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/15242) in GitLab 13.2.
 
 You can see the changes made in a version of a wiki page, similar to versioned diff file views:
 
@@ -201,9 +201,9 @@ Commits to wikis are not counted in [repository analytics](../../analytics/repos
 
 ## Customize sidebar
 
-> - [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/23109) in GitLab 13.8, the sidebar can be customized by selecting the **Edit sidebar** button.
+> [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/23109) in GitLab 13.8, the sidebar can be customized by selecting the **Edit sidebar** button.
 
-You need Developer [permissions](../../permissions.md) or higher to customize the wiki
+You need at least the [Developer role](../../permissions.md) to customize the wiki
 navigation sidebar. This process creates a wiki page named `_sidebar` which fully
 replaces the default sidebar navigation:
 
@@ -238,7 +238,7 @@ Administrators for self-managed GitLab installs can
 
 ## Group wikis **(PREMIUM)**
 
-> - [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/13195) in [GitLab Premium](https://about.gitlab.com/pricing/) 13.5.
+> [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/13195) in [GitLab Premium](https://about.gitlab.com/pricing/) 13.5.
 
 Group wikis work the same way as project wikis. Their usage is similar to project
 wikis, with a few limitations:
@@ -306,7 +306,7 @@ to disable the wiki but toggle it on (in blue).
 
 ## Content Editor **(FREE)**
 
-> - [Introduced](https://gitlab.com/groups/gitlab-org/-/epics/5643) in GitLab 14.0.
+> [Introduced](https://gitlab.com/groups/gitlab-org/-/epics/5643) in GitLab 14.0.
 
 GitLab version 14.0 introduces a WYSIWYG editing experience for GitLab Flavored Markdown
 in Wikis through the [Content Editor](../../../development/fe_guide/content_editor.md).

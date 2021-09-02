@@ -1,6 +1,6 @@
 ---
-stage: Plan
-group: Project Management
+stage: Ecosystem
+group: Integrations
 info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#designated-technical-writers
 ---
 
@@ -56,7 +56,7 @@ Returns [`CiConfig`](#ciconfig).
 
 ### `Query.ciMinutesUsage`
 
-The monthly CI minutes usage data for the current user.
+Monthly CI minutes usage data for the current user.
 
 Returns [`CiMinutesNamespaceMonthlyUsageConnection`](#ciminutesnamespacemonthlyusageconnection).
 
@@ -74,7 +74,7 @@ Returns [`ContainerRepositoryDetails`](#containerrepositorydetails).
 
 | Name | Type | Description |
 | ---- | ---- | ----------- |
-| <a id="querycontainerrepositoryid"></a>`id` | [`ContainerRepositoryID!`](#containerrepositoryid) | The global ID of the container repository. |
+| <a id="querycontainerrepositoryid"></a>`id` | [`ContainerRepositoryID!`](#containerrepositoryid) | Global ID of the container repository. |
 
 ### `Query.currentLicense`
 
@@ -185,7 +185,7 @@ Returns [`Issue`](#issue).
 
 | Name | Type | Description |
 | ---- | ---- | ----------- |
-| <a id="queryissueid"></a>`id` | [`IssueID!`](#issueid) | The global ID of the issue. |
+| <a id="queryissueid"></a>`id` | [`IssueID!`](#issueid) | Global ID of the issue. |
 
 ### `Query.iteration`
 
@@ -219,7 +219,7 @@ Returns [`MergeRequest`](#mergerequest).
 
 | Name | Type | Description |
 | ---- | ---- | ----------- |
-| <a id="querymergerequestid"></a>`id` | [`MergeRequestID!`](#mergerequestid) | The global ID of the merge request. |
+| <a id="querymergerequestid"></a>`id` | [`MergeRequestID!`](#mergerequestid) | Global ID of the merge request. |
 
 ### `Query.metadata`
 
@@ -304,7 +304,7 @@ Returns [`QueryComplexity`](#querycomplexity).
 
 ### `Query.runner`
 
-Find a runner. Available only when feature flag `runner_graphql_query` is enabled. This flag is enabled by default.
+Find a runner.
 
 Returns [`CiRunner`](#cirunner).
 
@@ -341,7 +341,7 @@ Returns [`RunnerSetup`](#runnersetup).
 
 ### `Query.runners`
 
-Find runners visible to the current user. Available only when feature flag `runner_graphql_query` is enabled. This flag is enabled by default.
+Find runners visible to the current user.
 
 Returns [`CiRunnerConnection`](#cirunnerconnection).
 
@@ -504,7 +504,7 @@ Returns [`Vulnerability`](#vulnerability).
 
 | Name | Type | Description |
 | ---- | ---- | ----------- |
-| <a id="queryvulnerabilityid"></a>`id` | [`VulnerabilityID!`](#vulnerabilityid) | The Global ID of the Vulnerability. |
+| <a id="queryvulnerabilityid"></a>`id` | [`VulnerabilityID!`](#vulnerabilityid) | Global ID of the Vulnerability. |
 
 ## `Mutation` type
 
@@ -631,7 +631,7 @@ Input type: `ApiFuzzingCiConfigurationCreateInput`
 | <a id="mutationapifuzzingciconfigurationcreateauthusername"></a>`authUsername` | [`String`](#string) | CI variable containing the username for authenticating with the target API. |
 | <a id="mutationapifuzzingciconfigurationcreateclientmutationid"></a>`clientMutationId` | [`String`](#string) | A unique identifier for the client performing the mutation. |
 | <a id="mutationapifuzzingciconfigurationcreateprojectpath"></a>`projectPath` | [`ID!`](#id) | Full path of the project. |
-| <a id="mutationapifuzzingciconfigurationcreatescanmode"></a>`scanMode` | [`ApiFuzzingScanMode!`](#apifuzzingscanmode) | The mode for API fuzzing scans. |
+| <a id="mutationapifuzzingciconfigurationcreatescanmode"></a>`scanMode` | [`ApiFuzzingScanMode!`](#apifuzzingscanmode) | Mode for API fuzzing scans. |
 | <a id="mutationapifuzzingciconfigurationcreatescanprofile"></a>`scanProfile` | [`String`](#string) | Name of a default profile to use for scanning. Ex: Quick-10. |
 | <a id="mutationapifuzzingciconfigurationcreatetarget"></a>`target` | [`String!`](#string) | URL for the target of API fuzzing scans. |
 
@@ -642,7 +642,7 @@ Input type: `ApiFuzzingCiConfigurationCreateInput`
 | <a id="mutationapifuzzingciconfigurationcreateclientmutationid"></a>`clientMutationId` | [`String`](#string) | A unique identifier for the client performing the mutation. |
 | <a id="mutationapifuzzingciconfigurationcreateconfigurationyaml"></a>`configurationYaml` | [`String`](#string) | A YAML snippet that can be inserted into the project's `.gitlab-ci.yml` to set up API fuzzing scans. |
 | <a id="mutationapifuzzingciconfigurationcreateerrors"></a>`errors` | [`[String!]!`](#string) | Errors encountered during execution of the mutation. |
-| <a id="mutationapifuzzingciconfigurationcreategitlabciyamleditpath"></a>`gitlabCiYamlEditPath` | [`String`](#string) | The location at which the project's `.gitlab-ci.yml` file can be edited in the browser. |
+| <a id="mutationapifuzzingciconfigurationcreategitlabciyamleditpath"></a>`gitlabCiYamlEditPath` | [`String`](#string) | Location at which the project's `.gitlab-ci.yml` file can be edited in the browser. |
 
 ### `Mutation.awardEmojiAdd`
 
@@ -760,10 +760,10 @@ Input type: `BoardListUpdateLimitMetricsInput`
 | Name | Type | Description |
 | ---- | ---- | ----------- |
 | <a id="mutationboardlistupdatelimitmetricsclientmutationid"></a>`clientMutationId` | [`String`](#string) | A unique identifier for the client performing the mutation. |
-| <a id="mutationboardlistupdatelimitmetricslimitmetric"></a>`limitMetric` | [`ListLimitMetric`](#listlimitmetric) | The new limit metric type for the list. |
-| <a id="mutationboardlistupdatelimitmetricslistid"></a>`listId` | [`ListID!`](#listid) | The global ID of the list. |
-| <a id="mutationboardlistupdatelimitmetricsmaxissuecount"></a>`maxIssueCount` | [`Int`](#int) | The new maximum issue count limit. |
-| <a id="mutationboardlistupdatelimitmetricsmaxissueweight"></a>`maxIssueWeight` | [`Int`](#int) | The new maximum issue weight limit. |
+| <a id="mutationboardlistupdatelimitmetricslimitmetric"></a>`limitMetric` | [`ListLimitMetric`](#listlimitmetric) | New limit metric type for the list. |
+| <a id="mutationboardlistupdatelimitmetricslistid"></a>`listId` | [`ListID!`](#listid) | Global ID of the list. |
+| <a id="mutationboardlistupdatelimitmetricsmaxissuecount"></a>`maxIssueCount` | [`Int`](#int) | New maximum issue count limit. |
+| <a id="mutationboardlistupdatelimitmetricsmaxissueweight"></a>`maxIssueWeight` | [`Int`](#int) | New maximum issue weight limit. |
 
 #### Fields
 
@@ -771,7 +771,7 @@ Input type: `BoardListUpdateLimitMetricsInput`
 | ---- | ---- | ----------- |
 | <a id="mutationboardlistupdatelimitmetricsclientmutationid"></a>`clientMutationId` | [`String`](#string) | A unique identifier for the client performing the mutation. |
 | <a id="mutationboardlistupdatelimitmetricserrors"></a>`errors` | [`[String!]!`](#string) | Errors encountered during execution of the mutation. |
-| <a id="mutationboardlistupdatelimitmetricslist"></a>`list` | [`BoardList`](#boardlist) | The updated list. |
+| <a id="mutationboardlistupdatelimitmetricslist"></a>`list` | [`BoardList`](#boardlist) | Updated list. |
 
 ### `Mutation.bulkEnableDevopsAdoptionNamespaces`
 
@@ -1149,7 +1149,7 @@ Input type: `CreateComplianceFrameworkInput`
 | ---- | ---- | ----------- |
 | <a id="mutationcreatecomplianceframeworkclientmutationid"></a>`clientMutationId` | [`String`](#string) | A unique identifier for the client performing the mutation. |
 | <a id="mutationcreatecomplianceframeworkerrors"></a>`errors` | [`[String!]!`](#string) | Errors encountered during execution of the mutation. |
-| <a id="mutationcreatecomplianceframeworkframework"></a>`framework` | [`ComplianceFramework`](#complianceframework) | The created compliance framework. |
+| <a id="mutationcreatecomplianceframeworkframework"></a>`framework` | [`ComplianceFramework`](#complianceframework) | Created compliance framework. |
 
 ### `Mutation.createCustomEmoji`
 
@@ -1186,7 +1186,7 @@ Input type: `CreateDiffNoteInput`
 | <a id="mutationcreatediffnoteclientmutationid"></a>`clientMutationId` | [`String`](#string) | A unique identifier for the client performing the mutation. |
 | <a id="mutationcreatediffnoteconfidential"></a>`confidential` | [`Boolean`](#boolean) | Confidentiality flag of a note. Default is false. |
 | <a id="mutationcreatediffnotenoteableid"></a>`noteableId` | [`NoteableID!`](#noteableid) | Global ID of the resource to add a note to. |
-| <a id="mutationcreatediffnoteposition"></a>`position` | [`DiffPositionInput!`](#diffpositioninput) | The position of this note on a diff. |
+| <a id="mutationcreatediffnoteposition"></a>`position` | [`DiffPositionInput!`](#diffpositioninput) | Position of this note on a diff. |
 
 #### Fields
 
@@ -1204,17 +1204,17 @@ Input type: `CreateEpicInput`
 
 | Name | Type | Description |
 | ---- | ---- | ----------- |
-| <a id="mutationcreateepicaddlabelids"></a>`addLabelIds` | [`[ID!]`](#id) | The IDs of labels to be added to the epic. |
+| <a id="mutationcreateepicaddlabelids"></a>`addLabelIds` | [`[ID!]`](#id) | IDs of labels to be added to the epic. |
 | <a id="mutationcreateepicclientmutationid"></a>`clientMutationId` | [`String`](#string) | A unique identifier for the client performing the mutation. |
 | <a id="mutationcreateepicconfidential"></a>`confidential` | [`Boolean`](#boolean) | Indicates if the epic is confidential. |
-| <a id="mutationcreateepicdescription"></a>`description` | [`String`](#string) | The description of the epic. |
-| <a id="mutationcreateepicduedatefixed"></a>`dueDateFixed` | [`String`](#string) | The end date of the epic. |
+| <a id="mutationcreateepicdescription"></a>`description` | [`String`](#string) | Description of the epic. |
+| <a id="mutationcreateepicduedatefixed"></a>`dueDateFixed` | [`String`](#string) | End date of the epic. |
 | <a id="mutationcreateepicduedateisfixed"></a>`dueDateIsFixed` | [`Boolean`](#boolean) | Indicates end date should be sourced from due_date_fixed field not the issue milestones. |
-| <a id="mutationcreateepicgrouppath"></a>`groupPath` | [`ID!`](#id) | The group the epic to mutate is in. |
-| <a id="mutationcreateepicremovelabelids"></a>`removeLabelIds` | [`[ID!]`](#id) | The IDs of labels to be removed from the epic. |
-| <a id="mutationcreateepicstartdatefixed"></a>`startDateFixed` | [`String`](#string) | The start date of the epic. |
+| <a id="mutationcreateepicgrouppath"></a>`groupPath` | [`ID!`](#id) | Group the epic to mutate is in. |
+| <a id="mutationcreateepicremovelabelids"></a>`removeLabelIds` | [`[ID!]`](#id) | IDs of labels to be removed from the epic. |
+| <a id="mutationcreateepicstartdatefixed"></a>`startDateFixed` | [`String`](#string) | Start date of the epic. |
 | <a id="mutationcreateepicstartdateisfixed"></a>`startDateIsFixed` | [`Boolean`](#boolean) | Indicates start date should be sourced from start_date_fixed field not the issue milestones. |
-| <a id="mutationcreateepictitle"></a>`title` | [`String`](#string) | The title of the epic. |
+| <a id="mutationcreateepictitle"></a>`title` | [`String`](#string) | Title of the epic. |
 
 #### Fields
 
@@ -1236,7 +1236,7 @@ Input type: `CreateImageDiffNoteInput`
 | <a id="mutationcreateimagediffnoteclientmutationid"></a>`clientMutationId` | [`String`](#string) | A unique identifier for the client performing the mutation. |
 | <a id="mutationcreateimagediffnoteconfidential"></a>`confidential` | [`Boolean`](#boolean) | Confidentiality flag of a note. Default is false. |
 | <a id="mutationcreateimagediffnotenoteableid"></a>`noteableId` | [`NoteableID!`](#noteableid) | Global ID of the resource to add a note to. |
-| <a id="mutationcreateimagediffnoteposition"></a>`position` | [`DiffImagePositionInput!`](#diffimagepositioninput) | The position of this note on a diff. |
+| <a id="mutationcreateimagediffnoteposition"></a>`position` | [`DiffImagePositionInput!`](#diffimagepositioninput) | Position of this note on a diff. |
 
 #### Fields
 
@@ -1261,7 +1261,7 @@ Input type: `CreateIssueInput`
 | <a id="mutationcreateissuedescription"></a>`description` | [`String`](#string) | Description of the issue. |
 | <a id="mutationcreateissuediscussiontoresolve"></a>`discussionToResolve` | [`String`](#string) | ID of a discussion to resolve. Also pass `merge_request_to_resolve_discussions_of`. |
 | <a id="mutationcreateissueduedate"></a>`dueDate` | [`ISO8601Date`](#iso8601date) | Due date of the issue. |
-| <a id="mutationcreateissueepicid"></a>`epicId` | [`EpicID`](#epicid) | The ID of an epic to associate the issue with. |
+| <a id="mutationcreateissueepicid"></a>`epicId` | [`EpicID`](#epicid) | ID of an epic to associate the issue with. |
 | <a id="mutationcreateissuehealthstatus"></a>`healthStatus` | [`HealthStatus`](#healthstatus) | The desired health status. |
 | <a id="mutationcreateissueiid"></a>`iid` | [`Int`](#int) | IID (internal ID) of a project issue. Only admins and project owners can modify. |
 | <a id="mutationcreateissuelabelids"></a>`labelIds` | [`[LabelID!]`](#labelid) | IDs of labels to be added to the issue. |
@@ -1417,7 +1417,7 @@ Input type: `DastOnDemandScanCreateInput`
 | <a id="mutationdastondemandscancreateclientmutationid"></a>`clientMutationId` | [`String`](#string) | A unique identifier for the client performing the mutation. |
 | <a id="mutationdastondemandscancreatedastscannerprofileid"></a>`dastScannerProfileId` | [`DastScannerProfileID`](#dastscannerprofileid) | ID of the scanner profile to be used for the scan. |
 | <a id="mutationdastondemandscancreatedastsiteprofileid"></a>`dastSiteProfileId` | [`DastSiteProfileID!`](#dastsiteprofileid) | ID of the site profile to be used for the scan. |
-| <a id="mutationdastondemandscancreatefullpath"></a>`fullPath` | [`ID!`](#id) | The project the site profile belongs to. |
+| <a id="mutationdastondemandscancreatefullpath"></a>`fullPath` | [`ID!`](#id) | Project the site profile belongs to. |
 
 #### Fields
 
@@ -1435,13 +1435,13 @@ Input type: `DastProfileCreateInput`
 
 | Name | Type | Description |
 | ---- | ---- | ----------- |
-| <a id="mutationdastprofilecreatebranchname"></a>`branchName` | [`String`](#string) | The associated branch. |
+| <a id="mutationdastprofilecreatebranchname"></a>`branchName` | [`String`](#string) | Associated branch. |
 | <a id="mutationdastprofilecreateclientmutationid"></a>`clientMutationId` | [`String`](#string) | A unique identifier for the client performing the mutation. |
 | <a id="mutationdastprofilecreatedastscannerprofileid"></a>`dastScannerProfileId` | [`DastScannerProfileID!`](#dastscannerprofileid) | ID of the scanner profile to be associated. |
 | <a id="mutationdastprofilecreatedastsiteprofileid"></a>`dastSiteProfileId` | [`DastSiteProfileID!`](#dastsiteprofileid) | ID of the site profile to be associated. |
-| <a id="mutationdastprofilecreatedescription"></a>`description` | [`String`](#string) | The description of the profile. Defaults to an empty string. |
-| <a id="mutationdastprofilecreatefullpath"></a>`fullPath` | [`ID!`](#id) | The project the profile belongs to. |
-| <a id="mutationdastprofilecreatename"></a>`name` | [`String!`](#string) | The name of the profile. |
+| <a id="mutationdastprofilecreatedescription"></a>`description` | [`String`](#string) | Description of the profile. Defaults to an empty string. |
+| <a id="mutationdastprofilecreatefullpath"></a>`fullPath` | [`ID!`](#id) | Project the profile belongs to. |
+| <a id="mutationdastprofilecreatename"></a>`name` | [`String!`](#string) | Name of the profile. |
 | <a id="mutationdastprofilecreaterunaftercreate"></a>`runAfterCreate` | [`Boolean`](#boolean) | Run scan using profile after creation. Defaults to false. |
 
 #### Fields
@@ -1449,9 +1449,9 @@ Input type: `DastProfileCreateInput`
 | Name | Type | Description |
 | ---- | ---- | ----------- |
 | <a id="mutationdastprofilecreateclientmutationid"></a>`clientMutationId` | [`String`](#string) | A unique identifier for the client performing the mutation. |
-| <a id="mutationdastprofilecreatedastprofile"></a>`dastProfile` | [`DastProfile`](#dastprofile) | The created profile. |
+| <a id="mutationdastprofilecreatedastprofile"></a>`dastProfile` | [`DastProfile`](#dastprofile) | Created profile. |
 | <a id="mutationdastprofilecreateerrors"></a>`errors` | [`[String!]!`](#string) | Errors encountered during execution of the mutation. |
-| <a id="mutationdastprofilecreatepipelineurl"></a>`pipelineUrl` | [`String`](#string) | The URL of the pipeline that was created. Requires `runAfterCreate` to be set to `true`. |
+| <a id="mutationdastprofilecreatepipelineurl"></a>`pipelineUrl` | [`String`](#string) | URL of the pipeline that was created. Requires `runAfterCreate` to be set to `true`. |
 
 ### `Mutation.dastProfileDelete`
 
@@ -1499,14 +1499,14 @@ Input type: `DastProfileUpdateInput`
 
 | Name | Type | Description |
 | ---- | ---- | ----------- |
-| <a id="mutationdastprofileupdatebranchname"></a>`branchName` | [`String`](#string) | The associated branch. |
+| <a id="mutationdastprofileupdatebranchname"></a>`branchName` | [`String`](#string) | Associated branch. |
 | <a id="mutationdastprofileupdateclientmutationid"></a>`clientMutationId` | [`String`](#string) | A unique identifier for the client performing the mutation. |
 | <a id="mutationdastprofileupdatedastscannerprofileid"></a>`dastScannerProfileId` | [`DastScannerProfileID`](#dastscannerprofileid) | ID of the scanner profile to be associated. |
 | <a id="mutationdastprofileupdatedastsiteprofileid"></a>`dastSiteProfileId` | [`DastSiteProfileID`](#dastsiteprofileid) | ID of the site profile to be associated. |
-| <a id="mutationdastprofileupdatedescription"></a>`description` | [`String`](#string) | The description of the profile. Defaults to an empty string. |
-| <a id="mutationdastprofileupdatefullpath"></a>`fullPath` | [`ID!`](#id) | The project the profile belongs to. |
+| <a id="mutationdastprofileupdatedescription"></a>`description` | [`String`](#string) | Description of the profile. Defaults to an empty string. |
+| <a id="mutationdastprofileupdatefullpath"></a>`fullPath` | [`ID!`](#id) | Project the profile belongs to. |
 | <a id="mutationdastprofileupdateid"></a>`id` | [`DastProfileID!`](#dastprofileid) | ID of the profile to be deleted. |
-| <a id="mutationdastprofileupdatename"></a>`name` | [`String`](#string) | The name of the profile. |
+| <a id="mutationdastprofileupdatename"></a>`name` | [`String`](#string) | Name of the profile. |
 | <a id="mutationdastprofileupdaterunafterupdate"></a>`runAfterUpdate` | [`Boolean`](#boolean) | Run scan using profile after update. Defaults to false. |
 
 #### Fields
@@ -1514,7 +1514,7 @@ Input type: `DastProfileUpdateInput`
 | Name | Type | Description |
 | ---- | ---- | ----------- |
 | <a id="mutationdastprofileupdateclientmutationid"></a>`clientMutationId` | [`String`](#string) | A unique identifier for the client performing the mutation. |
-| <a id="mutationdastprofileupdatedastprofile"></a>`dastProfile` | [`DastProfile`](#dastprofile) | The updated profile. |
+| <a id="mutationdastprofileupdatedastprofile"></a>`dastProfile` | [`DastProfile`](#dastprofile) | Updated profile. |
 | <a id="mutationdastprofileupdateerrors"></a>`errors` | [`[String!]!`](#string) | Errors encountered during execution of the mutation. |
 | <a id="mutationdastprofileupdatepipelineurl"></a>`pipelineUrl` | [`String`](#string) | The URL of the pipeline that was created. Requires the input argument `runAfterUpdate` to be set to `true` when calling the mutation, otherwise no pipeline will be created. |
 
@@ -1527,12 +1527,12 @@ Input type: `DastScannerProfileCreateInput`
 | Name | Type | Description |
 | ---- | ---- | ----------- |
 | <a id="mutationdastscannerprofilecreateclientmutationid"></a>`clientMutationId` | [`String`](#string) | A unique identifier for the client performing the mutation. |
-| <a id="mutationdastscannerprofilecreatefullpath"></a>`fullPath` | [`ID!`](#id) | The project the scanner profile belongs to. |
-| <a id="mutationdastscannerprofilecreateprofilename"></a>`profileName` | [`String!`](#string) | The name of the scanner profile. |
+| <a id="mutationdastscannerprofilecreatefullpath"></a>`fullPath` | [`ID!`](#id) | Project the scanner profile belongs to. |
+| <a id="mutationdastscannerprofilecreateprofilename"></a>`profileName` | [`String!`](#string) | Name of the scanner profile. |
 | <a id="mutationdastscannerprofilecreatescantype"></a>`scanType` | [`DastScanTypeEnum`](#dastscantypeenum) | Indicates the type of DAST scan that will run. Either a Passive Scan or an Active Scan. |
 | <a id="mutationdastscannerprofilecreateshowdebugmessages"></a>`showDebugMessages` | [`Boolean`](#boolean) | Indicates if debug messages should be included in DAST console output. True to include the debug messages. |
-| <a id="mutationdastscannerprofilecreatespidertimeout"></a>`spiderTimeout` | [`Int`](#int) | The maximum number of minutes allowed for the spider to traverse the site. |
-| <a id="mutationdastscannerprofilecreatetargettimeout"></a>`targetTimeout` | [`Int`](#int) | The maximum number of seconds allowed for the site under test to respond to a request. |
+| <a id="mutationdastscannerprofilecreatespidertimeout"></a>`spiderTimeout` | [`Int`](#int) | Maximum number of minutes allowed for the spider to traverse the site. |
+| <a id="mutationdastscannerprofilecreatetargettimeout"></a>`targetTimeout` | [`Int`](#int) | Maximum number of seconds allowed for the site under test to respond to a request. |
 | <a id="mutationdastscannerprofilecreateuseajaxspider"></a>`useAjaxSpider` | [`Boolean`](#boolean) | Indicates if the AJAX spider should be used to crawl the target site. True to run the AJAX spider in addition to the traditional spider, and false to run only the traditional spider. |
 
 #### Fields
@@ -1571,13 +1571,13 @@ Input type: `DastScannerProfileUpdateInput`
 | Name | Type | Description |
 | ---- | ---- | ----------- |
 | <a id="mutationdastscannerprofileupdateclientmutationid"></a>`clientMutationId` | [`String`](#string) | A unique identifier for the client performing the mutation. |
-| <a id="mutationdastscannerprofileupdatefullpath"></a>`fullPath` | [`ID!`](#id) | The project the scanner profile belongs to. |
+| <a id="mutationdastscannerprofileupdatefullpath"></a>`fullPath` | [`ID!`](#id) | Project the scanner profile belongs to. |
 | <a id="mutationdastscannerprofileupdateid"></a>`id` | [`DastScannerProfileID!`](#dastscannerprofileid) | ID of the scanner profile to be updated. |
-| <a id="mutationdastscannerprofileupdateprofilename"></a>`profileName` | [`String!`](#string) | The name of the scanner profile. |
+| <a id="mutationdastscannerprofileupdateprofilename"></a>`profileName` | [`String!`](#string) | Name of the scanner profile. |
 | <a id="mutationdastscannerprofileupdatescantype"></a>`scanType` | [`DastScanTypeEnum`](#dastscantypeenum) | Indicates the type of DAST scan that will run. Either a Passive Scan or an Active Scan. |
 | <a id="mutationdastscannerprofileupdateshowdebugmessages"></a>`showDebugMessages` | [`Boolean`](#boolean) | Indicates if debug messages should be included in DAST console output. True to include the debug messages. |
-| <a id="mutationdastscannerprofileupdatespidertimeout"></a>`spiderTimeout` | [`Int!`](#int) | The maximum number of minutes allowed for the spider to traverse the site. |
-| <a id="mutationdastscannerprofileupdatetargettimeout"></a>`targetTimeout` | [`Int!`](#int) | The maximum number of seconds allowed for the site under test to respond to a request. |
+| <a id="mutationdastscannerprofileupdatespidertimeout"></a>`spiderTimeout` | [`Int!`](#int) | Maximum number of minutes allowed for the spider to traverse the site. |
+| <a id="mutationdastscannerprofileupdatetargettimeout"></a>`targetTimeout` | [`Int!`](#int) | Maximum number of seconds allowed for the site under test to respond to a request. |
 | <a id="mutationdastscannerprofileupdateuseajaxspider"></a>`useAjaxSpider` | [`Boolean`](#boolean) | Indicates if the AJAX spider should be used to crawl the target site. True to run the AJAX spider in addition to the traditional spider, and false to run only the traditional spider. |
 
 #### Fields
@@ -1598,12 +1598,12 @@ Input type: `DastSiteProfileCreateInput`
 | ---- | ---- | ----------- |
 | <a id="mutationdastsiteprofilecreateauth"></a>`auth` | [`DastSiteProfileAuthInput`](#dastsiteprofileauthinput) | Parameters for authentication. |
 | <a id="mutationdastsiteprofilecreateclientmutationid"></a>`clientMutationId` | [`String`](#string) | A unique identifier for the client performing the mutation. |
-| <a id="mutationdastsiteprofilecreateexcludedurls"></a>`excludedUrls` | [`[String!]`](#string) | The URLs to skip during an authenticated scan. Defaults to `[]`. |
-| <a id="mutationdastsiteprofilecreatefullpath"></a>`fullPath` | [`ID!`](#id) | The project the site profile belongs to. |
-| <a id="mutationdastsiteprofilecreateprofilename"></a>`profileName` | [`String!`](#string) | The name of the site profile. |
+| <a id="mutationdastsiteprofilecreateexcludedurls"></a>`excludedUrls` | [`[String!]`](#string) | URLs to skip during an authenticated scan. Defaults to `[]`. |
+| <a id="mutationdastsiteprofilecreatefullpath"></a>`fullPath` | [`ID!`](#id) | Project the site profile belongs to. |
+| <a id="mutationdastsiteprofilecreateprofilename"></a>`profileName` | [`String!`](#string) | Name of the site profile. |
 | <a id="mutationdastsiteprofilecreaterequestheaders"></a>`requestHeaders` | [`String`](#string) | Comma-separated list of request header names and values to be added to every request made by DAST. |
-| <a id="mutationdastsiteprofilecreatetargettype"></a>`targetType` | [`DastTargetTypeEnum`](#dasttargettypeenum) | The type of target to be scanned. |
-| <a id="mutationdastsiteprofilecreatetargeturl"></a>`targetUrl` | [`String`](#string) | The URL of the target to be scanned. |
+| <a id="mutationdastsiteprofilecreatetargettype"></a>`targetType` | [`DastTargetTypeEnum`](#dasttargettypeenum) | Type of target to be scanned. |
+| <a id="mutationdastsiteprofilecreatetargeturl"></a>`targetUrl` | [`String`](#string) | URL of the target to be scanned. |
 
 #### Fields
 
@@ -1622,7 +1622,7 @@ Input type: `DastSiteProfileDeleteInput`
 | Name | Type | Description |
 | ---- | ---- | ----------- |
 | <a id="mutationdastsiteprofiledeleteclientmutationid"></a>`clientMutationId` | [`String`](#string) | A unique identifier for the client performing the mutation. |
-| <a id="mutationdastsiteprofiledeletefullpath"></a>`fullPath` | [`ID!`](#id) | The project the site profile belongs to. |
+| <a id="mutationdastsiteprofiledeletefullpath"></a>`fullPath` | [`ID!`](#id) | Project the site profile belongs to. |
 | <a id="mutationdastsiteprofiledeleteid"></a>`id` | [`DastSiteProfileID!`](#dastsiteprofileid) | ID of the site profile to be deleted. |
 
 #### Fields
@@ -1642,13 +1642,13 @@ Input type: `DastSiteProfileUpdateInput`
 | ---- | ---- | ----------- |
 | <a id="mutationdastsiteprofileupdateauth"></a>`auth` | [`DastSiteProfileAuthInput`](#dastsiteprofileauthinput) | Parameters for authentication. |
 | <a id="mutationdastsiteprofileupdateclientmutationid"></a>`clientMutationId` | [`String`](#string) | A unique identifier for the client performing the mutation. |
-| <a id="mutationdastsiteprofileupdateexcludedurls"></a>`excludedUrls` | [`[String!]`](#string) | The URLs to skip during an authenticated scan. |
-| <a id="mutationdastsiteprofileupdatefullpath"></a>`fullPath` | [`ID!`](#id) | The project the site profile belongs to. |
+| <a id="mutationdastsiteprofileupdateexcludedurls"></a>`excludedUrls` | [`[String!]`](#string) | URLs to skip during an authenticated scan. |
+| <a id="mutationdastsiteprofileupdatefullpath"></a>`fullPath` | [`ID!`](#id) | Project the site profile belongs to. |
 | <a id="mutationdastsiteprofileupdateid"></a>`id` | [`DastSiteProfileID!`](#dastsiteprofileid) | ID of the site profile to be updated. |
-| <a id="mutationdastsiteprofileupdateprofilename"></a>`profileName` | [`String!`](#string) | The name of the site profile. |
+| <a id="mutationdastsiteprofileupdateprofilename"></a>`profileName` | [`String!`](#string) | Name of the site profile. |
 | <a id="mutationdastsiteprofileupdaterequestheaders"></a>`requestHeaders` | [`String`](#string) | Comma-separated list of request header names and values to be added to every request made by DAST. |
-| <a id="mutationdastsiteprofileupdatetargettype"></a>`targetType` | [`DastTargetTypeEnum`](#dasttargettypeenum) | The type of target to be scanned. |
-| <a id="mutationdastsiteprofileupdatetargeturl"></a>`targetUrl` | [`String`](#string) | The URL of the target to be scanned. |
+| <a id="mutationdastsiteprofileupdatetargettype"></a>`targetType` | [`DastTargetTypeEnum`](#dasttargettypeenum) | Type of target to be scanned. |
+| <a id="mutationdastsiteprofileupdatetargeturl"></a>`targetUrl` | [`String`](#string) | URL of the target to be scanned. |
 
 #### Fields
 
@@ -1667,8 +1667,8 @@ Input type: `DastSiteTokenCreateInput`
 | Name | Type | Description |
 | ---- | ---- | ----------- |
 | <a id="mutationdastsitetokencreateclientmutationid"></a>`clientMutationId` | [`String`](#string) | A unique identifier for the client performing the mutation. |
-| <a id="mutationdastsitetokencreatefullpath"></a>`fullPath` | [`ID!`](#id) | The project the site token belongs to. |
-| <a id="mutationdastsitetokencreatetargeturl"></a>`targetUrl` | [`String`](#string) | The URL of the target to be validated. |
+| <a id="mutationdastsitetokencreatefullpath"></a>`fullPath` | [`ID!`](#id) | Project the site token belongs to. |
+| <a id="mutationdastsitetokencreatetargeturl"></a>`targetUrl` | [`String`](#string) | URL of the target to be validated. |
 
 #### Fields
 
@@ -1677,7 +1677,7 @@ Input type: `DastSiteTokenCreateInput`
 | <a id="mutationdastsitetokencreateclientmutationid"></a>`clientMutationId` | [`String`](#string) | A unique identifier for the client performing the mutation. |
 | <a id="mutationdastsitetokencreateerrors"></a>`errors` | [`[String!]!`](#string) | Errors encountered during execution of the mutation. |
 | <a id="mutationdastsitetokencreateid"></a>`id` | [`DastSiteTokenID`](#dastsitetokenid) | ID of the site token. |
-| <a id="mutationdastsitetokencreatestatus"></a>`status` | [`DastSiteProfileValidationStatusEnum`](#dastsiteprofilevalidationstatusenum) | The current validation status of the target. |
+| <a id="mutationdastsitetokencreatestatus"></a>`status` | [`DastSiteProfileValidationStatusEnum`](#dastsiteprofilevalidationstatusenum) | Current validation status of the target. |
 | <a id="mutationdastsitetokencreatetoken"></a>`token` | [`String`](#string) | Token string. |
 
 ### `Mutation.dastSiteValidationCreate`
@@ -1690,9 +1690,9 @@ Input type: `DastSiteValidationCreateInput`
 | ---- | ---- | ----------- |
 | <a id="mutationdastsitevalidationcreateclientmutationid"></a>`clientMutationId` | [`String`](#string) | A unique identifier for the client performing the mutation. |
 | <a id="mutationdastsitevalidationcreatedastsitetokenid"></a>`dastSiteTokenId` | [`DastSiteTokenID!`](#dastsitetokenid) | ID of the site token. |
-| <a id="mutationdastsitevalidationcreatefullpath"></a>`fullPath` | [`ID!`](#id) | The project the site profile belongs to. |
-| <a id="mutationdastsitevalidationcreatestrategy"></a>`strategy` | [`DastSiteValidationStrategyEnum`](#dastsitevalidationstrategyenum) | The validation strategy to be used. |
-| <a id="mutationdastsitevalidationcreatevalidationpath"></a>`validationPath` | [`String!`](#string) | The path to be requested during validation. |
+| <a id="mutationdastsitevalidationcreatefullpath"></a>`fullPath` | [`ID!`](#id) | Project the site profile belongs to. |
+| <a id="mutationdastsitevalidationcreatestrategy"></a>`strategy` | [`DastSiteValidationStrategyEnum`](#dastsitevalidationstrategyenum) | Validation strategy to be used. |
+| <a id="mutationdastsitevalidationcreatevalidationpath"></a>`validationPath` | [`String!`](#string) | Path to be requested during validation. |
 
 #### Fields
 
@@ -1701,7 +1701,7 @@ Input type: `DastSiteValidationCreateInput`
 | <a id="mutationdastsitevalidationcreateclientmutationid"></a>`clientMutationId` | [`String`](#string) | A unique identifier for the client performing the mutation. |
 | <a id="mutationdastsitevalidationcreateerrors"></a>`errors` | [`[String!]!`](#string) | Errors encountered during execution of the mutation. |
 | <a id="mutationdastsitevalidationcreateid"></a>`id` | [`DastSiteValidationID`](#dastsitevalidationid) | ID of the site validation. |
-| <a id="mutationdastsitevalidationcreatestatus"></a>`status` | [`DastSiteProfileValidationStatusEnum`](#dastsiteprofilevalidationstatusenum) | The current validation status. |
+| <a id="mutationdastsitevalidationcreatestatus"></a>`status` | [`DastSiteProfileValidationStatusEnum`](#dastsiteprofilevalidationstatusenum) | Current validation status. |
 
 ### `Mutation.dastSiteValidationRevoke`
 
@@ -1712,7 +1712,7 @@ Input type: `DastSiteValidationRevokeInput`
 | Name | Type | Description |
 | ---- | ---- | ----------- |
 | <a id="mutationdastsitevalidationrevokeclientmutationid"></a>`clientMutationId` | [`String`](#string) | A unique identifier for the client performing the mutation. |
-| <a id="mutationdastsitevalidationrevokefullpath"></a>`fullPath` | [`ID!`](#id) | The project the site validation belongs to. |
+| <a id="mutationdastsitevalidationrevokefullpath"></a>`fullPath` | [`ID!`](#id) | Project the site validation belongs to. |
 | <a id="mutationdastsitevalidationrevokenormalizedtargeturl"></a>`normalizedTargetUrl` | [`String!`](#string) | Normalized URL of the target to be revoked. |
 
 #### Fields
@@ -1851,7 +1851,7 @@ Input type: `DestroyComplianceFrameworkInput`
 | Name | Type | Description |
 | ---- | ---- | ----------- |
 | <a id="mutationdestroycomplianceframeworkclientmutationid"></a>`clientMutationId` | [`String`](#string) | A unique identifier for the client performing the mutation. |
-| <a id="mutationdestroycomplianceframeworkid"></a>`id` | [`ComplianceManagementFrameworkID!`](#compliancemanagementframeworkid) | The global ID of the compliance framework to destroy. |
+| <a id="mutationdestroycomplianceframeworkid"></a>`id` | [`ComplianceManagementFrameworkID!`](#compliancemanagementframeworkid) | Global ID of the compliance framework to destroy. |
 
 #### Fields
 
@@ -2144,7 +2144,7 @@ Input type: `EpicBoardCreateInput`
 | Name | Type | Description |
 | ---- | ---- | ----------- |
 | <a id="mutationepicboardcreateclientmutationid"></a>`clientMutationId` | [`String`](#string) | A unique identifier for the client performing the mutation. |
-| <a id="mutationepicboardcreateepicboard"></a>`epicBoard` | [`EpicBoard`](#epicboard) | The created epic board. |
+| <a id="mutationepicboardcreateepicboard"></a>`epicBoard` | [`EpicBoard`](#epicboard) | Created epic board. |
 | <a id="mutationepicboardcreateerrors"></a>`errors` | [`[String!]!`](#string) | Errors encountered during execution of the mutation. |
 
 ### `Mutation.epicBoardListCreate`
@@ -2187,7 +2187,7 @@ Input type: `EpicBoardListDestroyInput`
 | ---- | ---- | ----------- |
 | <a id="mutationepicboardlistdestroyclientmutationid"></a>`clientMutationId` | [`String`](#string) | A unique identifier for the client performing the mutation. |
 | <a id="mutationepicboardlistdestroyerrors"></a>`errors` | [`[String!]!`](#string) | Errors encountered during execution of the mutation. |
-| <a id="mutationepicboardlistdestroylist"></a>`list` | [`EpicList`](#epiclist) | The epic board list. `null` if the board was destroyed successfully. |
+| <a id="mutationepicboardlistdestroylist"></a>`list` | [`EpicList`](#epiclist) | Epic board list. `null` if the board was destroyed successfully. |
 
 ### `Mutation.epicBoardUpdate`
 
@@ -2200,7 +2200,7 @@ Input type: `EpicBoardUpdateInput`
 | <a id="mutationepicboardupdateclientmutationid"></a>`clientMutationId` | [`String`](#string) | A unique identifier for the client performing the mutation. |
 | <a id="mutationepicboardupdatehidebackloglist"></a>`hideBacklogList` | [`Boolean`](#boolean) | Whether or not backlog list is hidden. |
 | <a id="mutationepicboardupdatehideclosedlist"></a>`hideClosedList` | [`Boolean`](#boolean) | Whether or not closed list is hidden. |
-| <a id="mutationepicboardupdateid"></a>`id` | [`BoardsEpicBoardID!`](#boardsepicboardid) | The epic board global ID. |
+| <a id="mutationepicboardupdateid"></a>`id` | [`BoardsEpicBoardID!`](#boardsepicboardid) | Epic board global ID. |
 | <a id="mutationepicboardupdatelabelids"></a>`labelIds` | [`[LabelID!]`](#labelid) | IDs of labels to be added to the board. |
 | <a id="mutationepicboardupdatelabels"></a>`labels` | [`[String!]`](#string) | Labels of the issue. |
 | <a id="mutationepicboardupdatename"></a>`name` | [`String`](#string) | Board name. |
@@ -2210,7 +2210,7 @@ Input type: `EpicBoardUpdateInput`
 | Name | Type | Description |
 | ---- | ---- | ----------- |
 | <a id="mutationepicboardupdateclientmutationid"></a>`clientMutationId` | [`String`](#string) | A unique identifier for the client performing the mutation. |
-| <a id="mutationepicboardupdateepicboard"></a>`epicBoard` | [`EpicBoard`](#epicboard) | The updated epic board. |
+| <a id="mutationepicboardupdateepicboard"></a>`epicBoard` | [`EpicBoard`](#epicboard) | Updated epic board. |
 | <a id="mutationepicboardupdateerrors"></a>`errors` | [`[String!]!`](#string) | Errors encountered during execution of the mutation. |
 
 ### `Mutation.epicMoveList`
@@ -2234,7 +2234,7 @@ Input type: `EpicMoveListInput`
 | Name | Type | Description |
 | ---- | ---- | ----------- |
 | <a id="mutationepicmovelistclientmutationid"></a>`clientMutationId` | [`String`](#string) | A unique identifier for the client performing the mutation. |
-| <a id="mutationepicmovelistepic"></a>`epic` | [`Epic`](#epic) | The epic after mutation. |
+| <a id="mutationepicmovelistepic"></a>`epic` | [`Epic`](#epic) | Epic after mutation. |
 | <a id="mutationepicmovelisterrors"></a>`errors` | [`[String!]!`](#string) | Errors encountered during execution of the mutation. |
 
 ### `Mutation.epicSetSubscription`
@@ -2413,8 +2413,8 @@ Input type: `HttpIntegrationCreateInput`
 | <a id="mutationhttpintegrationcreateactive"></a>`active` | [`Boolean!`](#boolean) | Whether the integration is receiving alerts. |
 | <a id="mutationhttpintegrationcreateclientmutationid"></a>`clientMutationId` | [`String`](#string) | A unique identifier for the client performing the mutation. |
 | <a id="mutationhttpintegrationcreatename"></a>`name` | [`String!`](#string) | Name of the integration. |
-| <a id="mutationhttpintegrationcreatepayloadattributemappings"></a>`payloadAttributeMappings` | [`[AlertManagementPayloadAlertFieldInput!]`](#alertmanagementpayloadalertfieldinput) | The custom mapping of GitLab alert attributes to fields from the payload_example. |
-| <a id="mutationhttpintegrationcreatepayloadexample"></a>`payloadExample` | [`JsonString`](#jsonstring) | The example of an alert payload. |
+| <a id="mutationhttpintegrationcreatepayloadattributemappings"></a>`payloadAttributeMappings` | [`[AlertManagementPayloadAlertFieldInput!]`](#alertmanagementpayloadalertfieldinput) | Custom mapping of GitLab alert attributes to fields from the payload example. |
+| <a id="mutationhttpintegrationcreatepayloadexample"></a>`payloadExample` | [`JsonString`](#jsonstring) | Example of an alert payload. |
 | <a id="mutationhttpintegrationcreateprojectpath"></a>`projectPath` | [`ID!`](#id) | Project to create the integration in. |
 
 #### Fields
@@ -2475,8 +2475,8 @@ Input type: `HttpIntegrationUpdateInput`
 | <a id="mutationhttpintegrationupdateclientmutationid"></a>`clientMutationId` | [`String`](#string) | A unique identifier for the client performing the mutation. |
 | <a id="mutationhttpintegrationupdateid"></a>`id` | [`AlertManagementHttpIntegrationID!`](#alertmanagementhttpintegrationid) | ID of the integration to mutate. |
 | <a id="mutationhttpintegrationupdatename"></a>`name` | [`String`](#string) | Name of the integration. |
-| <a id="mutationhttpintegrationupdatepayloadattributemappings"></a>`payloadAttributeMappings` | [`[AlertManagementPayloadAlertFieldInput!]`](#alertmanagementpayloadalertfieldinput) | The custom mapping of GitLab alert attributes to fields from the payload_example. |
-| <a id="mutationhttpintegrationupdatepayloadexample"></a>`payloadExample` | [`JsonString`](#jsonstring) | The example of an alert payload. |
+| <a id="mutationhttpintegrationupdatepayloadattributemappings"></a>`payloadAttributeMappings` | [`[AlertManagementPayloadAlertFieldInput!]`](#alertmanagementpayloadalertfieldinput) | Custom mapping of GitLab alert attributes to fields from the payload example. |
+| <a id="mutationhttpintegrationupdatepayloadexample"></a>`payloadExample` | [`JsonString`](#jsonstring) | Example of an alert payload. |
 
 #### Fields
 
@@ -3601,7 +3601,7 @@ Input type: `ReleaseAssetLinkCreateInput`
 | ---- | ---- | ----------- |
 | <a id="mutationreleaseassetlinkcreateclientmutationid"></a>`clientMutationId` | [`String`](#string) | A unique identifier for the client performing the mutation. |
 | <a id="mutationreleaseassetlinkcreatedirectassetpath"></a>`directAssetPath` | [`String`](#string) | Relative path for a direct asset link. |
-| <a id="mutationreleaseassetlinkcreatelinktype"></a>`linkType` | [`ReleaseAssetLinkType`](#releaseassetlinktype) | The type of the asset link. |
+| <a id="mutationreleaseassetlinkcreatelinktype"></a>`linkType` | [`ReleaseAssetLinkType`](#releaseassetlinktype) | Type of the asset link. |
 | <a id="mutationreleaseassetlinkcreatename"></a>`name` | [`String!`](#string) | Name of the asset link. |
 | <a id="mutationreleaseassetlinkcreateprojectpath"></a>`projectPath` | [`ID!`](#id) | Full path of the project the asset link is associated with. |
 | <a id="mutationreleaseassetlinkcreatetagname"></a>`tagName` | [`String!`](#string) | Name of the associated release's tag. |
@@ -3757,7 +3757,7 @@ Input type: `RepositionImageDiffNoteInput`
 | ---- | ---- | ----------- |
 | <a id="mutationrepositionimagediffnoteclientmutationid"></a>`clientMutationId` | [`String`](#string) | A unique identifier for the client performing the mutation. |
 | <a id="mutationrepositionimagediffnoteid"></a>`id` | [`DiffNoteID!`](#diffnoteid) | Global ID of the DiffNote to update. |
-| <a id="mutationrepositionimagediffnoteposition"></a>`position` | [`UpdateDiffImagePositionInput!`](#updatediffimagepositioninput) | The position of this note on a diff. |
+| <a id="mutationrepositionimagediffnoteposition"></a>`position` | [`UpdateDiffImagePositionInput!`](#updatediffimagepositioninput) | Position of this note on a diff. |
 
 #### Fields
 
@@ -3768,8 +3768,6 @@ Input type: `RepositionImageDiffNoteInput`
 | <a id="mutationrepositionimagediffnotenote"></a>`note` | [`Note`](#note) | Note after mutation. |
 
 ### `Mutation.runnerDelete`
-
-Available only when feature flag `runner_graphql_query` is enabled. This flag is enabled by default.
 
 Input type: `RunnerDeleteInput`
 
@@ -3788,8 +3786,6 @@ Input type: `RunnerDeleteInput`
 | <a id="mutationrunnerdeleteerrors"></a>`errors` | [`[String!]!`](#string) | Errors encountered during execution of the mutation. |
 
 ### `Mutation.runnerUpdate`
-
-Available only when feature flag `runner_graphql_query` is enabled. This flag is enabled by default.
 
 Input type: `RunnerUpdateInput`
 
@@ -3818,8 +3814,6 @@ Input type: `RunnerUpdateInput`
 | <a id="mutationrunnerupdaterunner"></a>`runner` | [`CiRunner`](#cirunner) | Runner after mutation. |
 
 ### `Mutation.runnersRegistrationTokenReset`
-
-Available only when feature flag `runner_graphql_query` is enabled. This flag is enabled by default.
 
 Input type: `RunnersRegistrationTokenResetInput`
 
@@ -4105,7 +4099,7 @@ Input type: `UpdateBoardEpicUserPreferencesInput`
 
 | Name | Type | Description |
 | ---- | ---- | ----------- |
-| <a id="mutationupdateboardepicuserpreferencesboardid"></a>`boardId` | [`BoardID!`](#boardid) | The board global ID. |
+| <a id="mutationupdateboardepicuserpreferencesboardid"></a>`boardId` | [`BoardID!`](#boardid) | Board global ID. |
 | <a id="mutationupdateboardepicuserpreferencesclientmutationid"></a>`clientMutationId` | [`String`](#string) | A unique identifier for the client performing the mutation. |
 | <a id="mutationupdateboardepicuserpreferencescollapsed"></a>`collapsed` | [`Boolean!`](#boolean) | Whether the epic should be collapsed in the board. |
 | <a id="mutationupdateboardepicuserpreferencesepicid"></a>`epicId` | [`EpicID!`](#epicid) | ID of an epic to set preferences for. |
@@ -4148,7 +4142,7 @@ Input type: `UpdateComplianceFrameworkInput`
 | Name | Type | Description |
 | ---- | ---- | ----------- |
 | <a id="mutationupdatecomplianceframeworkclientmutationid"></a>`clientMutationId` | [`String`](#string) | A unique identifier for the client performing the mutation. |
-| <a id="mutationupdatecomplianceframeworkid"></a>`id` | [`ComplianceManagementFrameworkID!`](#compliancemanagementframeworkid) | The global ID of the compliance framework to update. |
+| <a id="mutationupdatecomplianceframeworkid"></a>`id` | [`ComplianceManagementFrameworkID!`](#compliancemanagementframeworkid) | Global ID of the compliance framework to update. |
 | <a id="mutationupdatecomplianceframeworkparams"></a>`params` | [`ComplianceFrameworkInput!`](#complianceframeworkinput) | Parameters to update the compliance framework with. |
 
 #### Fields
@@ -4156,7 +4150,7 @@ Input type: `UpdateComplianceFrameworkInput`
 | Name | Type | Description |
 | ---- | ---- | ----------- |
 | <a id="mutationupdatecomplianceframeworkclientmutationid"></a>`clientMutationId` | [`String`](#string) | A unique identifier for the client performing the mutation. |
-| <a id="mutationupdatecomplianceframeworkcomplianceframework"></a>`complianceFramework` | [`ComplianceFramework`](#complianceframework) | The compliance framework after mutation. |
+| <a id="mutationupdatecomplianceframeworkcomplianceframework"></a>`complianceFramework` | [`ComplianceFramework`](#complianceframework) | Compliance framework after mutation. |
 | <a id="mutationupdatecomplianceframeworkerrors"></a>`errors` | [`[String!]!`](#string) | Errors encountered during execution of the mutation. |
 
 ### `Mutation.updateContainerExpirationPolicy`
@@ -4192,19 +4186,19 @@ Input type: `UpdateEpicInput`
 
 | Name | Type | Description |
 | ---- | ---- | ----------- |
-| <a id="mutationupdateepicaddlabelids"></a>`addLabelIds` | [`[ID!]`](#id) | The IDs of labels to be added to the epic. |
+| <a id="mutationupdateepicaddlabelids"></a>`addLabelIds` | [`[ID!]`](#id) | IDs of labels to be added to the epic. |
 | <a id="mutationupdateepicclientmutationid"></a>`clientMutationId` | [`String`](#string) | A unique identifier for the client performing the mutation. |
 | <a id="mutationupdateepicconfidential"></a>`confidential` | [`Boolean`](#boolean) | Indicates if the epic is confidential. |
-| <a id="mutationupdateepicdescription"></a>`description` | [`String`](#string) | The description of the epic. |
-| <a id="mutationupdateepicduedatefixed"></a>`dueDateFixed` | [`String`](#string) | The end date of the epic. |
+| <a id="mutationupdateepicdescription"></a>`description` | [`String`](#string) | Description of the epic. |
+| <a id="mutationupdateepicduedatefixed"></a>`dueDateFixed` | [`String`](#string) | End date of the epic. |
 | <a id="mutationupdateepicduedateisfixed"></a>`dueDateIsFixed` | [`Boolean`](#boolean) | Indicates end date should be sourced from due_date_fixed field not the issue milestones. |
-| <a id="mutationupdateepicgrouppath"></a>`groupPath` | [`ID!`](#id) | The group the epic to mutate is in. |
+| <a id="mutationupdateepicgrouppath"></a>`groupPath` | [`ID!`](#id) | Group the epic to mutate is in. |
 | <a id="mutationupdateepiciid"></a>`iid` | [`ID!`](#id) | The IID of the epic to mutate. |
-| <a id="mutationupdateepicremovelabelids"></a>`removeLabelIds` | [`[ID!]`](#id) | The IDs of labels to be removed from the epic. |
-| <a id="mutationupdateepicstartdatefixed"></a>`startDateFixed` | [`String`](#string) | The start date of the epic. |
+| <a id="mutationupdateepicremovelabelids"></a>`removeLabelIds` | [`[ID!]`](#id) | IDs of labels to be removed from the epic. |
+| <a id="mutationupdateepicstartdatefixed"></a>`startDateFixed` | [`String`](#string) | Start date of the epic. |
 | <a id="mutationupdateepicstartdateisfixed"></a>`startDateIsFixed` | [`Boolean`](#boolean) | Indicates start date should be sourced from start_date_fixed field not the issue milestones. |
 | <a id="mutationupdateepicstateevent"></a>`stateEvent` | [`EpicStateEvent`](#epicstateevent) | State event for the epic. |
-| <a id="mutationupdateepictitle"></a>`title` | [`String`](#string) | The title of the epic. |
+| <a id="mutationupdateepictitle"></a>`title` | [`String`](#string) | Title of the epic. |
 
 #### Fields
 
@@ -4251,7 +4245,7 @@ Input type: `UpdateImageDiffNoteInput`
 | <a id="mutationupdateimagediffnotebody"></a>`body` | [`String`](#string) | Content of the note. |
 | <a id="mutationupdateimagediffnoteclientmutationid"></a>`clientMutationId` | [`String`](#string) | A unique identifier for the client performing the mutation. |
 | <a id="mutationupdateimagediffnoteid"></a>`id` | [`NoteID!`](#noteid) | Global ID of the note to update. |
-| <a id="mutationupdateimagediffnoteposition"></a>`position` | [`UpdateDiffImagePositionInput`](#updatediffimagepositioninput) | The position of this note on a diff. |
+| <a id="mutationupdateimagediffnoteposition"></a>`position` | [`UpdateDiffImagePositionInput`](#updatediffimagepositioninput) | Position of this note on a diff. |
 
 #### Fields
 
@@ -4274,7 +4268,7 @@ Input type: `UpdateIssueInput`
 | <a id="mutationupdateissueconfidential"></a>`confidential` | [`Boolean`](#boolean) | Indicates the issue is confidential. |
 | <a id="mutationupdateissuedescription"></a>`description` | [`String`](#string) | Description of the issue. |
 | <a id="mutationupdateissueduedate"></a>`dueDate` | [`ISO8601Date`](#iso8601date) | Due date of the issue. |
-| <a id="mutationupdateissueepicid"></a>`epicId` | [`EpicID`](#epicid) | The ID of the parent epic. NULL when removing the association. |
+| <a id="mutationupdateissueepicid"></a>`epicId` | [`EpicID`](#epicid) | ID of the parent epic. NULL when removing the association. |
 | <a id="mutationupdateissuehealthstatus"></a>`healthStatus` | [`HealthStatus`](#healthstatus) | The desired health status. |
 | <a id="mutationupdateissueiid"></a>`iid` | [`String!`](#string) | IID of the issue to mutate. |
 | <a id="mutationupdateissuelabelids"></a>`labelIds` | [`[ID!]`](#id) | IDs of labels to be set. Replaces existing issue labels. |
@@ -4478,7 +4472,6 @@ Input type: `VulnerabilityCreateInput`
 | <a id="mutationvulnerabilitycreateproject"></a>`project` | [`ProjectID!`](#projectid) | ID of the project to attach the vulnerability to. |
 | <a id="mutationvulnerabilitycreateresolvedat"></a>`resolvedAt` | [`Time`](#time) | Timestamp of when the vulnerability state changed to resolved (defaults to creation time if status is `resolved`). |
 | <a id="mutationvulnerabilitycreatescannername"></a>`scannerName` | [`String!`](#string) | Name of the security scanner used to discover the vulnerability. |
-| <a id="mutationvulnerabilitycreatescannertype"></a>`scannerType` | [`SecurityScannerType!`](#securityscannertype) | Type of the security scanner used to discover the vulnerability. |
 | <a id="mutationvulnerabilitycreateseverity"></a>`severity` | [`VulnerabilitySeverity`](#vulnerabilityseverity) | Severity of the vulnerability (defaults to `unknown`). |
 | <a id="mutationvulnerabilitycreatesolution"></a>`solution` | [`String`](#string) | How to fix this vulnerability. |
 | <a id="mutationvulnerabilitycreatestate"></a>`state` | [`VulnerabilityState`](#vulnerabilitystate) | State of the vulnerability (defaults to `detected`). |
@@ -5414,6 +5407,52 @@ The edge type for [`DastSiteValidation`](#dastsitevalidation).
 | ---- | ---- | ----------- |
 | <a id="dastsitevalidationedgecursor"></a>`cursor` | [`String!`](#string) | A cursor for use in pagination. |
 | <a id="dastsitevalidationedgenode"></a>`node` | [`DastSiteValidation`](#dastsitevalidation) | The item at the end of the edge. |
+
+#### `DependencyProxyBlobConnection`
+
+The connection type for [`DependencyProxyBlob`](#dependencyproxyblob).
+
+##### Fields
+
+| Name | Type | Description |
+| ---- | ---- | ----------- |
+| <a id="dependencyproxyblobconnectionedges"></a>`edges` | [`[DependencyProxyBlobEdge]`](#dependencyproxyblobedge) | A list of edges. |
+| <a id="dependencyproxyblobconnectionnodes"></a>`nodes` | [`[DependencyProxyBlob]`](#dependencyproxyblob) | A list of nodes. |
+| <a id="dependencyproxyblobconnectionpageinfo"></a>`pageInfo` | [`PageInfo!`](#pageinfo) | Information to aid in pagination. |
+
+#### `DependencyProxyBlobEdge`
+
+The edge type for [`DependencyProxyBlob`](#dependencyproxyblob).
+
+##### Fields
+
+| Name | Type | Description |
+| ---- | ---- | ----------- |
+| <a id="dependencyproxyblobedgecursor"></a>`cursor` | [`String!`](#string) | A cursor for use in pagination. |
+| <a id="dependencyproxyblobedgenode"></a>`node` | [`DependencyProxyBlob`](#dependencyproxyblob) | The item at the end of the edge. |
+
+#### `DependencyProxyManifestConnection`
+
+The connection type for [`DependencyProxyManifest`](#dependencyproxymanifest).
+
+##### Fields
+
+| Name | Type | Description |
+| ---- | ---- | ----------- |
+| <a id="dependencyproxymanifestconnectionedges"></a>`edges` | [`[DependencyProxyManifestEdge]`](#dependencyproxymanifestedge) | A list of edges. |
+| <a id="dependencyproxymanifestconnectionnodes"></a>`nodes` | [`[DependencyProxyManifest]`](#dependencyproxymanifest) | A list of nodes. |
+| <a id="dependencyproxymanifestconnectionpageinfo"></a>`pageInfo` | [`PageInfo!`](#pageinfo) | Information to aid in pagination. |
+
+#### `DependencyProxyManifestEdge`
+
+The edge type for [`DependencyProxyManifest`](#dependencyproxymanifest).
+
+##### Fields
+
+| Name | Type | Description |
+| ---- | ---- | ----------- |
+| <a id="dependencyproxymanifestedgecursor"></a>`cursor` | [`String!`](#string) | A cursor for use in pagination. |
+| <a id="dependencyproxymanifestedgenode"></a>`node` | [`DependencyProxyManifest`](#dependencyproxymanifest) | The item at the end of the edge. |
 
 #### `DesignAtVersionConnection`
 
@@ -6410,6 +6449,29 @@ The edge type for [`PackageTag`](#packagetag).
 | ---- | ---- | ----------- |
 | <a id="packagetagedgecursor"></a>`cursor` | [`String!`](#string) | A cursor for use in pagination. |
 | <a id="packagetagedgenode"></a>`node` | [`PackageTag`](#packagetag) | The item at the end of the edge. |
+
+#### `PagesDeploymentRegistryConnection`
+
+The connection type for [`PagesDeploymentRegistry`](#pagesdeploymentregistry).
+
+##### Fields
+
+| Name | Type | Description |
+| ---- | ---- | ----------- |
+| <a id="pagesdeploymentregistryconnectionedges"></a>`edges` | [`[PagesDeploymentRegistryEdge]`](#pagesdeploymentregistryedge) | A list of edges. |
+| <a id="pagesdeploymentregistryconnectionnodes"></a>`nodes` | [`[PagesDeploymentRegistry]`](#pagesdeploymentregistry) | A list of nodes. |
+| <a id="pagesdeploymentregistryconnectionpageinfo"></a>`pageInfo` | [`PageInfo!`](#pageinfo) | Information to aid in pagination. |
+
+#### `PagesDeploymentRegistryEdge`
+
+The edge type for [`PagesDeploymentRegistry`](#pagesdeploymentregistry).
+
+##### Fields
+
+| Name | Type | Description |
+| ---- | ---- | ----------- |
+| <a id="pagesdeploymentregistryedgecursor"></a>`cursor` | [`String!`](#string) | A cursor for use in pagination. |
+| <a id="pagesdeploymentregistryedgenode"></a>`node` | [`PagesDeploymentRegistry`](#pagesdeploymentregistry) | The item at the end of the edge. |
 
 #### `PathLockConnection`
 
@@ -7524,7 +7586,7 @@ An endpoint and credentials used to accept alerts for a project.
 | <a id="alertmanagementhttpintegrationname"></a>`name` | [`String`](#string) | Name of the integration. |
 | <a id="alertmanagementhttpintegrationpayloadalertfields"></a>`payloadAlertFields` | [`[AlertManagementPayloadAlertField!]`](#alertmanagementpayloadalertfield) | Extract alert fields from payload example for custom mapping. |
 | <a id="alertmanagementhttpintegrationpayloadattributemappings"></a>`payloadAttributeMappings` | [`[AlertManagementPayloadAlertMappingField!]`](#alertmanagementpayloadalertmappingfield) | The custom mapping of GitLab alert attributes to fields from the payload_example. |
-| <a id="alertmanagementhttpintegrationpayloadexample"></a>`payloadExample` | [`JsonString`](#jsonstring) | The example of an alert payload. |
+| <a id="alertmanagementhttpintegrationpayloadexample"></a>`payloadExample` | [`JsonString`](#jsonstring) | Example of an alert payload. |
 | <a id="alertmanagementhttpintegrationtoken"></a>`token` | [`String`](#string) | Token used to authenticate alert notification requests. |
 | <a id="alertmanagementhttpintegrationtype"></a>`type` | [`AlertManagementIntegrationType!`](#alertmanagementintegrationtype) | Type of integration. |
 | <a id="alertmanagementhttpintegrationurl"></a>`url` | [`String`](#string) | Endpoint which accepts alert notifications. |
@@ -7605,7 +7667,7 @@ Describes a rule for who can approve merge requests.
 | <a id="approvalruleapproved"></a>`approved` | [`Boolean`](#boolean) | Indicates if the rule is satisfied. |
 | <a id="approvalruleapprovedby"></a>`approvedBy` | [`UserCoreConnection`](#usercoreconnection) | List of users defined in the rule that approved the merge request. (see [Connections](#connections)) |
 | <a id="approvalrulecontainshiddengroups"></a>`containsHiddenGroups` | [`Boolean`](#boolean) | Indicates if the rule contains approvers from a hidden group. |
-| <a id="approvalruleeligibleapprovers"></a>`eligibleApprovers` | [`UserCoreConnection`](#usercoreconnection) | List of all users eligible to approve the merge request (defined explicitly and from associated groups). (see [Connections](#connections)) |
+| <a id="approvalruleeligibleapprovers"></a>`eligibleApprovers` | [`[UserCore!]`](#usercore) | List of all users eligible to approve the merge request (defined explicitly and from associated groups). |
 | <a id="approvalrulegroups"></a>`groups` | [`GroupConnection`](#groupconnection) | List of groups added as approvers for the rule. (see [Connections](#connections)) |
 | <a id="approvalruleid"></a>`id` | [`GlobalID!`](#globalid) | ID of the rule. |
 | <a id="approvalrulename"></a>`name` | [`String`](#string) | Name of the rule. |
@@ -7680,14 +7742,14 @@ Represents a project or group issue board.
 
 | Name | Type | Description |
 | ---- | ---- | ----------- |
-| <a id="boardassignee"></a>`assignee` | [`UserCore`](#usercore) | The board assignee. |
+| <a id="boardassignee"></a>`assignee` | [`UserCore`](#usercore) | Board assignee. |
 | <a id="boardcreatedat"></a>`createdAt` | [`Time!`](#time) | Timestamp of when the board was created. |
 | <a id="boardhidebackloglist"></a>`hideBacklogList` | [`Boolean`](#boolean) | Whether or not backlog list is hidden. |
 | <a id="boardhideclosedlist"></a>`hideClosedList` | [`Boolean`](#boolean) | Whether or not closed list is hidden. |
 | <a id="boardid"></a>`id` | [`ID!`](#id) | ID (global ID) of the board. |
-| <a id="boarditeration"></a>`iteration` | [`Iteration`](#iteration) | The board iteration. |
+| <a id="boarditeration"></a>`iteration` | [`Iteration`](#iteration) | Board iteration. |
 | <a id="boardlabels"></a>`labels` | [`LabelConnection`](#labelconnection) | Labels of the board. (see [Connections](#connections)) |
-| <a id="boardmilestone"></a>`milestone` | [`Milestone`](#milestone) | The board milestone. |
+| <a id="boardmilestone"></a>`milestone` | [`Milestone`](#milestone) | Board milestone. |
 | <a id="boardname"></a>`name` | [`String`](#string) | Name of the board. |
 | <a id="boardupdatedat"></a>`updatedAt` | [`Time!`](#time) | Timestamp of when the board was last updated. |
 | <a id="boardwebpath"></a>`webPath` | [`String!`](#string) | Web path of the board. |
@@ -7752,7 +7814,7 @@ Represents an epic on an issue board.
 | <a id="boardepicduedatefixed"></a>`dueDateFixed` | [`Time`](#time) | Fixed due date of the epic. |
 | <a id="boardepicduedatefrommilestones"></a>`dueDateFromMilestones` | [`Time`](#time) | Inherited due date of the epic from milestones. |
 | <a id="boardepicduedateisfixed"></a>`dueDateIsFixed` | [`Boolean`](#boolean) | Indicates if the due date has been manually set. |
-| <a id="boardepicevents"></a>`events` | [`EventConnection`](#eventconnection) | A list of events associated with the object. (see [Connections](#connections)) |
+| <a id="boardepicevents"></a>`events` | [`EventConnection`](#eventconnection) | List of events associated with the object. (see [Connections](#connections)) |
 | <a id="boardepicgroup"></a>`group` | [`Group!`](#group) | Group to which the epic belongs. |
 | <a id="boardepichaschildren"></a>`hasChildren` | [`Boolean!`](#boolean) | Indicates if the epic has children. |
 | <a id="boardepichasissues"></a>`hasIssues` | [`Boolean!`](#boolean) | Indicates if the epic has direct issues. |
@@ -7904,7 +7966,7 @@ Represents a list for an issue board.
 | <a id="boardlistissuescount"></a>`issuesCount` | [`Int`](#int) | Count of issues in the list. |
 | <a id="boardlistiteration"></a>`iteration` | [`Iteration`](#iteration) | Iteration of the list. |
 | <a id="boardlistlabel"></a>`label` | [`Label`](#label) | Label of the list. |
-| <a id="boardlistlimitmetric"></a>`limitMetric` | [`ListLimitMetric`](#listlimitmetric) | The current limit metric for the list. |
+| <a id="boardlistlimitmetric"></a>`limitMetric` | [`ListLimitMetric`](#listlimitmetric) | Current limit metric for the list. |
 | <a id="boardlistlisttype"></a>`listType` | [`String!`](#string) | Type of the list. |
 | <a id="boardlistmaxissuecount"></a>`maxIssueCount` | [`Int`](#int) | Maximum number of issues in the list. |
 | <a id="boardlistmaxissueweight"></a>`maxIssueWeight` | [`Int`](#int) | Maximum weight of issues in the list. |
@@ -8572,6 +8634,44 @@ The response from the AdminSidekiqQueuesDeleteJobs mutation.
 | <a id="deletejobsresponsedeletedjobs"></a>`deletedJobs` | [`Int`](#int) | Number of matching jobs deleted. |
 | <a id="deletejobsresponsequeuesize"></a>`queueSize` | [`Int`](#int) | Queue size after processing. |
 
+### `DependencyProxyBlob`
+
+Dependency proxy blob.
+
+#### Fields
+
+| Name | Type | Description |
+| ---- | ---- | ----------- |
+| <a id="dependencyproxyblobcreatedat"></a>`createdAt` | [`Time!`](#time) | Date of creation. |
+| <a id="dependencyproxyblobfilename"></a>`fileName` | [`String!`](#string) | Name of the blob. |
+| <a id="dependencyproxyblobsize"></a>`size` | [`String!`](#string) | Size of the blob file. |
+| <a id="dependencyproxyblobupdatedat"></a>`updatedAt` | [`Time!`](#time) | Date of most recent update. |
+
+### `DependencyProxyManifest`
+
+Dependency proxy manifest.
+
+#### Fields
+
+| Name | Type | Description |
+| ---- | ---- | ----------- |
+| <a id="dependencyproxymanifestcreatedat"></a>`createdAt` | [`Time!`](#time) | Date of creation. |
+| <a id="dependencyproxymanifestdigest"></a>`digest` | [`String!`](#string) | Digest of the manifest. |
+| <a id="dependencyproxymanifestfilename"></a>`fileName` | [`String!`](#string) | Name of the manifest. |
+| <a id="dependencyproxymanifestimagename"></a>`imageName` | [`String!`](#string) | Name of the image. |
+| <a id="dependencyproxymanifestsize"></a>`size` | [`String!`](#string) | Size of the manifest file. |
+| <a id="dependencyproxymanifestupdatedat"></a>`updatedAt` | [`Time!`](#time) | Date of most recent update. |
+
+### `DependencyProxySetting`
+
+Group-level Dependency Proxy settings.
+
+#### Fields
+
+| Name | Type | Description |
+| ---- | ---- | ----------- |
+| <a id="dependencyproxysettingenabled"></a>`enabled` | [`Boolean!`](#boolean) | Indicates whether the dependency proxy is enabled for the group. |
+
 ### `Design`
 
 A single design.
@@ -8580,18 +8680,18 @@ A single design.
 
 | Name | Type | Description |
 | ---- | ---- | ----------- |
-| <a id="designdiffrefs"></a>`diffRefs` | [`DiffRefs!`](#diffrefs) | The diff refs for this design. |
+| <a id="designdiffrefs"></a>`diffRefs` | [`DiffRefs!`](#diffrefs) | Diff refs for this design. |
 | <a id="designdiscussions"></a>`discussions` | [`DiscussionConnection!`](#discussionconnection) | All discussions on this noteable. (see [Connections](#connections)) |
 | <a id="designevent"></a>`event` | [`DesignVersionEvent!`](#designversionevent) | How this design was changed in the current version. |
-| <a id="designfilename"></a>`filename` | [`String!`](#string) | The filename of the design. |
-| <a id="designfullpath"></a>`fullPath` | [`String!`](#string) | The full path to the design file. |
-| <a id="designid"></a>`id` | [`ID!`](#id) | The ID of this design. |
-| <a id="designimage"></a>`image` | [`String!`](#string) | The URL of the full-sized image. |
+| <a id="designfilename"></a>`filename` | [`String!`](#string) | Filename of the design. |
+| <a id="designfullpath"></a>`fullPath` | [`String!`](#string) | Full path to the design file. |
+| <a id="designid"></a>`id` | [`ID!`](#id) | ID of this design. |
+| <a id="designimage"></a>`image` | [`String!`](#string) | URL of the full-sized image. |
 | <a id="designimagev432x230"></a>`imageV432x230` | [`String`](#string) | The URL of the design resized to fit within the bounds of 432x230. This will be `null` if the image has not been generated. |
-| <a id="designissue"></a>`issue` | [`Issue!`](#issue) | The issue the design belongs to. |
+| <a id="designissue"></a>`issue` | [`Issue!`](#issue) | Issue the design belongs to. |
 | <a id="designnotes"></a>`notes` | [`NoteConnection!`](#noteconnection) | All notes on this noteable. (see [Connections](#connections)) |
-| <a id="designnotescount"></a>`notesCount` | [`Int!`](#int) | The total count of user-created notes for this design. |
-| <a id="designproject"></a>`project` | [`Project!`](#project) | The project the design belongs to. |
+| <a id="designnotescount"></a>`notesCount` | [`Int!`](#int) | Total count of user-created notes for this design. |
+| <a id="designproject"></a>`project` | [`Project!`](#project) | Project the design belongs to. |
 
 #### Fields with arguments
 
@@ -8636,18 +8736,18 @@ A design pinned to a specific version. The image field reflects the design as of
 
 | Name | Type | Description |
 | ---- | ---- | ----------- |
-| <a id="designatversiondesign"></a>`design` | [`Design!`](#design) | The underlying design. |
-| <a id="designatversiondiffrefs"></a>`diffRefs` | [`DiffRefs!`](#diffrefs) | The diff refs for this design. |
+| <a id="designatversiondesign"></a>`design` | [`Design!`](#design) | Underlying design. |
+| <a id="designatversiondiffrefs"></a>`diffRefs` | [`DiffRefs!`](#diffrefs) | Diff refs for this design. |
 | <a id="designatversionevent"></a>`event` | [`DesignVersionEvent!`](#designversionevent) | How this design was changed in the current version. |
-| <a id="designatversionfilename"></a>`filename` | [`String!`](#string) | The filename of the design. |
-| <a id="designatversionfullpath"></a>`fullPath` | [`String!`](#string) | The full path to the design file. |
-| <a id="designatversionid"></a>`id` | [`ID!`](#id) | The ID of this design. |
-| <a id="designatversionimage"></a>`image` | [`String!`](#string) | The URL of the full-sized image. |
+| <a id="designatversionfilename"></a>`filename` | [`String!`](#string) | Filename of the design. |
+| <a id="designatversionfullpath"></a>`fullPath` | [`String!`](#string) | Full path to the design file. |
+| <a id="designatversionid"></a>`id` | [`ID!`](#id) | ID of this design. |
+| <a id="designatversionimage"></a>`image` | [`String!`](#string) | URL of the full-sized image. |
 | <a id="designatversionimagev432x230"></a>`imageV432x230` | [`String`](#string) | The URL of the design resized to fit within the bounds of 432x230. This will be `null` if the image has not been generated. |
-| <a id="designatversionissue"></a>`issue` | [`Issue!`](#issue) | The issue the design belongs to. |
-| <a id="designatversionnotescount"></a>`notesCount` | [`Int!`](#int) | The total count of user-created notes for this design. |
-| <a id="designatversionproject"></a>`project` | [`Project!`](#project) | The project the design belongs to. |
-| <a id="designatversionversion"></a>`version` | [`DesignVersion!`](#designversion) | The version this design-at-versions is pinned to. |
+| <a id="designatversionissue"></a>`issue` | [`Issue!`](#issue) | Issue the design belongs to. |
+| <a id="designatversionnotescount"></a>`notesCount` | [`Int!`](#int) | Total count of user-created notes for this design. |
+| <a id="designatversionproject"></a>`project` | [`Project!`](#project) | Project the design belongs to. |
+| <a id="designatversionversion"></a>`version` | [`DesignVersion!`](#designversion) | Version this design-at-versions is pinned to. |
 
 ### `DesignCollection`
 
@@ -8995,9 +9095,9 @@ Describes where code is deployed for a project.
 | Name | Type | Description |
 | ---- | ---- | ----------- |
 | <a id="environmentid"></a>`id` | [`ID!`](#id) | ID of the environment. |
-| <a id="environmentlatestopenedmostseverealert"></a>`latestOpenedMostSevereAlert` | [`AlertManagementAlert`](#alertmanagementalert) | The most severe open alert for the environment. If multiple alerts have equal severity, the most recent is returned. |
+| <a id="environmentlatestopenedmostseverealert"></a>`latestOpenedMostSevereAlert` | [`AlertManagementAlert`](#alertmanagementalert) | Most severe open alert for the environment. If multiple alerts have equal severity, the most recent is returned. |
 | <a id="environmentname"></a>`name` | [`String!`](#string) | Human-readable name of the environment. |
-| <a id="environmentpath"></a>`path` | [`String!`](#string) | The path to the environment. |
+| <a id="environmentpath"></a>`path` | [`String!`](#string) | Path to the environment. |
 | <a id="environmentstate"></a>`state` | [`String!`](#string) | State of the environment, for example: available/stopped. |
 
 #### Fields with arguments
@@ -9037,7 +9137,7 @@ Represents an epic.
 | <a id="epicduedatefixed"></a>`dueDateFixed` | [`Time`](#time) | Fixed due date of the epic. |
 | <a id="epicduedatefrommilestones"></a>`dueDateFromMilestones` | [`Time`](#time) | Inherited due date of the epic from milestones. |
 | <a id="epicduedateisfixed"></a>`dueDateIsFixed` | [`Boolean`](#boolean) | Indicates if the due date has been manually set. |
-| <a id="epicevents"></a>`events` | [`EventConnection`](#eventconnection) | A list of events associated with the object. (see [Connections](#connections)) |
+| <a id="epicevents"></a>`events` | [`EventConnection`](#eventconnection) | List of events associated with the object. (see [Connections](#connections)) |
 | <a id="epicgroup"></a>`group` | [`Group!`](#group) | Group to which the epic belongs. |
 | <a id="epichaschildren"></a>`hasChildren` | [`Boolean!`](#boolean) | Indicates if the epic has children. |
 | <a id="epichasissues"></a>`hasIssues` | [`Boolean!`](#boolean) | Indicates if the epic has direct issues. |
@@ -9529,6 +9629,22 @@ four standard [pagination arguments](#connection-pagination-arguments):
 | ---- | ---- | ----------- |
 | <a id="geonodepackagefileregistriesids"></a>`ids` | [`[ID!]`](#id) | Filters registries by their ID. |
 
+##### `GeoNode.pagesDeploymentRegistries`
+
+Find Pages Deployment registries on this Geo node Available only when feature flag `geo_pages_deployment_replication` is enabled. This flag is disabled by default, because the feature is experimental and is subject to change without notice.
+
+Returns [`PagesDeploymentRegistryConnection`](#pagesdeploymentregistryconnection).
+
+This field returns a [connection](#connections). It accepts the
+four standard [pagination arguments](#connection-pagination-arguments):
+`before: String`, `after: String`, `first: Int`, `last: Int`.
+
+###### Arguments
+
+| Name | Type | Description |
+| ---- | ---- | ----------- |
+| <a id="geonodepagesdeploymentregistriesids"></a>`ids` | [`[ID!]`](#id) | Filters registries by their ID. |
+
 ##### `GeoNode.pipelineArtifactRegistries`
 
 Find pipeline artifact registries on this Geo node.
@@ -9599,13 +9715,19 @@ four standard [pagination arguments](#connection-pagination-arguments):
 | <a id="groupadditionalpurchasedstoragesize"></a>`additionalPurchasedStorageSize` | [`Float`](#float) | Additional storage purchased for the root namespace in bytes. |
 | <a id="groupautodevopsenabled"></a>`autoDevopsEnabled` | [`Boolean`](#boolean) | Indicates whether Auto DevOps is enabled for all projects within this group. |
 | <a id="groupavatarurl"></a>`avatarUrl` | [`String`](#string) | Avatar URL of the group. |
-| <a id="groupbillablememberscount"></a>`billableMembersCount` | [`Int`](#int) | The number of billable users in the group. |
+| <a id="groupbillablememberscount"></a>`billableMembersCount` | [`Int`](#int) | Number of billable users in the group. |
 | <a id="groupcontainerrepositoriescount"></a>`containerRepositoriesCount` | [`Int!`](#int) | Number of container repositories in the group. |
 | <a id="groupcontainslockedprojects"></a>`containsLockedProjects` | [`Boolean!`](#boolean) | Includes at least one project where the repository size exceeds the limit. |
 | <a id="groupcustomemoji"></a>`customEmoji` | [`CustomEmojiConnection`](#customemojiconnection) | Custom emoji within this namespace. Available only when feature flag `custom_emoji` is enabled. This flag is disabled by default, because the feature is experimental and is subject to change without notice. (see [Connections](#connections)) |
+| <a id="groupdependencyproxyblobcount"></a>`dependencyProxyBlobCount` | [`Int!`](#int) | Number of dependency proxy blobs cached in the group. |
+| <a id="groupdependencyproxyblobs"></a>`dependencyProxyBlobs` | [`DependencyProxyBlobConnection`](#dependencyproxyblobconnection) | Dependency Proxy blobs. (see [Connections](#connections)) |
+| <a id="groupdependencyproxyimagecount"></a>`dependencyProxyImageCount` | [`Int!`](#int) | Number of dependency proxy images cached in the group. |
+| <a id="groupdependencyproxymanifests"></a>`dependencyProxyManifests` | [`DependencyProxyManifestConnection`](#dependencyproxymanifestconnection) | Dependency Proxy manifests. (see [Connections](#connections)) |
+| <a id="groupdependencyproxysetting"></a>`dependencyProxySetting` | [`DependencyProxySetting`](#dependencyproxysetting) | Dependency Proxy settings for the group. |
+| <a id="groupdependencyproxytotalsize"></a>`dependencyProxyTotalSize` | [`String!`](#string) | Total size of the dependency proxy cached images. |
 | <a id="groupdescription"></a>`description` | [`String`](#string) | Description of the namespace. |
 | <a id="groupdescriptionhtml"></a>`descriptionHtml` | [`String`](#string) | The GitLab Flavored Markdown rendering of `description`. |
-| <a id="groupdora"></a>`dora` | [`Dora`](#dora) | The group's DORA metrics. |
+| <a id="groupdora"></a>`dora` | [`Dora`](#dora) | Group's DORA metrics. |
 | <a id="groupemailsdisabled"></a>`emailsDisabled` | [`Boolean`](#boolean) | Indicates if a group has email notifications disabled. |
 | <a id="groupepicboards"></a>`epicBoards` | [`EpicBoardConnection`](#epicboardconnection) | Find epic boards. (see [Connections](#connections)) |
 | <a id="groupepicsenabled"></a>`epicsEnabled` | [`Boolean`](#boolean) | Indicates if Epics are enabled for namespace. |
@@ -9616,10 +9738,10 @@ four standard [pagination arguments](#connection-pagination-arguments):
 | <a id="grouplfsenabled"></a>`lfsEnabled` | [`Boolean`](#boolean) | Indicates if Large File Storage (LFS) is enabled for namespace. |
 | <a id="groupmentionsdisabled"></a>`mentionsDisabled` | [`Boolean`](#boolean) | Indicates if a group is disabled from getting mentioned. |
 | <a id="groupname"></a>`name` | [`String!`](#string) | Name of the namespace. |
-| <a id="grouppackagesettings"></a>`packageSettings` | [`PackageSettings`](#packagesettings) | The package settings for the namespace. |
+| <a id="grouppackagesettings"></a>`packageSettings` | [`PackageSettings`](#packagesettings) | Package settings for the namespace. |
 | <a id="groupparent"></a>`parent` | [`Group`](#group) | Parent group. |
 | <a id="grouppath"></a>`path` | [`String!`](#string) | Path of the namespace. |
-| <a id="groupprojectcreationlevel"></a>`projectCreationLevel` | [`String`](#string) | The permission level required to create projects in the group. |
+| <a id="groupprojectcreationlevel"></a>`projectCreationLevel` | [`String`](#string) | Permission level required to create projects in the group. |
 | <a id="grouprepositorysizeexcessprojectcount"></a>`repositorySizeExcessProjectCount` | [`Int!`](#int) | Number of projects in the root namespace where the repository size exceeds the limit. |
 | <a id="grouprequestaccessenabled"></a>`requestAccessEnabled` | [`Boolean`](#boolean) | Indicates if users can request access to namespace. |
 | <a id="grouprequiretwofactorauthentication"></a>`requireTwoFactorAuthentication` | [`Boolean`](#boolean) | Indicates if all users in this group are required to set up two-factor authentication. |
@@ -9628,7 +9750,7 @@ four standard [pagination arguments](#connection-pagination-arguments):
 | <a id="groupsharedrunnerssetting"></a>`sharedRunnersSetting` | [`SharedRunnersSetting`](#sharedrunnerssetting) | Shared runners availability for the namespace and its descendants. |
 | <a id="groupstats"></a>`stats` | [`GroupStats`](#groupstats) | Group statistics. |
 | <a id="groupstoragesizelimit"></a>`storageSizeLimit` | [`Float`](#float) | Total storage limit of the root namespace in bytes. |
-| <a id="groupsubgroupcreationlevel"></a>`subgroupCreationLevel` | [`String`](#string) | The permission level required to create subgroups within the group. |
+| <a id="groupsubgroupcreationlevel"></a>`subgroupCreationLevel` | [`String`](#string) | Permission level required to create subgroups within the group. |
 | <a id="grouptemporarystorageincreaseendson"></a>`temporaryStorageIncreaseEndsOn` | [`Time`](#time) | Date until the temporary storage increase is active. |
 | <a id="grouptotalrepositorysize"></a>`totalRepositorySize` | [`Float`](#float) | Total repository size of all projects in the root namespace in bytes. |
 | <a id="grouptotalrepositorysizeexcess"></a>`totalRepositorySizeExcess` | [`Float`](#float) | Total excess repository size of all projects in the root namespace in bytes. |
@@ -9913,7 +10035,7 @@ four standard [pagination arguments](#connection-pagination-arguments):
 
 ##### `Group.label`
 
-A label available on this group.
+Label available on this group.
 
 Returns [`Label`](#label).
 
@@ -10039,7 +10161,7 @@ four standard [pagination arguments](#connection-pagination-arguments):
 
 ##### `Group.runners`
 
-Find runners visible to the current user. Available only when feature flag `runner_graphql_query` is enabled. This flag is enabled by default.
+Find runners visible to the current user.
 
 Returns [`CiRunnerConnection`](#cirunnerconnection).
 
@@ -10587,7 +10709,7 @@ four standard [pagination arguments](#connection-pagination-arguments):
 | Name | Type | Description |
 | ---- | ---- | ----------- |
 | <a id="kasenabled"></a>`enabled` | [`Boolean!`](#boolean) | Indicates whether the Kubernetes Agent Server is enabled. |
-| <a id="kasexternalurl"></a>`externalUrl` | [`String`](#string) | The URL used by the Agents to communicate with KAS. |
+| <a id="kasexternalurl"></a>`externalUrl` | [`String`](#string) | URL used by the Agents to communicate with KAS. |
 | <a id="kasversion"></a>`version` | [`String`](#string) | KAS version. |
 
 ### `Label`
@@ -10695,7 +10817,7 @@ Maven metadata.
 | <a id="mergerequestforceremovesourcebranch"></a>`forceRemoveSourceBranch` | [`Boolean`](#boolean) | Indicates if the project settings will lead to source branch deletion after merge. |
 | <a id="mergerequesthasci"></a>`hasCi` | [`Boolean!`](#boolean) | Indicates if the merge request has CI. |
 | <a id="mergerequesthassecurityreports"></a>`hasSecurityReports` | [`Boolean!`](#boolean) | Indicates if the source branch has any security reports. |
-| <a id="mergerequestheadpipeline"></a>`headPipeline` | [`Pipeline`](#pipeline) | The pipeline running on the branch HEAD of the merge request. |
+| <a id="mergerequestheadpipeline"></a>`headPipeline` | [`Pipeline`](#pipeline) | Pipeline running on the branch HEAD of the merge request. |
 | <a id="mergerequesthumantimeestimate"></a>`humanTimeEstimate` | [`String`](#string) | Human-readable time estimate of the merge request. |
 | <a id="mergerequesthumantotaltimespent"></a>`humanTotalTimeSpent` | [`String`](#string) | Human-readable total time reported as spent on the merge request. |
 | <a id="mergerequestid"></a>`id` | [`ID!`](#id) | ID of the merge request. |
@@ -10713,7 +10835,7 @@ Maven metadata.
 | <a id="mergerequestmergeable"></a>`mergeable` | [`Boolean!`](#boolean) | Indicates if the merge request is mergeable. |
 | <a id="mergerequestmergeablediscussionsstate"></a>`mergeableDiscussionsState` | [`Boolean`](#boolean) | Indicates if all discussions in the merge request have been resolved, allowing the merge request to be merged. |
 | <a id="mergerequestmergedat"></a>`mergedAt` | [`Time`](#time) | Timestamp of when the merge request was merged, null if not merged. |
-| <a id="mergerequestmilestone"></a>`milestone` | [`Milestone`](#milestone) | The milestone of the merge request. |
+| <a id="mergerequestmilestone"></a>`milestone` | [`Milestone`](#milestone) | Milestone of the merge request. |
 | <a id="mergerequestnotes"></a>`notes` | [`NoteConnection!`](#noteconnection) | All notes on this noteable. (see [Connections](#connections)) |
 | <a id="mergerequestparticipants"></a>`participants` | [`UserCoreConnection`](#usercoreconnection) | Participants in the merge request. This includes the author, assignees, reviewers, and users mentioned in notes. (see [Connections](#connections)) |
 | <a id="mergerequestproject"></a>`project` | [`Project!`](#project) | Alias for target_project. |
@@ -10780,7 +10902,7 @@ Returns [`[DiffStats!]`](#diffstats).
 
 | Name | Type | Description |
 | ---- | ---- | ----------- |
-| <a id="mergerequestdiffstatspath"></a>`path` | [`String`](#string) | A specific file-path. |
+| <a id="mergerequestdiffstatspath"></a>`path` | [`String`](#string) | Specific file path. |
 
 ##### `MergeRequest.pipelines`
 
@@ -10838,7 +10960,7 @@ A user assigned to a merge request.
 | <a id="mergerequestassigneegroupcount"></a>`groupCount` | [`Int`](#int) | Group count for the user. |
 | <a id="mergerequestassigneegroupmemberships"></a>`groupMemberships` | [`GroupMemberConnection`](#groupmemberconnection) | Group memberships of the user. (see [Connections](#connections)) |
 | <a id="mergerequestassigneeid"></a>`id` | [`ID!`](#id) | ID of the user. |
-| <a id="mergerequestassigneelocation"></a>`location` | [`String`](#string) | The location of the user. |
+| <a id="mergerequestassigneelocation"></a>`location` | [`String`](#string) | Location of the user. |
 | <a id="mergerequestassigneemergerequestinteraction"></a>`mergeRequestInteraction` | [`UserMergeRequestInteraction`](#usermergerequestinteraction) | Details of this user's interactions with the merge request. |
 | <a id="mergerequestassigneename"></a>`name` | [`String!`](#string) | Human-readable name of the user. |
 | <a id="mergerequestassigneenamespace"></a>`namespace` | [`Namespace`](#namespace) | Personal namespace of the user. |
@@ -11084,7 +11206,7 @@ A user assigned to a merge request as a reviewer.
 | <a id="mergerequestreviewergroupcount"></a>`groupCount` | [`Int`](#int) | Group count for the user. |
 | <a id="mergerequestreviewergroupmemberships"></a>`groupMemberships` | [`GroupMemberConnection`](#groupmemberconnection) | Group memberships of the user. (see [Connections](#connections)) |
 | <a id="mergerequestreviewerid"></a>`id` | [`ID!`](#id) | ID of the user. |
-| <a id="mergerequestreviewerlocation"></a>`location` | [`String`](#string) | The location of the user. |
+| <a id="mergerequestreviewerlocation"></a>`location` | [`String`](#string) | Location of the user. |
 | <a id="mergerequestreviewermergerequestinteraction"></a>`mergeRequestInteraction` | [`UserMergeRequestInteraction`](#usermergerequestinteraction) | Details of this user's interactions with the merge request. |
 | <a id="mergerequestreviewername"></a>`name` | [`String!`](#string) | Human-readable name of the user. |
 | <a id="mergerequestreviewernamespace"></a>`namespace` | [`Namespace`](#namespace) | Personal namespace of the user. |
@@ -11397,7 +11519,7 @@ Contains statistics about a milestone.
 | <a id="namespaceistemporarystorageincreaseenabled"></a>`isTemporaryStorageIncreaseEnabled` | [`Boolean!`](#boolean) | Status of the temporary storage increase. |
 | <a id="namespacelfsenabled"></a>`lfsEnabled` | [`Boolean`](#boolean) | Indicates if Large File Storage (LFS) is enabled for namespace. |
 | <a id="namespacename"></a>`name` | [`String!`](#string) | Name of the namespace. |
-| <a id="namespacepackagesettings"></a>`packageSettings` | [`PackageSettings`](#packagesettings) | The package settings for the namespace. |
+| <a id="namespacepackagesettings"></a>`packageSettings` | [`PackageSettings`](#packagesettings) | Package settings for the namespace. |
 | <a id="namespacepath"></a>`path` | [`String!`](#string) | Path of the namespace. |
 | <a id="namespacerepositorysizeexcessprojectcount"></a>`repositorySizeExcessProjectCount` | [`Int!`](#int) | Number of projects in the root namespace where the repository size exceeds the limit. |
 | <a id="namespacerequestaccessenabled"></a>`requestAccessEnabled` | [`Boolean`](#boolean) | Indicates if users can request access to namespace. |
@@ -11476,9 +11598,9 @@ Represents the network policy.
 | <a id="notebodyhtml"></a>`bodyHtml` | [`String`](#string) | The GitLab Flavored Markdown rendering of `note`. |
 | <a id="noteconfidential"></a>`confidential` | [`Boolean`](#boolean) | Indicates if this note is confidential. |
 | <a id="notecreatedat"></a>`createdAt` | [`Time!`](#time) | Timestamp of the note creation. |
-| <a id="notediscussion"></a>`discussion` | [`Discussion`](#discussion) | The discussion this note is a part of. |
+| <a id="notediscussion"></a>`discussion` | [`Discussion`](#discussion) | Discussion this note is a part of. |
 | <a id="noteid"></a>`id` | [`NoteID!`](#noteid) | ID of the note. |
-| <a id="noteposition"></a>`position` | [`DiffPosition`](#diffposition) | The position of this note on a diff. |
+| <a id="noteposition"></a>`position` | [`DiffPosition`](#diffposition) | Position of this note on a diff. |
 | <a id="noteproject"></a>`project` | [`Project`](#project) | Project associated with the note. |
 | <a id="noteresolvable"></a>`resolvable` | [`Boolean!`](#boolean) | Indicates if the object can be resolved. |
 | <a id="noteresolved"></a>`resolved` | [`Boolean!`](#boolean) | Indicates if the object is resolved. |
@@ -11580,10 +11702,10 @@ Represents a composer JSON file.
 
 | Name | Type | Description |
 | ---- | ---- | ----------- |
-| <a id="packagecomposerjsontypelicense"></a>`license` | [`String`](#string) | The license set in the Composer JSON file. |
-| <a id="packagecomposerjsontypename"></a>`name` | [`String`](#string) | The name set in the Composer JSON file. |
-| <a id="packagecomposerjsontypetype"></a>`type` | [`String`](#string) | The type set in the Composer JSON file. |
-| <a id="packagecomposerjsontypeversion"></a>`version` | [`String`](#string) | The version set in the Composer JSON file. |
+| <a id="packagecomposerjsontypelicense"></a>`license` | [`String`](#string) | License set in the Composer JSON file. |
+| <a id="packagecomposerjsontypename"></a>`name` | [`String`](#string) | Name set in the Composer JSON file. |
+| <a id="packagecomposerjsontypetype"></a>`type` | [`String`](#string) | Type set in the Composer JSON file. |
+| <a id="packagecomposerjsontypeversion"></a>`version` | [`String`](#string) | Version set in the Composer JSON file. |
 
 ### `PackageDependency`
 
@@ -11631,7 +11753,7 @@ Represents a package details in the Package Registry. Note that this type is in 
 | <a id="packagedetailstypetags"></a>`tags` | [`PackageTagConnection`](#packagetagconnection) | Package tags. (see [Connections](#connections)) |
 | <a id="packagedetailstypeupdatedat"></a>`updatedAt` | [`Time!`](#time) | Date of most recent update. |
 | <a id="packagedetailstypeversion"></a>`version` | [`String`](#string) | Version string. |
-| <a id="packagedetailstypeversions"></a>`versions` | [`PackageConnection`](#packageconnection) | The other versions of the package. (see [Connections](#connections)) |
+| <a id="packagedetailstypeversions"></a>`versions` | [`PackageConnection`](#packageconnection) | Other versions of the package. (see [Connections](#connections)) |
 
 ### `PackageFile`
 
@@ -11641,7 +11763,7 @@ Represents a package file.
 
 | Name | Type | Description |
 | ---- | ---- | ----------- |
-| <a id="packagefilecreatedat"></a>`createdAt` | [`Time!`](#time) | The created date. |
+| <a id="packagefilecreatedat"></a>`createdAt` | [`Time!`](#time) | Created date. |
 | <a id="packagefiledownloadpath"></a>`downloadPath` | [`String!`](#string) | Download path of the package file. |
 | <a id="packagefilefilemd5"></a>`fileMd5` | [`String`](#string) | Md5 of the package file. |
 | <a id="packagefilefilemetadata"></a>`fileMetadata` | [`PackageFileMetadata`](#packagefilemetadata) | File metadata. |
@@ -11650,7 +11772,7 @@ Represents a package file.
 | <a id="packagefilefilesha256"></a>`fileSha256` | [`String`](#string) | Sha256 of the package file. |
 | <a id="packagefileid"></a>`id` | [`PackagesPackageFileID!`](#packagespackagefileid) | ID of the file. |
 | <a id="packagefilesize"></a>`size` | [`String!`](#string) | Size of the package file. |
-| <a id="packagefileupdatedat"></a>`updatedAt` | [`Time!`](#time) | The updated date. |
+| <a id="packagefileupdatedat"></a>`updatedAt` | [`Time!`](#time) | Updated date. |
 
 ### `PackageFileRegistry`
 
@@ -11690,10 +11812,10 @@ Represents a package tag.
 
 | Name | Type | Description |
 | ---- | ---- | ----------- |
-| <a id="packagetagcreatedat"></a>`createdAt` | [`Time!`](#time) | The created date. |
-| <a id="packagetagid"></a>`id` | [`ID!`](#id) | The ID of the tag. |
-| <a id="packagetagname"></a>`name` | [`String!`](#string) | The name of the tag. |
-| <a id="packagetagupdatedat"></a>`updatedAt` | [`Time!`](#time) | The updated date. |
+| <a id="packagetagcreatedat"></a>`createdAt` | [`Time!`](#time) | Created date. |
+| <a id="packagetagid"></a>`id` | [`ID!`](#id) | ID of the tag. |
+| <a id="packagetagname"></a>`name` | [`String!`](#string) | Name of the tag. |
+| <a id="packagetagupdatedat"></a>`updatedAt` | [`Time!`](#time) | Updated date. |
 
 ### `PageInfo`
 
@@ -11707,6 +11829,23 @@ Information about pagination in a connection.
 | <a id="pageinfohasnextpage"></a>`hasNextPage` | [`Boolean!`](#boolean) | When paginating forwards, are there more items?. |
 | <a id="pageinfohaspreviouspage"></a>`hasPreviousPage` | [`Boolean!`](#boolean) | When paginating backwards, are there more items?. |
 | <a id="pageinfostartcursor"></a>`startCursor` | [`String`](#string) | When paginating backwards, the cursor to continue. |
+
+### `PagesDeploymentRegistry`
+
+Represents the Geo replication and verification state of a pages_deployment.
+
+#### Fields
+
+| Name | Type | Description |
+| ---- | ---- | ----------- |
+| <a id="pagesdeploymentregistrycreatedat"></a>`createdAt` | [`Time`](#time) | Timestamp when the PagesDeploymentRegistry was created. |
+| <a id="pagesdeploymentregistryid"></a>`id` | [`ID!`](#id) | ID of the PagesDeploymentRegistry. |
+| <a id="pagesdeploymentregistrylastsyncfailure"></a>`lastSyncFailure` | [`String`](#string) | Error message during sync of the PagesDeploymentRegistry. |
+| <a id="pagesdeploymentregistrylastsyncedat"></a>`lastSyncedAt` | [`Time`](#time) | Timestamp of the most recent successful sync of the PagesDeploymentRegistry. |
+| <a id="pagesdeploymentregistrypagesdeploymentid"></a>`pagesDeploymentId` | [`ID!`](#id) | ID of the Pages Deployment. |
+| <a id="pagesdeploymentregistryretryat"></a>`retryAt` | [`Time`](#time) | Timestamp after which the PagesDeploymentRegistry should be resynced. |
+| <a id="pagesdeploymentregistryretrycount"></a>`retryCount` | [`Int`](#int) | Number of consecutive failed sync attempts of the PagesDeploymentRegistry. |
+| <a id="pagesdeploymentregistrystate"></a>`state` | [`RegistryState`](#registrystate) | Sync state of the PagesDeploymentRegistry. |
 
 ### `PathLock`
 
@@ -11910,16 +12049,16 @@ Represents vulnerability finding of a security report on the pipeline.
 | <a id="projectclusteragents"></a>`clusterAgents` | [`ClusterAgentConnection`](#clusteragentconnection) | Cluster agents associated with the project. (see [Connections](#connections)) |
 | <a id="projectcodecoveragesummary"></a>`codeCoverageSummary` | [`CodeCoverageSummary`](#codecoveragesummary) | Code coverage summary associated with the project. |
 | <a id="projectcomplianceframeworks"></a>`complianceFrameworks` | [`ComplianceFrameworkConnection`](#complianceframeworkconnection) | Compliance frameworks associated with the project. (see [Connections](#connections)) |
-| <a id="projectcontainerexpirationpolicy"></a>`containerExpirationPolicy` | [`ContainerExpirationPolicy`](#containerexpirationpolicy) | The container expiration policy of the project. |
+| <a id="projectcontainerexpirationpolicy"></a>`containerExpirationPolicy` | [`ContainerExpirationPolicy`](#containerexpirationpolicy) | Container expiration policy of the project. |
 | <a id="projectcontainerregistryenabled"></a>`containerRegistryEnabled` | [`Boolean`](#boolean) | Indicates if Container Registry is enabled for the current user. |
 | <a id="projectcontainerrepositoriescount"></a>`containerRepositoriesCount` | [`Int!`](#int) | Number of container repositories in the project. |
 | <a id="projectcreatedat"></a>`createdAt` | [`Time`](#time) | Timestamp of the project creation. |
 | <a id="projectdastprofiles"></a>`dastProfiles` | [`DastProfileConnection`](#dastprofileconnection) | DAST Profiles associated with the project. (see [Connections](#connections)) |
-| <a id="projectdastscannerprofiles"></a>`dastScannerProfiles` | [`DastScannerProfileConnection`](#dastscannerprofileconnection) | The DAST scanner profiles associated with the project. (see [Connections](#connections)) |
+| <a id="projectdastscannerprofiles"></a>`dastScannerProfiles` | [`DastScannerProfileConnection`](#dastscannerprofileconnection) | DAST scanner profiles associated with the project. (see [Connections](#connections)) |
 | <a id="projectdastsiteprofiles"></a>`dastSiteProfiles` | [`DastSiteProfileConnection`](#dastsiteprofileconnection) | DAST Site Profiles associated with the project. (see [Connections](#connections)) |
 | <a id="projectdescription"></a>`description` | [`String`](#string) | Short description of the project. |
 | <a id="projectdescriptionhtml"></a>`descriptionHtml` | [`String`](#string) | The GitLab Flavored Markdown rendering of `description`. |
-| <a id="projectdora"></a>`dora` | [`Dora`](#dora) | The project's DORA metrics. |
+| <a id="projectdora"></a>`dora` | [`Dora`](#dora) | Project's DORA metrics. |
 | <a id="projectforkscount"></a>`forksCount` | [`Int!`](#int) | Number of times the project has been forked. |
 | <a id="projectfullpath"></a>`fullPath` | [`ID!`](#id) | Full path of the project. |
 | <a id="projectgrafanaintegration"></a>`grafanaIntegration` | [`GrafanaIntegration`](#grafanaintegration) | Grafana integration details for the project. |
@@ -11947,7 +12086,7 @@ Represents vulnerability finding of a security report on the pipeline.
 | <a id="projectpipelineanalytics"></a>`pipelineAnalytics` | [`PipelineAnalytics`](#pipelineanalytics) | Pipeline analytics. |
 | <a id="projectprintingmergerequestlinkenabled"></a>`printingMergeRequestLinkEnabled` | [`Boolean`](#boolean) | Indicates if a link to create or view a merge request should display after a push to Git repositories of the project from the command line. |
 | <a id="projectpublicjobs"></a>`publicJobs` | [`Boolean`](#boolean) | Indicates if there is public access to pipelines and job details of the project, including output logs and artifacts. |
-| <a id="projectpushrules"></a>`pushRules` | [`PushRules`](#pushrules) | The project's push rules settings. |
+| <a id="projectpushrules"></a>`pushRules` | [`PushRules`](#pushrules) | Project's push rules settings. |
 | <a id="projectremovesourcebranchaftermerge"></a>`removeSourceBranchAfterMerge` | [`Boolean`](#boolean) | Indicates if `Delete source branch` option should be enabled by default for all new merge requests of the project. |
 | <a id="projectrepository"></a>`repository` | [`Repository`](#repository) | Git repository of the project. |
 | <a id="projectrepositorysizeexcess"></a>`repositorySizeExcess` | [`Float`](#float) | Size of repository that exceeds the limit in bytes. |
@@ -11966,7 +12105,7 @@ Represents vulnerability finding of a security report on the pipeline.
 | <a id="projectsshurltorepo"></a>`sshUrlToRepo` | [`String`](#string) | URL to connect to the project via SSH. |
 | <a id="projectstarcount"></a>`starCount` | [`Int!`](#int) | Number of times the project has been starred. |
 | <a id="projectstatistics"></a>`statistics` | [`ProjectStatistics`](#projectstatistics) | Statistics of the project. |
-| <a id="projectsuggestioncommitmessage"></a>`suggestionCommitMessage` | [`String`](#string) | The commit message used to apply merge request suggestions. |
+| <a id="projectsuggestioncommitmessage"></a>`suggestionCommitMessage` | [`String`](#string) | Commit message used to apply merge request suggestions. |
 | <a id="projecttaglist"></a>`tagList` **{warning-solid}** | [`String`](#string) | **Deprecated** in 13.12. Use `topics`. |
 | <a id="projectterraformstates"></a>`terraformStates` | [`TerraformStateConnection`](#terraformstateconnection) | Terraform states associated with the project. (see [Connections](#connections)) |
 | <a id="projecttopics"></a>`topics` | [`[String!]`](#string) | List of project topics. |
@@ -12408,7 +12547,7 @@ four standard [pagination arguments](#connection-pagination-arguments):
 
 ##### `Project.label`
 
-A label available on this project.
+Label available on this project.
 
 Returns [`Label`](#label).
 
@@ -12882,6 +13021,7 @@ Represents a Project Membership.
 | <a id="projectstatisticscommitcount"></a>`commitCount` | [`Float!`](#float) | Commit count of the project. |
 | <a id="projectstatisticslfsobjectssize"></a>`lfsObjectsSize` | [`Float!`](#float) | Large File Storage (LFS) object size of the project in bytes. |
 | <a id="projectstatisticspackagessize"></a>`packagesSize` | [`Float!`](#float) | Packages size of the project in bytes. |
+| <a id="projectstatisticspipelineartifactssize"></a>`pipelineArtifactsSize` | [`Float`](#float) | CI Pipeline artifacts size in bytes. |
 | <a id="projectstatisticsrepositorysize"></a>`repositorySize` | [`Float!`](#float) | Repository size of the project in bytes. |
 | <a id="projectstatisticssnippetssize"></a>`snippetsSize` | [`Float`](#float) | Snippets size of the project in bytes. |
 | <a id="projectstatisticsstoragesize"></a>`storageSize` | [`Float!`](#float) | Storage size of the project in bytes. |
@@ -12896,7 +13036,7 @@ The alert condition for Prometheus.
 
 | Name | Type | Description |
 | ---- | ---- | ----------- |
-| <a id="prometheusalerthumanizedtext"></a>`humanizedText` | [`String!`](#string) | The human-readable text of the alert condition. |
+| <a id="prometheusalerthumanizedtext"></a>`humanizedText` | [`String!`](#string) | Human-readable text of the alert condition. |
 | <a id="prometheusalertid"></a>`id` | [`ID!`](#id) | ID of the alert condition. |
 
 ### `PushRules`
@@ -12950,7 +13090,7 @@ Represents a release.
 | ---- | ---- | ----------- |
 | <a id="releaseassets"></a>`assets` | [`ReleaseAssets`](#releaseassets) | Assets of the release. |
 | <a id="releaseauthor"></a>`author` | [`UserCore`](#usercore) | User that created the release. |
-| <a id="releasecommit"></a>`commit` | [`Commit`](#commit) | The commit associated with the release. |
+| <a id="releasecommit"></a>`commit` | [`Commit`](#commit) | Commit associated with the release. |
 | <a id="releasecreatedat"></a>`createdAt` | [`Time`](#time) | Timestamp of when the release was created. |
 | <a id="releasedescription"></a>`description` | [`String`](#string) | Description (also known as "release notes") of the release. |
 | <a id="releasedescriptionhtml"></a>`descriptionHtml` | [`String`](#string) | The GitLab Flavored Markdown rendering of `description`. |
@@ -13114,7 +13254,7 @@ Returns [`Tree`](#tree).
 | <a id="repositoryblobcanmodifyblob"></a>`canModifyBlob` | [`Boolean`](#boolean) | Whether the current user can modify the blob. |
 | <a id="repositoryblobeditblobpath"></a>`editBlobPath` | [`String`](#string) | Web path to edit the blob in the old-style editor. |
 | <a id="repositoryblobexternalstorageurl"></a>`externalStorageUrl` | [`String`](#string) | Web path to download the raw blob via external storage, if enabled. |
-| <a id="repositoryblobfiletype"></a>`fileType` | [`String`](#string) | The expected format of the blob based on the extension. |
+| <a id="repositoryblobfiletype"></a>`fileType` | [`String`](#string) | Expected format of the blob based on the extension. |
 | <a id="repositoryblobforkandeditpath"></a>`forkAndEditPath` | [`String`](#string) | Web path to edit this blob using a forked project. |
 | <a id="repositoryblobid"></a>`id` | [`ID!`](#id) | ID of the blob. |
 | <a id="repositoryblobideeditpath"></a>`ideEditPath` | [`String`](#string) | Web path to edit this blob in the Web IDE. |
@@ -13125,10 +13265,10 @@ Returns [`Tree`](#tree).
 | <a id="repositorybloboid"></a>`oid` | [`String!`](#string) | OID of the blob. |
 | <a id="repositoryblobpath"></a>`path` | [`String!`](#string) | Path of the blob. |
 | <a id="repositoryblobplaindata"></a>`plainData` | [`String`](#string) | Blob plain highlighted data. |
-| <a id="repositoryblobrawblob"></a>`rawBlob` | [`String`](#string) | The raw content of the blob. |
+| <a id="repositoryblobrawblob"></a>`rawBlob` | [`String`](#string) | Raw content of the blob. |
 | <a id="repositoryblobrawpath"></a>`rawPath` | [`String`](#string) | Web path to download the raw blob. |
 | <a id="repositoryblobrawsize"></a>`rawSize` | [`Int`](#int) | Size (in bytes) of the blob, or the blob target if stored externally. |
-| <a id="repositoryblobrawtextblob"></a>`rawTextBlob` | [`String`](#string) | The raw content of the blob, if the blob is text data. |
+| <a id="repositoryblobrawtextblob"></a>`rawTextBlob` | [`String`](#string) | Raw content of the blob, if the blob is text data. |
 | <a id="repositoryblobreplacepath"></a>`replacePath` | [`String`](#string) | Web path to replace the blob content. |
 | <a id="repositoryblobrichviewer"></a>`richViewer` | [`BlobViewer`](#blobviewer) | Blob content rich viewer. |
 | <a id="repositoryblobsimpleviewer"></a>`simpleViewer` | [`BlobViewer!`](#blobviewer) | Blob content simple viewer. |
@@ -13208,15 +13348,15 @@ Counts of requirements by their state.
 
 | Name | Type | Description |
 | ---- | ---- | ----------- |
-| <a id="rootstoragestatisticsbuildartifactssize"></a>`buildArtifactsSize` | [`Float!`](#float) | The CI artifacts size in bytes. |
-| <a id="rootstoragestatisticslfsobjectssize"></a>`lfsObjectsSize` | [`Float!`](#float) | The LFS objects size in bytes. |
-| <a id="rootstoragestatisticspackagessize"></a>`packagesSize` | [`Float!`](#float) | The packages size in bytes. |
-| <a id="rootstoragestatisticspipelineartifactssize"></a>`pipelineArtifactsSize` | [`Float!`](#float) | The CI pipeline artifacts size in bytes. |
-| <a id="rootstoragestatisticsrepositorysize"></a>`repositorySize` | [`Float!`](#float) | The Git repository size in bytes. |
-| <a id="rootstoragestatisticssnippetssize"></a>`snippetsSize` | [`Float!`](#float) | The snippets size in bytes. |
-| <a id="rootstoragestatisticsstoragesize"></a>`storageSize` | [`Float!`](#float) | The total storage in bytes. |
-| <a id="rootstoragestatisticsuploadssize"></a>`uploadsSize` | [`Float!`](#float) | The uploads size in bytes. |
-| <a id="rootstoragestatisticswikisize"></a>`wikiSize` | [`Float!`](#float) | The wiki size in bytes. |
+| <a id="rootstoragestatisticsbuildartifactssize"></a>`buildArtifactsSize` | [`Float!`](#float) | CI artifacts size in bytes. |
+| <a id="rootstoragestatisticslfsobjectssize"></a>`lfsObjectsSize` | [`Float!`](#float) | LFS objects size in bytes. |
+| <a id="rootstoragestatisticspackagessize"></a>`packagesSize` | [`Float!`](#float) | Packages size in bytes. |
+| <a id="rootstoragestatisticspipelineartifactssize"></a>`pipelineArtifactsSize` | [`Float!`](#float) | CI pipeline artifacts size in bytes. |
+| <a id="rootstoragestatisticsrepositorysize"></a>`repositorySize` | [`Float!`](#float) | Git repository size in bytes. |
+| <a id="rootstoragestatisticssnippetssize"></a>`snippetsSize` | [`Float!`](#float) | Snippets size in bytes. |
+| <a id="rootstoragestatisticsstoragesize"></a>`storageSize` | [`Float!`](#float) | Total storage in bytes. |
+| <a id="rootstoragestatisticsuploadssize"></a>`uploadsSize` | [`Float!`](#float) | Uploads size in bytes. |
+| <a id="rootstoragestatisticswikisize"></a>`wikiSize` | [`Float!`](#float) | Wiki size in bytes. |
 
 ### `RunnerArchitecture`
 
@@ -13561,7 +13701,7 @@ Represents a snippet entry.
 
 | Name | Type | Description |
 | ---- | ---- | ----------- |
-| <a id="snippetauthor"></a>`author` | [`UserCore`](#usercore) | The owner of the snippet. |
+| <a id="snippetauthor"></a>`author` | [`UserCore`](#usercore) | Owner of the snippet. |
 | <a id="snippetcreatedat"></a>`createdAt` | [`Time!`](#time) | Timestamp this snippet was created. |
 | <a id="snippetdescription"></a>`description` | [`String`](#string) | Description of the snippet. |
 | <a id="snippetdescriptionhtml"></a>`descriptionHtml` | [`String`](#string) | The GitLab Flavored Markdown rendering of `description`. |
@@ -13570,7 +13710,7 @@ Represents a snippet entry.
 | <a id="snippethttpurltorepo"></a>`httpUrlToRepo` | [`String`](#string) | HTTP URL to the snippet repository. |
 | <a id="snippetid"></a>`id` | [`SnippetID!`](#snippetid) | ID of the snippet. |
 | <a id="snippetnotes"></a>`notes` | [`NoteConnection!`](#noteconnection) | All notes on this noteable. (see [Connections](#connections)) |
-| <a id="snippetproject"></a>`project` | [`Project`](#project) | The project the snippet is associated with. |
+| <a id="snippetproject"></a>`project` | [`Project`](#project) | Project the snippet is associated with. |
 | <a id="snippetrawurl"></a>`rawUrl` | [`String!`](#string) | Raw URL of the snippet. |
 | <a id="snippetsshurltorepo"></a>`sshUrlToRepo` | [`String`](#string) | SSH URL to the snippet repository. |
 | <a id="snippettitle"></a>`title` | [`String!`](#string) | Title of the snippet. |
@@ -13612,7 +13752,7 @@ Represents the snippet blob.
 | <a id="snippetblobpath"></a>`path` | [`String`](#string) | Blob path. |
 | <a id="snippetblobplaindata"></a>`plainData` | [`String`](#string) | Blob plain highlighted data. |
 | <a id="snippetblobrawpath"></a>`rawPath` | [`String!`](#string) | Blob raw content endpoint path. |
-| <a id="snippetblobrawplaindata"></a>`rawPlainData` | [`String`](#string) | The raw content of the blob, if the blob is text data. |
+| <a id="snippetblobrawplaindata"></a>`rawPlainData` | [`String`](#string) | Raw content of the blob, if the blob is text data. |
 | <a id="snippetblobrenderedastext"></a>`renderedAsText` | [`Boolean!`](#boolean) | Shows whether the blob is rendered as text. |
 | <a id="snippetblobrichdata"></a>`richData` | [`String`](#string) | Blob highlighted data. |
 | <a id="snippetblobrichviewer"></a>`richViewer` | [`SnippetBlobViewer`](#snippetblobviewer) | Blob content rich viewer. |
@@ -13712,9 +13852,9 @@ Completion status of tasks.
 | ---- | ---- | ----------- |
 | <a id="terraformstatecreatedat"></a>`createdAt` | [`Time!`](#time) | Timestamp the Terraform state was created. |
 | <a id="terraformstateid"></a>`id` | [`ID!`](#id) | ID of the Terraform state. |
-| <a id="terraformstatelatestversion"></a>`latestVersion` | [`TerraformStateVersion`](#terraformstateversion) | The latest version of the Terraform state. |
+| <a id="terraformstatelatestversion"></a>`latestVersion` | [`TerraformStateVersion`](#terraformstateversion) | Latest version of the Terraform state. |
 | <a id="terraformstatelockedat"></a>`lockedAt` | [`Time`](#time) | Timestamp the Terraform state was locked. |
-| <a id="terraformstatelockedbyuser"></a>`lockedByUser` | [`UserCore`](#usercore) | The user currently holding a lock on the Terraform state. |
+| <a id="terraformstatelockedbyuser"></a>`lockedByUser` | [`UserCore`](#usercore) | User currently holding a lock on the Terraform state. |
 | <a id="terraformstatename"></a>`name` | [`String!`](#string) | Name of the Terraform state. |
 | <a id="terraformstateupdatedat"></a>`updatedAt` | [`Time!`](#time) | Timestamp the Terraform state was updated. |
 
@@ -13725,10 +13865,10 @@ Completion status of tasks.
 | Name | Type | Description |
 | ---- | ---- | ----------- |
 | <a id="terraformstateversioncreatedat"></a>`createdAt` | [`Time!`](#time) | Timestamp the version was created. |
-| <a id="terraformstateversioncreatedbyuser"></a>`createdByUser` | [`UserCore`](#usercore) | The user that created this version. |
+| <a id="terraformstateversioncreatedbyuser"></a>`createdByUser` | [`UserCore`](#usercore) | User that created this version. |
 | <a id="terraformstateversiondownloadpath"></a>`downloadPath` | [`String`](#string) | URL for downloading the version's JSON file. |
 | <a id="terraformstateversionid"></a>`id` | [`ID!`](#id) | ID of the Terraform state version. |
-| <a id="terraformstateversionjob"></a>`job` | [`CiJob`](#cijob) | The job that created this version. |
+| <a id="terraformstateversionjob"></a>`job` | [`CiJob`](#cijob) | Job that created this version. |
 | <a id="terraformstateversionserial"></a>`serial` | [`Int`](#int) | Serial number of the version. |
 | <a id="terraformstateversionupdatedat"></a>`updatedAt` | [`Time!`](#time) | Timestamp the version was updated. |
 
@@ -13883,13 +14023,13 @@ Represents a historically accurate report about the timebox.
 
 | Name | Type | Description |
 | ---- | ---- | ----------- |
-| <a id="timelogissue"></a>`issue` | [`Issue`](#issue) | The issue that logged time was added to. |
-| <a id="timelogmergerequest"></a>`mergeRequest` | [`MergeRequest`](#mergerequest) | The merge request that logged time was added to. |
-| <a id="timelognote"></a>`note` | [`Note`](#note) | The note where the quick action to add the logged time was executed. |
+| <a id="timelogissue"></a>`issue` | [`Issue`](#issue) | Issue that logged time was added to. |
+| <a id="timelogmergerequest"></a>`mergeRequest` | [`MergeRequest`](#mergerequest) | Merge request that logged time was added to. |
+| <a id="timelognote"></a>`note` | [`Note`](#note) | Note where the quick action was executed to add the logged time. |
 | <a id="timelogspentat"></a>`spentAt` | [`Time`](#time) | Timestamp of when the time tracked was spent at. |
-| <a id="timelogsummary"></a>`summary` | [`String`](#string) | The summary of how the time was spent. |
-| <a id="timelogtimespent"></a>`timeSpent` | [`Int!`](#int) | The time spent displayed in seconds. |
-| <a id="timeloguser"></a>`user` | [`UserCore!`](#usercore) | The user that logged the time. |
+| <a id="timelogsummary"></a>`summary` | [`String`](#string) | Summary of how the time was spent. |
+| <a id="timelogtimespent"></a>`timeSpent` | [`Int!`](#int) | Time spent displayed in seconds. |
+| <a id="timeloguser"></a>`user` | [`UserCore!`](#usercore) | User that logged the time. |
 
 ### `Todo`
 
@@ -13900,12 +14040,12 @@ Representing a to-do entry.
 | Name | Type | Description |
 | ---- | ---- | ----------- |
 | <a id="todoaction"></a>`action` | [`TodoActionEnum!`](#todoactionenum) | Action of the to-do item. |
-| <a id="todoauthor"></a>`author` | [`UserCore!`](#usercore) | The author of this to-do item. |
+| <a id="todoauthor"></a>`author` | [`UserCore!`](#usercore) | Author of this to-do item. |
 | <a id="todobody"></a>`body` | [`String!`](#string) | Body of the to-do item. |
 | <a id="todocreatedat"></a>`createdAt` | [`Time!`](#time) | Timestamp this to-do item was created. |
 | <a id="todogroup"></a>`group` | [`Group`](#group) | Group this to-do item is associated with. |
 | <a id="todoid"></a>`id` | [`ID!`](#id) | ID of the to-do item. |
-| <a id="todoproject"></a>`project` | [`Project`](#project) | The project this to-do item is associated with. |
+| <a id="todoproject"></a>`project` | [`Project`](#project) | Project this to-do item is associated with. |
 | <a id="todostate"></a>`state` | [`TodoStateEnum!`](#todostateenum) | State of the to-do item. |
 | <a id="todotargettype"></a>`targetType` | [`TodoTargetEnum!`](#todotargetenum) | Target type of the to-do item. |
 
@@ -13973,7 +14113,7 @@ Core represention of a GitLab user.
 | <a id="usercoregroupcount"></a>`groupCount` | [`Int`](#int) | Group count for the user. |
 | <a id="usercoregroupmemberships"></a>`groupMemberships` | [`GroupMemberConnection`](#groupmemberconnection) | Group memberships of the user. (see [Connections](#connections)) |
 | <a id="usercoreid"></a>`id` | [`ID!`](#id) | ID of the user. |
-| <a id="usercorelocation"></a>`location` | [`String`](#string) | The location of the user. |
+| <a id="usercorelocation"></a>`location` | [`String`](#string) | Location of the user. |
 | <a id="usercorename"></a>`name` | [`String!`](#string) | Human-readable name of the user. |
 | <a id="usercorenamespace"></a>`namespace` | [`Namespace`](#namespace) | Personal namespace of the user. |
 | <a id="usercoreprojectmemberships"></a>`projectMemberships` | [`ProjectMemberConnection`](#projectmemberconnection) | Project memberships of the user. (see [Connections](#connections)) |
@@ -14183,7 +14323,7 @@ fields relate to interactions between the two entities.
 | <a id="usermergerequestinteractionapproved"></a>`approved` | [`Boolean!`](#boolean) | Whether this user has approved this merge request. |
 | <a id="usermergerequestinteractioncanmerge"></a>`canMerge` | [`Boolean!`](#boolean) | Whether this user can merge this merge request. |
 | <a id="usermergerequestinteractioncanupdate"></a>`canUpdate` | [`Boolean!`](#boolean) | Whether this user can update this merge request. |
-| <a id="usermergerequestinteractionreviewstate"></a>`reviewState` | [`MergeRequestReviewState`](#mergerequestreviewstate) | The state of the review by this user. |
+| <a id="usermergerequestinteractionreviewstate"></a>`reviewState` | [`MergeRequestReviewState`](#mergerequestreviewstate) | State of the review by this user. |
 | <a id="usermergerequestinteractionreviewed"></a>`reviewed` | [`Boolean!`](#boolean) | Whether this user has provided a review for this merge request. |
 
 ### `UserPermissions`
@@ -15100,7 +15240,7 @@ Type of file the position refers to.
 | Value | Description |
 | ----- | ----------- |
 | <a id="diffpositiontypeimage"></a>`image` | An image. |
-| <a id="diffpositiontypetext"></a>`text` | A text file. |
+| <a id="diffpositiontypetext"></a>`text` | Text file. |
 
 ### `DoraMetricBucketingInterval`
 
@@ -15522,7 +15662,7 @@ Milestone ID wildcard values.
 
 | Value | Description |
 | ----- | ----------- |
-| <a id="milestonewildcardidany"></a>`ANY` | A milestone is assigned. |
+| <a id="milestonewildcardidany"></a>`ANY` | Milestone is assigned. |
 | <a id="milestonewildcardidnone"></a>`NONE` | No milestone is assigned. |
 | <a id="milestonewildcardidstarted"></a>`STARTED` | An open, started milestone (start date <= today). |
 | <a id="milestonewildcardidupcoming"></a>`UPCOMING` | An open milestone due in the future (due date >= today). |
@@ -15919,19 +16059,19 @@ State of a test report.
 
 | Value | Description |
 | ----- | ----------- |
-| <a id="todostateenumdone"></a>`done` | The state of the todo is done. |
-| <a id="todostateenumpending"></a>`pending` | The state of the todo is pending. |
+| <a id="todostateenumdone"></a>`done` | State of the todo is done. |
+| <a id="todostateenumpending"></a>`pending` | State of the todo is pending. |
 
 ### `TodoTargetEnum`
 
 | Value | Description |
 | ----- | ----------- |
-| <a id="todotargetenumalert"></a>`ALERT` | An Alert. |
-| <a id="todotargetenumcommit"></a>`COMMIT` | A Commit. |
-| <a id="todotargetenumdesign"></a>`DESIGN` | A Design. |
+| <a id="todotargetenumalert"></a>`ALERT` | Alert. |
+| <a id="todotargetenumcommit"></a>`COMMIT` | Commit. |
+| <a id="todotargetenumdesign"></a>`DESIGN` | Design. |
 | <a id="todotargetenumepic"></a>`EPIC` | An Epic. |
-| <a id="todotargetenumissue"></a>`ISSUE` | An Issue. |
-| <a id="todotargetenummergerequest"></a>`MERGEREQUEST` | A MergeRequest. |
+| <a id="todotargetenumissue"></a>`ISSUE` | Issue. |
+| <a id="todotargetenummergerequest"></a>`MERGEREQUEST` | Merge request. |
 
 ### `TypeEnum`
 
@@ -15946,7 +16086,6 @@ Name of the feature that the callout is for.
 
 | Value | Description |
 | ----- | ----------- |
-| <a id="usercalloutfeaturenameenumaccount_recovery_regular_check"></a>`ACCOUNT_RECOVERY_REGULAR_CHECK` | Callout feature name for account_recovery_regular_check. |
 | <a id="usercalloutfeaturenameenumactive_user_count_threshold"></a>`ACTIVE_USER_COUNT_THRESHOLD` | Callout feature name for active_user_count_threshold. |
 | <a id="usercalloutfeaturenameenumbuy_pipeline_minutes_notification_dot"></a>`BUY_PIPELINE_MINUTES_NOTIFICATION_DOT` | Callout feature name for buy_pipeline_minutes_notification_dot. |
 | <a id="usercalloutfeaturenameenumcanary_deployment"></a>`CANARY_DEPLOYMENT` | Callout feature name for canary_deployment. |
@@ -15975,6 +16114,7 @@ Name of the feature that the callout is for.
 | <a id="usercalloutfeaturenameenumthreat_monitoring_info"></a>`THREAT_MONITORING_INFO` | Callout feature name for threat_monitoring_info. |
 | <a id="usercalloutfeaturenameenumtrial_status_reminder_d14"></a>`TRIAL_STATUS_REMINDER_D14` | Callout feature name for trial_status_reminder_d14. |
 | <a id="usercalloutfeaturenameenumtrial_status_reminder_d3"></a>`TRIAL_STATUS_REMINDER_D3` | Callout feature name for trial_status_reminder_d3. |
+| <a id="usercalloutfeaturenameenumtwo_factor_auth_recovery_settings_check"></a>`TWO_FACTOR_AUTH_RECOVERY_SETTINGS_CHECK` | Callout feature name for two_factor_auth_recovery_settings_check. |
 | <a id="usercalloutfeaturenameenumultimate_trial"></a>`ULTIMATE_TRIAL` | Callout feature name for ultimate_trial. |
 | <a id="usercalloutfeaturenameenumunfinished_tag_cleanup_callout"></a>`UNFINISHED_TAG_CLEANUP_CALLOUT` | Callout feature name for unfinished_tag_cleanup_callout. |
 | <a id="usercalloutfeaturenameenumweb_ide_alert_dismissed"></a>`WEB_IDE_ALERT_DISMISSED` | Callout feature name for web_ide_alert_dismissed. |
@@ -15986,9 +16126,9 @@ Possible states of a user.
 
 | Value | Description |
 | ----- | ----------- |
-| <a id="userstateactive"></a>`active` | The user is active and is able to use the system. |
-| <a id="userstateblocked"></a>`blocked` | The user has been blocked and is prevented from using the system. |
-| <a id="userstatedeactivated"></a>`deactivated` | The user is no longer active and is unable to use the system. |
+| <a id="userstateactive"></a>`active` | User is active and is able to use the system. |
+| <a id="userstateblocked"></a>`blocked` | User has been blocked and is prevented from using the system. |
+| <a id="userstatedeactivated"></a>`deactivated` | User is no longer active and is unable to use the system. |
 
 ### `VisibilityLevelsEnum`
 
@@ -16002,9 +16142,9 @@ Possible states of a user.
 
 | Value | Description |
 | ----- | ----------- |
-| <a id="visibilityscopesenuminternal"></a>`internal` | The snippet is visible for any logged in user except external users. |
-| <a id="visibilityscopesenumprivate"></a>`private` | The snippet is visible only to the snippet creator. |
-| <a id="visibilityscopesenumpublic"></a>`public` | The snippet can be accessed without any authentication. |
+| <a id="visibilityscopesenuminternal"></a>`internal` | Snippet is visible for any logged in user except external users. |
+| <a id="visibilityscopesenumprivate"></a>`private` | Snippet is visible only to the snippet creator. |
+| <a id="visibilityscopesenumpublic"></a>`public` | Snippet can be accessed without any authentication. |
 
 ### `VulnerabilityConfidence`
 
@@ -16787,16 +16927,16 @@ Implementations:
 
 | Name | Type | Description |
 | ---- | ---- | ----------- |
-| <a id="designfieldsdiffrefs"></a>`diffRefs` | [`DiffRefs!`](#diffrefs) | The diff refs for this design. |
+| <a id="designfieldsdiffrefs"></a>`diffRefs` | [`DiffRefs!`](#diffrefs) | Diff refs for this design. |
 | <a id="designfieldsevent"></a>`event` | [`DesignVersionEvent!`](#designversionevent) | How this design was changed in the current version. |
-| <a id="designfieldsfilename"></a>`filename` | [`String!`](#string) | The filename of the design. |
-| <a id="designfieldsfullpath"></a>`fullPath` | [`String!`](#string) | The full path to the design file. |
-| <a id="designfieldsid"></a>`id` | [`ID!`](#id) | The ID of this design. |
-| <a id="designfieldsimage"></a>`image` | [`String!`](#string) | The URL of the full-sized image. |
+| <a id="designfieldsfilename"></a>`filename` | [`String!`](#string) | Filename of the design. |
+| <a id="designfieldsfullpath"></a>`fullPath` | [`String!`](#string) | Full path to the design file. |
+| <a id="designfieldsid"></a>`id` | [`ID!`](#id) | ID of this design. |
+| <a id="designfieldsimage"></a>`image` | [`String!`](#string) | URL of the full-sized image. |
 | <a id="designfieldsimagev432x230"></a>`imageV432x230` | [`String`](#string) | The URL of the design resized to fit within the bounds of 432x230. This will be `null` if the image has not been generated. |
-| <a id="designfieldsissue"></a>`issue` | [`Issue!`](#issue) | The issue the design belongs to. |
-| <a id="designfieldsnotescount"></a>`notesCount` | [`Int!`](#int) | The total count of user-created notes for this design. |
-| <a id="designfieldsproject"></a>`project` | [`Project!`](#project) | The project the design belongs to. |
+| <a id="designfieldsissue"></a>`issue` | [`Issue!`](#issue) | Issue the design belongs to. |
+| <a id="designfieldsnotescount"></a>`notesCount` | [`Int!`](#int) | Total count of user-created notes for this design. |
+| <a id="designfieldsproject"></a>`project` | [`Project!`](#project) | Project the design belongs to. |
 
 #### `Entry`
 
@@ -16828,7 +16968,7 @@ Implementations:
 
 | Name | Type | Description |
 | ---- | ---- | ----------- |
-| <a id="eventableevents"></a>`events` | [`EventConnection`](#eventconnection) | A list of events associated with the object. (see [Connections](#connections)) |
+| <a id="eventableevents"></a>`events` | [`EventConnection`](#eventconnection) | List of events associated with the object. (see [Connections](#connections)) |
 
 #### `MemberInterface`
 
@@ -16949,7 +17089,7 @@ Implementations:
 | <a id="usergroupcount"></a>`groupCount` | [`Int`](#int) | Group count for the user. |
 | <a id="usergroupmemberships"></a>`groupMemberships` | [`GroupMemberConnection`](#groupmemberconnection) | Group memberships of the user. (see [Connections](#connections)) |
 | <a id="userid"></a>`id` | [`ID!`](#id) | ID of the user. |
-| <a id="userlocation"></a>`location` | [`String`](#string) | The location of the user. |
+| <a id="userlocation"></a>`location` | [`String`](#string) | Location of the user. |
 | <a id="username"></a>`name` | [`String!`](#string) | Human-readable name of the user. |
 | <a id="usernamespace"></a>`namespace` | [`Namespace`](#namespace) | Personal namespace of the user. |
 | <a id="userprojectmemberships"></a>`projectMemberships` | [`ProjectMemberConnection`](#projectmemberconnection) | Project memberships of the user. (see [Connections](#connections)) |
@@ -17251,8 +17391,8 @@ Input type for DastSiteProfile authentication.
 
 | Name | Type | Description |
 | ---- | ---- | ----------- |
-| <a id="diffpathsinputnewpath"></a>`newPath` | [`String`](#string) | The path of the file on the head sha. |
-| <a id="diffpathsinputoldpath"></a>`oldPath` | [`String`](#string) | The path of the file on the start sha. |
+| <a id="diffpathsinputnewpath"></a>`newPath` | [`String`](#string) | Path of the file on the HEAD SHA. |
+| <a id="diffpathsinputoldpath"></a>`oldPath` | [`String`](#string) | Path of the file on the start SHA. |
 
 ### `DiffPositionInput`
 
@@ -17434,7 +17574,7 @@ Fields that are available when modifying a release asset link.
 | Name | Type | Description |
 | ---- | ---- | ----------- |
 | <a id="releaseassetlinkinputdirectassetpath"></a>`directAssetPath` | [`String`](#string) | Relative path for a direct asset link. |
-| <a id="releaseassetlinkinputlinktype"></a>`linkType` | [`ReleaseAssetLinkType`](#releaseassetlinktype) | The type of the asset link. |
+| <a id="releaseassetlinkinputlinktype"></a>`linkType` | [`ReleaseAssetLinkType`](#releaseassetlinktype) | Type of the asset link. |
 | <a id="releaseassetlinkinputname"></a>`name` | [`String!`](#string) | Name of the asset link. |
 | <a id="releaseassetlinkinputurl"></a>`url` | [`String!`](#string) | URL of the asset link. |
 
@@ -17446,7 +17586,7 @@ Fields that are available when modifying release assets.
 
 | Name | Type | Description |
 | ---- | ---- | ----------- |
-| <a id="releaseassetsinputlinks"></a>`links` | [`[ReleaseAssetLinkInput!]`](#releaseassetlinkinput) | A list of asset links to associate to the release. |
+| <a id="releaseassetsinputlinks"></a>`links` | [`[ReleaseAssetLinkInput!]`](#releaseassetlinkinput) | List of asset links to associate to the release. |
 
 ### `SastCiConfigurationAnalyzersEntityInput`
 
@@ -17505,8 +17645,8 @@ A time-frame defined as a closed inclusive range of two dates.
 
 | Name | Type | Description |
 | ---- | ---- | ----------- |
-| <a id="timeframeend"></a>`end` | [`Date!`](#date) | The end of the range. |
-| <a id="timeframestart"></a>`start` | [`Date!`](#date) | The start of the range. |
+| <a id="timeframeend"></a>`end` | [`Date!`](#date) | End of the range. |
+| <a id="timeframestart"></a>`start` | [`Date!`](#date) | Start of the range. |
 
 ### `UpdateDiffImagePositionInput`
 

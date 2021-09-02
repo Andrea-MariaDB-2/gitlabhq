@@ -1755,14 +1755,26 @@ RSpec.describe User do
       end
 
       describe '#manageable_groups' do
-        it 'includes all the namespaces the user can manage' do
-          expect(user.manageable_groups).to contain_exactly(group, subgroup)
+        shared_examples 'manageable groups examples' do
+          it 'includes all the namespaces the user can manage' do
+            expect(user.manageable_groups).to contain_exactly(group, subgroup)
+          end
+
+          it 'does not include duplicates if a membership was added for the subgroup' do
+            subgroup.add_owner(user)
+
+            expect(user.manageable_groups).to contain_exactly(group, subgroup)
+          end
         end
 
-        it 'does not include duplicates if a membership was added for the subgroup' do
-          subgroup.add_owner(user)
+        it_behaves_like 'manageable groups examples'
 
-          expect(user.manageable_groups).to contain_exactly(group, subgroup)
+        context 'when feature flag :linear_user_manageable_groups is disabled' do
+          before do
+            stub_feature_flags(linear_user_manageable_groups: false)
+          end
+
+          it_behaves_like 'manageable groups examples'
         end
       end
 
@@ -1919,15 +1931,15 @@ RSpec.describe User do
         user.ban!
       end
 
-      it 'activates the user' do
-        user.activate
+      it 'unbans the user' do
+        user.unban
 
         expect(user.banned?).to eq(false)
         expect(user.active?).to eq(true)
       end
 
       it 'deletes the BannedUser record' do
-        expect { user.activate }.to change { Users::BannedUser.count }.by(-1)
+        expect { user.unban }.to change { Users::BannedUser.count }.by(-1)
         expect(Users::BannedUser.where(user_id: user.id)).not_to exist
       end
     end
@@ -3389,17 +3401,32 @@ RSpec.describe User do
   end
 
   describe '#membership_groups' do
-    let!(:user) { create(:user) }
-    let!(:parent_group) { create(:group) }
-    let!(:child_group) { create(:group, parent: parent_group) }
+    let_it_be(:user) { create(:user) }
 
-    before do
-      parent_group.add_user(user, Gitlab::Access::MAINTAINER)
+    let_it_be(:parent_group) do
+      create(:group).tap do |g|
+        g.add_user(user, Gitlab::Access::MAINTAINER)
+      end
     end
+
+    let_it_be(:child_group) { create(:group, parent: parent_group) }
+    let_it_be(:other_group) { create(:group) }
 
     subject { user.membership_groups }
 
-    it { is_expected.to contain_exactly parent_group, child_group }
+    shared_examples 'returns groups where the user is a member' do
+      specify { is_expected.to contain_exactly(parent_group, child_group) }
+    end
+
+    it_behaves_like 'returns groups where the user is a member'
+
+    context 'when feature flag :linear_user_membership_groups is disabled' do
+      before do
+        stub_feature_flags(linear_user_membership_groups: false)
+      end
+
+      it_behaves_like 'returns groups where the user is a member'
+    end
   end
 
   describe '#authorizations_for_projects' do
@@ -5970,6 +5997,51 @@ RSpec.describe User do
         subject.unset_secondary_emails_matching_deleted_email!(deleted_email)
         expect(subject.read_attribute(:commit_email)).to be nil
       end
+    end
+  end
+
+  describe '#groups_with_developer_maintainer_project_access' do
+    let_it_be(:user) { create(:user) }
+    let_it_be(:group1) { create(:group) }
+
+    let_it_be(:developer_group1) do
+      create(:group).tap do |g|
+        g.add_developer(user)
+      end
+    end
+
+    let_it_be(:developer_group2) do
+      create(:group, project_creation_level: ::Gitlab::Access::DEVELOPER_MAINTAINER_PROJECT_ACCESS).tap do |g|
+        g.add_developer(user)
+      end
+    end
+
+    let_it_be(:guest_group1) do
+      create(:group, project_creation_level: ::Gitlab::Access::DEVELOPER_MAINTAINER_PROJECT_ACCESS).tap do |g|
+        g.add_guest(user)
+      end
+    end
+
+    let_it_be(:developer_group1) do
+      create(:group, project_creation_level: ::Gitlab::Access::DEVELOPER_MAINTAINER_PROJECT_ACCESS).tap do |g|
+        g.add_maintainer(user)
+      end
+    end
+
+    subject { user.send(:groups_with_developer_maintainer_project_access) }
+
+    shared_examples 'groups_with_developer_maintainer_project_access examples' do
+      specify { is_expected.to contain_exactly(developer_group2) }
+    end
+
+    it_behaves_like 'groups_with_developer_maintainer_project_access examples'
+
+    context 'when feature flag :linear_user_groups_with_developer_maintainer_project_access is disabled' do
+      before do
+        stub_feature_flags(linear_user_groups_with_developer_maintainer_project_access: false)
+      end
+
+      it_behaves_like 'groups_with_developer_maintainer_project_access examples'
     end
   end
 end

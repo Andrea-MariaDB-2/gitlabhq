@@ -58,6 +58,7 @@ issues:
 - test_reports
 - requirement
 - incident_management_issuable_escalation_status
+- pending_escalations
 work_item_type:
 - issues
 events:
@@ -223,6 +224,7 @@ ci_pipelines:
 - builds
 - bridges
 - processables
+- generic_commit_statuses
 - trigger_requests
 - variables
 - auto_canceled_by
@@ -318,6 +320,7 @@ integrations:
 - project
 - service_hook
 - jira_tracker_data
+- zentao_tracker_data
 - issue_tracker_data
 - open_project_tracker_data
 hooks:
@@ -397,6 +400,7 @@ project:
 - teamcity_integration
 - pushover_integration
 - jira_integration
+- zentao_integration
 - redmine_integration
 - youtrack_integration
 - custom_issue_tracker_integration

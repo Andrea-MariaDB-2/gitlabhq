@@ -936,6 +936,75 @@ RSpec.describe Gitlab::Git::Repository, :seed_helper do
     end
   end
 
+  describe '#new_blobs' do
+    let(:repository) { mutable_repository }
+    let(:repository_rugged) { mutable_repository_rugged }
+    let(:new_blob) do
+      repository_rugged.write('This is a new blob', :blob)
+    end
+
+    let(:new_commit) do
+      author = { name: 'Test User', email: 'mail@example.com', time: Time.now }
+
+      index = repository_rugged.index
+      index.add(path: 'nested/new-blob.txt', oid: new_blob, mode: 0100644)
+
+      Rugged::Commit.create(repository_rugged,
+                            author: author,
+                            committer: author,
+                            message: "Message",
+                            parents: [],
+                            tree: index.write_tree(repository_rugged))
+    end
+
+    subject { repository.new_blobs(new_commit).to_a }
+
+    context 'with :new_blobs_via_list_blobs enabled' do
+      before do
+        stub_feature_flags(new_blobs_via_list_blobs: true)
+
+        expect_next_instance_of(Gitlab::GitalyClient::BlobService) do |service|
+          expect(service)
+            .to receive(:list_blobs)
+            .with(['--not', '--all', '--not', new_commit],
+                  limit: Gitlab::Git::Repository::REV_LIST_COMMIT_LIMIT,
+                  with_paths: true,
+                  dynamic_timeout: nil)
+            .and_call_original
+        end
+      end
+
+      it 'enumerates new blobs' do
+        expect(subject).to match_array(
+          [have_attributes(class: Gitlab::Git::Blob, id: new_blob, path: 'nested/new-blob.txt', size: 18)]
+        )
+      end
+    end
+
+    context 'with :new_blobs_via_list_blobs disabled' do
+      before do
+        stub_feature_flags(new_blobs_via_list_blobs: false)
+
+        expect_next_instance_of(Gitlab::GitalyClient::RefService) do |service|
+          expect(service)
+            .to receive(:list_new_blobs)
+            .with(new_commit,
+                  Gitlab::Git::Repository::REV_LIST_COMMIT_LIMIT,
+                  dynamic_timeout: nil)
+            .and_call_original
+        end
+      end
+
+      it 'enumerates new blobs' do
+        expect(subject).to match_array([Gitaly::NewBlobObject.new(
+          size: 18,
+          oid: new_blob,
+          path: "nested/new-blob.txt"
+        )])
+      end
+    end
+  end
+
   describe '#new_commits' do
     let(:repository) { mutable_repository }
     let(:new_commit) do
@@ -1710,83 +1779,42 @@ RSpec.describe Gitlab::Git::Repository, :seed_helper do
   end
 
   describe '#set_full_path' do
-    shared_examples '#set_full_path' do
-      before do
-        repository_rugged.config["gitlab.fullpath"] = repository_path
-      end
+    before do
+      repository_rugged.config["gitlab.fullpath"] = repository_path
+    end
 
-      context 'is given a path' do
-        it 'writes it to disk' do
-          repository.set_full_path(full_path: "not-the/real-path.git")
+    context 'is given a path' do
+      it 'writes it to disk' do
+        repository.set_full_path(full_path: "not-the/real-path.git")
 
-          config = File.read(File.join(repository_path, "config"))
+        config = File.read(File.join(repository_path, "config"))
 
-          expect(config).to include("[gitlab]")
-          expect(config).to include("fullpath = not-the/real-path.git")
-        end
-      end
-
-      context 'it is given an empty path' do
-        it 'does not write it to disk' do
-          repository.set_full_path(full_path: "")
-
-          config = File.read(File.join(repository_path, "config"))
-
-          expect(config).to include("[gitlab]")
-          expect(config).to include("fullpath = #{repository_path}")
-        end
-      end
-
-      context 'repository does not exist' do
-        it 'raises NoRepository and does not call Gitaly WriteConfig' do
-          repository = Gitlab::Git::Repository.new('default', 'does/not/exist.git', '', 'group/project')
-
-          expect(repository.gitaly_repository_client).not_to receive(:set_full_path)
-
-          expect do
-            repository.set_full_path(full_path: 'foo/bar.git')
-          end.to raise_error(Gitlab::Git::Repository::NoRepository)
-        end
+        expect(config).to include("[gitlab]")
+        expect(config).to include("fullpath = not-the/real-path.git")
       end
     end
 
-    context 'with :set_full_path enabled' do
-      before do
-        stub_feature_flags(set_full_path: true)
+    context 'it is given an empty path' do
+      it 'does not write it to disk' do
+        repository.set_full_path(full_path: "")
+
+        config = File.read(File.join(repository_path, "config"))
+
+        expect(config).to include("[gitlab]")
+        expect(config).to include("fullpath = #{repository_path}")
       end
-
-      it_behaves_like '#set_full_path'
     end
 
-    context 'with :set_full_path disabled' do
-      before do
-        stub_feature_flags(set_full_path: false)
+    context 'repository does not exist' do
+      it 'raises NoRepository and does not call Gitaly WriteConfig' do
+        repository = Gitlab::Git::Repository.new('default', 'does/not/exist.git', '', 'group/project')
+
+        expect(repository.gitaly_repository_client).not_to receive(:set_full_path)
+
+        expect do
+          repository.set_full_path(full_path: 'foo/bar.git')
+        end.to raise_error(Gitlab::Git::Repository::NoRepository)
       end
-
-      it_behaves_like '#set_full_path'
-    end
-  end
-
-  describe '#set_config' do
-    let(:repository) { mutable_repository }
-    let(:entries) do
-      {
-        'test.foo1' => 'bla bla',
-        'test.foo2' => 1234,
-        'test.foo3' => true
-      }
-    end
-
-    it 'can set config settings' do
-      expect(repository.set_config(entries)).to be_nil
-
-      expect(repository_rugged.config['test.foo1']).to eq('bla bla')
-      expect(repository_rugged.config['test.foo2']).to eq('1234')
-      expect(repository_rugged.config['test.foo3']).to eq('true')
-    end
-
-    after do
-      entries.keys.each { |k| repository_rugged.config.delete(k) }
     end
   end
 

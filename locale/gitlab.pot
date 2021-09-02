@@ -1263,7 +1263,7 @@ msgstr[0] ""
 msgstr[1] ""
 
 msgid "1 merge request selected"
-msgid_plural "%d merge request selected"
+msgid_plural "%d merge requests selected"
 msgstr[0] ""
 msgstr[1] ""
 
@@ -3626,9 +3626,6 @@ msgstr ""
 msgid "An error occurred while fetching terraform reports."
 msgstr ""
 
-msgid "An error occurred while fetching the board lists. Please try again."
-msgstr ""
-
 msgid "An error occurred while fetching the job log."
 msgstr ""
 
@@ -4379,6 +4376,9 @@ msgstr ""
 msgid "Are you sure you want to %{action} %{name}?"
 msgstr ""
 
+msgid "Are you sure you want to attempt to merge?"
+msgstr ""
+
 msgid "Are you sure you want to cancel editing this comment?"
 msgstr ""
 
@@ -4767,6 +4767,12 @@ msgid "Authenticated API request rate limit"
 msgstr ""
 
 msgid "Authenticated API requests"
+msgstr ""
+
+msgid "Authenticated Git LFS rate limit period in seconds"
+msgstr ""
+
+msgid "Authenticated Git LFS request rate limit"
 msgstr ""
 
 msgid "Authenticated web rate limit period in seconds"
@@ -5510,9 +5516,6 @@ msgid_plural "Boards|Blocked by %{blockedByCount} %{issuableType}s"
 msgstr[0] ""
 msgstr[1] ""
 
-msgid "Boards|Board"
-msgstr ""
-
 msgid "Boards|Collapse"
 msgstr ""
 
@@ -5883,6 +5886,9 @@ msgid "Busy"
 msgstr ""
 
 msgid "Buy CI Minutes"
+msgstr ""
+
+msgid "Buy Storage"
 msgstr ""
 
 msgid "Buy more Pipeline minutes"
@@ -8494,9 +8500,6 @@ msgstr ""
 msgid "Configure limits for web and API requests."
 msgstr ""
 
-msgid "Configure limits on the number of inbound alerts able to be sent to a project."
-msgstr ""
-
 msgid "Configure paths to be protected by Rack Attack."
 msgstr ""
 
@@ -8507,6 +8510,9 @@ msgid "Configure repository storage."
 msgstr ""
 
 msgid "Configure settings for Advanced Search with Elasticsearch."
+msgstr ""
+
+msgid "Configure specific limits for Git LFS requests that supersede the general user and IP rate limits."
 msgstr ""
 
 msgid "Configure specific limits for Packages API requests that supersede the general user and IP rate limits."
@@ -11065,6 +11071,18 @@ msgstr ""
 msgid "DeployFreeze|Add deploy freeze"
 msgstr ""
 
+msgid "DeployFreeze|Delete"
+msgstr ""
+
+msgid "DeployFreeze|Delete deploy freeze?"
+msgstr ""
+
+msgid "DeployFreeze|Delete freeze period"
+msgstr ""
+
+msgid "DeployFreeze|Deploy freeze from %{start} to %{end} in %{timezone} will be removed. Are you sure?"
+msgstr ""
+
 msgid "DeployFreeze|Edit"
 msgstr ""
 
@@ -11491,6 +11509,12 @@ msgid "DevopsAdoption|Add or remove subgroups"
 msgstr ""
 
 msgid "DevopsAdoption|Adopted"
+msgstr ""
+
+msgid "DevopsAdoption|Adoption by group"
+msgstr ""
+
+msgid "DevopsAdoption|Adoption by subgroup"
 msgstr ""
 
 msgid "DevopsAdoption|An error occurred while removing the group. Please try again."
@@ -12062,6 +12086,9 @@ msgstr ""
 msgid "Edit Group Hook"
 msgstr ""
 
+msgid "Edit Identity"
+msgstr ""
+
 msgid "Edit Label"
 msgstr ""
 
@@ -12347,9 +12374,6 @@ msgstr ""
 msgid "Enable Gitpod?"
 msgstr ""
 
-msgid "Enable Incident Management inbound alert limit"
-msgstr ""
-
 msgid "Enable Invisible Captcha during sign up"
 msgstr ""
 
@@ -12398,6 +12422,9 @@ msgstr ""
 msgid "Enable authenticated API request rate limit"
 msgstr ""
 
+msgid "Enable authenticated Git LFS request rate limit"
+msgstr ""
+
 msgid "Enable authentication"
 msgstr ""
 
@@ -12435,6 +12462,9 @@ msgid "Enable health and performance metrics endpoint"
 msgstr ""
 
 msgid "Enable in-product marketing emails"
+msgstr ""
+
+msgid "Enable incident management inbound alert limit"
 msgstr ""
 
 msgid "Enable integration"
@@ -12911,6 +12941,9 @@ msgstr ""
 msgid "Environments|Your feedback helps GitLab make environments better for you and other users. Participate and enter a sweepstake to win a USD 30 gift card."
 msgstr ""
 
+msgid "Environments|by %{avatar}"
+msgstr ""
+
 msgid "Environments|protected"
 msgstr ""
 
@@ -13245,6 +13278,9 @@ msgid "Error: No AWS provision role found for user"
 msgstr ""
 
 msgid "Error: Unable to create deploy freeze"
+msgstr ""
+
+msgid "Error: Unable to delete deploy freeze"
 msgstr ""
 
 msgid "Error: Unable to find AWS role for current user"
@@ -14843,10 +14879,10 @@ msgstr ""
 msgid "Geo|Geo Status"
 msgstr ""
 
-msgid "Geo|Geo nodes are paused using a command run on the node"
+msgid "Geo|Geo sites"
 msgstr ""
 
-msgid "Geo|Geo sites"
+msgid "Geo|Geo sites are paused using a command run on the site"
 msgstr ""
 
 msgid "Geo|Geo supports replication of many data types."
@@ -14891,7 +14927,7 @@ msgstr ""
 msgid "Geo|Learn more about Geo"
 msgstr ""
 
-msgid "Geo|Learn more about Geo node statuses"
+msgid "Geo|Learn more about Geo site statuses"
 msgstr ""
 
 msgid "Geo|Make everyone on your team more productive regardless of their location. GitLab Geo creates read-only mirrors of your GitLab instance so you can reduce the time it takes to clone and fetch large repos."
@@ -14910,9 +14946,6 @@ msgid "Geo|Node name can't be blank"
 msgstr ""
 
 msgid "Geo|Node name should be between 1 and 255 characters"
-msgstr ""
-
-msgid "Geo|Node's status was updated %{timeAgo}."
 msgstr ""
 
 msgid "Geo|Not synced yet"
@@ -14975,10 +15008,10 @@ msgstr ""
 msgid "Geo|Removing a Geo node stops the synchronization to and from that node. Are you sure?"
 msgstr ""
 
-msgid "Geo|Replicated data is verified with the secondary node(s) using checksums"
+msgid "Geo|Replicated data is verified with the secondary site(s) using checksums"
 msgstr ""
 
-msgid "Geo|Replicated data is verified with the secondary node(s) using checksums."
+msgid "Geo|Replicated data is verified with the secondary site(s) using checksums."
 msgstr ""
 
 msgid "Geo|Replication Details"
@@ -15023,7 +15056,7 @@ msgstr ""
 msgid "Geo|Reverify all projects"
 msgstr ""
 
-msgid "Geo|Review replication status, and resynchronize and reverify items with the primary node."
+msgid "Geo|Review replication status, and resynchronize and reverify items with the primary site."
 msgstr ""
 
 msgid "Geo|Secondary node"
@@ -15033,6 +15066,9 @@ msgid "Geo|Secondary site"
 msgstr ""
 
 msgid "Geo|Selective (%{syncLabel})"
+msgstr ""
+
+msgid "Geo|Site's status was updated %{timeAgo}."
 msgstr ""
 
 msgid "Geo|Status"
@@ -15059,10 +15095,10 @@ msgstr ""
 msgid "Geo|Synchronization status"
 msgstr ""
 
-msgid "Geo|The database is currently %{db_lag} behind the primary node."
+msgid "Geo|The database is currently %{db_lag} behind the primary site."
 msgstr ""
 
-msgid "Geo|The node is currently %{minutes_behind} behind the primary node."
+msgid "Geo|The site is currently %{minutes_behind} behind the primary site."
 msgstr ""
 
 msgid "Geo|There are no %{replicable_type} to show"
@@ -15134,7 +15170,7 @@ msgstr ""
 msgid "Geo|With GitLab Geo, you can install a special read-only and replicated instance anywhere. %{linkStart}Learn more%{linkEnd}"
 msgstr ""
 
-msgid "Geo|You are on a secondary, %{b_open}read-only%{b_close} Geo node."
+msgid "Geo|You are on a secondary, %{b_open}read-only%{b_close} Geo site."
 msgstr ""
 
 msgid "Geo|You may be able to make a limited amount of changes or perform a limited amount of actions on this page."
@@ -15177,6 +15213,9 @@ msgid "Git"
 msgstr ""
 
 msgid "Git GC period"
+msgstr ""
+
+msgid "Git LFS Rate Limits"
 msgstr ""
 
 msgid "Git LFS is not enabled on this GitLab server, contact your admin."
@@ -15482,6 +15521,9 @@ msgstr ""
 msgid "Given epic is already related to this epic."
 msgstr ""
 
+msgid "Global Search is disabled for this scope"
+msgstr ""
+
 msgid "Global Shortcuts"
 msgstr ""
 
@@ -15563,7 +15605,7 @@ msgstr ""
 msgid "Go to previous page"
 msgstr ""
 
-msgid "Go to primary node"
+msgid "Go to primary site"
 msgstr ""
 
 msgid "Go to project"
@@ -16496,10 +16538,10 @@ msgstr ""
 msgid "Helps prevent malicious users hide their activity"
 msgstr ""
 
-msgid "Helps reduce alert volume (e.g. if creating too many issues)"
+msgid "Helps reduce request volume (e.g. from crawlers or abusive bots)"
 msgstr ""
 
-msgid "Helps reduce request volume (e.g. from crawlers or abusive bots)"
+msgid "Helps reduce request volume (for example, from crawlers or abusive bots)"
 msgstr ""
 
 msgid "Helps reduce request volume for protected paths"
@@ -16630,6 +16672,9 @@ msgid "How do I generate it?"
 msgstr ""
 
 msgid "How do I mirror repositories?"
+msgstr ""
+
+msgid "How do I rename an environment?"
 msgstr ""
 
 msgid "How do I set up a Google Chat webhook?"
@@ -16770,7 +16815,7 @@ msgstr ""
 msgid "If disabled, only administrators can configure repository mirroring."
 msgstr ""
 
-msgid "If enabled, GitLab will handle Object Storage replication using Geo. %{linkStart}More information%{linkEnd}"
+msgid "If enabled, GitLab will handle Object Storage replication using Geo. %{linkStart}Learn more%{linkEnd}"
 msgstr ""
 
 msgid "If enabled, access to projects will be validated on an external service using their classification label."
@@ -18782,6 +18827,9 @@ msgstr ""
 msgid "Iterations|Create cadence"
 msgstr ""
 
+msgid "Iterations|Create your first iteration"
+msgstr ""
+
 msgid "Iterations|Delete cadence"
 msgstr ""
 
@@ -20059,7 +20107,10 @@ msgstr ""
 msgid "Limit sign in from multiple ips"
 msgstr ""
 
-msgid "Limit the number of concurrent operations this secondary node can run in the background."
+msgid "Limit the number of concurrent operations this secondary site can run in the background."
+msgstr ""
+
+msgid "Limit the number of inbound incident management alerts that can be sent to a project."
 msgstr ""
 
 msgid "Limit the number of issues and epics per minute a user can create through web and API requests."
@@ -20571,6 +20622,9 @@ msgstr ""
 msgid "Max authenticated API requests per period per user"
 msgstr ""
 
+msgid "Max authenticated Git LFS requests per period per user"
+msgstr ""
+
 msgid "Max authenticated web requests per period per user"
 msgstr ""
 
@@ -20782,6 +20836,9 @@ msgid "Member since:"
 msgstr ""
 
 msgid "MemberInviteEmail|%{member_name} invited you to join GitLab"
+msgstr ""
+
+msgid "MemberInviteEmail|I've invited you to join me in GitLab"
 msgstr ""
 
 msgid "MemberInviteEmail|Invitation to join the %{project_or_group} %{project_or_group_name}"
@@ -21943,7 +22000,7 @@ msgstr ""
 msgid "Must match with the %{codeStart}external_url%{codeEnd} in %{codeStart}/etc/gitlab/gitlab.rb%{codeEnd}."
 msgstr ""
 
-msgid "Must match with the %{codeStart}geo_node_name%{codeEnd} in %{codeStart}/etc/gitlab/gitlab.rb%{codeEnd}. %{linkStart}More information%{linkEnd}"
+msgid "Must match with the %{codeStart}geo_node_name%{codeEnd} in %{codeStart}/etc/gitlab/gitlab.rb%{codeEnd}. %{linkStart}Learn more%{linkEnd}"
 msgstr ""
 
 msgid "My Awesome Group"
@@ -22185,19 +22242,10 @@ msgstr ""
 msgid "NetworkPolicies|Policy definition"
 msgstr ""
 
-msgid "NetworkPolicies|Policy description"
-msgstr ""
-
 msgid "NetworkPolicies|Policy editor"
 msgstr ""
 
 msgid "NetworkPolicies|Policy preview"
-msgstr ""
-
-msgid "NetworkPolicies|Policy status"
-msgstr ""
-
-msgid "NetworkPolicies|Policy type"
 msgstr ""
 
 msgid "NetworkPolicies|Rule"
@@ -23066,6 +23114,9 @@ msgid "November"
 msgstr ""
 
 msgid "Novice"
+msgstr ""
+
+msgid "Now, personalize your GitLab experience"
 msgstr ""
 
 msgid "Nuget metadatum must have at least license_url, project_url or icon_url set"
@@ -27477,6 +27528,12 @@ msgstr ""
 msgid "Ready to get started with GitLab? Follow these steps to set up your workspace, plan and commit changes, and deploy your project."
 msgstr ""
 
+msgid "Ready to merge by members who can write to the target branch."
+msgstr ""
+
+msgid "Ready to merge!"
+msgstr ""
+
 msgid "Reauthenticating with SAML provider."
 msgstr ""
 
@@ -27544,6 +27601,9 @@ msgid "Redirecting"
 msgstr ""
 
 msgid "Redis"
+msgstr ""
+
+msgid "Reduce incident management alert volume (for example, if too many issues are being created)."
 msgstr ""
 
 msgid "Reduce project visibility"
@@ -28964,6 +29024,9 @@ msgstr ""
 msgid "Runners|Windows 2019 Shell with manual scaling and optional scheduling. Non-spot. Default choice for Windows Shell executor."
 msgstr ""
 
+msgid "Runners|You are about to change this instance runner to a project runner. This operation is not reversible. Are you sure you want to continue?"
+msgstr ""
+
 msgid "Runners|You can set up a specific runner to be used by multiple projects but you cannot make this a shared runner."
 msgstr ""
 
@@ -29631,10 +29694,22 @@ msgstr ""
 msgid "SecurityConfiguration|Vulnerability details and statistics in the merge request"
 msgstr ""
 
+msgid "SecurityOrchestration|%{branches} %{plural}"
+msgstr ""
+
+msgid "SecurityOrchestration|%{branches} and %{lastBranch} %{plural}"
+msgstr ""
+
+msgid "SecurityOrchestration|Action"
+msgstr ""
+
 msgid "SecurityOrchestration|All policies"
 msgstr ""
 
 msgid "SecurityOrchestration|An error occurred assigning your security policy project"
+msgstr ""
+
+msgid "SecurityOrchestration|Description"
 msgstr ""
 
 msgid "SecurityOrchestration|Edit policy"
@@ -29646,10 +29721,22 @@ msgstr ""
 msgid "SecurityOrchestration|Enforce security for this project. %{linkStart}More information.%{linkEnd}"
 msgstr ""
 
+msgid "SecurityOrchestration|Enforcement Status"
+msgstr ""
+
+msgid "SecurityOrchestration|Executes a %{scanType} scan"
+msgstr ""
+
 msgid "SecurityOrchestration|If you are using Auto DevOps, your %{monospacedStart}auto-deploy-values.yaml%{monospacedEnd} file will not be updated if you change a policy in this section. Auto DevOps users should make changes by following the %{linkStart}Container Network Policy documentation%{linkEnd}."
 msgstr ""
 
+msgid "SecurityOrchestration|Latest scan"
+msgstr ""
+
 msgid "SecurityOrchestration|Network"
+msgstr ""
+
+msgid "SecurityOrchestration|Network Policies can be used to limit which network traffic is allowed between containers inside the cluster."
 msgstr ""
 
 msgid "SecurityOrchestration|New policy"
@@ -29661,13 +29748,31 @@ msgstr ""
 msgid "SecurityOrchestration|Policies"
 msgstr ""
 
+msgid "SecurityOrchestration|Policy description"
+msgstr ""
+
 msgid "SecurityOrchestration|Policy editor"
+msgstr ""
+
+msgid "SecurityOrchestration|Policy status"
+msgstr ""
+
+msgid "SecurityOrchestration|Policy type"
+msgstr ""
+
+msgid "SecurityOrchestration|Rule"
 msgstr ""
 
 msgid "SecurityOrchestration|Scan Execution"
 msgstr ""
 
 msgid "SecurityOrchestration|Scan execution"
+msgstr ""
+
+msgid "SecurityOrchestration|Scan to be performed every %{cadence} on the %{branches}"
+msgstr ""
+
+msgid "SecurityOrchestration|Scan to be performed on every pipeline on the %{branches}"
 msgstr ""
 
 msgid "SecurityOrchestration|Security policy project was linked successfully"
@@ -29694,28 +29799,19 @@ msgstr ""
 msgid "SecurityOrchestration|Update scan execution policies"
 msgstr ""
 
+msgid "SecurityOrchestration|view results"
+msgstr ""
+
+msgid "SecurityOrhestration|No rules defined - policy will not run."
+msgstr ""
+
 msgid "SecurityPolicies|+%{count} more"
-msgstr ""
-
-msgid "SecurityPolicies|Description"
-msgstr ""
-
-msgid "SecurityPolicies|Enforcement status"
 msgstr ""
 
 msgid "SecurityPolicies|Environment(s)"
 msgstr ""
 
-msgid "SecurityPolicies|Latest scan"
-msgstr ""
-
 msgid "SecurityPolicies|Policy type"
-msgstr ""
-
-msgid "SecurityPolicies|Scan execution"
-msgstr ""
-
-msgid "SecurityPolicies|view results"
 msgstr ""
 
 msgid "SecurityReports|%{firstProject} and %{secondProject}"
@@ -30507,7 +30603,7 @@ msgstr ""
 msgid "Set the milestone to %{milestone_reference}."
 msgstr ""
 
-msgid "Set the timeout in seconds to send a secondary node status to the primary and IPs allowed for the secondary nodes."
+msgid "Set the timeout in seconds to send a secondary site status to the primary and IPs allowed for the secondary sites."
 msgstr ""
 
 msgid "Set time estimate"
@@ -30555,7 +30651,7 @@ msgstr ""
 msgid "Set weight to %{weight}."
 msgstr ""
 
-msgid "Set what should be replicated by this secondary node."
+msgid "Set what should be replicated by this secondary site."
 msgstr ""
 
 msgid "SetPasswordToCloneLink|set a password"
@@ -33116,7 +33212,7 @@ msgstr ""
 msgid "The URL defined on the primary node that secondary nodes should use to contact it."
 msgstr ""
 
-msgid "The URL defined on the primary node that secondary nodes should use to contact it. %{linkStart}More information%{linkEnd}"
+msgid "The URL defined on the primary node that secondary nodes should use to contact it. %{linkStart}Learn more%{linkEnd}"
 msgstr ""
 
 msgid "The URL of the Jenkins server."
@@ -33334,6 +33430,9 @@ msgstr ""
 msgid "The latest pipeline for this merge request did not complete successfully."
 msgstr ""
 
+msgid "The latest pipeline for this merge request has failed."
+msgstr ""
+
 msgid "The license key is invalid. Make sure it is exactly as you received it from GitLab Inc."
 msgstr ""
 
@@ -33521,6 +33620,9 @@ msgid "The subject will be used as the title of the new issue, and the message w
 msgstr ""
 
 msgid "The tag name can't be changed for an existing release."
+msgstr ""
+
+msgid "The time period in seconds that the maximum requests per project limit applies to."
 msgstr ""
 
 msgid "The update action will time out after %{number_of_minutes} minutes. For big repositories, use a clone/push combination."
@@ -36058,6 +36160,9 @@ msgstr ""
 msgid "UsageQuota|Snippets"
 msgstr ""
 
+msgid "UsageQuota|Something went wrong while fetching project storage statistics"
+msgstr ""
+
 msgid "UsageQuota|Storage"
 msgstr ""
 
@@ -36950,6 +37055,11 @@ msgstr ""
 msgid "View project labels"
 msgstr ""
 
+msgid "View public GPG key"
+msgid_plural "View public GPG keys"
+msgstr[0] ""
+msgstr[1] ""
+
 msgid "View replaced file @ "
 msgstr ""
 
@@ -37328,6 +37438,9 @@ msgstr ""
 msgid "We'll continuously validate your pipeline configuration. The validation results will appear here."
 msgstr ""
 
+msgid "We'll use this to help surface the right features and information to you."
+msgstr ""
+
 msgid "We've found no vulnerabilities"
 msgstr ""
 
@@ -37583,6 +37696,9 @@ msgstr ""
 msgid "What is your job title? (optional)"
 msgstr ""
 
+msgid "What will you use this group for?"
+msgstr ""
+
 msgid "What's new"
 msgstr ""
 
@@ -37640,6 +37756,9 @@ msgid "Who will be using this GitLab subscription?"
 msgstr ""
 
 msgid "Who will be using this GitLab trial?"
+msgstr ""
+
+msgid "Who will be using this group?"
 msgstr ""
 
 msgid "Why are you signing up? (Optional)"
@@ -38200,6 +38319,9 @@ msgstr ""
 msgid "You can view the source or %{linkStart}%{cloneIcon} clone the repository%{linkEnd}"
 msgstr ""
 
+msgid "You cannot %{action} %{state} users."
+msgstr ""
+
 msgid "You cannot access the raw file. Please wait a minute."
 msgstr ""
 
@@ -38213,6 +38335,9 @@ msgid "You cannot impersonate an internal user"
 msgstr ""
 
 msgid "You cannot play this scheduled pipeline at the moment. Please wait a minute."
+msgstr ""
+
+msgid "You cannot rename an environment after it's created."
 msgstr ""
 
 msgid "You cannot write to a read-only secondary GitLab Geo instance. Please use %{link_to_primary_node} instead."
@@ -38815,6 +38940,30 @@ msgstr ""
 msgid "Your username is %{username}."
 msgstr ""
 
+msgid "ZentaoIntegration|Base URL of the Zentao instance."
+msgstr ""
+
+msgid "ZentaoIntegration|Enter API token"
+msgstr ""
+
+msgid "ZentaoIntegration|If different from Web URL."
+msgstr ""
+
+msgid "ZentaoIntegration|Use Zentao as this project's issue tracker."
+msgstr ""
+
+msgid "ZentaoIntegration|Zentao API URL (optional)"
+msgstr ""
+
+msgid "ZentaoIntegration|Zentao API token"
+msgstr ""
+
+msgid "ZentaoIntegration|Zentao Product ID"
+msgstr ""
+
+msgid "ZentaoIntegration|Zentao Web URL"
+msgstr ""
+
 msgid "Zoom meeting added"
 msgstr ""
 
@@ -38918,6 +39067,11 @@ msgstr ""
 
 msgid "blocks"
 msgstr ""
+
+msgid "branch"
+msgid_plural "branches"
+msgstr[0] ""
+msgstr[1] ""
 
 msgid "branch name"
 msgstr ""

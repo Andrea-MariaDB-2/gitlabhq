@@ -1,15 +1,11 @@
 ---
 stage: Verify
-group: Pipeline Execution
+group: Pipeline Authoring
 info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
 type: reference
 ---
 
-<!-- markdownlint-disable MD044 -->
-<!-- vale gitlab.Spelling = NO -->
-# Keyword reference for the .gitlab-ci.yml file **(FREE)**
-<!-- vale gitlab.Spelling = YES -->
-<!-- markdownlint-enable MD044 -->
+# Keyword reference for the `.gitlab-ci.yml` file **(FREE)**
 
 This document lists the configuration options for your GitLab `.gitlab-ci.yml` file.
 
@@ -386,7 +382,7 @@ does not block triggered pipelines.
 > [Moved](https://gitlab.com/gitlab-org/gitlab-foss/-/issues/42861) to GitLab Free in 11.4.
 
 Use `include` to include external YAML files in your CI/CD configuration.
-You can break down one long `gitlab-ci.yml` file into multiple files to increase readability,
+You can break down one long `.gitlab-ci.yml` file into multiple files to increase readability,
 or reduce duplication of the same configuration in multiple places.
 
 You can also store template files in a central repository and `include` them in projects.
@@ -450,12 +446,12 @@ that proposes expanding this feature to support more variables.
 
 #### `rules` with `include`
 
-> [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/276515) in GitLab 14.2.
+> - [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/276515) in GitLab 14.2.
+> - [Enabled on GitLab.com](https://gitlab.com/gitlab-org/gitlab/-/issues/337507) in GitLab 14.3 and is ready for production use.
+> - [Enabled with `ci_include_rules` flag](https://gitlab.com/gitlab-org/gitlab/-/issues/337507) for self-managed GitLab in GitLab 14.3 and is ready for production use.
 
-NOTE:
-On self-managed GitLab, by default this feature is not available. To make it available,
-ask an administrator to [enable the `ci_include_rules` flag](../../administration/feature_flags.md).
-On GitLab.com, this feature is not available. The feature is not ready for production use.
+FLAG:
+On self-managed GitLab, by default this feature is available. To hide the feature per project or for your entire instance, ask an administrator to [disable the `ci_include_rules` flag](../../administration/feature_flags.md). On GitLab.com, this feature is available.
 
 You can use [`rules`](#rules) with `include` to conditionally include other configuration files.
 You can only use `rules:if` in `include` with [certain variables](#variables-with-include).
@@ -1141,6 +1137,9 @@ The job is not added to the pipeline:
 - If no rules match.
 - If a rule matches and has `when: never`.
 
+You can use [`!reference` tags](#reference-tags) to [reuse `rules` configuration](../jobs/job_control.md#reuse-rules-in-different-jobs)
+in different jobs.
+
 #### `rules:if`
 
 Use `rules:if` clauses to specify when to add a job to a pipeline:
@@ -1591,6 +1590,14 @@ production:
 
 #### Requirements and limitations
 
+- The maximum number of jobs that a single job can need in the `needs:` array is limited:
+  - For GitLab.com, the limit is 50. For more information, see our
+    [infrastructure issue](https://gitlab.com/gitlab-com/gl-infra/infrastructure/-/issues/7541).
+  - For self-managed instances, the default limit is 50. This limit [can be changed](#changing-the-needs-job-limit).
+- If `needs:` refers to a job that uses the [`parallel`](#parallel) keyword,
+  it depends on all jobs created in parallel, not just one job. It also downloads
+  artifacts from all the parallel jobs by default. If the artifacts have the same
+  name, they overwrite each other and only the last one downloaded is saved.
 - In [GitLab 14.1 and later](https://gitlab.com/gitlab-org/gitlab/-/issues/30632) you
   can refer to jobs in the same stage as the job you are configuring. This feature is
   enabled on GitLab.com and ready for production use. On self-managed [GitLab 14.2 and later](https://gitlab.com/gitlab-org/gitlab/-/issues/30632)
@@ -1600,17 +1607,6 @@ production:
   in a job's `needs:` section.
 - In GitLab 13.9 and older, if `needs:` refers to a job that might not be added to
   a pipeline because of `only`, `except`, or `rules`, the pipeline might fail to create.
-- The maximum number of jobs that a single job can need in the `needs:` array is limited:
-  - For GitLab.com, the limit is 50. For more information, see our
-    [infrastructure issue](https://gitlab.com/gitlab-com/gl-infra/infrastructure/-/issues/7541).
-  - For self-managed instances, the limit is: 50. This limit [can be changed](#changing-the-needs-job-limit).
-- If `needs:` refers to a job that uses the [`parallel`](#parallel) keyword,
-  it depends on all jobs created in parallel, not just one job. It also downloads
-  artifacts from all the parallel jobs by default. If the artifacts have the same
-  name, they overwrite each other and only the last one downloaded is saved.
-- `needs:` is similar to `dependencies:` in that it must use jobs from prior stages,
-  meaning it's impossible to create circular dependencies. Depending on jobs in the
-  current stage is not possible either, but [an issue exists](https://gitlab.com/gitlab-org/gitlab/-/issues/30632).
 
 ##### Changing the `needs:` job limit **(FREE SELF)**
 
@@ -1627,7 +1623,7 @@ To disable directed acyclic graphs (DAG), set the limit to `0`.
 
 #### Artifact downloads with `needs`
 
-> [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/14311) in GitLab v12.6.
+> [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/14311) in GitLab 12.6.
 
 When a job uses `needs`, it no longer downloads all artifacts from previous stages
 by default, because jobs with `needs` can start before earlier stages complete. With
@@ -1679,7 +1675,7 @@ with `needs`.
 
 #### Cross project artifact downloads with `needs` **(PREMIUM)**
 
-> [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/14311) in GitLab v12.7.
+> [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/14311) in GitLab 12.7.
 
 Use `needs` to download artifacts from up to five jobs in pipelines:
 
@@ -1752,7 +1748,7 @@ pipelines running on the same ref could override the artifacts.
 
 #### Artifact downloads to child pipelines
 
-> [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/255983) in GitLab v13.7.
+> [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/255983) in GitLab 13.7.
 
 A [child pipeline](../pipelines/parent_child_pipelines.md) can download artifacts from a job in
 its parent pipeline or another child pipeline in the same parent-child pipeline hierarchy.
@@ -2379,7 +2375,7 @@ cache-job:
 
 ##### `cache:key:files`
 
-> [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/18986) in GitLab v12.5.
+> [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/18986) in GitLab 12.5.
 
 Use the `cache:key:files` keyword to generate a new key when one or two specific files
 change. `cache:key:files` lets you reuse some caches, and rebuild them less often,
@@ -2417,7 +2413,7 @@ fallback key is `default`.
 
 ##### `cache:key:prefix`
 
-> [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/18986) in GitLab v12.5.
+> [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/18986) in GitLab 12.5.
 
 Use `cache:key:prefix` to combine a prefix with the SHA computed for [`cache:key:files`](#cachekeyfiles).
 
@@ -3194,10 +3190,10 @@ dashboards.
 > - [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/207528) in GitLab 13.0.
 > - Requires [GitLab Runner](https://docs.gitlab.com/runner/) 11.5 and above.
 
-The `terraform` report obtains a Terraform `tfplan.json` file. [JQ processing required to remove credentials](../../user/infrastructure/mr_integration.md#configure-terraform-report-artifacts). The collected Terraform
+The `terraform` report obtains a Terraform `tfplan.json` file. [JQ processing required to remove credentials](../../user/infrastructure/iac/mr_integration.md#configure-terraform-report-artifacts). The collected Terraform
 plan report uploads to GitLab as an artifact and displays
 in merge requests. For more information, see
-[Output `terraform plan` information into a merge request](../../user/infrastructure/mr_integration.md).
+[Output `terraform plan` information into a merge request](../../user/infrastructure/iac/mr_integration.md).
 
 #### `artifacts:untracked`
 
@@ -4483,7 +4479,7 @@ deploy_review_job:
 
 You can use only integers and strings for the variable's name and value.
 
-If you define a variable at the top level of the `gitlab-ci.yml` file, it is global,
+If you define a variable at the top level of the `.gitlab-ci.yml` file, it is global,
 meaning it applies to all jobs. If you define a variable in a job, it's available
 to that job only.
 
@@ -4765,6 +4761,7 @@ into templates.
 ### `!reference` tags
 
 > - [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/266173) in GitLab 13.9.
+> - `rules` keyword support [introduced in](https://gitlab.com/gitlab-org/gitlab/-/issues/322992) GitLab 14.3.
 
 Use the `!reference` custom YAML tag to select keyword configuration from other job
 sections and reuse it in the current section. Unlike [YAML anchors](#anchors), you can

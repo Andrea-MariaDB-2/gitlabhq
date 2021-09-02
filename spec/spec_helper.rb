@@ -160,7 +160,6 @@ RSpec.configure do |config|
   config.include GitlabRoutingHelper
   config.include StubExperiments
   config.include StubGitlabCalls
-  config.include StubGitlabData
   config.include NextFoundInstanceOf
   config.include NextInstanceOf
   config.include TestEnv
@@ -259,6 +258,9 @@ RSpec.configure do |config|
       # Using FortiToken Cloud as OTP provider is disabled by default in
       # tests, until we introduce it in user settings
       stub_feature_flags(forti_token_cloud: false)
+
+      # Disable for now whilst we add more states
+      stub_feature_flags(restructured_mr_widget: false)
 
       # These feature flag are by default disabled and used in disaster recovery mode
       stub_feature_flags(ci_queueing_disaster_recovery_disable_fair_scheduling: false)

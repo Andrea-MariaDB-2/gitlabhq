@@ -220,7 +220,8 @@ You can use a GitLab CI/CD job token to authenticate with specific API endpoints
     Package Registry, you can use [deploy tokens](../user/project/deploy_tokens/index.md).
   - [Container Registry](../user/packages/container_registry/index.md)
     (the `$CI_REGISTRY_PASSWORD` is `$CI_JOB_TOKEN`).
-  - [Container Registry API](container_registry.md) (scoped to the job's project, when the `ci_job_token_scope` feature flag is enabled)
+  - [Container Registry API](container_registry.md)
+    (scoped to the job's project, when the `ci_job_token_scope` feature flag is enabled).
 - [Get job artifacts](job_artifacts.md#get-job-artifacts).
 - [Get job token's job](jobs.md#get-job-tokens-job).
 - [Pipeline triggers](pipeline_triggers.md), using the `token=` parameter.
@@ -236,6 +237,13 @@ use the token anymore.
 A job token can access a project's resources without any configuration, but it might
 give extra permissions that aren't necessary. There is [a proposal](https://gitlab.com/groups/gitlab-org/-/epics/3559)
 to redesign the feature for more strategic control of the access permissions.
+
+You can also use the job token to authenticate and clone a repository from a private project
+in a CI/CD job:
+
+```shell
+git clone https://gitlab-ci-token:${CI_JOB_TOKEN}@gitlab.example.com/<namespace>/<project>
+```
 
 #### GitLab CI/CD job token security
 
@@ -675,7 +683,7 @@ send the payload body:
 
   ```shell
   curl --request POST --header "Content-Type: application/json" \
-       --data '{"name":"<example-name>", "description":"<example-description"}' "https://gitlab/api/v4/projects"
+       --data '{"name":"<example-name>", "description":"<example-description>"}' "https://gitlab/api/v4/projects"
   ```
 
 URL encoded query strings have a length limitation. Requests that are too large

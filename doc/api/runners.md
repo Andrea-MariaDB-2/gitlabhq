@@ -41,7 +41,6 @@ GET /runners?scope=active
 GET /runners?type=project_type
 GET /runners?status=active
 GET /runners?tag_list=tag1,tag2
-GET /runners?search=gitlab
 ```
 
 | Attribute   | Type           | Required | Description         |
@@ -50,7 +49,6 @@ GET /runners?search=gitlab
 | `type`      | string         | no       | The type of runners to show, one of: `instance_type`, `group_type`, `project_type` |
 | `status`    | string         | no       | The status of runners to show, one of: `active`, `paused`, `online`, `offline` |
 | `tag_list`  | string array   | no       | List of the runner's tags |
-| `search`    | string         | no       | The full token or partial description text to match |
 
 ```shell
 curl --header "PRIVATE-TOKEN: <your_access_token>" "https://gitlab.example.com/api/v4/runners"
@@ -675,3 +673,42 @@ Response:
 |-----------|---------------------------------|
 | 200       | Credentials are valid           |
 | 403       | Credentials are invalid         |
+
+## Reset instance's runner registration token
+
+Resets the runner registration token for the GitLab instance.
+
+```plaintext
+POST /runners/reset_registration_token
+```
+
+```shell
+curl --request POST --header "PRIVATE-TOKEN: <your_access_token>" \
+     "https://gitlab.example.com/api/v4/runners/reset_registration_token"
+```
+
+## Reset project's runner registration token
+
+Resets the runner registration token for a project.
+
+```plaintext
+POST /projects/:id/runners/reset_registration_token
+```
+
+```shell
+curl --request POST --header "PRIVATE-TOKEN: <your_access_token>" \
+     "https://gitlab.example.com/api/v4/projects/9/runners/reset_registration_token"
+```
+
+## Reset group's runner registration token
+
+Resets the runner registration token for a group.
+
+```plaintext
+POST /groups/:id/runners/reset_registration_token
+```
+
+```shell
+curl --request POST --header "PRIVATE-TOKEN: <your_access_token>" \
+     "https://gitlab.example.com/api/v4/groups/9/runners/reset_registration_token"
+```

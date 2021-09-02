@@ -60,8 +60,16 @@ module IssuesHelper
     sprite_icon('eye-slash', css_class: 'gl-vertical-align-text-bottom') if issue.confidential?
   end
 
+  def issue_hidden?(issue)
+    Feature.enabled?(:ban_user_feature_flag) && issue.hidden?
+  end
+
   def hidden_issue_icon(issue)
-    sprite_icon('spam', css_class: 'gl-vertical-align-text-bottom') if issue.hidden?
+    return unless issue_hidden?(issue)
+
+    content_tag(:span, class: 'has-tooltip', title: _('This issue is hidden because its author has been banned')) do
+      sprite_icon('spam', css_class: 'gl-vertical-align-text-bottom')
+    end
   end
 
   def award_user_list(awards, current_user, limit: 10)
@@ -206,7 +214,8 @@ module IssuesHelper
       emails_help_page_path: help_page_path('development/emails', anchor: 'email-namespace'),
       empty_state_svg_path: image_path('illustrations/issues.svg'),
       export_csv_path: export_csv_project_issues_path(project),
-      has_project_issues: project_issues(project).exists?.to_s,
+      full_path: project.full_path,
+      has_any_issues: project_issues(project).exists?.to_s,
       import_csv_issues_path: import_csv_namespace_project_issues_path,
       initial_email: project.new_issuable_address(current_user, 'issue'),
       is_signed_in: current_user.present?.to_s,
@@ -216,7 +225,6 @@ module IssuesHelper
       max_attachment_size: number_to_human_size(Gitlab::CurrentSettings.max_attachment_size.megabytes),
       new_issue_path: new_project_issue_path(project, issue: { milestone_id: finder.milestones.first.try(:id) }),
       project_import_jira_path: project_import_jira_path(project),
-      project_path: project.full_path,
       quick_actions_help_path: help_page_path('user/project/quick_actions'),
       reset_path: new_issuable_address_project_path(project, issuable_type: 'issue'),
       rss_path: url_for(safe_params.merge(rss_url_options)),

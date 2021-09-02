@@ -30,6 +30,7 @@ RSpec.describe Group do
     it { is_expected.to have_many(:group_deploy_keys) }
     it { is_expected.to have_many(:integrations) }
     it { is_expected.to have_one(:dependency_proxy_setting) }
+    it { is_expected.to have_one(:dependency_proxy_image_ttl_policy) }
     it { is_expected.to have_many(:dependency_proxy_blobs) }
     it { is_expected.to have_many(:dependency_proxy_manifests) }
     it { is_expected.to have_many(:debian_distributions).class_name('Packages::Debian::GroupDistribution').dependent(:destroy) }
@@ -2273,19 +2274,27 @@ RSpec.describe Group do
   end
 
   describe '.groups_including_descendants_by' do
-    it 'returns the expected groups for a group and its descendants' do
-      parent_group1 = create(:group)
-      child_group1 = create(:group, parent: parent_group1)
-      child_group2 = create(:group, parent: parent_group1)
+    let_it_be(:parent_group1) { create(:group) }
+    let_it_be(:parent_group2) { create(:group) }
+    let_it_be(:extra_group)   { create(:group) }
+    let_it_be(:child_group1)  { create(:group, parent: parent_group1) }
+    let_it_be(:child_group2)  { create(:group, parent: parent_group1) }
+    let_it_be(:child_group3)  { create(:group, parent: parent_group2) }
 
-      parent_group2 = create(:group)
-      child_group3 = create(:group, parent: parent_group2)
+    subject { described_class.groups_including_descendants_by([parent_group2.id, parent_group1.id]) }
 
-      create(:group)
+    shared_examples 'returns the expected groups for a group and its descendants' do
+      specify { is_expected.to contain_exactly(parent_group1, parent_group2, child_group1, child_group2, child_group3) }
+    end
 
-      groups = described_class.groups_including_descendants_by([parent_group2.id, parent_group1.id])
+    it_behaves_like 'returns the expected groups for a group and its descendants'
 
-      expect(groups).to contain_exactly(parent_group1, parent_group2, child_group1, child_group2, child_group3)
+    context 'when :linear_group_including_descendants_by feature flag is disabled' do
+      before do
+        stub_feature_flags(linear_group_including_descendants_by: false)
+      end
+
+      it_behaves_like 'returns the expected groups for a group and its descendants'
     end
   end
 

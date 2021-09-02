@@ -1,6 +1,6 @@
 ---
 stage: Verify
-group: Pipeline Execution
+group: Pipeline Authoring
 info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
 ---
 
@@ -289,6 +289,35 @@ docker build:
 You can use the `$` character for both variables and paths. For example, if the
 `$DOCKERFILES_DIR` variable exists, its value is used. If it does not exist, the
 `$` is interpreted as being part of a path.
+
+## Reuse rules in different jobs
+
+> [Introduced in](https://gitlab.com/gitlab-org/gitlab/-/issues/322992) GitLab 14.3.
+
+Use [`!reference` tags](../yaml/index.md#reference-tags) to reuse rules in different
+jobs. You can combine `!reference` rules with regular job-defined rules:
+
+```yaml
+.default_rules:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+job1:
+  rules:
+    - !reference [.default_rules, rules]
+  script:
+    - echo "This job runs for the default branch, but not schedules."
+
+job2:
+  rules:
+    - !reference [.default_rules, rules]
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+  script:
+    - echo "This job runs for the default branch, but not schedules."
+    - echo "It also runs for merge requests."
+```
 
 ## Specify when jobs run with `only` and `except`
 

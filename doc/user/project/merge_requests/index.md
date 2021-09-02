@@ -27,7 +27,7 @@ important parts of the merge request:
 ![Merge request tab positions](img/merge_request_tab_position_v13_11.png)
 
 - **Overview**: Contains the description, notifications from pipelines, and a
-  discussion area for [comment threads](../../discussions/index.md#resolve-a-thread))
+  discussion area for [comment threads](../../discussions/index.md#resolve-a-thread)
   and [code suggestions](reviews/suggestions.md). The right sidebar provides fields
   to add assignees, reviewers, labels, and a milestone to your work, and the
   [merge request widgets area](widgets.md) reports results from pipelines and tests.
@@ -75,6 +75,21 @@ can assign, categorize, and track progress on a merge request:
 - **Participants**: A list of users participating or watching a merge request.
 - [**Notifications**](../../profile/notifications.md): A toggle to select whether
   or not to receive notifications for updates to a merge request.
+
+## Add changes to a merge request
+
+If you have permission to add changes to a merge request, you can add your changes
+to an existing merge request in several ways, depending on the complexity of your change and whether you need access to a development environment:
+
+- [Edit changes in the Web IDE](../web_ide/index.md) in your browser. Use this
+  browser-based method to edit multiple files, or if you are not comfortable with Git commands.
+  You cannot run tests from the Web IDE.
+- [Edit changes in Gitpod](../../../integration/gitpod.md#launch-gitpod-in-gitlab), if you
+  need a fully-featured environment to both edit files, and run tests afterward. Gitpod
+  supports running the [GitLab Development Kit (GDK)](https://gitlab.com/gitlab-org/gitlab-development-kit).
+  To use Gitpod, you must [enable Gitpod in your user account](../../../integration/gitpod.md#enable-gitpod-in-your-user-settings).
+- [Push changes from the command line](../../../gitlab-basics/start-using-git.md), if you are
+  familiar with Git and the command line.
 
 ## Close a merge request
 

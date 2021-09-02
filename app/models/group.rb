@@ -74,13 +74,14 @@ class Group < Namespace
   has_many :oauth_applications, class_name: 'Doorkeeper::Application', as: :owner, dependent: :destroy # rubocop:disable Cop/ActiveRecordDependent
 
   has_one :dependency_proxy_setting, class_name: 'DependencyProxy::GroupSetting'
+  has_one :dependency_proxy_image_ttl_policy, class_name: 'DependencyProxy::ImageTtlGroupPolicy'
   has_many :dependency_proxy_blobs, class_name: 'DependencyProxy::Blob'
   has_many :dependency_proxy_manifests, class_name: 'DependencyProxy::Manifest'
 
   # debian_distributions and associated component_files must be destroyed by ruby code in order to properly remove carrierwave uploads
   has_many :debian_distributions, class_name: 'Packages::Debian::GroupDistribution', dependent: :destroy # rubocop:disable Cop/ActiveRecordDependent
 
-  delegate :prevent_sharing_groups_outside_hierarchy, :new_user_signups_cap, to: :namespace_settings
+  delegate :prevent_sharing_groups_outside_hierarchy, :new_user_signups_cap, :setup_for_company, :jobs_to_be_done, to: :namespace_settings
 
   accepts_nested_attributes_for :variables, allow_destroy: true
 
@@ -296,7 +297,7 @@ class Group < Namespace
   end
 
   def add_users(users, access_level, current_user: nil, expires_at: nil)
-    Members::Groups::CreatorService.add_users( # rubocop:disable CodeReuse/ServiceClass
+    Members::Groups::BulkCreatorService.add_users( # rubocop:disable CodeReuse/ServiceClass
       self,
       users,
       access_level,
@@ -734,6 +735,10 @@ class Group < Namespace
     Timelog.in_group(self)
   end
 
+  def cached_issues_state_count_enabled?
+    Feature.enabled?(:cached_issues_state_count, self, default_enabled: :yaml)
+  end
+
   private
 
   def max_member_access(user_ids)
@@ -822,9 +827,15 @@ class Group < Namespace
   end
 
   def self.groups_including_descendants_by(group_ids)
-    Gitlab::ObjectHierarchy
-      .new(Group.where(id: group_ids))
+    groups = Group.where(id: group_ids)
+
+    if Feature.enabled?(:linear_group_including_descendants_by, default_enabled: :yaml)
+      groups.self_and_descendants
+    else
+      Gitlab::ObjectHierarchy
+      .new(groups)
       .base_and_descendants
+    end
   end
 
   def disable_shared_runners!

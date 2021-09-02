@@ -1,6 +1,6 @@
 ---
 stage: Verify
-group: Pipeline Execution
+group: Pipeline Authoring
 info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
 disqus_identifier: 'https://docs.gitlab.com/ee/ci/pipelines.html'
 type: reference
@@ -122,6 +122,7 @@ you can filter the pipeline list by:
 - Branch name
 - Status ([GitLab 13.1 and later](https://gitlab.com/gitlab-org/gitlab/-/issues/217617))
 - Tag ([GitLab 13.1 and later](https://gitlab.com/gitlab-org/gitlab/-/issues/217617))
+- Source ([GitLab 14.3 and later](https://gitlab.com/gitlab-org/gitlab/-/issues/338347))
 
 [Starting in GitLab 14.2](https://gitlab.com/gitlab-org/gitlab/-/issues/26621), you can change the
 pipeline column to display the pipeline ID or the pipeline IID.

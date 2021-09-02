@@ -54,7 +54,6 @@ module QA
       end
 
       before do
-        Runtime::Feature.enable(:bulk_import) unless staging?
         Runtime::Feature.enable(:top_level_group_creation_enabled) if staging?
 
         sandbox.add_member(user, Resource::Members::AccessLevel::MAINTAINER)
@@ -71,12 +70,9 @@ module QA
         end
       end
 
-      # Non blocking issues:
-      # https://gitlab.com/gitlab-org/gitlab/-/issues/331252
-      # https://gitlab.com/gitlab-org/gitlab/-/issues/333678 <- can cause 500 when creating user and group back to back
       it(
         'imports group with subgroups and labels',
-        testcase: 'https://gitlab.com/gitlab-org/quality/testcases/-/issues/1871'
+        testcase: 'https://gitlab.com/gitlab-org/quality/testcases/-/quality/test_cases/1873'
       ) do
         expect { imported_group.import_status }.to(
           eventually_eq('finished').within(max_duration: 300, sleep_interval: 2)
@@ -94,7 +90,6 @@ module QA
       after do
         user.remove_via_api!
       ensure
-        Runtime::Feature.disable(:bulk_import) unless staging?
         Runtime::Feature.disable(:top_level_group_creation_enabled) if staging?
       end
     end

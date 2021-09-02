@@ -6,14 +6,43 @@ const defaultAttrs = {
   th: { colspan: 1, rowspan: 1, colwidth: null },
 };
 
+const ignoreAttrs = {
+  dd: ['isTerm'],
+  dt: ['isTerm'],
+};
+
 const tableMap = new WeakMap();
 
-function shouldRenderCellInline(cell) {
+// Source taken from
+// prosemirror-markdown/src/to_markdown.js
+export function isPlainURL(link, parent, index, side) {
+  if (link.attrs.title || !/^\w+:/.test(link.attrs.href)) return false;
+  const content = parent.child(index + (side < 0 ? -1 : 0));
+  if (
+    !content.isText ||
+    content.text !== link.attrs.href ||
+    content.marks[content.marks.length - 1] !== link
+  )
+    return false;
+  if (index === (side < 0 ? 1 : parent.childCount - 1)) return true;
+  const next = parent.child(index + (side < 0 ? -2 : 1));
+  return !link.isInSet(next.marks);
+}
+
+function containsOnlyText(node) {
+  if (node.childCount === 1) {
+    const child = node.child(0);
+    return child.isText && child.marks.length === 0;
+  }
+
+  return false;
+}
+
+function containsParagraphWithOnlyText(cell) {
   if (cell.childCount === 1) {
-    const parent = cell.child(0);
-    if (parent.type.name === 'paragraph' && parent.childCount === 1) {
-      const child = parent.child(0);
-      return child.isText && child.marks.length === 0;
+    const child = cell.child(0);
+    if (child.type.name === 'paragraph') {
+      return containsOnlyText(child);
     }
   }
 
@@ -80,21 +109,31 @@ function shouldRenderHTMLTable(table) {
   return true;
 }
 
-function openTag(state, tagName, attrs) {
+function htmlEncode(str = '') {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/'/g, '&#39;')
+    .replace(/"/g, '&#34;');
+}
+
+export function openTag(tagName, attrs) {
   let str = `<${tagName}`;
 
   str += Object.entries(attrs || {})
     .map(([key, value]) => {
-      if (defaultAttrs[tagName]?.[key] === value) return '';
+      if ((ignoreAttrs[tagName] || []).includes(key) || defaultAttrs[tagName]?.[key] === value)
+        return '';
 
-      return ` ${key}=${state.quote(value?.toString() || '')}`;
+      return ` ${key}="${htmlEncode(value?.toString())}"`;
     })
     .join('');
 
   return `${str}>`;
 }
 
-function closeTag(state, tagName) {
+export function closeTag(tagName) {
   return `</${tagName}>`;
 }
 
@@ -131,11 +170,11 @@ function unsetIsInBlockTable(table) {
 
 function renderTagOpen(state, tagName, attrs) {
   state.ensureNewLine();
-  state.write(openTag(state, tagName, attrs));
+  state.write(openTag(tagName, attrs));
 }
 
 function renderTagClose(state, tagName, insertNewline = true) {
-  state.write(closeTag(state, tagName));
+  state.write(closeTag(tagName));
   if (insertNewline) state.ensureNewLine();
 }
 
@@ -183,7 +222,7 @@ function renderTableRowAsHTML(state, node) {
 
     renderTagOpen(state, tag, cell.attrs);
 
-    if (!shouldRenderCellInline(cell)) {
+    if (!containsParagraphWithOnlyText(cell)) {
       state.closeBlock(node);
       state.flushClose();
     }
@@ -197,13 +236,58 @@ function renderTableRowAsHTML(state, node) {
   renderTagClose(state, 'tr');
 }
 
+export function renderContent(state, node, forceRenderInline) {
+  if (node.type.inlineContent) {
+    if (containsOnlyText(node)) {
+      state.renderInline(node);
+    } else {
+      state.closeBlock(node);
+      state.flushClose();
+      state.renderInline(node);
+      state.closeBlock(node);
+      state.flushClose();
+    }
+  } else {
+    const renderInline = forceRenderInline || containsParagraphWithOnlyText(node);
+    if (!renderInline) {
+      state.closeBlock(node);
+      state.flushClose();
+      state.renderContent(node);
+      state.ensureNewLine();
+    } else {
+      state.renderInline(forceRenderInline ? node : node.child(0));
+    }
+  }
+}
+
+export function renderHTMLNode(tagName, forceRenderInline = false) {
+  return (state, node) => {
+    renderTagOpen(state, tagName, node.attrs);
+    renderContent(state, node, forceRenderInline);
+    renderTagClose(state, tagName, false);
+  };
+}
+
+export function renderOrderedList(state, node) {
+  const { parens } = node.attrs;
+  const start = node.attrs.start || 1;
+  const maxW = String(start + node.childCount - 1).length;
+  const space = state.repeat(' ', maxW + 2);
+  const delimiter = parens ? ')' : '.';
+
+  state.renderList(node, space, (i) => {
+    const nStr = String(start + i);
+    return `${state.repeat(' ', maxW - nStr.length) + nStr}${delimiter} `;
+  });
+}
+
 export function renderTableCell(state, node) {
   if (!isBlockTablesFeatureEnabled()) {
     state.renderInline(node);
     return;
   }
 
-  if (!isInBlockTable(node) || shouldRenderCellInline(node)) {
+  if (!isInBlockTable(node) || containsParagraphWithOnlyText(node)) {
     state.renderInline(node.child(0));
   } else {
     state.renderContent(node);
@@ -247,4 +331,15 @@ export function renderHardBreak(state, node, parent, index) {
       return;
     }
   }
+}
+
+export function renderImage(state, node) {
+  const { alt, canonicalSrc, src, title } = node.attrs;
+  const quotedTitle = title ? ` ${state.quote(title)}` : '';
+
+  state.write(`![${state.esc(alt || '')}](${state.esc(canonicalSrc || src)}${quotedTitle})`);
+}
+
+export function renderPlayable(state, node) {
+  renderImage(state, node);
 }

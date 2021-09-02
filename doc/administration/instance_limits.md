@@ -78,6 +78,16 @@ This setting limits the request rate on the Packages API per user or IP. For mor
 
 - **Default rate limit**: Disabled by default.
 
+### Git LFS
+
+> [Introduced](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/68642) in GitLab 14.3.
+
+This setting limits the request rate on the [Git LFS](../topics/git/lfs/index.md)
+requests per user. For more information, read
+[GitLab Git Large File Storage (LFS) Administration](../administration/lfs/index.md).
+
+- **Default rate limit**: Disabled by default.
+
 ### Import/Export
 
 > [Introduced](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/35728) in GitLab 13.2.
@@ -513,19 +523,48 @@ Update `ci_jobs_trace_size_limit` with the new value in megabytes:
 Plan.default.actual_limits.update!(ci_jobs_trace_size_limit: 125)
 ```
 
+### Maximum size and depth of CI/CD configuration YAML files
+
+The default maximum size of a CI/CD configuration YAML file is 1 megabyte and the default depth is 100.
+
+You can change these limits in the [GitLab Rails console](operations/rails_console.md#starting-a-rails-console-session).
+Update `max_yaml_size_bytes` with the new value in megabytes:
+
+```ruby
+ApplicationSetting.update!(max_yaml_size_bytes: 2.megabytes)
+```
+
+Update `max_yaml_depth` with the new value in megabytes:
+
+```ruby
+ApplicationSetting.update!(max_yaml_depth: 125)
+```
+
+To disable this limitation entirely, disable the feature flag in the console:
+
+```ruby
+Feature.disable(:ci_yaml_limit_size)
+```
+
 ## Instance monitoring and metrics
 
-### Incident Management inbound alert limits
+### Limit inbound incident management alerts
 
 > [Introduced](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/17859) in GitLab 12.5.
 
-Limiting inbound alerts for an incident reduces the number of alerts (issues)
-that can be created within a period of time, which can help prevent overloading
-your incident responders with duplicate issues. You can reduce the volume of
-alerts in the following ways:
+You can limit the number of inbound alerts for [incidents](../operations/incident_management/incidents.md)
+that can be created in a period of time. The inbound [incident management](../operations/incident_management/index.md)
+alert limit can help prevent overloading your incident responders by reducing the
+number of alerts or duplicate issues.
 
-- Max requests per period per project, 3600 seconds by default.
-- Rate limit period in seconds, 3600 seconds by default.
+To set inbound incident management alert limits:
+
+1. On the top bar, select **Menu > Admin**.
+1. On the left sidebar, select **Settings > Network**.
+1. Expand General **Incident Management Limits**.
+1. Select the **Enable Incident Management inbound alert limit** checkbox.
+1. Optional. Input a custom value for **Maximum requests per project per rate limit period**. Default is 3600.
+1. Optional. Input a custom value for **Rate limit period**. Default is 3600 seconds.
 
 ### Prometheus Alert JSON payloads
 

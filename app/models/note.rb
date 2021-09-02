@@ -582,7 +582,7 @@ class Note < ApplicationRecord
   end
 
   def post_processed_cache_key
-    cache_key_items = [cache_key, author.cache_key]
+    cache_key_items = [cache_key, author&.cache_key]
     cache_key_items << Digest::SHA1.hexdigest(redacted_note_html) if redacted_note_html.present?
 
     cache_key_items.join(':')
@@ -643,7 +643,7 @@ class Note < ApplicationRecord
       user_visible_reference_count > 0 && user_visible_reference_count == total_reference_count
     else
       refs = all_references(user)
-      refs.all.any? && refs.stateful_not_visible_counter == 0
+      refs.all.any? && refs.all_visible?
     end
   end
 
