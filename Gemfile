@@ -7,7 +7,7 @@ gem 'rails', '~> 6.1.3.2'
 gem 'bootsnap', '~> 1.4.6'
 
 # Responders respond_to and respond_with
-gem 'responders', '~> 3.0'
+gem 'responders', '~> 3.0', '>= 3.0.0'
 
 gem 'sprockets', '~> 3.7.0'
 
@@ -27,10 +27,10 @@ gem 'marginalia', '~> 1.10.0'
 gem 'declarative_policy', '~> 1.0.0'
 
 # Authentication libraries
-gem 'devise', '~> 4.7.2'
+gem 'devise', '~> 4.7.3'
 gem 'bcrypt', '~> 3.1', '>= 3.1.14'
-gem 'doorkeeper', '~> 5.5.0.rc2'
-gem 'doorkeeper-openid_connect', '~> 1.7.5'
+gem 'doorkeeper', '~> 5.5.0.0'
+gem 'doorkeeper-openid_connect', '~> 1.8.0'
 gem 'rexml', '~> 3.2.5'
 gem 'ruby-saml', '~> 1.12.1'
 gem 'omniauth', '~> 1.8'
@@ -44,7 +44,7 @@ gem 'omniauth-gitlab', '~> 1.0.2'
 gem 'omniauth-google-oauth2', '~> 0.6.0'
 gem 'omniauth-kerberos', '~> 0.3.0', group: :kerberos
 gem 'omniauth-oauth2-generic', '~> 0.2.2'
-gem 'omniauth-saml', '~> 1.10'
+gem 'omniauth-saml', '~> 1.10', '>= 1.10.0'
 gem 'omniauth-shibboleth', '~> 1.3.0'
 gem 'omniauth-twitter', '~> 1.4'
 gem 'omniauth_crowd', '~> 2.4.0'
@@ -110,7 +110,7 @@ gem 'hashie'
 gem 'hashie-forbidden_attributes'
 
 # Pagination
-gem 'kaminari', '~> 1.0'
+gem 'kaminari', '~> 1.2', '>= 1.2.1'
 
 # HAML
 gem 'hamlit', '~> 2.15.0'
@@ -120,11 +120,11 @@ gem 'carrierwave', '~> 1.3'
 gem 'mini_magick', '~> 4.10.1'
 
 # for backups
-gem 'fog-aws', '~> 3.9'
+gem 'fog-aws', '~> 3.9', '>= 3.9.0'
 # Locked until fog-google resolves https://github.com/fog/fog-google/issues/421.
 # Also see config/initializers/fog_core_patch.rb.
 gem 'fog-core', '= 2.1.0'
-gem 'fog-google', '~> 1.15', require: 'fog/google'
+gem 'fog-google', '~> 1.15', '>= 1.15.0', require: 'fog/google'
 gem 'fog-local', '~> 0.6'
 gem 'fog-openstack', '~> 1.0'
 gem 'fog-rackspace', '~> 0.1.1'
@@ -168,7 +168,7 @@ gem 'asciidoctor-kroki', '~> 0.5.0', require: false
 gem 'rouge', '~> 3.26.0'
 gem 'truncato', '~> 0.7.11'
 gem 'bootstrap_form', '~> 4.2.0'
-gem 'nokogiri', '~> 1.11.4'
+gem 'nokogiri', '~> 1.12.5'
 gem 'escape_utils', '~> 1.1'
 
 # Calendar rendering
@@ -265,7 +265,7 @@ gem 'sanitize', '~> 5.2.1'
 gem 'babosa', '~> 1.0.4'
 
 # Sanitizes SVG input
-gem 'loofah', '~> 2.2'
+gem 'loofah', '~> 2.11', '>= 2.11.0'
 
 # Working with license
 gem 'licensee', '~> 9.14.1'
@@ -317,15 +317,15 @@ gem 'thrift', '>= 0.14.0'
 
 # I18n
 gem 'ruby_parser', '~> 3.15', require: false
-gem 'rails-i18n', '~> 6.0'
+gem 'rails-i18n', '~> 6.0', '>= 6.0.0'
 gem 'gettext_i18n_rails', '~> 1.8.0'
-gem 'gettext_i18n_rails_js', '~> 1.3'
+gem 'gettext_i18n_rails_js', '~> 1.3', '>= 1.3.0'
 gem 'gettext', '~> 3.3', require: false, group: :development
 
 gem 'batch-loader', '~> 2.0.1'
 
 # Perf bar
-gem 'peek', '~> 1.1'
+gem 'peek', '~> 1.1', '>= 1.1.0'
 
 # Snowplow events tracking
 gem 'snowplow-tracker', '~> 0.6.1'
@@ -339,7 +339,7 @@ gem 'warning', '~> 1.2.0'
 
 group :development do
   gem 'lefthook', '~> 0.7.0', require: false
-  gem 'solargraph', '~> 0.43', require: false
+  gem 'solargraph', '~> 0.43', '>= 0.43.0', require: false
 
   gem 'letter_opener_web', '~> 1.4.0'
 
@@ -422,7 +422,7 @@ group :test do
   gem 'shoulda-matchers', '~> 4.0.1', require: false
   gem 'email_spec', '~> 2.2.0'
   gem 'webmock', '~> 3.9.1'
-  gem 'rails-controller-testing'
+  gem 'rails-controller-testing', '>= 1.0.5'
   gem 'concurrent-ruby', '~> 1.1'
   gem 'test-prof', '~> 0.12.0'
   gem 'rspec_junit_formatter'
@@ -438,7 +438,7 @@ gem 'octokit', '~> 4.15'
 gem 'gitlab-mail_room', '~> 0.0.9', require: 'mail_room'
 
 gem 'email_reply_trimmer', '~> 0.1'
-gem 'html2text'
+gem 'html2text', '>= 0.2.0'
 
 gem 'ruby-prof', '~> 1.3.0'
 gem 'stackprof', '~> 0.2.15', require: false
@@ -451,7 +451,7 @@ gem 'activerecord-explain-analyze', '~> 0.1', require: false
 gem 'oauth2', '~> 1.4'
 
 # Health check
-gem 'health_check', '~> 3.0'
+gem 'health_check', '~> 3.0', '>= 3.0.0'
 
 # System information
 gem 'vmstat', '~> 2.3.0'
@@ -493,7 +493,7 @@ gem 'unleash', '~> 3.2.2'
 gem 'gitlab-experiment', '~> 0.6.4'
 
 # Structured logging
-gem 'lograge', '~> 0.5'
+gem 'lograge', '~> 0.11', '>= 0.11.2'
 gem 'grape_logging', '~> 1.7'
 
 # DNS Lookup
