@@ -1,4 +1,4 @@
-FROM php:7.0-apache
+FROM php:7.3.31-apache
 
 # Customize any core extensions here
 #RUN apt-get update && apt-get install -y \
