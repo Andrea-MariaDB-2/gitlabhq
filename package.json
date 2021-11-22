@@ -111,7 +111,7 @@
     "bootstrap": "4.5.3",
     "cache-loader": "^4.1.0",
     "clipboard": "^1.7.1",
-    "codemirror": "^5.48.4",
+    "codemirror": "^5.62.2",
     "codesandbox-api": "0.0.23",
     "compression-webpack-plugin": "^5.0.2",
     "copy-webpack-plugin": "^6.4.1",
