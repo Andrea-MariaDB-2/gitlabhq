@@ -2,7 +2,7 @@
 
 source 'https://rubygems.org'
 
-gem 'rails', '~> 6.1.3.2'
+gem 'rails', '~> 6.1.4.1'
 
 gem 'bootsnap', '~> 1.4.6'
 
@@ -319,7 +319,7 @@ gem 'thrift', '>= 0.14.0'
 gem 'ruby_parser', '~> 3.15', require: false
 gem 'rails-i18n', '~> 6.0'
 gem 'gettext_i18n_rails', '~> 1.8.0'
-gem 'gettext_i18n_rails_js', '~> 1.3'
+gem 'gettext_i18n_rails_js', '~> 1.3', '>= 1.3.0'
 gem 'gettext', '~> 3.3', require: false, group: :development
 
 gem 'batch-loader', '~> 2.0.1'
