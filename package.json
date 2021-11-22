@@ -104,7 +104,7 @@
     "apollo-link-http": "^1.5.17",
     "apollo-upload-client": "^13.0.0",
     "autosize": "^4.0.2",
-    "aws-sdk": "^2.637.0",
+    "aws-sdk": "^2.951.0",
     "axios": "^0.20.0",
     "babel-loader": "^8.2.2",
     "babel-plugin-lodash": "^3.3.4",
