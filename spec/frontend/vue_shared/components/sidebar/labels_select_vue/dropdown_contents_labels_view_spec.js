@@ -5,7 +5,8 @@ import {
   GlSearchBoxByType,
   GlLink,
 } from '@gitlab/ui';
-import { shallowMount, createLocalVue } from '@vue/test-utils';
+import { shallowMount } from '@vue/test-utils';
+import Vue, { nextTick } from 'vue';
 import Vuex from 'vuex';
 import { UP_KEY_CODE, DOWN_KEY_CODE, ENTER_KEY_CODE, ESC_KEY_CODE } from '~/lib/utils/keycodes';
 import DropdownContentsLabelsView from '~/vue_shared/components/sidebar/labels_select_vue/dropdown_contents_labels_view.vue';
@@ -18,8 +19,7 @@ import defaultState from '~/vue_shared/components/sidebar/labels_select_vue/stor
 
 import { mockConfig, mockLabels, mockRegularLabel } from './mock_data';
 
-const localVue = createLocalVue();
-localVue.use(Vuex);
+Vue.use(Vuex);
 
 describe('DropdownContentsLabelsView', () => {
   let wrapper;
@@ -43,7 +43,6 @@ describe('DropdownContentsLabelsView', () => {
     store.dispatch('receiveLabelsSuccess', mockLabels);
 
     wrapper = shallowMount(DropdownContentsLabelsView, {
-      localVue,
       store,
     });
   };
@@ -64,6 +63,8 @@ describe('DropdownContentsLabelsView', () => {
   describe('computed', () => {
     describe('visibleLabels', () => {
       it('returns matching labels filtered with `searchKey`', () => {
+        // setData usage is discouraged. See https://gitlab.com/groups/gitlab-org/-/epics/7330 for details
+        // eslint-disable-next-line no-restricted-syntax
         wrapper.setData({
           searchKey: 'bug',
         });
@@ -73,6 +74,8 @@ describe('DropdownContentsLabelsView', () => {
       });
 
       it('returns matching labels with fuzzy filtering', () => {
+        // setData usage is discouraged. See https://gitlab.com/groups/gitlab-org/-/epics/7330 for details
+        // eslint-disable-next-line no-restricted-syntax
         wrapper.setData({
           searchKey: 'bg',
         });
@@ -83,6 +86,8 @@ describe('DropdownContentsLabelsView', () => {
       });
 
       it('returns all labels when `searchKey` is empty', () => {
+        // setData usage is discouraged. See https://gitlab.com/groups/gitlab-org/-/epics/7330 for details
+        // eslint-disable-next-line no-restricted-syntax
         wrapper.setData({
           searchKey: '',
         });
@@ -101,13 +106,15 @@ describe('DropdownContentsLabelsView', () => {
       `(
         'returns $returnValue when searchKey is "$searchKey" and visibleLabels is $labelsDescription',
         async ({ searchKey, labels, returnValue }) => {
+          // setData usage is discouraged. See https://gitlab.com/groups/gitlab-org/-/epics/7330 for details
+          // eslint-disable-next-line no-restricted-syntax
           wrapper.setData({
             searchKey,
           });
 
           wrapper.vm.$store.dispatch('receiveLabelsSuccess', labels);
 
-          await wrapper.vm.$nextTick();
+          await nextTick();
 
           expect(wrapper.vm.showNoMatchingResultsMessage).toBe(returnValue);
         },
@@ -124,7 +131,7 @@ describe('DropdownContentsLabelsView', () => {
       });
 
       it('returns false when provided `label` param is not one of the selected labels', () => {
-        expect(wrapper.vm.isLabelSelected(mockLabels[2])).toBe(false);
+        expect(wrapper.vm.isLabelSelected(mockLabels[1])).toBe(false);
       });
     });
 
@@ -162,6 +169,8 @@ describe('DropdownContentsLabelsView', () => {
 
     describe('handleKeyDown', () => {
       it('decreases `currentHighlightItem` value by 1 when Up arrow key is pressed', () => {
+        // setData usage is discouraged. See https://gitlab.com/groups/gitlab-org/-/epics/7330 for details
+        // eslint-disable-next-line no-restricted-syntax
         wrapper.setData({
           currentHighlightItem: 1,
         });
@@ -174,6 +183,8 @@ describe('DropdownContentsLabelsView', () => {
       });
 
       it('increases `currentHighlightItem` value by 1 when Down arrow key is pressed', () => {
+        // setData usage is discouraged. See https://gitlab.com/groups/gitlab-org/-/epics/7330 for details
+        // eslint-disable-next-line no-restricted-syntax
         wrapper.setData({
           currentHighlightItem: 1,
         });
@@ -186,6 +197,8 @@ describe('DropdownContentsLabelsView', () => {
       });
 
       it('resets the search text when the Enter key is pressed', () => {
+        // setData usage is discouraged. See https://gitlab.com/groups/gitlab-org/-/epics/7330 for details
+        // eslint-disable-next-line no-restricted-syntax
         wrapper.setData({
           currentHighlightItem: 1,
           searchKey: 'bug',
@@ -202,8 +215,10 @@ describe('DropdownContentsLabelsView', () => {
 
       it('calls action `updateSelectedLabels` with currently highlighted label when Enter key is pressed', () => {
         jest.spyOn(wrapper.vm, 'updateSelectedLabels').mockImplementation();
+        // setData usage is discouraged. See https://gitlab.com/groups/gitlab-org/-/epics/7330 for details
+        // eslint-disable-next-line no-restricted-syntax
         wrapper.setData({
-          currentHighlightItem: 1,
+          currentHighlightItem: 2,
         });
 
         wrapper.vm.handleKeyDown({
@@ -213,7 +228,7 @@ describe('DropdownContentsLabelsView', () => {
 
         expect(wrapper.vm.updateSelectedLabels).toHaveBeenCalledWith([
           {
-            ...mockLabels[1],
+            ...mockLabels[2],
             set: true,
           },
         ]);
@@ -221,6 +236,8 @@ describe('DropdownContentsLabelsView', () => {
 
       it('calls action `toggleDropdownContents` when Esc key is pressed', () => {
         jest.spyOn(wrapper.vm, 'toggleDropdownContents').mockImplementation();
+        // setData usage is discouraged. See https://gitlab.com/groups/gitlab-org/-/epics/7330 for details
+        // eslint-disable-next-line no-restricted-syntax
         wrapper.setData({
           currentHighlightItem: 1,
         });
@@ -232,8 +249,10 @@ describe('DropdownContentsLabelsView', () => {
         expect(wrapper.vm.toggleDropdownContents).toHaveBeenCalled();
       });
 
-      it('calls action `scrollIntoViewIfNeeded` in next tick when any key is pressed', () => {
+      it('calls action `scrollIntoViewIfNeeded` in next tick when any key is pressed', async () => {
         jest.spyOn(wrapper.vm, 'scrollIntoViewIfNeeded').mockImplementation();
+        // setData usage is discouraged. See https://gitlab.com/groups/gitlab-org/-/epics/7330 for details
+        // eslint-disable-next-line no-restricted-syntax
         wrapper.setData({
           currentHighlightItem: 1,
         });
@@ -242,9 +261,8 @@ describe('DropdownContentsLabelsView', () => {
           keyCode: DOWN_KEY_CODE,
         });
 
-        return wrapper.vm.$nextTick(() => {
-          expect(wrapper.vm.scrollIntoViewIfNeeded).toHaveBeenCalled();
-        });
+        await nextTick();
+        expect(wrapper.vm.scrollIntoViewIfNeeded).toHaveBeenCalled();
       });
     });
 
@@ -275,15 +293,14 @@ describe('DropdownContentsLabelsView', () => {
       expect(wrapper.find(GlIntersectionObserver).exists()).toBe(true);
     });
 
-    it('renders gl-loading-icon component when `labelsFetchInProgress` prop is true', () => {
+    it('renders gl-loading-icon component when `labelsFetchInProgress` prop is true', async () => {
       wrapper.vm.$store.dispatch('requestLabels');
 
-      return wrapper.vm.$nextTick(() => {
-        const loadingIconEl = findLoadingIcon();
+      await nextTick();
+      const loadingIconEl = findLoadingIcon();
 
-        expect(loadingIconEl.exists()).toBe(true);
-        expect(loadingIconEl.attributes('class')).toContain('labels-fetch-loading');
-      });
+      expect(loadingIconEl.exists()).toBe(true);
+      expect(loadingIconEl.attributes('class')).toContain('labels-fetch-loading');
     });
 
     it('renders dropdown title element', () => {
@@ -320,43 +337,44 @@ describe('DropdownContentsLabelsView', () => {
       expect(wrapper.findAll(LabelItem)).toHaveLength(mockLabels.length);
     });
 
-    it('renders label element with `highlight` set to true when value of `currentHighlightItem` is more than -1', () => {
+    it('renders label element with `highlight` set to true when value of `currentHighlightItem` is more than -1', async () => {
+      // setData usage is discouraged. See https://gitlab.com/groups/gitlab-org/-/epics/7330 for details
+      // eslint-disable-next-line no-restricted-syntax
       wrapper.setData({
         currentHighlightItem: 0,
       });
 
-      return wrapper.vm.$nextTick(() => {
-        const labelItemEl = findDropdownContent().find(LabelItem);
+      await nextTick();
+      const labelItemEl = findDropdownContent().find(LabelItem);
 
-        expect(labelItemEl.attributes('highlight')).toBe('true');
-      });
+      expect(labelItemEl.attributes('highlight')).toBe('true');
     });
 
-    it('renders element containing "No matching results" when `searchKey` does not match with any label', () => {
+    it('renders element containing "No matching results" when `searchKey` does not match with any label', async () => {
+      // setData usage is discouraged. See https://gitlab.com/groups/gitlab-org/-/epics/7330 for details
+      // eslint-disable-next-line no-restricted-syntax
       wrapper.setData({
         searchKey: 'abc',
       });
 
-      return wrapper.vm.$nextTick(() => {
-        const noMatchEl = findDropdownContent().find('li');
+      await nextTick();
+      const noMatchEl = findDropdownContent().find('li');
 
-        expect(noMatchEl.isVisible()).toBe(true);
-        expect(noMatchEl.text()).toContain('No matching results');
-      });
+      expect(noMatchEl.isVisible()).toBe(true);
+      expect(noMatchEl.text()).toContain('No matching results');
     });
 
-    it('renders empty content while loading', () => {
+    it('renders empty content while loading', async () => {
       wrapper.vm.$store.state.labelsFetchInProgress = true;
 
-      return wrapper.vm.$nextTick(() => {
-        const dropdownContent = findDropdownContent();
-        const loadingIcon = findLoadingIcon();
+      await nextTick();
+      const dropdownContent = findDropdownContent();
+      const loadingIcon = findLoadingIcon();
 
-        expect(dropdownContent.exists()).toBe(true);
-        expect(dropdownContent.isVisible()).toBe(true);
-        expect(loadingIcon.exists()).toBe(true);
-        expect(loadingIcon.isVisible()).toBe(true);
-      });
+      expect(dropdownContent.exists()).toBe(true);
+      expect(dropdownContent.isVisible()).toBe(true);
+      expect(loadingIcon.exists()).toBe(true);
+      expect(loadingIcon.isVisible()).toBe(true);
     });
 
     it('renders footer list items', () => {
@@ -370,14 +388,13 @@ describe('DropdownContentsLabelsView', () => {
       expect(manageLabelsLink.text()).toBe('Manage labels');
     });
 
-    it('does not render "Create label" footer link when `state.allowLabelCreate` is `false`', () => {
+    it('does not render "Create label" footer link when `state.allowLabelCreate` is `false`', async () => {
       wrapper.vm.$store.state.allowLabelCreate = false;
 
-      return wrapper.vm.$nextTick(() => {
-        const createLabelLink = findDropdownFooter().findAll(GlLink).at(0);
+      await nextTick();
+      const createLabelLink = findDropdownFooter().findAll(GlLink).at(0);
 
-        expect(createLabelLink.text()).not.toBe('Create label');
-      });
+      expect(createLabelLink.text()).not.toBe('Create label');
     });
 
     it('does not render footer list items when `state.variant` is "standalone"', () => {

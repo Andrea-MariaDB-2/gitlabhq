@@ -7,7 +7,7 @@ info: To determine the technical writer assigned to the Stage/Group associated w
 # Frontend testing standards and style guidelines
 
 There are two types of test suites encountered while developing frontend code
-at GitLab. We use Karma with Jasmine and Jest for JavaScript unit and integration testing,
+at GitLab. We use Jest for JavaScript unit and integration testing,
 and RSpec feature tests with Capybara for e2e (end-to-end) integration testing.
 
 Unit and feature tests need to be written for all new features.
@@ -28,46 +28,9 @@ If you are looking for a guide on Vue component testing, you can jump right away
 We use Jest to write frontend unit and integration tests.
 Jest tests can be found in `/spec/frontend` and `/ee/spec/frontend` in EE.
 
-## Karma test suite
-
-While GitLab has switched over to [Jest](https://jestjs.io), Karma tests still exist in our
-application because some of our specs require a browser and can't be easily migrated to Jest.
-Those specs intend to eventually drop Karma in favor of either Jest or RSpec. You can track this migration
-in the [related epic](https://gitlab.com/groups/gitlab-org/-/epics/4900).
-
-[Karma](http://karma-runner.github.io/) is a test runner which uses
-[Jasmine](https://jasmine.github.io/) as its test framework. Jest also uses Jasmine as foundation,
-that's why it's looking quite similar.
-
-Karma tests live in `spec/javascripts/` and `/ee/spec/javascripts` in EE.
-
-`app/assets/javascripts/behaviors/autosize.js`
-might have a corresponding `spec/javascripts/behaviors/autosize_spec.js` file.
-
-Keep in mind that in a CI environment, these tests are run in a headless
-browser and you don't have access to certain APIs, such as
-[`Notification`](https://developer.mozilla.org/en-US/docs/Web/API/notification),
-which have to be stubbed.
-
-### Differences to Karma
-
-- Jest runs in a Node.js environment, not in a browser. [An issue exists](https://gitlab.com/gitlab-org/gitlab/-/issues/26982) for running Jest tests in a browser.
-- Because Jest runs in a Node.js environment, it uses [jsdom](https://github.com/jsdom/jsdom) by default. See also its [limitations](#limitations-of-jsdom) below.
-- Jest does not have access to Webpack loaders or aliases.
-  The aliases used by Jest are defined in its [own configuration](https://gitlab.com/gitlab-org/gitlab/-/blob/master/jest.config.js).
-- All calls to `setTimeout` and `setInterval` are mocked away. See also [Jest Timer Mocks](https://jestjs.io/docs/timer-mocks).
-- `rewire` is not required because Jest supports mocking modules. See also [Manual Mocks](https://jestjs.io/docs/manual-mocks).
-- No [context object](https://jasmine.github.io/tutorials/your_first_suite#section-The_%3Ccode%3Ethis%3C/code%3E_keyword) is passed to tests in Jest.
-  This means sharing `this.something` between `beforeEach()` and `it()` for example does not work.
-  Instead you should declare shared variables in the context that they are needed (via `const` / `let`).
-- The following cause tests to fail in Jest:
-  - Unmocked requests.
-  - Unhandled Promise rejections.
-  - Calls to `console.warn`, including warnings from libraries like Vue.
-
 ### Limitations of jsdom
 
-As mentioned [above](#differences-to-karma), Jest uses jsdom instead of a browser for running tests.
+Jest uses jsdom instead of a browser for running tests.
 This comes with a number of limitations, namely:
 
 - [No scrolling support](https://github.com/jsdom/jsdom/blob/15.1.1/lib/jsdom/browser/Window.js#L623-L625)
@@ -183,7 +146,7 @@ it('does not display a dropdown if no metricTypes exist', () => {
 });
 ```
 
-Keep an eye out for these kinds of tests, as they just make updating logic more fragile and tedious than it needs to be. This is also true for other libraries. A rule of thumb here is: if you are checking a `wrapper.vm` property, you should probably stop and rethink the test to check the rendered template instead.
+Keep an eye out for these kinds of tests, as they just make updating logic more fragile and tedious than it needs to be. This is also true for other libraries. A suggestion here is: if you are checking a `wrapper.vm` property, you should probably stop and rethink the test to check the rendered template instead.
 
 Some more examples can be found in the [Frontend unit tests section](testing_levels.md#frontend-unit-tests)
 
@@ -387,8 +350,7 @@ Sometimes we have to test time-sensitive code. For example, recurring events tha
 
 If the application itself is waiting for some time, mock await the waiting. In Jest this is already
 [done by default](https://gitlab.com/gitlab-org/gitlab/-/blob/a2128edfee799e49a8732bfa235e2c5e14949c68/jest.config.js#L47)
-(see also [Jest Timer Mocks](https://jestjs.io/docs/timer-mocks)). In Karma you can use the
-[Jasmine mock clock](https://jasmine.github.io/api/2.9/Clock.html).
+(see also [Jest Timer Mocks](https://jestjs.io/docs/timer-mocks)).
 
 ```javascript
 const doSomethingLater = () => {
@@ -406,20 +368,6 @@ it('does something', () => {
   jest.runAllTimers();
 
   expect(something).toBe('done');
-});
-```
-
-**in Karma:**
-
-```javascript
-it('does something', () => {
-  jasmine.clock().install();
-
-  doSomethingLater();
-  jasmine.clock().tick(4000);
-
-  expect(something).toBe('done');
-  jasmine.clock().uninstall();
 });
 ```
 
@@ -447,7 +395,7 @@ it('passes', () => {
 ```
 
 To modify only the hash, use either the `setWindowLocation` helper, or assign
-directly to `window.location.hash`, e.g.:
+directly to `window.location.hash`, for example:
 
 ```javascript
 it('passes', () => {
@@ -475,9 +423,7 @@ it('passes', () => {
 ### Waiting in tests
 
 Sometimes a test needs to wait for something to happen in the application before it continues.
-Avoid using [`setTimeout`](https://developer.mozilla.org/en-US/docs/Web/API/WindowOrWorkerGlobalScope/setTimeout)
-because it makes the reason for waiting unclear and if used within Karma with a time larger than zero it slows down our test suite.
-Instead use one of the following approaches.
+Avoid using [`setTimeout`](https://developer.mozilla.org/en-US/docs/Web/API/setTimeout) because it makes the reason for waiting unclear. Instead use one of the following approaches.
 
 #### Promises and Ajax calls
 
@@ -502,19 +448,6 @@ const askTheServer = () => {
 it('waits for an Ajax call', async () => {
   await askTheServer()
   expect(something).toBe('done');
-});
-```
-
-**in Karma:**
-
-```javascript
-it('waits for an Ajax call', done => {
-  askTheServer()
-    .then(() => {
-      expect(something).toBe('done');
-    })
-    .then(done)
-    .catch(done.fail);
 });
 ```
 
@@ -545,22 +478,6 @@ it('renders something', () => {
   return wrapper.vm.$nextTick().then(() => {
     expect(wrapper.text()).toBe('new value');
   });
-});
-```
-
-**in Karma:**
-
-```javascript
-it('renders something', done => {
-  wrapper.setProps({ value: 'new value' });
-
-  wrapper.vm
-    .$nextTick()
-    .then(() => {
-      expect(wrapper.text()).toBe('new value');
-    })
-    .then(done)
-    .catch(done.fail);
 });
 ```
 
@@ -714,8 +631,8 @@ The latter is useful when you have `setInterval` in the code. **Remember:** our 
 
 Non-determinism is the breeding ground for flaky and brittle specs. Such specs end up breaking the CI pipeline, interrupting the work flow of other contributors.
 
-1. Make sure your test subject's collaborators (e.g., Axios, apollo, Lodash helpers) and test environment (e.g., Date) behave consistently across systems and over time.
-1. Make sure tests are focused and not doing "extra work" (e.g., needlessly creating the test subject more than once in an individual test)
+1. Make sure your test subject's collaborators (for example, Axios, Apollo, Lodash helpers) and test environment (for example, Date) behave consistently across systems and over time.
+1. Make sure tests are focused and not doing "extra work" (for example, needlessly creating the test subject more than once in an individual test).
 
 ### Faking `Date` for determinism
 
@@ -731,7 +648,7 @@ describe('cool/component', () => {
   // Default fake `Date`
   const TODAY = new Date();
 
-  // NOTE: `useFakeDate` cannot be called during test execution (i.e. inside `it`, `beforeEach`, `beforeAll`, etc.).
+  // NOTE: `useFakeDate` cannot be called during test execution (that is, inside `it`, `beforeEach`, `beforeAll`, etc.).
   describe("on Ada Lovelace's Birthday", () => {
     useFakeDate(1815, 11, 10)
 
@@ -751,7 +668,7 @@ Similarly, if you really need to use the real `Date` class, then you can import 
 ```javascript
 import { useRealDate } from 'helpers/fake_date';
 
-// NOTE: `useRealDate` cannot be called during test execution (i.e. inside `it`, `beforeEach`, `beforeAll`, etc.).
+// NOTE: `useRealDate` cannot be called during test execution (that is, inside `it`, `beforeEach`, `beforeAll`, etc.).
 describe('with real date', () => {
   useRealDate();
 });
@@ -776,8 +693,6 @@ TBU
 
 ### Stubbing and Mocking
 
-Jasmine provides stubbing and mocking capabilities. There are some subtle differences in how to use it within Karma and Jest.
-
 Stubs or spies are often used synonymously. In Jest it's quite easy thanks to the `.spyOn` method.
 [Official docs](https://jestjs.io/docs/jest-object#jestspyonobject-methodname)
 The more challenging part are mocks, which can be used for functions or even dependencies.
@@ -785,30 +700,33 @@ The more challenging part are mocks, which can be used for functions or even dep
 ### Manual module mocks
 
 Manual mocks are used to mock modules across the entire Jest environment. This is a very powerful testing tool that helps simplify
-unit testing by mocking out modules which cannot be easily consumed in our test environment.
+unit testing by mocking out modules that cannot be easily consumed in our test environment.
 
-> **WARNING:** Do not use manual mocks if a mock should not be consistently applied in every spec (i.e. it's only needed by a few specs).
+> **WARNING:** Do not use manual mocks if a mock should not be consistently applied in every spec (that is, it's only needed by a few specs).
 > Instead, consider using [`jest.mock(..)`](https://jestjs.io/docs/jest-object#jestmockmodulename-factory-options)
 > (or a similar mocking function) in the relevant spec file.
 
 #### Where should I put manual mocks?
 
 Jest supports [manual module mocks](https://jestjs.io/docs/manual-mocks) by placing a mock in a `__mocks__/` directory next to the source module
-(e.g. `app/assets/javascripts/ide/__mocks__`). **Don't do this.** We want to keep all of our test-related code in one place (the `spec/` folder).
+(for example, `app/assets/javascripts/ide/__mocks__`). **Don't do this.** We want to keep all of our test-related code in one place (the `spec/` folder).
 
 If a manual mock is needed for a `node_modules` package, use the `spec/frontend/__mocks__` folder. Here's an example of
 a [Jest mock for the package `monaco-editor`](https://gitlab.com/gitlab-org/gitlab/-/blob/b7f914cddec9fc5971238cdf12766e79fa1629d7/spec/frontend/__mocks__/monaco-editor/index.js#L1).
 
-If a manual mock is needed for a CE module, place it in `spec/frontend/mocks/ce`.
+If a manual mock is needed for a CE module, place the implementation in
+`spec/frontend/__helpers__/mocks` and add a line to the `frontend/test_setup`
+(or the `frontend/shared_test_setup`) that looks something like:
 
-- Files in `spec/frontend/mocks/ce` mocks the corresponding CE module from `app/assets/javascripts`, mirroring the source module's path.
-  - Example: `spec/frontend/mocks/ce/lib/utils/axios_utils` mocks the module `~/lib/utils/axios_utils`.
-- We don't support mocking EE modules yet.
-- If a mock is found for which a source module doesn't exist, the test suite fails. 'Virtual' mocks, or mocks that don't have a 1-to-1 association with a source module, are not supported yet.
+```javascript
+// "~/lib/utils/axios_utils" is the path to the real module
+// "helpers/mocks/axios_utils" is the path to the mocked implementation
+jest.mock('~/lib/utils/axios_utils', () => jest.requireActual('helpers/mocks/axios_utils'));
+```
 
 #### Manual mock examples
 
-- [`mocks/axios_utils`](https://gitlab.com/gitlab-org/gitlab/-/blob/bd20aeb64c4eed117831556c54b40ff4aee9bfd1/spec/frontend/mocks/ce/lib/utils/axios_utils.js#L1) -
+- [`__helpers__/mocks/axios_utils`](https://gitlab.com/gitlab-org/gitlab/-/blob/a50edd12b3b1531389624086b6381a042c8143ef/spec/frontend/__helpers__/mocks/axios_utils.js#L1) -
   This mock is helpful because we don't want any unmocked requests to pass any tests. Also, we are able to inject some test helpers such as `axios.waitForAll`.
 - [`__mocks__/mousetrap/index.js`](https://gitlab.com/gitlab-org/gitlab/-/blob/cd4c086d894226445be9d18294a060ba46572435/spec/frontend/__mocks__/mousetrap/index.js#L1) -
   This mock is helpful because the module itself uses AMD format which webpack understands, but is incompatible with the jest environment. This mock doesn't remove
@@ -830,12 +748,13 @@ Consult the [official Jest docs](https://jestjs.io/docs/jest-object#mock-modules
 
 ## Running Frontend Tests
 
+Before generating fixtures, make sure you have a running GDK instance.
+
 For running the frontend tests, you need the following commands:
 
 - `rake frontend:fixtures` (re-)generates [fixtures](#frontend-test-fixtures). Make sure that
   fixtures are up-to-date before running tests that require them.
 - `yarn jest` runs Jest tests.
-- `yarn karma` runs Karma tests.
 
 ### Live testing and focused testing -- Jest
 
@@ -860,49 +779,41 @@ yarn jest ./path/to/folder/
 yarn jest term
 ```
 
-### Live testing and focused testing -- Karma
-
-Karma allows something similar, but it's way more costly.
-
-Running Karma with `yarn run karma-start` compiles the JavaScript
-assets and runs a server at `http://localhost:9876/` where it automatically
-runs the tests on any browser which connects to it. You can enter that URL on
-multiple browsers at once to have it run the tests on each in parallel.
-
-While Karma is running, any changes you make instantly trigger a recompile
-and retest of the **entire test suite**, so you can see instantly if you've broken
-a test with your changes. You can use [Jasmine focused](https://jasmine.github.io/2.5/focused_specs.html) or
-excluded tests (with `fdescribe` or `xdescribe`) to get Karma to run only the
-tests you want while you're working on a specific feature, but make sure to
-remove these directives when you commit your code.
-
-It is also possible to only run Karma on specific folders or files by filtering
-the run tests via the argument `--filter-spec` or short `-f`:
-
-```shell
-# Run all files
-yarn karma-start
-# Run specific spec files
-yarn karma-start --filter-spec profile/account/components/update_username_spec.js
-# Run specific spec folder
-yarn karma-start --filter-spec profile/account/components/
-# Run all specs which path contain vue_shared or vie
-yarn karma-start -f vue_shared -f vue_mr_widget
-```
-
-You can also use glob syntax to match files. Remember to put quotes around the
-glob otherwise your shell may split it into multiple arguments:
-
-```shell
-# Run all specs named `file_spec` within the IDE subdirectory
-yarn karma -f 'spec/javascripts/ide/**/file_spec.js'
-```
-
 ## Frontend test fixtures
 
 Frontend fixtures are files containing responses from backend controllers. These responses can be either HTML
 generated from HAML templates or JSON payloads. Frontend tests that rely on these responses are
 often using fixtures to validate correct integration with the backend code.
+
+### Use fixtures
+
+To import a JSON fixture, `import` it using the `test_fixtures` alias.
+
+```javascript
+import responseBody from 'test_fixtures/some/fixture.json' // loads spec/frontend/fixtures/some/fixture.json
+
+it('makes a request', () => {
+  axiosMock.onGet(endpoint).reply(200, responseBody);
+
+  myButton.click();
+
+  // ...
+});
+```
+
+For other fixtures, Jest uses `spec/frontend/__helpers__/fixtures.js` to import them in tests.
+
+The following are examples of tests that work for Jest:
+
+```javascript
+it('uses some HTML element', () => {
+  loadFixtures('some/page.html'); // loads spec/frontend/fixtures/some/page.html and adds it to the DOM
+
+  const element = document.getElementById('#my-id');
+
+  // ...
+});
+```
 
 ### Generate fixtures
 
@@ -941,10 +852,6 @@ describe GraphQL::Query, type: :request do
 
   all_releases_query_path = 'releases/graphql/queries/all_releases.query.graphql'
 
-  before(:all) do
-    clean_frontend_fixtures('graphql/releases/')
-  end
-
   it "graphql/#{all_releases_query_path}.json" do
     query = get_graphql_query_as_string(all_releases_query_path)
 
@@ -958,36 +865,8 @@ end
 This will create a new fixture located at
 `tmp/tests/frontend/fixtures-ee/graphql/releases/graphql/queries/all_releases.query.graphql.json`.
 
-You can import the JSON fixture in a Jest test using the `getJSONFixture` method
+You can import the JSON fixture in a Jest test using the `test_fixtures` alias
 [as described below](#use-fixtures).
-
-### Use fixtures
-
-Jest and Karma test suites import fixtures in different ways:
-
-- The Karma test suite are served by [jasmine-jquery](https://github.com/velesin/jasmine-jquery).
-- Jest use `spec/frontend/__helpers__/fixtures.js`.
-
-The following are examples of tests that work for both Karma and Jest:
-
-```javascript
-it('makes a request', () => {
-  const responseBody = getJSONFixture('some/fixture.json'); // loads spec/frontend/fixtures/some/fixture.json
-  axiosMock.onGet(endpoint).reply(200, responseBody);
-
-  myButton.click();
-
-  // ...
-});
-
-it('uses some HTML element', () => {
-  loadFixtures('some/page.html'); // loads spec/frontend/fixtures/some/page.html and adds it to the DOM
-
-  const element = document.getElementById('#my-id');
-
-  // ...
-});
-```
 
 ## Data-driven tests
 
@@ -1021,7 +900,7 @@ it.each([
 NOTE:
 Only use template literal block if pretty print is not needed for spec output. For example, empty strings, nested objects etc.
 
-For example, when testing the difference between an empty search string and a non-empty search string, the use of the array block syntax with the pretty print option would be preferred. That way the differences between an empty string e.g. `''` and a non-empty string e.g. `'search string'` would be visible in the spec output. Whereas with a template literal block, the empty string would be shown as a space, which could lead to a confusing developer experience
+For example, when testing the difference between an empty search string and a non-empty search string, the use of the array block syntax with the pretty print option would be preferred. That way the differences between an empty string (`''`) and a non-empty string (`'search string'`) would be visible in the spec output. Whereas with a template literal block, the empty string would be shown as a space, which could lead to a confusing developer experience.
 
 ```javascript
 // bad
@@ -1124,7 +1003,7 @@ it like so:
 import Subject from '~/feature/the_subject.vue';
 
 // Force Jest to transpile and cache
-// eslint-disable-next-line import/order, no-unused-vars
+// eslint-disable-next-line no-unused-vars
 import _Thing from '~/feature/path/to/thing.vue';
 ```
 
@@ -1139,13 +1018,10 @@ Main information on frontend testing levels can be found in the [Testing Levels 
 
 Tests relevant for frontend development can be found at the following places:
 
-- `spec/javascripts/`, for Karma tests
 - `spec/frontend/`, for Jest tests
 - `spec/features/`, for RSpec tests
 
-RSpec runs complete [feature tests](testing_levels.md#frontend-feature-tests), while the Jest and Karma directories contain [frontend unit tests](testing_levels.md#frontend-unit-tests), [frontend component tests](testing_levels.md#frontend-component-tests), and [frontend integration tests](testing_levels.md#frontend-integration-tests).
-
-All tests in `spec/javascripts/` are intended to be migrated to `spec/frontend/` (see also [#52483](https://gitlab.com/gitlab-org/gitlab-foss/-/issues/52483)).
+RSpec runs complete [feature tests](testing_levels.md#frontend-feature-tests), while the Jest directories contain [frontend unit tests](testing_levels.md#frontend-unit-tests), [frontend component tests](testing_levels.md#frontend-component-tests), and [frontend integration tests](testing_levels.md#frontend-integration-tests).
 
 Before May 2018, `features/` also contained feature tests run by Spinach. These tests were removed from the codebase in May 2018 ([#23036](https://gitlab.com/gitlab-org/gitlab-foss/-/issues/23036)).
 
@@ -1161,6 +1037,16 @@ If you introduce new helpers, place them in that directory.
 We have a helper available to make testing actions easier, as per [official documentation](https://vuex.vuejs.org/guide/testing.html):
 
 ```javascript
+// prefer using like this, a single object argument so parameters are obvious from reading the test
+await testAction({
+  action: actions.actionName,
+  payload: { deleteListId: 1 },
+  state: { lists: [1, 2, 3] },
+  expectedMutations: [ { type: types.MUTATION} ],
+  expectedActions: [],
+});
+
+// old way, don't do this for new tests
 testAction(
   actions.actionName, // action
   { }, // params to be passed to action
@@ -1176,8 +1062,6 @@ testAction(
   done,
 );
 ```
-
-Check an example in [`spec/frontend/ide/stores/actions_spec.js`](https://gitlab.com/gitlab-org/gitlab/-/blob/fdc7197609dfa7caeb1d962042a26248e49f27da/spec/frontend/ide/stores/actions_spec.js#L392).
 
 ### Wait until Axios requests finish
 
@@ -1309,7 +1193,7 @@ it('renders the component correctly', () => {
 })
 ```
 
-The above test will create two snapshots, what's important is to decide which of the snapshots provide more value for the codebase safety i.e. if one of these snapshots changes, does that highlight a possible un-wanted break in the codebase? This can help catch unexpected changes if something in an underlying dependency changes without our knowledge.
+The above test will create two snapshots. It's important to decide which of the snapshots provide more value for codebase safety. That is, if one of these snapshots changes, does that highlight a possible break in the codebase? This can help catch unexpected changes if something in an underlying dependency changes without our knowledge.
 
 ### Pros and Cons
 

@@ -38,8 +38,7 @@ module GroupTree
     #
     # Pagination needs to be applied before loading the ancestors to
     # make sure ancestors are not cut off by pagination.
-    Gitlab::ObjectHierarchy.new(Group.where(id: filtered_groups.select(:id)))
-      .base_and_ancestors
+    Group.where(id: filtered_groups.select(:id)).self_and_ancestors
   end
   # rubocop: enable CodeReuse/ActiveRecord
 end

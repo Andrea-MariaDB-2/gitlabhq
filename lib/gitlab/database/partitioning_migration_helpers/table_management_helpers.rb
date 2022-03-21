@@ -5,7 +5,6 @@ module Gitlab
     module PartitioningMigrationHelpers
       module TableManagementHelpers
         include ::Gitlab::Database::SchemaHelpers
-        include ::Gitlab::Database::DynamicModelHelpers
         include ::Gitlab::Database::MigrationHelpers
         include ::Gitlab::Database::Migrations::BackgroundMigrationHelpers
 
@@ -406,7 +405,8 @@ module Gitlab
         end
 
         def copy_missed_records(source_table_name, partitioned_table_name, source_column)
-          backfill_table = BackfillPartitionedTable.new
+          backfill_table = BackfillPartitionedTable.new(connection: connection)
+
           relation = ::Gitlab::Database::BackgroundMigrationJob.pending
             .for_partitioning_migration(MIGRATION_CLASS_NAME, source_table_name)
 
@@ -428,10 +428,10 @@ module Gitlab
         end
 
         def replace_table(original_table_name, replacement_table_name, replaced_table_name, primary_key_name)
-          replace_table = Gitlab::Database::Partitioning::ReplaceTable.new(original_table_name.to_s,
-              replacement_table_name, replaced_table_name, primary_key_name)
+          replace_table = Gitlab::Database::Partitioning::ReplaceTable.new(connection,
+              original_table_name.to_s, replacement_table_name, replaced_table_name, primary_key_name)
 
-          with_lock_retries do
+          transaction do
             drop_sync_trigger(original_table_name)
 
             replace_table.perform do |sql|

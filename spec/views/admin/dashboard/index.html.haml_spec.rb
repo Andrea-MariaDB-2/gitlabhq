@@ -53,11 +53,43 @@ RSpec.describe 'admin/dashboard/index.html.haml' do
     expect(rendered).not_to have_content "Users over License"
   end
 
-  it 'links to the GitLab Changelog' do
-    stub_application_setting(version_check_enabled: true)
+  describe 'when show_version_check? is true' do
+    before do
+      allow(view).to receive(:show_version_check?).and_return(true)
+      render
+    end
 
-    render
+    it 'renders the version check badge' do
+      expect(rendered).to have_selector('.js-gitlab-version-check')
+    end
+  end
 
-    expect(rendered).to have_link(href: 'https://gitlab.com/gitlab-org/gitlab/-/blob/master/CHANGELOG.md')
+  describe 'GitLab KAS' do
+    before do
+      allow(Gitlab::Kas).to receive(:enabled?).and_return(enabled)
+      allow(Gitlab::Kas).to receive(:version).and_return('kas-1.2.3')
+    end
+
+    context 'KAS enabled' do
+      let(:enabled) { true }
+
+      it 'includes KAS version' do
+        render
+
+        expect(rendered).to have_content('GitLab KAS')
+        expect(rendered).to have_content('kas-1.2.3')
+      end
+    end
+
+    context 'KAS disabled' do
+      let(:enabled) { false }
+
+      it 'does not include KAS version' do
+        render
+
+        expect(rendered).not_to have_content('GitLab KAS')
+        expect(rendered).not_to have_content('kas-1.2.3')
+      end
+    end
   end
 end

@@ -10,14 +10,22 @@ type: reference
 [Gitaly](https://gitlab.com/gitlab-org/gitaly) provides high-level RPC access to Git repositories.
 It is used by GitLab to read and write Git data.
 
+Gitaly is present in every GitLab installation and coordinates Git repository
+storage and retrieval. Gitaly can be:
+
+- A background service operating on a single instance Omnibus GitLab (all of
+  GitLab on one machine).
+- Separated onto its own instance and configured in a full cluster configuration,
+  depending on scaling and availability requirements.
+
 Gitaly implements a client-server architecture:
 
 - A Gitaly server is any node that runs Gitaly itself.
-- A Gitaly client is any node that runs a process that makes requests of the Gitaly server. These
-  include, but are not limited to:
-  - [GitLab Rails application](https://gitlab.com/gitlab-org/gitlab).
-  - [GitLab Shell](https://gitlab.com/gitlab-org/gitlab-shell).
-  - [GitLab Workhorse](https://gitlab.com/gitlab-org/gitlab-workhorse).
+- A Gitaly client is any node that runs a process that makes requests of the Gitaly server. Gitaly clients are also known as _Gitaly consumers_ and include:
+  - [GitLab Rails application](https://gitlab.com/gitlab-org/gitlab)
+  - [GitLab Shell](https://gitlab.com/gitlab-org/gitlab-shell)
+  - [GitLab Workhorse](https://gitlab.com/gitlab-org/gitlab-workhorse)
+  - [GitLab Elasticsearch Indexer](https://gitlab.com/gitlab-org/gitlab-elasticsearch-indexer)
 
 Gitaly manages only Git repository access for GitLab. Other types of GitLab data aren't accessed
 using Gitaly.
@@ -35,9 +43,49 @@ repository storage is either:
   - Read requests are distributed between multiple Gitaly nodes, which can improve performance.
   - Write requests are broadcast to repository replicas.
 
-WARNING:
-Engineering support for NFS for Git repositories is deprecated. Read the
-[deprecation notice](#nfs-deprecation-notice).
+## Guidance regarding Gitaly Cluster
+
+Gitaly Cluster provides the benefits of fault tolerance, but comes with additional complexity of setup and management. Please review existing technical limitations and considerations prior to deploying Gitaly Cluster.
+
+- [Known issues](#known-issues)
+- [Snapshot limitations](#snapshot-backup-and-recovery-limitations).
+
+Please also review the [configuration guidance](configure_gitaly.md) and [Repository storage options](../repository_storage_paths.md) to make sure that Gitaly Cluster is the best set-up for you. Finally, refer to the following guidance:
+
+- If you have not yet migrated to Gitaly Cluster and want to continue using NFS, remain on the
+  service you are using. NFS is supported in 14.x releases.
+- If you have not yet migrated to Gitaly Cluster but want to migrate away from NFS, you have two options - a sharded Gitaly instance or Gitaly Cluster.
+- If you have migrated to Gitaly Cluster and the limitations and tradeoffs are not suitable for your environment, your options are:
+  1. [Migrate off Gitaly Cluster](#migrate-off-gitaly-cluster) back to your NFS solution
+  1. [Migrate off Gitaly Cluster](#migrate-off-gitaly-cluster) to NFS solution or to a sharded Gitaly instance.
+
+Reach out to your Technical Account Manager or customer support if you have any questions.
+
+### Known issues
+
+The following table outlines current known issues impacting the use of Gitaly Cluster. For
+the current status of these issues, please refer to the referenced issues and epics.
+
+| Issue                                                                                 | Summary                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | How to avoid |
+|:--------------------------------------------------------------------------------------|:------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|:--------------------------------|
+| Gitaly Cluster + Geo - Issues retrying failed syncs                             | If Gitaly Cluster is used on a Geo secondary site, repositories that have failed to sync could continue to fail when Geo tries to resync them. Recovering from this state requires assistance from support to run manual steps. Work is in-progress to update Gitaly Cluster to [identify repositories with a unique and persistent identifier](https://gitlab.com/gitlab-org/gitaly/-/issues/3485), which is expected to resolve the issue.                                                                                                                                                                                                                                          | No known solution at this time. |
+| Database inconsistencies due to repository access outside of Gitaly Cluster's control | Operations that write to the repository storage that do not go through normal Gitaly Cluster methods can cause database inconsistencies. These can include (but are not limited to) snapshot restoration for cluster node disks, node upgrades which modify files under Git control, or any other disk operation that may touch repository storage external to GitLab. The Gitaly team is actively working to provide manual commands to [reconcile the Praefect database with the repository storage](https://gitlab.com/groups/gitlab-org/-/epics/6723).  | Don't directly change repositories on any Gitaly Cluster node at this time. |
+| Praefect unable to insert data into the database due to migrations not being applied after an upgrade | If the database is not kept up to date with completed migrations, then the Praefect node is unable to perform normal operation. | Make sure the Praefect database is up and running with all migrations completed (For example: `/opt/gitlab/embedded/bin/praefect -config /var/opt/gitlab/praefect/config.toml sql-migrate-status` should show a list of all applied migrations). Consider [requesting live upgrade assistance](https://about.gitlab.com/support/scheduling-live-upgrade-assistance.html) so your upgrade plan can be reviewed by support. |
+| Restoring a Gitaly Cluster node from a snapshot in a running cluster | Because the Gitaly Cluster runs with consistent state, introducing a single node that is behind will result in the cluster not being able to reconcile the nodes data and other nodes data | Don't restore a single Gitaly Cluster node from a backup snapshot. If you must restore from backup, it's best to snapshot all Gitaly Cluster nodes at the same time and take a database dump of the Praefect database. |
+
+### Snapshot backup and recovery limitations
+
+Gitaly Cluster does not support snapshot backups because these can cause issues where the Praefect
+database becomes out of sync with the disk storage. Because of how Praefect rebuilds the replication
+metadata of Gitaly disk information during a restore, we recommend using the
+[official backup and restore Rake tasks](../../raketasks/backup_restore.md). If you are unable to use this method, please contact customer support for restoration help.
+
+To track progress on work on a solution for manually re-synchronizing the Praefect database with
+disk storage, see [this epic](https://gitlab.com/groups/gitlab-org/-/epics/6575).
+
+### What to do if you are on Gitaly Cluster experiencing an issue or limitation
+
+Please contact customer support for immediate help in restoration or recovery.
 
 ## Gitaly
 
@@ -87,11 +135,8 @@ Gitaly comes pre-configured with Omnibus GitLab, which is a configuration
 - Omnibus GitLab installations for up to 2000 users, see [specific Gitaly configuration instructions](../reference_architectures/2k_users.md#configure-gitaly).
 - Source installations or custom Gitaly installations, see [Configure Gitaly](configure_gitaly.md).
 
-GitLab installations for more than 2000 users should use Gitaly Cluster.
-
-NOTE:
-If not set in GitLab, feature flags are read as false from the console and Gitaly uses their
-default value. The default value depends on the GitLab version.
+GitLab installations for more than 2000 active users performing daily Git write operation may be
+best suited by using Gitaly Cluster.
 
 ## Gitaly Cluster
 
@@ -134,18 +179,17 @@ In this example:
 - Repositories are stored on a virtual storage called `storage-1`.
 - Three Gitaly nodes provide `storage-1` access: `gitaly-1`, `gitaly-2`, and `gitaly-3`.
 - The three Gitaly nodes share data in three separate hashed storage locations.
-- The [replication factor](#replication-factor) is `3`. There are three copies maintained
+- The [replication factor](#replication-factor) is `3`. Three copies are maintained
   of each repository.
 
-The availability objectives for Gitaly clusters are:
+The availability objectives for Gitaly clusters assuming a single node failure are:
 
 - **Recovery Point Objective (RPO):** Less than 1 minute.
 
   Writes are replicated asynchronously. Any writes that have not been replicated
   to the newly promoted primary are lost.
 
-  [Strong consistency](#strong-consistency) can be used to avoid loss in some
-  circumstances.
+  [Strong consistency](#strong-consistency) prevents loss in some circumstances.
 
 - **Recovery Time Objective (RTO):** Less than 10 seconds.
   Outages are detected by a health check run by each Praefect node every
@@ -154,6 +198,10 @@ The availability objectives for Gitaly clusters are:
 
   Faster outage detection, to improve this speed to less than 1 second,
   is tracked [in this issue](https://gitlab.com/gitlab-org/gitaly/-/issues/2608).
+
+WARNING:
+If complete cluster failure occurs, disaster recovery plans should be executed. These can affect the
+RPO and RTO discussed above.
 
 ### Virtual storage
 
@@ -183,15 +231,13 @@ As with normal Gitaly storages, virtual storages can be sharded.
 
 ### Moving beyond NFS
 
-WARNING:
-Engineering support for NFS for Git repositories is deprecated. Technical support is planned to be
-unavailable from GitLab 15.0. No further enhancements are planned for this feature.
+Engineering support for NFS for Git repositories is deprecated. Technical support is planned to be unavailable starting GitLab 15.0. Please see our [statement of support](https://about.gitlab.com/support/statement-of-support.html#gitaly-and-nfs) for more details.
 
 [Network File System (NFS)](https://en.wikipedia.org/wiki/Network_File_System)
 is not well suited to Git workloads which are CPU and IOPS sensitive.
 Specifically:
 
-- Git is sensitive to file system latency. Even simple operations require many
+- Git is sensitive to file system latency. Some operations require many
   read operations. Operations that are fast on block storage can become an order of
   magnitude slower. This significantly impacts GitLab application performance.
 - NFS performance optimizations that prevent the performance gap between
@@ -237,15 +283,14 @@ Gitaly Cluster provides the following features:
 - [Replication factor](#replication-factor) of repositories for increased redundancy.
 - [Automatic failover](praefect.md#automatic-failover-and-primary-election-strategies) from the
   primary Gitaly node to secondary Gitaly nodes.
-- Reporting of possible [data loss](praefect.md#check-for-data-loss) if replication queue is
-  non-empty.
+- Reporting of possible [data loss](recovery.md#check-for-data-loss) if replication queue isn't empty.
 
 Follow the [Gitaly Cluster epic](https://gitlab.com/groups/gitlab-org/-/epics/1489) for improvements
 including [horizontally distributing reads](https://gitlab.com/groups/gitlab-org/-/epics/2013).
 
 #### Distributed reads
 
-> - Introduced in GitLab 13.1 in [beta](https://about.gitlab.com/handbook/product/gitlab-the-product/#alpha-beta-ga) with feature flag `gitaly_distributed_reads` set to disabled.
+> - Introduced in GitLab 13.1 in [beta](../../policy/alpha-beta-support.md#beta-features) with feature flag `gitaly_distributed_reads` set to disabled.
 > - [Made generally available and enabled by default](https://gitlab.com/gitlab-org/gitaly/-/issues/2951) in GitLab 13.3.
 > - [Disabled by default](https://gitlab.com/gitlab-org/gitaly/-/issues/3178) in GitLab 13.5.
 > - [Enabled by default](https://gitlab.com/gitlab-org/gitaly/-/issues/3334) in GitLab 13.8.
@@ -271,23 +316,31 @@ You can [monitor distribution of reads](#monitor-gitaly-cluster) using Prometheu
 
 #### Strong consistency
 
-> - Introduced in GitLab 13.1 in [alpha](https://about.gitlab.com/handbook/product/gitlab-the-product/#alpha-beta-ga), disabled by default.
-> - Entered [beta](https://about.gitlab.com/handbook/product/gitlab-the-product/#alpha-beta-ga) in GitLab 13.2, disabled by default.
+> - Introduced in GitLab 13.1 in [alpha](../../policy/alpha-beta-support.md#alpha-features), disabled by default.
+> - Entered [beta](../../policy/alpha-beta-support.md#beta-features) in GitLab 13.2, disabled by default.
 > - In GitLab 13.3, disabled unless primary-wins voting strategy is disabled.
 > - From GitLab 13.4, enabled by default.
 > - From GitLab 13.5, you must use Git v2.28.0 or higher on Gitaly nodes to enable strong consistency.
-> - From GitLab 13.6, primary-wins voting strategy and `gitaly_reference_transactions_primary_wins` feature flag were removed from the source code.
+> - From GitLab 13.6, primary-wins voting strategy and the `gitaly_reference_transactions_primary_wins` feature flag was removed.
+> - From GitLab 14.0, [Gitaly Cluster only supports strong consistency](https://gitlab.com/gitlab-org/gitaly/-/merge_requests/3575), and the `gitaly_reference_transactions` feature flag was removed.
 
-By default, Gitaly Cluster guarantees eventual consistency by replicating all writes to secondary
-Gitaly nodes after the write to the primary Gitaly node has happened.
+Gitaly Cluster provides strong consistency by writing changes synchronously to all healthy, up-to-date replicas. If a
+replica is outdated or unhealthy at the time of the transaction, the write is asynchronously replicated to it.
 
-Praefect can instead provide strong consistency by creating a transaction and writing changes to all
-Gitaly nodes at once.
+If strong consistency is unavailable, Gitaly Cluster guarantees eventual consistency. In this case. Gitaly Cluster
+replicates all writes to secondary Gitaly nodes after the write to the primary Gitaly node has occurred.
 
-If enabled, transactions are only available for a subset of RPCs. For more information, see the
-[strong consistency epic](https://gitlab.com/groups/gitlab-org/-/epics/1189).
+Strong consistency:
 
-For configuration information, see [Configure strong consistency](praefect.md#configure-strong-consistency).
+- Is the primary replication method in GitLab 14.0 and later. A subset of operations still use replication jobs
+  (eventual consistency) instead of strong consistency. Refer to the
+  [strong consistency epic](https://gitlab.com/groups/gitlab-org/-/epics/1189) for more information.
+- Must be configured in GitLab versions 13.1 to 13.12. For configuration information, refer to either:
+  - Documentation on your GitLab instance at `/help`.
+  - The [13.12 documentation](https://docs.gitlab.com/13.12/ee/administration/gitaly/praefect.html#strong-consistency).
+- Is unavailable in GitLab 13.0 and earlier.
+
+For more information on monitoring strong consistency, see the Gitaly Cluster [Prometheus metrics documentation](#monitor-gitaly-cluster).
 
 #### Replication factor
 
@@ -306,10 +359,9 @@ For configuration information, see [Configure replication factor](praefect.md#co
 
 For more information on configuring Gitaly Cluster, see [Configure Gitaly Cluster](praefect.md).
 
-### Migrate to Gitaly Cluster
+## Migrating to Gitaly Cluster
 
-Whether migrating to Gitaly Cluster because of [NFS support deprecation](index.md#nfs-deprecation-notice)
-or to move from single Gitaly nodes, the basic process involves:
+Please see [current guidance on Gitaly Cluster](#guidance-regarding-gitaly-cluster). The basic process for migrating to Gitaly Cluster involves:
 
 1. Create the required storage. Refer to
    [repository storage recommendations](faq.md#what-are-some-repository-storage-recommendations).
@@ -317,6 +369,25 @@ or to move from single Gitaly nodes, the basic process involves:
 1. [Move the repositories](../operations/moving_repositories.md#move-repositories). To migrate to
    Gitaly Cluster, existing repositories stored outside Gitaly Cluster must be moved. There is no
    automatic migration but the moves can be scheduled with the GitLab API.
+
+WARNING:
+Some [known database inconsistency issues](#known-issues) exist in Gitaly Cluster. We recommend you
+remain on your current service for now.
+
+NOTE:
+GitLab requires a `default` repository storage to be configured.
+[Read more about this limitation](configure_gitaly.md#gitlab-requires-a-default-repository-storage).
+
+### Migrate off Gitaly Cluster
+
+If you have repositories stored on a Gitaly Cluster, but you'd like to migrate
+them back to direct Gitaly storage:
+
+1. Create and configure a new
+   [Gitaly server](configure_gitaly.md#run-gitaly-on-its-own-server).
+1. [Move the repositories](../operations/moving_repositories.md#move-repositories)
+   to the newly created storage. You can move them by shard or by group, which gives you the opportunity to spread them over
+   multiple Gitaly servers.
 
 ## Monitor Gitaly and Gitaly Cluster
 
@@ -418,7 +489,15 @@ The following are useful queries for monitoring Gitaly:
 
 ### Monitor Gitaly Cluster
 
-To monitor Gitaly Cluster (Praefect), you can use these Prometheus metrics:
+To monitor Gitaly Cluster (Praefect), you can use these Prometheus metrics. There are two separate metrics
+endpoints from which metrics can be scraped:
+
+- The default `/metrics` endpoint.
+- `/db_metrics`, which contains metrics that require database queries.
+
+#### Default Prometheus `/metrics` endpoint
+
+The following metrics are available from the `/metrics` endpoint:
 
 - `gitaly_praefect_read_distribution`, a counter to track [distribution of reads](#distributed-reads).
   It has two labels:
@@ -429,7 +508,7 @@ To monitor Gitaly Cluster (Praefect), you can use these Prometheus metrics:
   They reflect configuration defined for this instance of Praefect.
 
 - `gitaly_praefect_replication_latency_bucket`, a histogram measuring the amount of time it takes
-  for replication to complete once the replication job starts. Available in GitLab 12.10 and later.
+  for replication to complete after the replication job starts. Available in GitLab 12.10 and later.
 - `gitaly_praefect_replication_delay_bucket`, a histogram measuring how much time passes between
   when the replication job is created and when it starts. Available in GitLab 12.10 and later.
 - `gitaly_praefect_node_latency_bucket`, a histogram measuring the latency in Gitaly returning
@@ -448,6 +527,28 @@ To monitor [strong consistency](#strong-consistency), you can use the following 
   transaction to be committed.
 - `gitaly_hook_transaction_voting_delay_seconds`, the client-side delay introduced by waiting for
   the transaction to be committed.
+
+To monitor the number of repositories that have no healthy, up-to-date replicas:
+
+- `gitaly_praefect_unavailable_repositories`
+
+You can also monitor the [Praefect logs](../logs.md#praefect-logs).
+
+#### Database metrics `/db_metrics` endpoint
+
+> [Introduced](https://gitlab.com/gitlab-org/gitaly/-/issues/3286) in GitLab 14.5.
+
+The following metrics are available from the `/db_metrics` endpoint:
+
+- `gitaly_praefect_unavailable_repositories`, the number of repositories that have no healthy, up to date replicas.
+- `gitaly_praefect_read_only_repositories`, the number of repositories in read-only mode in a virtual storage.
+  This metric is available for backwards compatibility reasons. `gitaly_praefect_unavailable_repositories` is more
+  accurate.
+- `gitaly_praefect_replication_queue_depth`, the number of jobs in the replication queue.
+
+## Recover from failure
+
+Gitaly Cluster can [recover from certain types of failure](recovery.md).
 
 ## Do not bypass Gitaly
 
@@ -539,12 +640,6 @@ To see if GitLab can access the repository file system directly, we use the foll
 Direct Git access is enable by default in Omnibus GitLab because it fills in the correct repository
 paths in the GitLab configuration file `config/gitlab.yml`. This satisfies the UUID check.
 
-WARNING:
-If directly copying repository data from a GitLab server to Gitaly, ensure that the metadata file,
-default path `/var/opt/gitlab/git-data/repositories/.gitaly-metadata`, is not included in the transfer.
-Copying this file causes GitLab to use the Rugged patches for repositories hosted on the Gitaly server,
-leading to `Error creating pipeline` and `Commit not found` errors, or stale data.
-
 ### Transition to Gitaly Cluster
 
 For the sake of removing complexity, we must remove direct Git access in GitLab. However, we can't
@@ -562,20 +657,4 @@ The second facet presents the only real solution. For this, we developed
 ## NFS deprecation notice
 
 Engineering support for NFS for Git repositories is deprecated. Technical support is planned to be
-unavailable from GitLab 15.0. No further enhancements are planned for this feature.
-
-Additional information:
-
-- [Recommended NFS mount options and known issues with Gitaly and NFS](../nfs.md#upgrade-to-gitaly-cluster-or-disable-caching-if-experiencing-data-loss).
-- [GitLab statement of support](https://about.gitlab.com/support/statement-of-support.html#gitaly-and-nfs).
-
-GitLab recommends:
-
-- Creating a [Gitaly Cluster](#gitaly-cluster) as soon as possible.
-- [Moving your repositories](#migrate-to-gitaly-cluster) from NFS-based storage to Gitaly
-  Cluster.
-
-We welcome your feedback on this process. You can:
-
-- Raise a support ticket.
-- [Comment on the epic](https://gitlab.com/groups/gitlab-org/-/epics/4916).
+unavailable from GitLab 15.0. For further information, please see our [NFS Deprecation](../nfs.md#gitaly-and-nfs-deprecation) documentation.

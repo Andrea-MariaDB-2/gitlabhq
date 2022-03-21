@@ -34,9 +34,11 @@ export const updatePrometheusVariables = {
 export const getIntegrationsQueryResponse = {
   data: {
     project: {
+      id: '1',
       alertManagementIntegrations: {
         nodes: [
           {
+            __typename: 'AlertManagementIntegration',
             id: '37',
             type: 'HTTP',
             active: true,
@@ -47,6 +49,7 @@ export const getIntegrationsQueryResponse = {
             apiUrl: null,
           },
           {
+            __typename: 'AlertManagementIntegration',
             id: '41',
             type: 'HTTP',
             active: true,
@@ -57,6 +60,7 @@ export const getIntegrationsQueryResponse = {
             apiUrl: null,
           },
           {
+            __typename: 'AlertManagementIntegration',
             id: '40',
             type: 'HTTP',
             active: true,
@@ -67,6 +71,7 @@ export const getIntegrationsQueryResponse = {
             apiUrl: null,
           },
           {
+            __typename: 'AlertManagementIntegration',
             id: '12',
             type: 'PROMETHEUS',
             active: false,
@@ -82,6 +87,7 @@ export const getIntegrationsQueryResponse = {
 };
 
 export const integrationToDestroy = {
+  __typename: 'AlertManagementIntegration',
   id: '37',
   type: 'HTTP',
   active: true,
@@ -96,6 +102,7 @@ export const destroyIntegrationResponse = {
     httpIntegrationDestroy: {
       errors: [],
       integration: {
+        __typename: 'AlertManagementIntegration',
         id: '37',
         type: 'HTTP',
         active: true,

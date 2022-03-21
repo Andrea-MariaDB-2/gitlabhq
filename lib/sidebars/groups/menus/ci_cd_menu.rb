@@ -29,15 +29,13 @@ module Sidebars
           ::Sidebars::MenuItem.new(
             title: _('Runners'),
             link: group_runners_path(context.group),
-            active_routes: { path: 'groups/runners#index' },
+            active_routes: { controller: 'groups/runners' },
             item_id: :runners
           )
         end
 
-        # TODO Proper policies, such as `read_group_runners`, should be implemented per
-        # See https://gitlab.com/gitlab-org/gitlab/-/issues/334802
         def show_runners?
-          can?(context.current_user, :admin_group, context.group) &&
+          can?(context.current_user, :read_group_runners, context.group) &&
             Feature.enabled?(:runner_list_group_view_vue_ui, context.group, default_enabled: :yaml)
         end
       end

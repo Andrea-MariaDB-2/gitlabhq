@@ -7,15 +7,15 @@ class BlobPresenter < Gitlab::View::Presenter::Delegated
   include TreeHelper
   include ChecksCollaboration
 
-  presents :blob
+  presents ::Blob, as: :blob
 
   def highlight(to: nil, plain: nil)
     load_all_blob_data
 
     Gitlab::Highlight.highlight(
       blob.path,
-      limited_blob_data(to: to),
-      language: language,
+      blob_data(to),
+      language: blob_language,
       plain: plain
     )
   end
@@ -24,6 +24,14 @@ class BlobPresenter < Gitlab::View::Presenter::Delegated
     return if blob.binary?
 
     highlight(plain: false)
+  end
+
+  def blob_data(to)
+    @_blob_data ||= Gitlab::Diff::CustomDiff.transformed_blob_data(blob) || limited_blob_data(to: to)
+  end
+
+  def blob_language
+    @_blob_language ||= Gitlab::Diff::CustomDiff.transformed_blob_language(blob) || gitattr_language || detect_language
   end
 
   def raw_plain_data
@@ -47,7 +55,50 @@ class BlobPresenter < Gitlab::View::Presenter::Delegated
   end
 
   def replace_path
-    url_helpers.project_create_blob_path(project, ref_qualified_path)
+    url_helpers.project_update_blob_path(project, ref_qualified_path)
+  end
+
+  def pipeline_editor_path
+    project_ci_pipeline_editor_path(project, branch_name: blob.commit_id) if can_collaborate_with_project?(project) && blob.path == project.ci_config_path_or_default
+  end
+
+  def gitpod_blob_url
+    return unless Gitlab::CurrentSettings.gitpod_enabled && !current_user.nil? && current_user.gitpod_enabled
+
+    "#{Gitlab::CurrentSettings.gitpod_url}##{url_helpers.project_tree_url(project, tree_join(blob.commit_id, blob.path || ''))}"
+  end
+
+  def find_file_path
+    url_helpers.project_find_file_path(project, ref_qualified_path)
+  end
+
+  def blame_path
+    url_helpers.project_blame_path(project, ref_qualified_path)
+  end
+
+  def history_path
+    url_helpers.project_commits_path(project, ref_qualified_path)
+  end
+
+  def permalink_path
+    url_helpers.project_blob_path(project, File.join(project.repository.commit.sha, blob.path))
+  end
+
+  def environment_formatted_external_url
+    return unless environment
+
+    environment.formatted_external_url
+  end
+
+  def environment_external_url_for_route_map
+    return unless environment
+
+    environment.external_url_for(blob.path, blob.commit_id)
+  end
+
+  # Will be overridden in EE
+  def code_owners
+    []
   end
 
   def fork_and_edit_path
@@ -58,8 +109,22 @@ class BlobPresenter < Gitlab::View::Presenter::Delegated
     fork_path_for_current_user(project, ide_edit_path)
   end
 
+  def fork_and_view_path
+    fork_path_for_current_user(project, web_path)
+  end
+
   def can_modify_blob?
     super(blob, project, blob.commit_id)
+  end
+
+  def can_current_user_push_to_branch?
+    return false unless current_user && project.repository.branch_exists?(blob.commit_id)
+
+    user_access(project).can_push_to_branch?(blob.commit_id)
+  end
+
+  def archived?
+    project.archived
   end
 
   def ide_edit_path
@@ -69,13 +134,27 @@ class BlobPresenter < Gitlab::View::Presenter::Delegated
   def external_storage_url
     return unless static_objects_external_storage_enabled?
 
-    external_storage_url_or_path(url_helpers.project_raw_url(project, ref_qualified_path))
+    external_storage_url_or_path(url_helpers.project_raw_url(project, ref_qualified_path), project)
+  end
+
+  def code_navigation_path
+    Gitlab::CodeNavigationPath.new(project, blob.commit_id).full_json_path_for(blob.path)
+  end
+
+  def project_blob_path_root
+    project_blob_path(project, blob.commit_id)
   end
 
   private
 
   def url_helpers
     Gitlab::Routing.url_helpers
+  end
+
+  def environment
+    environment_params = project.repository.branch_exists?(blob.commit_id) ? { ref: blob.commit_id } : { sha: blob.commit_id }
+    environment_params[:find_latest] = true
+    ::Environments::EnvironmentsByDeploymentsFinder.new(project, current_user, environment_params).execute.last
   end
 
   def project
@@ -104,7 +183,15 @@ class BlobPresenter < Gitlab::View::Presenter::Delegated
     @all_lines ||= blob.data.lines
   end
 
-  def language
+  def gitattr_language
     blob.language_from_gitattributes
   end
+
+  def detect_language
+    return if blob.binary?
+
+    Rouge::Lexer.guess(filename: blob.path, source: blob_data(nil)) { |lex| lex.min_by(&:tag) }.tag
+  end
 end
+
+BlobPresenter.prepend_mod_with('BlobPresenter')

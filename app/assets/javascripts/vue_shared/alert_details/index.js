@@ -1,4 +1,4 @@
-import { defaultDataIdFromObject } from 'apollo-cache-inmemory';
+import { defaultDataIdFromObject } from '@apollo/client/core';
 import produce from 'immer';
 import Vue from 'vue';
 import VueApollo from 'vue-apollo';
@@ -38,7 +38,6 @@ export default (selector) => {
           return defaultDataIdFromObject(object);
         },
       },
-      assumeImmutableResults: true,
     }),
   });
 
@@ -71,6 +70,7 @@ export default (selector) => {
   // eslint-disable-next-line no-new
   new Vue({
     el: selector,
+    name: 'AlertDetailsRoot',
     components: {
       AlertDetails,
     },

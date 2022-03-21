@@ -31,11 +31,17 @@ module Gitlab
 
         def find
           find_with_cache do
-            find_object || klass.create(prepare_attributes)
+            find_object || create_object
           end
         end
 
         protected
+
+        def create_object
+          klass.transaction do
+            klass.create(prepare_attributes)
+          end
+        end
 
         def where_clauses
           raise NotImplementedError
@@ -47,15 +53,15 @@ module Gitlab
           attributes
         end
 
+        def find_with_cache(key = cache_key)
+          return yield unless lru_cache && key
+
+          lru_cache[key] ||= yield
+        end
+
         private
 
         attr_reader :klass, :attributes, :lru_cache, :cache_key
-
-        def find_with_cache
-          return yield unless lru_cache && cache_key
-
-          lru_cache[cache_key] ||= yield
-        end
 
         def cache_from_request_store
           Gitlab::SafeRequestStore[:lru_cache] ||= LruRedux::Cache.new(LRU_CACHE_SIZE)

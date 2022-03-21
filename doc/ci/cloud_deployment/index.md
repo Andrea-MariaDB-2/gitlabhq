@@ -58,6 +58,9 @@ Some credentials are required to be able to run `aws` commands:
    | `AWS_SECRET_ACCESS_KEY`        | Your Secret access key |
    | `AWS_DEFAULT_REGION`           | Your region code       |
 
+   NOTE:
+   When you create a variable it's set to be [protected by default](../variables/index.md#protect-a-cicd-variable). If you want to use the `aws` commands on branches or tags that are not protected, make sure to uncheck the **Protect variable** checkbox.
+
 1. You can now use `aws` commands in the `.gitlab-ci.yml` file of this project:
 
    ```yaml
@@ -101,7 +104,7 @@ GitLab also provides [Docker images](https://gitlab.com/gitlab-org/cloud-deploy/
 - Use `registry.gitlab.com/gitlab-org/cloud-deploy/aws-ecs:latest` to deploy your application to AWS ECS.
 
 Before getting started with this process, you need a cluster on AWS ECS, as well as related
-components, like an ECS service, ECS task definition, a database on AWS RDS, and so on.
+components, like an ECS service, ECS task definition, a database on Amazon RDS, and so on.
 [Read more about AWS ECS](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/Welcome.html).
 
 The ECS task definition can be:

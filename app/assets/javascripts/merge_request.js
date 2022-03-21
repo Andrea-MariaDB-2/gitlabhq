@@ -2,6 +2,7 @@
 
 import $ from 'jquery';
 import createFlash from '~/flash';
+import toast from '~/vue_shared/plugins/global_toast';
 import { __ } from '~/locale';
 import eventHub from '~/vue_merge_request_widget/event_hub';
 import axios from './lib/utils/axios_utils';
@@ -19,11 +20,9 @@ function MergeRequest(opts) {
   this.opts = opts != null ? opts : {};
   this.submitNoteForm = this.submitNoteForm.bind(this);
   this.$el = $('.merge-request');
-  this.$('.show-all-commits').on('click', () => this.showAllCommits());
 
   this.initTabs();
   this.initMRBtnListeners();
-  this.initCommitMessageListeners();
 
   if ($('.description.js-task-list-container').length) {
     this.taskList = new TaskList({
@@ -57,11 +56,6 @@ MergeRequest.prototype.initTabs = function () {
   }
 
   window.mrTabs = new MergeRequestTabs(this.opts);
-};
-
-MergeRequest.prototype.showAllCommits = function () {
-  this.$('.first-commits').remove();
-  return this.$('.all-commits').removeClass('hide');
 };
 
 MergeRequest.prototype.initMRBtnListeners = function () {
@@ -128,26 +122,6 @@ MergeRequest.prototype.submitNoteForm = function (form, $button) {
   }
 };
 
-MergeRequest.prototype.initCommitMessageListeners = function () {
-  $(document).on('click', 'a.js-with-description-link', (e) => {
-    const textarea = $('textarea.js-commit-message');
-    e.preventDefault();
-
-    textarea.val(textarea.data('messageWithDescription'));
-    $('.js-with-description-hint').hide();
-    $('.js-without-description-hint').show();
-  });
-
-  $(document).on('click', 'a.js-without-description-link', (e) => {
-    const textarea = $('textarea.js-commit-message');
-    e.preventDefault();
-
-    textarea.val(textarea.data('messageWithoutDescription'));
-    $('.js-with-description-hint').show();
-    $('.js-without-description-hint').hide();
-  });
-};
-
 MergeRequest.decreaseCounter = function (by = 1) {
   const $el = $('.js-merge-counter');
   const count = Math.max(parseInt($el.text().replace(/[^\d]/, ''), 10) - by, 0);
@@ -163,10 +137,9 @@ MergeRequest.hideCloseButton = function () {
 
 MergeRequest.toggleDraftStatus = function (title, isReady) {
   if (isReady) {
-    createFlash({
-      message: __('The merge request can now be merged.'),
-      type: 'notice',
-    });
+    toast(__('Marked as ready. Merging is now allowed.'));
+  } else {
+    toast(__('Marked as draft. Can only be merged when marked as ready.'));
   }
   const titleEl = document.querySelector('.merge-request .detail-page-description .title');
 

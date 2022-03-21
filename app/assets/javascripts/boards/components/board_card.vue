@@ -72,7 +72,7 @@ export default {
     data-qa-selector="board_card"
     :class="{
       'multi-select': multiSelectVisible,
-      'user-can-drag': isDraggable,
+      'gl-cursor-grab': isDraggable,
       'is-disabled': isDisabled,
       'is-active': isActive,
       'gl-cursor-not-allowed gl-bg-gray-10': item.isLoading,
@@ -83,7 +83,7 @@ export default {
     :data-item-path="item.referencePath"
     data-testid="board_card"
     class="board-card gl-p-5 gl-rounded-base"
-    @mouseup="toggleIssue($event)"
+    @click="toggleIssue($event)"
   >
     <board-card-inner :list="list" :item="item" :update-filters="true" />
   </li>

@@ -2,8 +2,13 @@
 
 class Profiles::TwoFactorAuthsController < Profiles::ApplicationController
   skip_before_action :check_two_factor_requirement
+  before_action :ensure_verified_primary_email, only: [:show, :create]
+  before_action :validate_current_password, only: [:create, :codes, :destroy], if: :current_password_required?
+
+  helper_method :current_password_required?
+
   before_action do
-    push_frontend_feature_flag(:webauthn)
+    push_frontend_feature_flag(:webauthn, default_enabled: :yaml)
   end
 
   feature_category :authentication_and_authorization
@@ -39,7 +44,7 @@ class Profiles::TwoFactorAuthsController < Profiles::ApplicationController
     @qr_code = build_qr_code
     @account_string = account_string
 
-    if Feature.enabled?(:webauthn)
+    if Feature.enabled?(:webauthn, default_enabled: :yaml)
       setup_webauthn_registration
     else
       setup_u2f_registration
@@ -61,10 +66,10 @@ class Profiles::TwoFactorAuthsController < Profiles::ApplicationController
 
       render 'create'
     else
-      @error = _('Invalid pin code')
+      @error = { message: _('Invalid pin code.') }
       @qr_code = build_qr_code
 
-      if Feature.enabled?(:webauthn)
+      if Feature.enabled?(:webauthn, default_enabled: :yaml)
         setup_webauthn_registration
       else
         setup_u2f_registration
@@ -132,6 +137,18 @@ class Profiles::TwoFactorAuthsController < Profiles::ApplicationController
   end
 
   private
+
+  def validate_current_password
+    return if current_user.valid_password?(params[:current_password])
+
+    current_user.increment_failed_attempts!
+
+    redirect_to profile_two_factor_auth_path, alert: _('You must provide a valid current password')
+  end
+
+  def current_password_required?
+    !current_user.password_automatically_set? && current_user.allow_password_authentication_for_web?
+  end
 
   def build_qr_code
     uri = current_user.otp_provisioning_uri(account_string, issuer: issuer_host)
@@ -217,5 +234,11 @@ class Profiles::TwoFactorAuthsController < Profiles::ApplicationController
 
     s_(%{The group settings for %{group_links} require you to enable Two-Factor Authentication for your account. You can %{leave_group_links}.})
         .html_safe % { group_links: group_links.html_safe, leave_group_links: leave_group_links.html_safe }
+  end
+
+  def ensure_verified_primary_email
+    unless current_user.two_factor_enabled? || current_user.primary_email_verified?
+      redirect_to profile_emails_path, notice: s_('You need to verify your primary email first before enabling Two-Factor Authentication.')
+    end
   end
 end

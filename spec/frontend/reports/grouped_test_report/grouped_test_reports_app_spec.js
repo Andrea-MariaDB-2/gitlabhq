@@ -1,4 +1,5 @@
-import { mount, createLocalVue } from '@vue/test-utils';
+import { mount } from '@vue/test-utils';
+import Vue from 'vue';
 import Vuex from 'vuex';
 import Api from '~/api';
 import GroupedTestReportsApp from '~/reports/grouped_test_report/grouped_test_reports_app.vue';
@@ -14,8 +15,7 @@ import resolvedFailures from '../mock_data/resolved_failures.json';
 
 jest.mock('~/api.js');
 
-const localVue = createLocalVue();
-localVue.use(Vuex);
+Vue.use(Vuex);
 
 describe('Grouped test reports app', () => {
   const endpoint = 'endpoint.json';
@@ -24,18 +24,14 @@ describe('Grouped test reports app', () => {
   let wrapper;
   let mockStore;
 
-  const mountComponent = ({ props = { pipelinePath }, glFeatures = {} } = {}) => {
+  const mountComponent = ({ props = { pipelinePath } } = {}) => {
     wrapper = mount(GroupedTestReportsApp, {
       store: mockStore,
-      localVue,
       propsData: {
         endpoint,
         headBlobPath,
         pipelinePath,
         ...props,
-      },
-      provide: {
-        glFeatures,
       },
     });
   };
@@ -114,8 +110,8 @@ describe('Grouped test reports app', () => {
       setReports(newFailedTestReports);
     });
 
-    it('tracks service ping metric when enabled', () => {
-      mountComponent({ glFeatures: { usageDataITestingSummaryWidgetTotal: true } });
+    it('tracks service ping metric', () => {
+      mountComponent();
       findExpandButton().trigger('click');
 
       expect(Api.trackRedisHllUserEvent).toHaveBeenCalledTimes(1);
@@ -123,20 +119,13 @@ describe('Grouped test reports app', () => {
     });
 
     it('only tracks the first expansion', () => {
-      mountComponent({ glFeatures: { usageDataITestingSummaryWidgetTotal: true } });
+      mountComponent();
       const expandButton = findExpandButton();
       expandButton.trigger('click');
       expandButton.trigger('click');
       expandButton.trigger('click');
 
       expect(Api.trackRedisHllUserEvent).toHaveBeenCalledTimes(1);
-    });
-
-    it('does not track service ping metric when disabled', () => {
-      mountComponent({ glFeatures: { usageDataITestingSummaryWidgetTotal: false } });
-      findExpandButton().trigger('click');
-
-      expect(Api.trackRedisHllUserEvent).not.toHaveBeenCalled();
     });
   });
 

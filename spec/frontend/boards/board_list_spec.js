@@ -1,6 +1,8 @@
 import Draggable from 'vuedraggable';
+import { nextTick } from 'vue';
 import { DraggableItemTypes } from 'ee_else_ce/boards/constants';
 import { useFakeRequestAnimationFrame } from 'helpers/fake_request_animation_frame';
+import waitForPromises from 'helpers/wait_for_promises';
 import createComponent from 'jest/boards/board_list_helper';
 import BoardCard from '~/boards/components/board_card.vue';
 import eventHub from '~/boards/eventhub';
@@ -38,7 +40,7 @@ describe('Board list component', () => {
 
   describe('When Expanded', () => {
     beforeEach(() => {
-      wrapper = createComponent();
+      wrapper = createComponent({ issuesCount: 1 });
     });
 
     it('renders component', () => {
@@ -64,14 +66,14 @@ describe('Board list component', () => {
     it('shows new issue form', async () => {
       wrapper.vm.toggleForm();
 
-      await wrapper.vm.$nextTick();
+      await nextTick();
       expect(wrapper.find('.board-new-issue-form').exists()).toBe(true);
     });
 
     it('shows new issue form after eventhub event', async () => {
       eventHub.$emit(`toggle-issue-form-${wrapper.vm.list.id}`);
 
-      await wrapper.vm.$nextTick();
+      await nextTick();
       expect(wrapper.find('.board-new-issue-form').exists()).toBe(true);
     });
 
@@ -85,7 +87,7 @@ describe('Board list component', () => {
     it('shows count list item', async () => {
       wrapper.vm.showCount = true;
 
-      await wrapper.vm.$nextTick();
+      await nextTick();
       expect(wrapper.find('.board-list-count').exists()).toBe(true);
 
       expect(wrapper.find('.board-list-count').text()).toBe('Showing all issues');
@@ -94,16 +96,8 @@ describe('Board list component', () => {
     it('sets data attribute with invalid id', async () => {
       wrapper.vm.showCount = true;
 
-      await wrapper.vm.$nextTick();
+      await nextTick();
       expect(wrapper.find('.board-list-count').attributes('data-issue-id')).toBe('-1');
-    });
-
-    it('shows how many more issues to load', async () => {
-      wrapper.vm.showCount = true;
-      wrapper.setProps({ list: { issuesCount: 20 } });
-
-      await wrapper.vm.$nextTick();
-      expect(wrapper.find('.board-list-count').text()).toBe('Showing 1 of 20 issues');
     });
   });
 
@@ -111,12 +105,6 @@ describe('Board list component', () => {
     const actions = {
       fetchItemsForList: jest.fn(),
     };
-
-    beforeEach(() => {
-      wrapper = createComponent({
-        listProps: { issuesCount: 25 },
-      });
-    });
 
     it('does not load issues if already loading', () => {
       wrapper = createComponent({
@@ -131,12 +119,29 @@ describe('Board list component', () => {
     it('shows loading more spinner', async () => {
       wrapper = createComponent({
         state: { listsFlags: { 'gid://gitlab/List/1': { isLoadingMore: true } } },
+        data: {
+          showCount: true,
+        },
       });
-      wrapper.vm.showCount = true;
 
-      await wrapper.vm.$nextTick();
+      await nextTick();
 
       expect(findIssueCountLoadingIcon().exists()).toBe(true);
+    });
+
+    it('shows how many more issues to load', async () => {
+      wrapper = createComponent({
+        data: {
+          showCount: true,
+        },
+      });
+
+      await nextTick();
+      await waitForPromises();
+      await nextTick();
+      await nextTick();
+
+      expect(wrapper.find('.board-list-count').text()).toBe('Showing 1 of 20 issues');
     });
   });
 
@@ -151,7 +156,7 @@ describe('Board list component', () => {
       it('sets background to bg-danger-100', async () => {
         wrapper.setProps({ list: { issuesCount: 4, maxIssueCount: 3 } });
 
-        await wrapper.vm.$nextTick();
+        await nextTick();
         expect(wrapper.find('.bg-danger-100').exists()).toBe(true);
       });
     });

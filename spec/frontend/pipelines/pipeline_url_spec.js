@@ -1,38 +1,26 @@
-import { shallowMount } from '@vue/test-utils';
-import { trimText } from 'helpers/text_helper';
+import { shallowMountExtended } from 'helpers/vue_test_utils_helper';
 import PipelineUrlComponent from '~/pipelines/components/pipelines_list/pipeline_url.vue';
+import { mockPipeline, mockPipelineBranch, mockPipelineTag } from './mock_data';
 
 const projectPath = 'test/test';
 
 describe('Pipeline Url Component', () => {
   let wrapper;
 
-  const findTableCell = () => wrapper.find('[data-testid="pipeline-url-table-cell"]');
-  const findPipelineUrlLink = () => wrapper.find('[data-testid="pipeline-url-link"]');
-  const findScheduledTag = () => wrapper.find('[data-testid="pipeline-url-scheduled"]');
-  const findLatestTag = () => wrapper.find('[data-testid="pipeline-url-latest"]');
-  const findYamlTag = () => wrapper.find('[data-testid="pipeline-url-yaml"]');
-  const findFailureTag = () => wrapper.find('[data-testid="pipeline-url-failure"]');
-  const findAutoDevopsTag = () => wrapper.find('[data-testid="pipeline-url-autodevops"]');
-  const findAutoDevopsTagLink = () => wrapper.find('[data-testid="pipeline-url-autodevops-link"]');
-  const findStuckTag = () => wrapper.find('[data-testid="pipeline-url-stuck"]');
-  const findDetachedTag = () => wrapper.find('[data-testid="pipeline-url-detached"]');
-  const findForkTag = () => wrapper.find('[data-testid="pipeline-url-fork"]');
-  const findTrainTag = () => wrapper.find('[data-testid="pipeline-url-train"]');
+  const findTableCell = () => wrapper.findByTestId('pipeline-url-table-cell');
+  const findPipelineUrlLink = () => wrapper.findByTestId('pipeline-url-link');
+  const findRefName = () => wrapper.findByTestId('merge-request-ref');
+  const findCommitShortSha = () => wrapper.findByTestId('commit-short-sha');
+  const findCommitIcon = () => wrapper.findByTestId('commit-icon');
+  const findCommitIconType = () => wrapper.findByTestId('commit-icon-type');
 
-  const defaultProps = {
-    pipeline: {
-      id: 1,
-      path: 'foo',
-      project: { full_path: `/${projectPath}` },
-      flags: {},
-    },
-    pipelineScheduleUrl: 'foo',
-    pipelineKey: 'id',
-  };
+  const findCommitTitleContainer = () => wrapper.findByTestId('commit-title-container');
+  const findCommitTitle = (commitWrapper) => commitWrapper.find('[data-testid="commit-title"]');
+
+  const defaultProps = mockPipeline(projectPath);
 
   const createComponent = (props) => {
-    wrapper = shallowMount(PipelineUrlComponent, {
+    wrapper = shallowMountExtended(PipelineUrlComponent, {
       propsData: { ...defaultProps, ...props },
       provide: {
         targetProjectFullPath: projectPath,
@@ -59,144 +47,30 @@ describe('Pipeline Url Component', () => {
     expect(findPipelineUrlLink().text()).toBe('#1');
   });
 
-  it('should not render tags when flags are not set', () => {
-    createComponent();
+  it('should render the commit title, commit reference and commit-short-sha', () => {
+    createComponent({}, true);
 
-    expect(findStuckTag().exists()).toBe(false);
-    expect(findLatestTag().exists()).toBe(false);
-    expect(findYamlTag().exists()).toBe(false);
-    expect(findAutoDevopsTag().exists()).toBe(false);
-    expect(findFailureTag().exists()).toBe(false);
-    expect(findScheduledTag().exists()).toBe(false);
-    expect(findForkTag().exists()).toBe(false);
-    expect(findTrainTag().exists()).toBe(false);
+    const commitWrapper = findCommitTitleContainer();
+
+    expect(findCommitTitle(commitWrapper).exists()).toBe(true);
+    expect(findRefName().exists()).toBe(true);
+    expect(findCommitShortSha().exists()).toBe(true);
   });
 
-  it('should render the stuck tag when flag is provided', () => {
-    createComponent({
-      pipeline: {
-        flags: {
-          stuck: true,
-        },
-      },
-    });
+  it('should render commit icon tooltip', () => {
+    createComponent({}, true);
 
-    expect(findStuckTag().text()).toContain('stuck');
+    expect(findCommitIcon().attributes('title')).toBe('Commit');
   });
 
-  it('should render latest tag when flag is provided', () => {
-    createComponent({
-      pipeline: {
-        flags: {
-          latest: true,
-        },
-      },
-    });
+  it.each`
+    pipeline                | expectedTitle
+    ${mockPipelineTag()}    | ${'Tag'}
+    ${mockPipelineBranch()} | ${'Branch'}
+    ${mockPipeline()}       | ${'Merge Request'}
+  `('should render tooltip $expectedTitle for commit icon type', ({ pipeline, expectedTitle }) => {
+    createComponent(pipeline, true);
 
-    expect(findLatestTag().text()).toContain('latest');
-  });
-
-  it('should render a yaml badge when it is invalid', () => {
-    createComponent({
-      pipeline: {
-        flags: {
-          yaml_errors: true,
-        },
-      },
-    });
-
-    expect(findYamlTag().text()).toContain('yaml invalid');
-  });
-
-  it('should render an autodevops badge when flag is provided', () => {
-    createComponent({
-      pipeline: {
-        ...defaultProps.pipeline,
-        flags: {
-          auto_devops: true,
-        },
-      },
-    });
-
-    expect(trimText(findAutoDevopsTag().text())).toBe('Auto DevOps');
-
-    expect(findAutoDevopsTagLink().attributes()).toMatchObject({
-      href: '/help/topics/autodevops/index.md',
-      target: '_blank',
-    });
-  });
-
-  it('should render a detached badge when flag is provided', () => {
-    createComponent({
-      pipeline: {
-        flags: {
-          detached_merge_request_pipeline: true,
-        },
-      },
-    });
-
-    expect(findDetachedTag().text()).toContain('detached');
-  });
-
-  it('should render error badge when pipeline has a failure reason set', () => {
-    createComponent({
-      pipeline: {
-        flags: {
-          failure_reason: true,
-        },
-        failure_reason: 'some reason',
-      },
-    });
-
-    expect(findFailureTag().text()).toContain('error');
-    expect(findFailureTag().attributes('title')).toContain('some reason');
-  });
-
-  it('should render scheduled badge when pipeline was triggered by a schedule', () => {
-    createComponent({
-      pipeline: {
-        flags: {},
-        source: 'schedule',
-      },
-    });
-
-    expect(findScheduledTag().exists()).toBe(true);
-    expect(findScheduledTag().text()).toContain('Scheduled');
-  });
-
-  it('should render the fork badge when the pipeline was run in a fork', () => {
-    createComponent({
-      pipeline: {
-        flags: {},
-        project: { fullPath: '/test/forked' },
-      },
-    });
-
-    expect(findForkTag().exists()).toBe(true);
-    expect(findForkTag().text()).toBe('fork');
-  });
-
-  it('should render the train badge when the pipeline is a merge train pipeline', () => {
-    createComponent({
-      pipeline: {
-        flags: {
-          merge_train_pipeline: true,
-        },
-      },
-    });
-
-    expect(findTrainTag().text()).toContain('train');
-  });
-
-  it('should not render the train badge when the pipeline is not a merge train pipeline', () => {
-    createComponent({
-      pipeline: {
-        flags: {
-          merge_train_pipeline: false,
-        },
-      },
-    });
-
-    expect(findTrainTag().exists()).toBe(false);
+    expect(findCommitIconType().attributes('title')).toBe(expectedTitle);
   });
 });

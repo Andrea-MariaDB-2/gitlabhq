@@ -17,4 +17,6 @@
         project: error_tracking_setting_project_json,
         api_host: setting.api_host,
         enabled: setting.enabled.to_json,
+        integrated: setting.integrated.to_json,
+        gitlab_dsn: setting.gitlab_dsn,
         token: setting.token.present? ? '*' * 12 : nil } }

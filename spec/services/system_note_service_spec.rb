@@ -77,6 +77,19 @@ RSpec.describe SystemNoteService do
     end
   end
 
+  describe '.change_issuable_contacts' do
+    let(:added_count) { 5 }
+    let(:removed_count) { 3 }
+
+    it 'calls IssuableService' do
+      expect_next_instance_of(::SystemNotes::IssuablesService) do |service|
+        expect(service).to receive(:change_issuable_contacts).with(added_count, removed_count)
+      end
+
+      described_class.change_issuable_contacts(noteable, project, author, added_count, removed_count)
+    end
+  end
+
   describe '.close_after_error_tracking_resolve' do
     it 'calls IssuableService' do
       expect_next_instance_of(::SystemNotes::IssuablesService) do |service|
@@ -87,7 +100,7 @@ RSpec.describe SystemNoteService do
     end
   end
 
-  describe '.relate_issue' do
+  describe '.relate_issuable' do
     let(:noteable_ref) { double }
     let(:noteable) { double }
 
@@ -97,14 +110,14 @@ RSpec.describe SystemNoteService do
 
     it 'calls IssuableService' do
       expect_next_instance_of(::SystemNotes::IssuablesService) do |service|
-        expect(service).to receive(:relate_issue).with(noteable_ref)
+        expect(service).to receive(:relate_issuable).with(noteable_ref)
       end
 
-      described_class.relate_issue(noteable, noteable_ref, double)
+      described_class.relate_issuable(noteable, noteable_ref, double)
     end
   end
 
-  describe '.unrelate_issue' do
+  describe '.unrelate_issuable' do
     let(:noteable_ref) { double }
     let(:noteable) { double }
 
@@ -114,10 +127,10 @@ RSpec.describe SystemNoteService do
 
     it 'calls IssuableService' do
       expect_next_instance_of(::SystemNotes::IssuablesService) do |service|
-        expect(service).to receive(:unrelate_issue).with(noteable_ref)
+        expect(service).to receive(:unrelate_issuable).with(noteable_ref)
       end
 
-      described_class.unrelate_issue(noteable, noteable_ref, double)
+      described_class.unrelate_issuable(noteable, noteable_ref, double)
     end
   end
 
@@ -143,6 +156,30 @@ RSpec.describe SystemNoteService do
       end
 
       described_class.change_status(noteable, project, author, status, source)
+    end
+  end
+
+  describe '.request_attention' do
+    let(:user) { double }
+
+    it 'calls IssuableService' do
+      expect_next_instance_of(::SystemNotes::IssuablesService) do |service|
+        expect(service).to receive(:request_attention).with(user)
+      end
+
+      described_class.request_attention(noteable, project, author, user)
+    end
+  end
+
+  describe '.remove_attention_request' do
+    let(:user) { double }
+
+    it 'calls IssuableService' do
+      expect_next_instance_of(::SystemNotes::IssuablesService) do |service|
+        expect(service).to receive(:remove_attention_request).with(user)
+      end
+
+      described_class.remove_attention_request(noteable, project, author, user)
     end
   end
 
@@ -287,38 +324,38 @@ RSpec.describe SystemNoteService do
   end
 
   describe '.cross_reference' do
-    let(:mentioner) { double }
+    let(:mentioned_in) { double }
 
     it 'calls IssuableService' do
       expect_next_instance_of(::SystemNotes::IssuablesService) do |service|
-        expect(service).to receive(:cross_reference).with(mentioner)
+        expect(service).to receive(:cross_reference).with(mentioned_in)
       end
 
-      described_class.cross_reference(double, mentioner, double)
+      described_class.cross_reference(double, mentioned_in, double)
     end
   end
 
   describe '.cross_reference_disallowed?' do
-    let(:mentioner) { double }
+    let(:mentioned_in) { double }
 
     it 'calls IssuableService' do
       expect_next_instance_of(::SystemNotes::IssuablesService) do |service|
-        expect(service).to receive(:cross_reference_disallowed?).with(mentioner)
+        expect(service).to receive(:cross_reference_disallowed?).with(mentioned_in)
       end
 
-      described_class.cross_reference_disallowed?(double, mentioner)
+      described_class.cross_reference_disallowed?(double, mentioned_in)
     end
   end
 
   describe '.cross_reference_exists?' do
-    let(:mentioner) { double }
+    let(:mentioned_in) { double }
 
     it 'calls IssuableService' do
       expect_next_instance_of(::SystemNotes::IssuablesService) do |service|
-        expect(service).to receive(:cross_reference_exists?).with(mentioner)
+        expect(service).to receive(:cross_reference_exists?).with(mentioned_in)
       end
 
-      described_class.cross_reference_exists?(double, mentioner)
+      described_class.cross_reference_exists?(double, mentioned_in)
     end
   end
 
@@ -345,193 +382,6 @@ RSpec.describe SystemNoteService do
       end
 
       described_class.noteable_cloned(double, double, noteable_ref, double, direction: direction)
-    end
-  end
-
-  describe 'Jira integration' do
-    include JiraServiceHelper
-
-    let(:project)         { create(:jira_project, :repository) }
-    let(:author)          { create(:user) }
-    let(:issue)           { create(:issue, project: project) }
-    let(:merge_request)   { create(:merge_request, :simple, target_project: project, source_project: project) }
-    let(:jira_issue)      { ExternalIssue.new("JIRA-1", project)}
-    let(:jira_tracker)    { project.jira_integration }
-    let(:commit)          { project.commit }
-    let(:comment_url)     { jira_api_comment_url(jira_issue.id) }
-    let(:success_message) { "SUCCESS: Successfully posted to http://jira.example.net." }
-
-    before do
-      stub_jira_integration_test
-      stub_jira_urls(jira_issue.id)
-      jira_integration_settings
-    end
-
-    def cross_reference(type, link_exists = false)
-      noteable = type == 'commit' ? commit : merge_request
-
-      links = []
-      if link_exists
-        url = if type == 'commit'
-                "#{Settings.gitlab.base_url}/#{project.namespace.path}/#{project.path}/-/commit/#{commit.id}"
-              else
-                "#{Settings.gitlab.base_url}/#{project.namespace.path}/#{project.path}/-/merge_requests/#{merge_request.iid}"
-              end
-
-        link = double(object: { 'url' => url })
-        links << link
-        expect(link).to receive(:save!)
-      end
-
-      allow(JIRA::Resource::Remotelink).to receive(:all).and_return(links)
-
-      described_class.cross_reference(jira_issue, noteable, author)
-    end
-
-    noteable_types = %w(merge_requests commit)
-
-    noteable_types.each do |type|
-      context "when noteable is a #{type}" do
-        it "blocks cross reference when #{type.underscore}_events is false" do
-          jira_tracker.update!("#{type}_events" => false)
-
-          expect(cross_reference(type)).to eq(s_('JiraService|Events for %{noteable_model_name} are disabled.') % { noteable_model_name: type.pluralize.humanize.downcase })
-        end
-
-        it "creates cross reference when #{type.underscore}_events is true" do
-          jira_tracker.update!("#{type}_events" => true)
-
-          expect(cross_reference(type)).to eq(success_message)
-        end
-      end
-
-      context 'when a new cross reference is created' do
-        it 'creates a new comment and remote link' do
-          cross_reference(type)
-
-          expect(WebMock).to have_requested(:post, jira_api_comment_url(jira_issue))
-          expect(WebMock).to have_requested(:post, jira_api_remote_link_url(jira_issue))
-        end
-      end
-
-      context 'when a link exists' do
-        it 'updates a link but does not create a new comment' do
-          expect(WebMock).not_to have_requested(:post, jira_api_comment_url(jira_issue))
-
-          cross_reference(type, true)
-        end
-      end
-    end
-
-    describe "new reference" do
-      let(:favicon_path) { "http://localhost/assets/#{find_asset('favicon.png').digest_path}" }
-
-      before do
-        allow(JIRA::Resource::Remotelink).to receive(:all).and_return([])
-      end
-
-      context 'for commits' do
-        it "creates comment" do
-          result = described_class.cross_reference(jira_issue, commit, author)
-
-          expect(result).to eq(success_message)
-        end
-
-        it "creates remote link" do
-          described_class.cross_reference(jira_issue, commit, author)
-
-          expect(WebMock).to have_requested(:post, jira_api_remote_link_url(jira_issue)).with(
-            body: hash_including(
-              GlobalID: "GitLab",
-              relationship: 'mentioned on',
-              object: {
-                url: project_commit_url(project, commit),
-                title: "Commit - #{commit.title}",
-                icon: { title: "GitLab", url16x16: favicon_path },
-                status: { resolved: false }
-              }
-            )
-          ).once
-        end
-      end
-
-      context 'for issues' do
-        let(:issue) { create(:issue, project: project) }
-
-        it "creates comment" do
-          result = described_class.cross_reference(jira_issue, issue, author)
-
-          expect(result).to eq(success_message)
-        end
-
-        it "creates remote link" do
-          described_class.cross_reference(jira_issue, issue, author)
-
-          expect(WebMock).to have_requested(:post, jira_api_remote_link_url(jira_issue)).with(
-            body: hash_including(
-              GlobalID: "GitLab",
-              relationship: 'mentioned on',
-              object: {
-                url: project_issue_url(project, issue),
-                title: "Issue - #{issue.title}",
-                icon: { title: "GitLab", url16x16: favicon_path },
-                status: { resolved: false }
-              }
-            )
-          ).once
-        end
-      end
-
-      context 'for snippets' do
-        let(:snippet) { create(:snippet, project: project) }
-
-        it "creates comment" do
-          result = described_class.cross_reference(jira_issue, snippet, author)
-
-          expect(result).to eq(success_message)
-        end
-
-        it "creates remote link" do
-          described_class.cross_reference(jira_issue, snippet, author)
-
-          expect(WebMock).to have_requested(:post, jira_api_remote_link_url(jira_issue)).with(
-            body: hash_including(
-              GlobalID: "GitLab",
-              relationship: 'mentioned on',
-              object: {
-                url: project_snippet_url(project, snippet),
-                title: "Snippet - #{snippet.title}",
-                icon: { title: "GitLab", url16x16: favicon_path },
-                status: { resolved: false }
-              }
-            )
-          ).once
-        end
-      end
-    end
-
-    describe "existing reference" do
-      before do
-        allow(JIRA::Resource::Remotelink).to receive(:all).and_return([])
-        message = double('message')
-        allow(message).to receive(:include?) { true }
-        allow_next_instance_of(JIRA::Resource::Issue) do |instance|
-          allow(instance).to receive(:comments).and_return([OpenStruct.new(body: message)])
-        end
-      end
-
-      it "does not return success message" do
-        result = described_class.cross_reference(jira_issue, commit, author)
-
-        expect(result).not_to eq(success_message)
-      end
-
-      it 'does not try to create comment and remote link' do
-        subject
-
-        expect(WebMock).not_to have_requested(:post, jira_api_comment_url(jira_issue))
-        expect(WebMock).not_to have_requested(:post, jira_api_remote_link_url(jira_issue))
-      end
     end
   end
 
@@ -735,12 +585,26 @@ RSpec.describe SystemNoteService do
   describe '.change_alert_status' do
     let(:alert) { build(:alert_management_alert) }
 
-    it 'calls AlertManagementService' do
-      expect_next_instance_of(SystemNotes::AlertManagementService) do |service|
-        expect(service).to receive(:change_alert_status).with(alert)
-      end
+    context 'with status change reason' do
+      let(:reason) { 'reason for status change' }
 
-      described_class.change_alert_status(alert, author)
+      it 'calls AlertManagementService' do
+        expect_next_instance_of(SystemNotes::AlertManagementService) do |service|
+          expect(service).to receive(:change_alert_status).with(reason)
+        end
+
+        described_class.change_alert_status(alert, author, reason)
+      end
+    end
+
+    context 'without status change reason' do
+      it 'calls AlertManagementService' do
+        expect_next_instance_of(SystemNotes::AlertManagementService) do |service|
+          expect(service).to receive(:change_alert_status).with(nil)
+        end
+
+        described_class.change_alert_status(alert, author)
+      end
     end
   end
 
@@ -778,6 +642,32 @@ RSpec.describe SystemNoteService do
       end
 
       described_class.change_incident_severity(incident, author)
+    end
+  end
+
+  describe '.change_incident_status' do
+    let(:incident) { instance_double('Issue', project: project) }
+
+    context 'with status change reason' do
+      let(:reason) { 'reason for status change' }
+
+      it 'calls IncidentService' do
+        expect_next_instance_of(SystemNotes::IncidentService) do |service|
+          expect(service).to receive(:change_incident_status).with(reason)
+        end
+
+        described_class.change_incident_status(incident, author, reason)
+      end
+    end
+
+    context 'without status change reason' do
+      it 'calls IncidentService' do
+        expect_next_instance_of(SystemNotes::IncidentService) do |service|
+          expect(service).to receive(:change_incident_status).with(nil)
+        end
+
+        described_class.change_incident_status(incident, author)
+      end
     end
   end
 

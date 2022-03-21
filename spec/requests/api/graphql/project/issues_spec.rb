@@ -5,12 +5,15 @@ require 'spec_helper'
 RSpec.describe 'getting an issue list for a project' do
   include GraphqlHelpers
 
-  let_it_be(:project) { create(:project, :repository, :public) }
+  let_it_be(:group) { create(:group) }
+  let_it_be(:project) { create(:project, :repository, :public, group: group) }
   let_it_be(:current_user) { create(:user) }
   let_it_be(:issue_a, reload: true) { create(:issue, project: project, discussion_locked: true) }
   let_it_be(:issue_b, reload: true) { create(:issue, :with_alert, project: project) }
   let_it_be(:issues, reload: true) { [issue_a, issue_b] }
 
+  let(:issue_a_gid) { issue_a.to_global_id.to_s }
+  let(:issue_b_gid) { issue_b.to_global_id.to_s }
   let(:issues_data) { graphql_data['project']['issues']['edges'] }
   let(:issue_filter_params) { {} }
 
@@ -58,6 +61,31 @@ RSpec.describe 'getting an issue list for a project' do
       post_graphql(query, current_user: current_user)
 
       expect_graphql_errors_to_include('only one of [assigneeUsernames, assigneeUsername] arguments is allowed at the same time.')
+    end
+  end
+
+  context 'filtering by my_reaction_emoji' do
+    using RSpec::Parameterized::TableSyntax
+
+    let_it_be(:upvote_award) { create(:award_emoji, :upvote, user: current_user, awardable: issue_a) }
+
+    where(:value, :gids) do
+      'thumbsup'   | lazy { [issue_a_gid] }
+      'ANY'        | lazy { [issue_a_gid] }
+      'any'        | lazy { [issue_a_gid] }
+      'AnY'        | lazy { [issue_a_gid] }
+      'NONE'       | lazy { [issue_b_gid] }
+      'thumbsdown' | lazy { [] }
+    end
+
+    with_them do
+      let(:issue_filter_params) { { my_reaction_emoji: value } }
+
+      it 'returns correctly filtered issues' do
+        post_graphql(query, current_user: current_user)
+
+        expect(issues_ids).to eq(gids)
+      end
     end
   end
 
@@ -121,6 +149,8 @@ RSpec.describe 'getting an issue list for a project' do
       create(:issue, :confidential, project: project)
     end
 
+    let(:confidential_issue_gid) { confidential_issue.to_global_id.to_s }
+
     context 'when the user cannot see confidential issues' do
       it 'returns issues without confidential issues' do
         post_graphql(query, current_user: current_user)
@@ -131,12 +161,34 @@ RSpec.describe 'getting an issue list for a project' do
           expect(issue.dig('node', 'confidential')).to eq(false)
         end
       end
+
+      context 'filtering for confidential issues' do
+        let(:issue_filter_params) { { confidential: true } }
+
+        it 'returns no issues' do
+          post_graphql(query, current_user: current_user)
+
+          expect(issues_data.size).to eq(0)
+        end
+      end
+
+      context 'filtering for non-confidential issues' do
+        let(:issue_filter_params) { { confidential: false } }
+
+        it 'returns correctly filtered issues' do
+          post_graphql(query, current_user: current_user)
+
+          expect(issues_ids).to contain_exactly(issue_a_gid, issue_b_gid)
+        end
+      end
     end
 
     context 'when the user can see confidential issues' do
-      it 'returns issues with confidential issues' do
+      before do
         project.add_developer(current_user)
+      end
 
+      it 'returns issues with confidential issues' do
         post_graphql(query, current_user: current_user)
 
         expect(issues_data.size).to eq(3)
@@ -146,6 +198,26 @@ RSpec.describe 'getting an issue list for a project' do
         end
 
         expect(confidentials).to eq([true, false, false])
+      end
+
+      context 'filtering for confidential issues' do
+        let(:issue_filter_params) { { confidential: true } }
+
+        it 'returns correctly filtered issues' do
+          post_graphql(query, current_user: current_user)
+
+          expect(issues_ids).to contain_exactly(confidential_issue_gid)
+        end
+      end
+
+      context 'filtering for non-confidential issues' do
+        let(:issue_filter_params) { { confidential: false } }
+
+        it 'returns correctly filtered issues' do
+          post_graphql(query, current_user: current_user)
+
+          expect(issues_ids).to contain_exactly(issue_a_gid, issue_b_gid)
+        end
       end
     end
   end
@@ -177,7 +249,7 @@ RSpec.describe 'getting an issue list for a project' do
         it_behaves_like 'sorted paginated query' do
           let(:sort_param)       { :DUE_DATE_ASC }
           let(:first_param)      { 2 }
-          let(:expected_results) { [due_issue3.iid, due_issue5.iid, due_issue1.iid, due_issue4.iid, due_issue2.iid] }
+          let(:all_records) { [due_issue3.iid, due_issue5.iid, due_issue1.iid, due_issue4.iid, due_issue2.iid] }
         end
       end
 
@@ -185,7 +257,7 @@ RSpec.describe 'getting an issue list for a project' do
         it_behaves_like 'sorted paginated query' do
           let(:sort_param)       { :DUE_DATE_DESC }
           let(:first_param)      { 2 }
-          let(:expected_results) { [due_issue1.iid, due_issue5.iid, due_issue3.iid, due_issue4.iid, due_issue2.iid] }
+          let(:all_records) { [due_issue1.iid, due_issue5.iid, due_issue3.iid, due_issue4.iid, due_issue2.iid] }
         end
       end
     end
@@ -202,10 +274,10 @@ RSpec.describe 'getting an issue list for a project' do
         it_behaves_like 'sorted paginated query' do
           let(:sort_param)       { :RELATIVE_POSITION_ASC }
           let(:first_param)      { 2 }
-          let(:expected_results) do
+          let(:all_records) do
             [
               relative_issue5.iid, relative_issue3.iid, relative_issue1.iid,
-              relative_issue4.iid, relative_issue2.iid
+              relative_issue2.iid, relative_issue4.iid
             ]
           end
         end
@@ -228,7 +300,7 @@ RSpec.describe 'getting an issue list for a project' do
         it_behaves_like 'sorted paginated query' do
           let(:sort_param)       { :PRIORITY_ASC }
           let(:first_param)      { 2 }
-          let(:expected_results) do
+          let(:all_records) do
             [
               priority_issue3.iid, priority_issue1.iid,
               priority_issue2.iid, priority_issue4.iid
@@ -241,7 +313,7 @@ RSpec.describe 'getting an issue list for a project' do
         it_behaves_like 'sorted paginated query' do
           let(:sort_param)       { :PRIORITY_DESC }
           let(:first_param)      { 2 }
-          let(:expected_results) do
+          let(:all_records) do
             [priority_issue1.iid, priority_issue3.iid, priority_issue2.iid, priority_issue4.iid]
           end
         end
@@ -260,17 +332,17 @@ RSpec.describe 'getting an issue list for a project' do
 
       context 'when ascending' do
         it_behaves_like 'sorted paginated query' do
-          let(:sort_param)       { :LABEL_PRIORITY_ASC }
-          let(:first_param)      { 2 }
-          let(:expected_results) { [label_issue3.iid, label_issue1.iid, label_issue2.iid, label_issue4.iid] }
+          let(:sort_param) { :LABEL_PRIORITY_ASC }
+          let(:first_param) { 2 }
+          let(:all_records) { [label_issue3.iid, label_issue1.iid, label_issue2.iid, label_issue4.iid] }
         end
       end
 
       context 'when descending' do
         it_behaves_like 'sorted paginated query' do
-          let(:sort_param)       { :LABEL_PRIORITY_DESC }
-          let(:first_param)      { 2 }
-          let(:expected_results) { [label_issue2.iid, label_issue3.iid, label_issue1.iid, label_issue4.iid] }
+          let(:sort_param) { :LABEL_PRIORITY_DESC }
+          let(:first_param) { 2 }
+          let(:all_records) { [label_issue2.iid, label_issue3.iid, label_issue1.iid, label_issue4.iid] }
         end
       end
     end
@@ -285,17 +357,17 @@ RSpec.describe 'getting an issue list for a project' do
 
       context 'when ascending' do
         it_behaves_like 'sorted paginated query' do
-          let(:sort_param)       { :MILESTONE_DUE_ASC }
-          let(:first_param)      { 2 }
-          let(:expected_results) { [milestone_issue2.iid, milestone_issue3.iid, milestone_issue1.iid] }
+          let(:sort_param) { :MILESTONE_DUE_ASC }
+          let(:first_param) { 2 }
+          let(:all_records) { [milestone_issue2.iid, milestone_issue3.iid, milestone_issue1.iid] }
         end
       end
 
       context 'when descending' do
         it_behaves_like 'sorted paginated query' do
-          let(:sort_param)       { :MILESTONE_DUE_DESC }
-          let(:first_param)      { 2 }
-          let(:expected_results) { [milestone_issue3.iid, milestone_issue2.iid, milestone_issue1.iid] }
+          let(:sort_param) { :MILESTONE_DUE_DESC }
+          let(:first_param) { 2 }
+          let(:all_records) { [milestone_issue3.iid, milestone_issue2.iid, milestone_issue1.iid] }
         end
       end
     end
@@ -335,6 +407,35 @@ RSpec.describe 'getting an issue list for a project' do
       expected_titles = issues.map { |issue| issue.alert_management_alert&.title }
 
       expect(alert_titles).to contain_exactly(*expected_titles)
+    end
+  end
+
+  context 'when fetching customer_relations_contacts' do
+    let(:fields) do
+      <<~QUERY
+      nodes {
+        id
+        customerRelationsContacts {
+          nodes {
+            firstName
+          }
+        }
+      }
+      QUERY
+    end
+
+    def clean_state_query
+      run_with_clean_state(query, context: { current_user: current_user })
+    end
+
+    it 'avoids N+1 queries' do
+      create(:issue_customer_relations_contact, :for_issue, issue: issue_a)
+
+      control = ActiveRecord::QueryRecorder.new(skip_cached: false) { clean_state_query }
+
+      create(:issue_customer_relations_contact, :for_issue, issue: issue_a)
+
+      expect { clean_state_query }.not_to exceed_all_query_limit(control)
     end
   end
 
@@ -438,6 +539,43 @@ RSpec.describe 'getting an issue list for a project' do
     end
   end
 
+  context 'when fetching escalation status' do
+    let_it_be(:escalation_status) { create(:incident_management_issuable_escalation_status, issue: issue_a) }
+
+    let(:statuses) { issue_data.to_h { |issue| [issue['iid'], issue['escalationStatus']] } }
+    let(:fields) do
+      <<~QUERY
+        edges {
+          node {
+            id
+            escalationStatus
+          }
+        }
+      QUERY
+    end
+
+    before do
+      issue_a.update!(issue_type: Issue.issue_types[:incident])
+    end
+
+    it 'returns the escalation status values' do
+      post_graphql(query, current_user: current_user)
+
+      statuses = issues_data.map { |issue| issue.dig('node', 'escalationStatus') }
+
+      expect(statuses).to contain_exactly(escalation_status.status_name.upcase.to_s, nil)
+    end
+
+    it 'avoids N+1 queries', :aggregate_failures do
+      base_count = ActiveRecord::QueryRecorder.new { run_with_clean_state(query, context: { current_user: current_user }) }
+
+      new_incident = create(:incident, project: project)
+      create(:incident_management_issuable_escalation_status, issue: new_incident)
+
+      expect { run_with_clean_state(query, context: { current_user: current_user }) }.not_to exceed_query_limit(base_count)
+    end
+  end
+
   describe 'N+1 query checks' do
     let(:extra_iid_for_second_query) { issue_b.iid.to_s }
     let(:search_params) { { iids: [issue_a.iid.to_s] } }
@@ -497,5 +635,9 @@ RSpec.describe 'getting an issue list for a project' do
 
       include_examples 'N+1 query check'
     end
+  end
+
+  def issues_ids
+    graphql_dig_at(issues_data, :node, :id)
   end
 end

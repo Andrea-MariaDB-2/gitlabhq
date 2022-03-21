@@ -89,6 +89,10 @@ module API
           Gitlab::AppLogger.info({ message: "File exceeds maximum size", file_bytes: file.size, project_id: user_project.id, project_path: user_project.full_path, upload_allowed: allowed })
         end
       end
+
+      def check_import_by_url_is_enabled
+        Gitlab::CurrentSettings.import_sources&.include?('git') || forbidden!
+      end
     end
 
     helpers do
@@ -152,6 +156,12 @@ module API
         ProjectsFinder.new(current_user: current_user, params: project_params).execute
       end
 
+      def present_project(project, options = {})
+        options[:with].preload_resource(project) if options[:with].respond_to?(:preload_resource)
+
+        present project, options
+      end
+
       def present_projects(projects, options = {})
         verify_statistics_order_by_projects!
 
@@ -171,8 +181,6 @@ module API
 
           [options[:with].prepare_relation(projects, options), options]
         end
-
-        Preloaders::UserMaxAccessLevelInProjectsPreloader.new(records, current_user).execute if current_user
 
         present records, options
       end
@@ -261,12 +269,15 @@ module API
         attrs = declared_params(include_missing: false)
         attrs = translate_params_for_compatibility(attrs)
         filter_attributes_using_license!(attrs)
+
+        validate_git_import_url!(params[:import_url]) { check_import_by_url_is_enabled }
+
         project = ::Projects::CreateService.new(current_user, attrs).execute
 
         if project.saved?
-          present project, with: Entities::Project,
-                           user_can_admin_project: can?(current_user, :admin_project, project),
-                           current_user: current_user
+          present_project project, with: Entities::Project,
+                                   user_can_admin_project: can?(current_user, :admin_project, project),
+                                   current_user: current_user
         else
           if project.errors[:limit_reached].present?
             error!(project.errors[:limit_reached], 403)
@@ -298,12 +309,14 @@ module API
         attrs = declared_params(include_missing: false)
         attrs = translate_params_for_compatibility(attrs)
         filter_attributes_using_license!(attrs)
+        validate_git_import_url!(params[:import_url])
+
         project = ::Projects::CreateService.new(user, attrs).execute
 
         if project.saved?
-          present project, with: Entities::Project,
-                           user_can_admin_project: can?(current_user, :admin_project, project),
-                           current_user: current_user
+          present_project project, with: Entities::Project,
+                                   user_can_admin_project: can?(current_user, :admin_project, project),
+                                   current_user: current_user
         else
           render_validation_error!(project)
         end
@@ -336,7 +349,7 @@ module API
 
         project, options = with_custom_attributes(user_project, options)
 
-        present project, options
+        present_project project, options
       end
 
       desc 'Fork new project for the current user or provided namespace.' do
@@ -350,6 +363,7 @@ module API
         optional :name, type: String, desc: 'The name that will be assigned to the fork'
         optional :description, type: String, desc: 'The description that will be assigned to the fork'
         optional :visibility, type: String, values: Gitlab::VisibilityLevel.string_values, desc: 'The visibility of the fork'
+        optional :mr_default_target_self, Boolean, desc: 'Merge requests of this forked project targets itself by default'
       end
       post ':id/fork', feature_category: :source_code_management do
         Gitlab::QueryLimiting.disable!('https://gitlab.com/gitlab-org/gitlab/-/issues/20759')
@@ -376,9 +390,11 @@ module API
         if forked_project.errors.any?
           conflict!(forked_project.errors.messages)
         else
-          present forked_project, with: Entities::Project,
-                  user_can_admin_project: can?(current_user, :admin_project, forked_project),
-                  current_user: current_user
+          present_project forked_project, {
+            with: Entities::Project,
+            user_can_admin_project: can?(current_user, :admin_project, forked_project),
+            current_user: current_user
+          }
         end
       end
 
@@ -389,7 +405,7 @@ module API
         use :collection_params
         use :with_custom_attributes
       end
-      get ':id/forks', feature_category: :source_code_management do
+      get ':id/forks', feature_category: :source_code_management, urgency: :low do
         forks = ForkProjectsFinder.new(user_project, params: project_finder_params, current_user: current_user).execute
 
         present_projects forks, request_scope: user_project
@@ -418,7 +434,7 @@ module API
         authorize_admin_project
         attrs = declared_params(include_missing: false)
         authorize! :rename_project, user_project if attrs[:name].present?
-        authorize! :change_visibility_level, user_project if attrs[:visibility].present?
+        authorize! :change_visibility_level, user_project if user_project.visibility_attribute_present?(attrs)
 
         attrs = translate_params_for_compatibility(attrs)
         filter_attributes_using_license!(attrs)
@@ -427,9 +443,9 @@ module API
         result = ::Projects::UpdateService.new(user_project, current_user, attrs).execute
 
         if result[:status] == :success
-          present user_project, with: Entities::Project,
-                                user_can_admin_project: can?(current_user, :admin_project, user_project),
-                                current_user: current_user
+          present_project user_project, with: Entities::Project,
+                                        user_can_admin_project: can?(current_user, :admin_project, user_project),
+                                        current_user: current_user
         else
           render_validation_error!(user_project)
         end
@@ -443,7 +459,7 @@ module API
 
         ::Projects::UpdateService.new(user_project, current_user, archived: true).execute
 
-        present user_project, with: Entities::Project, current_user: current_user
+        present_project user_project, with: Entities::Project, current_user: current_user
       end
 
       desc 'Unarchive a project' do
@@ -454,7 +470,7 @@ module API
 
         ::Projects::UpdateService.new(user_project, current_user, archived: false).execute
 
-        present user_project, with: Entities::Project, current_user: current_user
+        present_project user_project, with: Entities::Project, current_user: current_user
       end
 
       desc 'Star a project' do
@@ -467,7 +483,7 @@ module API
           current_user.toggle_star(user_project)
           user_project.reset
 
-          present user_project, with: Entities::Project, current_user: current_user
+          present_project user_project, with: Entities::Project, current_user: current_user
         end
       end
 
@@ -479,7 +495,7 @@ module API
           current_user.toggle_star(user_project)
           user_project.reset
 
-          present user_project, with: Entities::Project, current_user: current_user
+          present_project user_project, with: Entities::Project, current_user: current_user
         else
           not_modified!
         end
@@ -499,7 +515,7 @@ module API
       end
 
       desc 'Get languages in project repository'
-      get ':id/languages', feature_category: :source_code_management do
+      get ':id/languages', feature_category: :source_code_management, urgency: :medium do
         ::Projects::RepositoryLanguagesService
           .new(user_project, current_user)
           .execute.to_h { |lang| [lang.name, lang.share] }
@@ -528,7 +544,7 @@ module API
         result = ::Projects::ForkService.new(fork_from_project, current_user).execute(user_project)
 
         if result
-          present user_project.reset, with: Entities::Project, current_user: current_user
+          present_project user_project.reset, with: Entities::Project, current_user: current_user
         else
           render_api_error!("Project already forked", 409) if user_project.forked?
         end
@@ -598,6 +614,7 @@ module API
 
         source_project = Project.find_by_id(params[:project_id])
         not_found!('Project') unless source_project && can?(current_user, :read_project, source_project)
+        forbidden!('Project') unless source_project && can?(current_user, :admin_project_member, source_project)
 
         result = ::Members::ImportProjectTeamService.new(current_user, params).execute
 
@@ -645,10 +662,7 @@ module API
         users = DeclarativePolicy.subject_scope { user_project.team.users }
         users = users.search(params[:search]) if params[:search].present?
         users = users.where_not_in(params[:skip_users]) if params[:skip_users].present?
-
-        if Feature.enabled?(:sort_by_project_users_by_project_authorizations_user_id, user_project, default_enabled: :yaml)
-          users = users.order('project_authorizations.user_id' => :asc) # rubocop: disable CodeReuse/ActiveRecord
-        end
+        users = users.order('project_authorizations.user_id' => :asc) # rubocop: disable CodeReuse/ActiveRecord
 
         present paginate(users), with: Entities::UserBasic
       end
@@ -698,7 +712,7 @@ module API
         result = ::Projects::TransferService.new(user_project, current_user).execute(namespace)
 
         if result
-          present user_project, with: Entities::Project, current_user: current_user
+          present_project user_project, with: Entities::Project, current_user: current_user
         else
           render_api_error!("Failed to transfer project #{user_project.errors.messages}", 400)
         end

@@ -33,7 +33,6 @@ from where content is sourced, the `gitlab-docs` project, and the published outp
     D --> E
     E -- Build pipeline --> F
     F[docs.gitlab.com]
-    G[/ce/]
     H[/ee/]
     I[/runner/]
     J[/omnibus/]
@@ -42,7 +41,6 @@ from where content is sourced, the `gitlab-docs` project, and the published outp
     F --> I
     F --> J
     F --> K
-    H -- symlink --> G
 ```
 
 GitLab docs content isn't kept in the `gitlab-docs` repository.
@@ -54,14 +52,7 @@ product, and all together are pulled to generate the docs website:
 - [GitLab Runner](https://gitlab.com/gitlab-org/gitlab-runner/-/tree/main/docs)
 - [GitLab Chart](https://gitlab.com/charts/gitlab/tree/master/doc)
 
-NOTE:
-In September 2019, we [moved towards a single codebase](https://gitlab.com/gitlab-org/gitlab/-/issues/2952),
-as such the docs for CE and EE are now identical. For historical reasons and
-in order not to break any existing links throughout the internet, we still
-maintain the CE docs (`https://docs.gitlab.com/ce/`), although it is hidden
-from the website, and is now a symlink to the EE docs. When
-[Support wildcard redirects](https://gitlab.com/gitlab-org/gitlab-pages/-/issues/500) is resolved,
-we can remove this completely.
+Learn more about [the docs folder structure](folder_structure.md).
 
 ## Assets
 
@@ -69,13 +60,12 @@ To provide an optimized site structure, design, and a search-engine friendly
 website, along with a discoverable documentation, we use a few assets for
 the GitLab Documentation website.
 
-### Libraries
+### External libraries
 
-- [Bootstrap 4.3.1 components](https://getbootstrap.com/docs/4.3/components/)
-- [Bootstrap 4.3.1 JS](https://getbootstrap.com/docs/4.3/getting-started/javascript/)
-- [jQuery](https://jquery.com/) 3.3.1
-- [Clipboard JS](https://clipboardjs.com/)
-- [Font Awesome 4.7.0](https://fontawesome.com/v4.7.0/icons/)
+GitLab Docs is built with a combination of external:
+
+- [JavaScript libraries](https://gitlab.com/gitlab-org/gitlab-docs/-/blob/main/package.json).
+- [Ruby libraries](https://gitlab.com/gitlab-org/gitlab-docs/-/blob/main/Gemfile).
 
 ### SEO
 
@@ -109,7 +99,7 @@ The pipeline in the `gitlab-docs` project:
 
 Once a week on Mondays, a scheduled pipeline runs and rebuilds the Docker images
 used in various pipeline jobs, like `docs-lint`. The Docker image configuration files are
-located in the [Dockerfiles directory](https://gitlab.com/gitlab-org/gitlab-docs/-/tree/master/dockerfiles).
+located in the [Dockerfiles directory](https://gitlab.com/gitlab-org/gitlab-docs/-/tree/main/dockerfiles).
 
 If you need to rebuild the Docker images immediately (must have maintainer level permissions):
 
@@ -135,12 +125,12 @@ Every four hours a scheduled pipeline builds and deploys the docs site. The pipe
 fetches the current docs from the main project's main branch, builds it with Nanoc
 and deploys it to <https://docs.gitlab.com>.
 
-If you need to build and deploy the site immediately (must have maintainer level permissions):
+To build and deploy the site immediately (must have the Maintainer role):
 
 1. In [`gitlab-docs`](https://gitlab.com/gitlab-org/gitlab-docs), go to **{rocket}** **CI/CD > Schedules**.
 1. For the `Build docs.gitlab.com every 4 hours` scheduled pipeline, click the **play** (**{play}**) button.
 
-Read more about the [deployment process](deployment_process.md).
+Read more about [documentation deployments](deployment_process.md).
 
 ## Using YAML data files
 
@@ -173,6 +163,35 @@ We can then loop over the `versions` array with something like:
 
 Note that the data file must have the `yaml` extension (not `yml`) and that
 we reference the array with a symbol (`:versions`).
+
+## Archived documentation banner
+
+A banner is displayed on archived documentation pages with the text `This is archived documentation for
+GitLab. Go to the latest.` when either:
+
+- The version of the documentation displayed is not the first version entry in `online` in
+  `content/_data/versions.yaml`.
+- The documentation was built from the default branch (`main`).
+
+For example, if the `online` entries for `content/_data/versions.yaml` are:
+
+```yaml
+online:
+  - "14.4"
+  - "14.3"
+  - "14.2"
+```
+
+In this case, the archived documentation banner isn't displayed:
+
+- For 14.4, the docs built from the `14.4` branch. The branch name is the first entry in `online`.
+- For 14.5-pre, the docs built from the default project branch (`main`).
+
+The archived documentation banner is displayed:
+
+- For 14.3.
+- For 14.2.
+- For any other version.
 
 ## Bumping versions of CSS and JavaScript
 
@@ -241,7 +260,7 @@ reports.
 ## Monthly release process (versions)
 
 The docs website supports versions and each month we add the latest one to the list.
-For more information, read about the [monthly release process](https://about.gitlab.com/handbook/engineering/ux/technical-writing/workflow/#monthly-documentation-releases).
+For more information, read about the [monthly release process](https://gitlab.com/gitlab-org/gitlab-docs/-/blob/main/doc/releases.md).
 
 ## Review Apps for documentation merge requests
 

@@ -14,6 +14,7 @@ module QA
           resource.add_name_uuid = false
           resource.name = name
           resource.path_with_namespace = "#{user.username}/#{name}"
+          resource.api_client = @api_client
         end
       end
 
@@ -30,17 +31,17 @@ module QA
         end
       end
 
+      delegate :path_with_namespace, to: :project
+
       def fabricate!
         populate(:upstream, :user)
 
         namespace_path ||= user.name
 
         # Sign out as admin and sign is as the fork user
-        Page::Main::Menu.perform(&:sign_out)
-        Runtime::Browser.visit(:gitlab, Page::Main::Login)
-        Page::Main::Login.perform do |login|
-          login.sign_in_using_credentials(user: user)
-        end
+        Flow::Login.sign_in(as: user)
+
+        @api_client = Runtime::API::Client.new(:gitlab, is_new_session: false, user: user)
 
         upstream.visit!
 
@@ -69,6 +70,12 @@ module QA
         populate(:project)
       end
 
+      def remove_via_api!
+        project.remove_via_api!
+        upstream.remove_via_api!
+        user.remove_via_api! unless Specs::Helpers::ContextSelector.dot_com?
+      end
+
       def api_get_path
         "/projects/#{CGI.escape(path_with_namespace)}"
       end
@@ -88,7 +95,7 @@ module QA
       def wait_until_forked
         Runtime::Logger.debug("Waiting for the fork process to complete...")
         forked = wait_until do
-          project.import_status == "finished"
+          project.reload!.import_status == "finished"
         end
 
         raise "Timed out while waiting for the fork process to complete." unless forked

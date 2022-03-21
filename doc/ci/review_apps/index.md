@@ -1,8 +1,7 @@
 ---
-stage: Release
-group: Release
+stage: Verify
+group: Pipeline Insights
 info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
-type: reference
 ---
 
 # Review Apps **(FREE)**
@@ -57,7 +56,7 @@ The process of configuring Review Apps is as follows:
 
 1. Set up the infrastructure to host and deploy the Review Apps (check the [examples](#review-apps-examples) below).
 1. [Install](https://docs.gitlab.com/runner/install/) and [configure](https://docs.gitlab.com/runner/commands/) a runner to do deployment.
-1. Set up a job in `.gitlab-ci.yml` that uses the [predefined CI/CD variable](../variables/index.md) `${CI_COMMIT_REF_NAME}`
+1. Set up a job in `.gitlab-ci.yml` that uses the [predefined CI/CD variable](../variables/index.md) `${CI_COMMIT_REF_SLUG}`
    to create dynamic environments and restrict it to run only on branches.
    Alternatively, you can get a YML template for this job by [enabling review apps](#enable-review-apps-button) for your project.
 1. Optionally, set a job that [manually stops](../environments/index.md#stop-an-environment) the Review Apps.
@@ -73,7 +72,7 @@ you can copy and paste into `.gitlab-ci.yml` as a starting point.
 
 Prerequisite:
 
-- You need at least the Developer [role](../../user/permissions.md) for the project.
+- You need at least the Developer role for the project.
 
 To use the Review Apps template:
 
@@ -98,6 +97,7 @@ The following are example projects that demonstrate Review App configuration:
 
 - [NGINX](https://gitlab.com/gitlab-examples/review-apps-nginx).
 - [OpenShift](https://gitlab.com/gitlab-examples/review-apps-openshift).
+- [HashiCorp Nomad](https://gitlab.com/gitlab-examples/review-apps-nomad).
 
 Other examples of Review Apps:
 
@@ -180,7 +180,7 @@ After you have the route mapping set up, it takes effect in the following locati
 
     ![View app file list in merge request widget](img/view_on_mr_widget.png)
 
-- In the diff for a merge request, comparison, or commit.
+- In the diff for a comparison or commit.
 
   ![View on environment button in merge request diff](img/view_on_env_mr.png)
 

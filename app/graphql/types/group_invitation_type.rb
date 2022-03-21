@@ -2,13 +2,13 @@
 
 module Types
   class GroupInvitationType < BaseObject
-    expose_permissions Types::PermissionTypes::Group
-    authorize :read_group
-
-    implements InvitationInterface
-
     graphql_name 'GroupInvitation'
     description 'Represents a Group Invitation'
+
+    expose_permissions Types::PermissionTypes::Group
+    authorize :admin_group
+
+    implements InvitationInterface
 
     field :group, Types::GroupType, null: true,
           description: 'Group that a User is invited to.'

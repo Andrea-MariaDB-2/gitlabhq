@@ -1,5 +1,7 @@
 import { GlAlert, GlLoadingIcon, GlTable, GlAvatar, GlEmptyState } from '@gitlab/ui';
 import { mount } from '@vue/test-utils';
+import { nextTick } from 'vue';
+import { extendedWrapper } from 'helpers/vue_test_utils_helper';
 import IncidentsList from '~/incidents/components/incidents_list.vue';
 import {
   I18N,
@@ -18,7 +20,7 @@ import mockIncidents from '../mocks/incidents.json';
 
 jest.mock('~/lib/utils/url_utility', () => ({
   visitUrl: jest.fn().mockName('visitUrlMock'),
-  joinPaths: jest.fn(),
+  joinPaths: jest.requireActual('~/lib/utils/url_utility').joinPaths,
   mergeUrlParams: jest.fn(),
   setUrlParams: jest.fn(),
   updateHistory: jest.fn(),
@@ -47,46 +49,52 @@ describe('Incidents List', () => {
   const findClosedIcon = () => wrapper.findAll("[data-testid='incident-closed']");
   const findEmptyState = () => wrapper.find(GlEmptyState);
   const findSeverity = () => wrapper.findAll(SeverityToken);
+  const findEscalationStatus = () => wrapper.findAll('[data-testid="incident-escalation-status"]');
+  const findIncidentLink = () => wrapper.findByTestId('incident-link');
 
   function mountComponent({ data = {}, loading = false, provide = {} } = {}) {
-    wrapper = mount(IncidentsList, {
-      data() {
-        return {
-          incidents: [],
-          incidentsCount: {},
-          ...data,
-        };
-      },
-      mocks: {
-        $apollo: {
-          queries: {
-            incidents: {
-              loading,
+    wrapper = extendedWrapper(
+      mount(IncidentsList, {
+        data() {
+          return {
+            incidents: [],
+            incidentsCount: {},
+            ...data,
+          };
+        },
+        mocks: {
+          $apollo: {
+            queries: {
+              incidents: {
+                loading,
+              },
             },
           },
         },
-      },
-      provide: {
-        projectPath: '/project/path',
-        newIssuePath,
-        incidentTemplateName,
-        incidentType,
-        issuePath: '/project/issues',
-        publishedAvailable: true,
-        emptyListSvgPath,
-        textQuery: '',
-        authorUsernameQuery: '',
-        assigneeUsernameQuery: '',
-        slaFeatureAvailable: true,
-        ...provide,
-      },
-      stubs: {
-        GlButton: true,
-        GlAvatar: true,
-        GlEmptyState: true,
-        ServiceLevelAgreementCell: true,
-      },
-    });
+        provide: {
+          projectPath: '/project/path',
+          newIssuePath,
+          incidentTemplateName,
+          incidentType,
+          issuePath: '/project/issues',
+          publishedAvailable: true,
+          emptyListSvgPath,
+          textQuery: '',
+          authorUsernameQuery: '',
+          assigneeUsernameQuery: '',
+          slaFeatureAvailable: true,
+          canCreateIncident: true,
+          incidentEscalationsAvailable: true,
+          ...provide,
+        },
+        stubs: {
+          GlButton: true,
+          GlAvatar: true,
+          GlEmptyState: true,
+          ServiceLevelAgreementCell: true,
+        },
+      }),
+    );
   }
 
   afterEach(() => {
@@ -105,21 +113,23 @@ describe('Incidents List', () => {
 
   describe('empty state', () => {
     const {
-      emptyState: { title, emptyClosedTabTitle, description },
+      emptyState: { title, emptyClosedTabTitle, description, cannotCreateIncidentDescription },
     } = I18N;
 
     it.each`
-      statusFilter | all  | closed | expectedTitle          | expectedDescription
-      ${'all'}     | ${2} | ${1}   | ${title}               | ${description}
-      ${'open'}    | ${2} | ${0}   | ${title}               | ${description}
-      ${'closed'}  | ${0} | ${0}   | ${title}               | ${description}
-      ${'closed'}  | ${2} | ${0}   | ${emptyClosedTabTitle} | ${undefined}
+      statusFilter | all  | closed | expectedTitle          | canCreateIncident | expectedDescription
+      ${'all'}     | ${2} | ${1}   | ${title}               | ${true}           | ${description}
+      ${'open'}    | ${2} | ${0}   | ${title}               | ${true}           | ${description}
+      ${'closed'}  | ${0} | ${0}   | ${title}               | ${true}           | ${description}
+      ${'closed'}  | ${2} | ${0}   | ${emptyClosedTabTitle} | ${true}           | ${undefined}
+      ${'all'}     | ${2} | ${1}   | ${title}               | ${false}          | ${cannotCreateIncidentDescription}
     `(
       `when active tab is $statusFilter and there are $all incidents in total and $closed closed incidents, the empty state
       has title: $expectedTitle and description: $expectedDescription`,
-      ({ statusFilter, all, closed, expectedTitle, expectedDescription }) => {
+      ({ statusFilter, all, closed, expectedTitle, expectedDescription, canCreateIncident }) => {
         mountComponent({
           data: { incidents: { list: [] }, incidentsCount: { all, closed }, statusFilter },
+          provide: { canCreateIncident },
           loading: false,
         });
         expect(findEmptyState().exists()).toBe(true);
@@ -154,6 +164,14 @@ describe('Incidents List', () => {
       expect(findTimeAgo().length).toBe(mockIncidents.length);
     });
 
+    it('renders a link to the incident as the incident title', () => {
+      const { title, iid } = mockIncidents[0];
+      const link = findIncidentLink();
+
+      expect(link.text()).toBe(title);
+      expect(link.attributes('href')).toContain(`issues/incident/${iid}`);
+    });
+
     describe('Assignees', () => {
       it('shows Unassigned when there are no assignees', () => {
         expect(findAssignees().at(0).text()).toBe(I18N.unassigned);
@@ -178,6 +196,34 @@ describe('Incidents List', () => {
 
     it('renders severity per row', () => {
       expect(findSeverity().length).toBe(mockIncidents.length);
+    });
+
+    describe('Escalation status', () => {
+      it('renders escalation status per row', () => {
+        expect(findEscalationStatus().length).toBe(mockIncidents.length);
+
+        const actualStatuses = findEscalationStatus().wrappers.map((status) => status.text());
+        expect(actualStatuses).toEqual([
+          'Triggered',
+          'Acknowledged',
+          'Resolved',
+          I18N.noEscalationStatus,
+        ]);
+      });
+
+      describe('when feature is disabled', () => {
+        beforeEach(() => {
+          mountComponent({
+            data: { incidents: { list: mockIncidents }, incidentsCount },
+            provide: { incidentEscalationsAvailable: false },
+            loading: false,
+          });
+        });
+
+        it('is absent if feature flag is disabled', () => {
+          expect(findEscalationStatus().length).toBe(0);
+        });
+      });
     });
 
     it('contains a link to the incident details page', async () => {
@@ -207,7 +253,7 @@ describe('Incidents List', () => {
 
     it('sets button loading on click', async () => {
       findCreateIncidentBtn().vm.$emit('click');
-      await wrapper.vm.$nextTick();
+      await nextTick();
       expect(findCreateIncidentBtn().attributes('loading')).toBe('true');
     });
 
@@ -219,9 +265,18 @@ describe('Incidents List', () => {
       expect(findCreateIncidentBtn().exists()).toBe(false);
     });
 
+    it("doesn't show the button when user does not have incident creation permissions", () => {
+      mountComponent({
+        data: { incidents: { list: mockIncidents }, incidentsCount: {} },
+        provide: { canCreateIncident: false },
+        loading: false,
+      });
+      expect(findCreateIncidentBtn().exists()).toBe(false);
+    });
+
     it('should track create new incident button', async () => {
       findCreateIncidentBtn().vm.$emit('click');
-      await wrapper.vm.$nextTick();
+      await nextTick();
       expect(Tracking.event).toHaveBeenCalled();
     });
   });
@@ -251,10 +306,10 @@ describe('Incidents List', () => {
         const columnHeader = () => wrapper.find(`[${attr}="${value}"]`);
         expect(columnHeader().attributes('aria-sort')).toBe(initialSort);
         columnHeader().trigger('click');
-        await wrapper.vm.$nextTick();
+        await nextTick();
         expect(columnHeader().attributes('aria-sort')).toBe(firstSort);
         columnHeader().trigger('click');
-        await wrapper.vm.$nextTick();
+        await nextTick();
         expect(columnHeader().attributes('aria-sort')).toBe(nextSort);
       },
     );
@@ -275,7 +330,7 @@ describe('Incidents List', () => {
 
     it('should track incident creation events', async () => {
       findCreateIncidentBtn().vm.$emit('click');
-      await wrapper.vm.$nextTick();
+      await nextTick();
       const { category, action } = trackIncidentCreateNewOptions;
       expect(Tracking.event).toHaveBeenCalledWith(category, action);
     });

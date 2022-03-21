@@ -5,6 +5,8 @@ require 'active_support/core_ext/enumerable'
 module QA
   module Runtime
     class AllureReport
+      extend QA::Support::API
+
       class << self
         # Configure allure reports
         #
@@ -72,32 +74,35 @@ module QA
         # @return [void]
         def configure_rspec
           RSpec.configure do |config|
+            config.add_formatter(QA::Support::Formatters::AllureMetadataFormatter)
             config.add_formatter(AllureRspecFormatter)
-            config.add_formatter(QA::Support::AllureMetadataFormatter)
+
+            config.append_after do |example|
+              Allure.add_attachment(
+                name: 'browser.log',
+                source: Capybara.current_session.driver.browser.logs.get(:browser).map(&:to_s).join("\n\n"),
+                type: Allure::ContentType::TXT,
+                test_case: true
+              )
+            end
           end
         end
 
-        # Custom environment info hash
+        # Gitlab version and revision information
         #
         # @return [Hash]
         def environment_info
-          %w[
-            CI_COMMIT_SHA
-            CI_MERGE_REQUEST_SOURCE_BRANCH_SHA
-            CI_MERGE_REQUEST_IID
-            TOP_UPSTREAM_SOURCE_SHA
-            TOP_UPSTREAM_MERGE_REQUEST_IID
-            DEPLOY_VERSION
-            GITLAB_VERSION
-            GITLAB_SHELL_VERSION
-            GITLAB_ELASTICSEARCH_INDEXER_VERSION
-            GITLAB_KAS_VERSION
-            GITLAB_WORKHORSE_VERSION
-            GITLAB_PAGES_VERSION
-            GITALY_SERVER_VERSION
-            QA_IMAGE
-            QA_BROWSER
-          ].index_with { |val| ENV[val] }.compact_blank
+          lambda do
+            return {} unless Env.admin_personal_access_token || Env.personal_access_token
+
+            client = Env.admin_personal_access_token ? API::Client.as_admin : API::Client.new
+            response = get(API::Request.new(client, '/version').url)
+
+            JSON.parse(response.body, symbolize_names: true)
+          rescue StandardError, ArgumentError => e
+            Logger.error("Failed to attach version info to allure report: #{e}")
+            {}
+          end
         end
       end
     end

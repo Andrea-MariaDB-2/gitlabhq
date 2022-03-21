@@ -10,13 +10,15 @@ import {
   GlIcon,
   GlTooltipDirective,
 } from '@gitlab/ui';
+import { kebabCase, snakeCase } from 'lodash';
 import createFlash from '~/flash';
 import { getIdFromGraphQLId } from '~/graphql_shared/utils';
-import { IssuableType } from '~/issue_show/constants';
+import { IssuableType } from '~/issues/constants';
 import { timeFor } from '~/lib/utils/datetime_utility';
-import { __, s__, sprintf } from '~/locale';
+import { __ } from '~/locale';
 import SidebarEditableItem from '~/sidebar/components/sidebar_editable_item.vue';
 import {
+  dropdowni18nText,
   Tracking,
   IssuableAttributeState,
   IssuableAttributeType,
@@ -24,14 +26,11 @@ import {
   noAttributeId,
   defaultEpicSort,
   epicIidPattern,
-} from '~/sidebar/constants';
+} from 'ee_else_ce/sidebar/constants';
 
 export default {
   noAttributeId,
-  IssuableAttributeState,
-  issuableAttributesQueries,
   i18n: {
-    [IssuableAttributeType.Milestone]: __('Milestone'),
     expired: __('(expired)'),
     none: __('None'),
   },
@@ -53,14 +52,24 @@ export default {
     isClassicSidebar: {
       default: false,
     },
+    issuableAttributesQueries: {
+      default: issuableAttributesQueries,
+    },
+    issuableAttributesState: {
+      default: IssuableAttributeState,
+    },
+    widgetTitleText: {
+      default: {
+        [IssuableAttributeType.Milestone]: __('Milestone'),
+        expired: __('(expired)'),
+        none: __('None'),
+      },
+    },
   },
   props: {
     issuableAttribute: {
       type: String,
       required: true,
-      validator(value) {
-        return [IssuableAttributeType.Milestone].includes(value);
-      },
     },
     workspacePath: {
       required: true,
@@ -132,13 +141,13 @@ export default {
           return {
             fullPath: this.attrWorkspacePath,
             title: this.searchTerm,
-            state: this.$options.IssuableAttributeState[this.issuableAttribute],
+            state: this.issuableAttributesState[this.issuableAttribute],
           };
         }
 
         const variables = {
           fullPath: this.attrWorkspacePath,
-          state: this.$options.IssuableAttributeState[this.issuableAttribute],
+          state: this.issuableAttributesState[this.issuableAttribute],
           sort: defaultEpicSort,
         };
 
@@ -180,7 +189,7 @@ export default {
   },
   computed: {
     issuableAttributeQuery() {
-      return this.$options.issuableAttributesQueries[this.issuableAttribute];
+      return this.issuableAttributesQueries[this.issuableAttribute];
     },
     attributeTitle() {
       return this.currentAttribute?.title || this.i18n.noAttribute;
@@ -189,9 +198,7 @@ export default {
       return this.currentAttribute?.webUrl;
     },
     dropdownText() {
-      return this.currentAttribute
-        ? this.currentAttribute?.title
-        : this.$options.i18n[this.issuableAttribute];
+      return this.currentAttribute ? this.currentAttribute?.title : this.attributeTypeTitle;
     },
     loading() {
       return this.$apollo.queries.currentAttribute.loading;
@@ -200,7 +207,7 @@ export default {
       return this.attributesList.length === 0;
     },
     attributeTypeTitle() {
-      return this.$options.i18n[this.issuableAttribute];
+      return this.widgetTitleText[this.issuableAttribute];
     },
     attributeTypeIcon() {
       return this.icon || this.issuableAttribute;
@@ -209,38 +216,17 @@ export default {
       return timeFor(this.currentAttribute?.dueDate);
     },
     i18n() {
-      return {
-        noAttribute: sprintf(s__('DropdownWidget|No %{issuableAttribute}'), {
-          issuableAttribute: this.issuableAttribute,
-        }),
-        assignAttribute: sprintf(s__('DropdownWidget|Assign %{issuableAttribute}'), {
-          issuableAttribute: this.issuableAttribute,
-        }),
-        noAttributesFound: sprintf(s__('DropdownWidget|No %{issuableAttribute} found'), {
-          issuableAttribute: this.issuableAttribute,
-        }),
-        updateError: sprintf(
-          s__(
-            'DropdownWidget|Failed to set %{issuableAttribute} on this %{issuableType}. Please try again.',
-          ),
-          { issuableAttribute: this.issuableAttribute, issuableType: this.issuableType },
-        ),
-        listFetchError: sprintf(
-          s__(
-            'DropdownWidget|Failed to fetch the %{issuableAttribute} for this %{issuableType}. Please try again.',
-          ),
-          { issuableAttribute: this.issuableAttribute, issuableType: this.issuableType },
-        ),
-        currentFetchError: sprintf(
-          s__(
-            'DropdownWidget|An error occurred while fetching the assigned %{issuableAttribute} of the selected %{issuableType}.',
-          ),
-          { issuableAttribute: this.issuableAttribute, issuableType: this.issuableType },
-        ),
-      };
+      return dropdowni18nText(this.issuableAttribute, this.issuableType);
     },
     isEpic() {
+      // MV to EE https://gitlab.com/gitlab-org/gitlab/-/issues/345311
       return this.issuableAttribute === IssuableType.Epic;
+    },
+    formatIssuableAttribute() {
+      return {
+        kebab: kebabCase(this.issuableAttribute),
+        snake: snakeCase(this.issuableAttribute),
+      };
     },
   },
   methods: {
@@ -252,7 +238,7 @@ export default {
 
       const selectedAttribute =
         Boolean(attributeId) && this.attributesList.find((p) => p.id === attributeId);
-      this.selectedTitle = selectedAttribute ? selectedAttribute.title : this.$options.i18n.none;
+      this.selectedTitle = selectedAttribute ? selectedAttribute.title : this.widgetTitleText.none;
 
       const { current } = this.issuableAttributeQuery;
       const { mutation } = current[this.issuableType];
@@ -321,21 +307,28 @@ export default {
   <sidebar-editable-item
     ref="editable"
     :title="attributeTypeTitle"
-    :data-testid="`${issuableAttribute}-edit`"
+    :data-testid="`${formatIssuableAttribute.kebab}-edit`"
     :tracking="tracking"
     :loading="updating || loading"
     @open="handleOpen"
     @close="handleClose"
   >
     <template #collapsed>
-      <div v-if="isClassicSidebar" v-gl-tooltip class="sidebar-collapsed-icon">
-        <gl-icon :size="16" :aria-label="attributeTypeTitle" :name="attributeTypeIcon" />
-        <span class="collapse-truncated-title">
-          {{ attributeTitle }}
-        </span>
-      </div>
+      <slot name="value-collapsed" :current-attribute="currentAttribute">
+        <div
+          v-if="isClassicSidebar"
+          v-gl-tooltip.left.viewport
+          :title="attributeTypeTitle"
+          class="sidebar-collapsed-icon"
+        >
+          <gl-icon :aria-label="attributeTypeTitle" :name="attributeTypeIcon" />
+          <span class="collapse-truncated-title">
+            {{ attributeTitle }}
+          </span>
+        </div>
+      </slot>
       <div
-        :data-testid="`select-${issuableAttribute}`"
+        :data-testid="`select-${formatIssuableAttribute.kebab}`"
         :class="isClassicSidebar ? 'hide-collapsed' : 'gl-mt-3'"
       >
         <span v-if="updating" class="gl-font-weight-bold">{{ selectedTitle }}</span>
@@ -353,7 +346,7 @@ export default {
             v-gl-tooltip="tooltipText"
             class="gl-text-gray-900! gl-font-weight-bold"
             :href="attributeUrl"
-            :data-qa-selector="`${issuableAttribute}_link`"
+            :data-qa-selector="`${formatIssuableAttribute.snake}_link`"
           >
             {{ attributeTitle }}
             <span v-if="isAttributeOverdue(currentAttribute)">{{ $options.i18n.expired }}</span>
@@ -369,11 +362,13 @@ export default {
         :text="dropdownText"
         :loading="loading"
         class="gl-w-full"
+        toggle-class="gl-max-w-100"
+        block
         @shown="setFocus"
       >
         <gl-search-box-by-type ref="search" v-model="searchTerm" />
         <gl-dropdown-item
-          :data-testid="`no-${issuableAttribute}-item`"
+          :data-testid="`no-${formatIssuableAttribute.kebab}-item`"
           :is-check-item="true"
           :is-checked="isAttributeChecked($options.noAttributeId)"
           @click="updateAttribute($options.noAttributeId)"
@@ -403,7 +398,7 @@ export default {
               :key="attrItem.id"
               :is-check-item="true"
               :is-checked="isAttributeChecked(attrItem.id)"
-              :data-testid="`${issuableAttribute}-items`"
+              :data-testid="`${formatIssuableAttribute.kebab}-items`"
               @click="updateAttribute(attrItem.id)"
             >
               {{ attrItem.title }}

@@ -6,6 +6,7 @@ module QA
       module WebIDE
         class Edit < Page::Base
           prepend Page::Component::WebIDE::Alert
+          prepend Page::Component::WebIDE::WebTerminalPanel
           include Page::Component::DropdownFilter
 
           view 'app/assets/javascripts/ide/components/activity_bar.vue' do
@@ -31,7 +32,7 @@ module QA
             element :file_template_dropdown
           end
 
-          view 'app/assets/javascripts/ide/components/file_templates/dropdown.vue' do
+          view 'app/assets/javascripts/ide/components/file_templates/bar.vue' do
             element :dropdown_filter_input
           end
 
@@ -67,7 +68,7 @@ module QA
             element :delete_button
           end
 
-          view 'app/views/shared/_confirm_fork_modal.html.haml' do
+          view 'app/assets/javascripts/vue_shared/components/confirm_fork_modal.vue' do
             element :fork_project_button
             element :confirm_fork_modal
           end
@@ -330,5 +331,3 @@ module QA
     end
   end
 end
-
-QA::Page::Project::WebIDE::Edit.prepend_mod_with('Page::Component::WebIDE::WebTerminalPanel', namespace: QA)

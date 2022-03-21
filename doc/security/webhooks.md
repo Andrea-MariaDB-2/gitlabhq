@@ -1,6 +1,6 @@
 ---
-stage: none
-group: unassigned
+stage: Manage
+group: Authentication and Authorization
 info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
 type: concepts, reference, howto
 ---
@@ -26,11 +26,11 @@ sent.
 
 Webhook requests are made by the GitLab server itself and use a single
 (optional) secret token per hook for authorization (instead of a user or
-repository-specific token). As a result, these may have broader access than
-intended to everything running on the server hosting the webhook (which
-may include the GitLab server or API itself, e.g., `http://localhost:123`).
+repository-specific token). As a result, these requests may have broader access than
+intended, including access to everything running on the server hosting the webhook. This
+may include the GitLab server or API itself (for example, `http://localhost:123`).
 Depending on the called webhook, this may also result in network access
-to other servers within that webhook server's local network (e.g.,
+to other servers within that webhook server's local network (for example,
 `http://192.168.1.12:345`), even if these services are otherwise protected
 and inaccessible from the outside world.
 
@@ -47,7 +47,7 @@ to `127.0.0.1`, `::1` and `0.0.0.0`, as well as IPv4 `10.0.0.0/8`, `172.16.0.0/1
 This behavior can be overridden:
 
 1. On the top bar, select **Menu > Admin**.
-1. In the left sidebar, select **Settings > Network**.
+1. On the left sidebar, select **Settings > Network**.
 1. Expand the **Outbound requests** section:
    ![Outbound requests admin settings](img/outbound_requests_section_v12_2.png)
 1. Select **Allow requests to the local network from web hooks and services**.
@@ -66,7 +66,7 @@ and *webhooks* even when local requests are not allowed by adding them to the
 allowlist:
 
 1. On the top bar, select **Menu > Admin**.
-1. In the left sidebar, select **Settings > Network** (`/admin/application_settings/network`)
+1. On the left sidebar, select **Settings > Network** (`/admin/application_settings/network`)
    and expand **Outbound requests**:
 
    ![Outbound local requests allowlist](img/allowlist_v13_0.png)
@@ -74,7 +74,8 @@ allowlist:
 The allowed entries can be separated by semicolons, commas or whitespaces
 (including newlines) and be in different formats like hostnames, IP addresses and/or
 IP ranges. IPv6 is supported. Hostnames that contain Unicode characters should
-use IDNA encoding.
+use [Internationalized Domain Names in Applications](https://www.icann.org/resources/pages/glossary-2014-02-04-en#i)
+(IDNA) encoding.
 
 The allowlist can hold a maximum of 1000 entries. Each entry can be a maximum of
 255 characters.

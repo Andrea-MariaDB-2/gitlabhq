@@ -20,14 +20,14 @@
       %span.legend-box.legend-box-9
       %span.right-label Older
 
-    .table-responsive.file-content.blame.code.js-syntax-highlight
+    .table-responsive.file-content.blame.code{ class: user_color_scheme }
       %table
         - current_line = 1
         - @blame.groups.each do |blame_group|
           - commit_data = @blame.commit_data(blame_group[:commit])
           - line_count = blame_group[:lines].count
 
-          %tr
+          %tr{ style: intrinsic_row_css(line_count) }
             %td.blame-commit{ class: commit_data.age_map_class }
               .commit
                 = commit_data.author_avatar

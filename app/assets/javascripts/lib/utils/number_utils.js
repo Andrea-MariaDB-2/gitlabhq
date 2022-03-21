@@ -1,5 +1,5 @@
 import { sprintf, __ } from '~/locale';
-import { BYTES_IN_KIB } from './constants';
+import { BYTES_IN_KIB, THOUSAND } from './constants';
 
 /**
  * Function that allows a number with an X amount of decimals
@@ -69,21 +69,43 @@ export function bytesToGiB(number) {
  * representation (e.g., giving it 1500 yields 1.5 KB).
  *
  * @param {Number} size
+ * @param {Number} digits - The number of digits to appear after the decimal point
  * @returns {String}
  */
-export function numberToHumanSize(size) {
+export function numberToHumanSize(size, digits = 2) {
   const abs = Math.abs(size);
 
   if (abs < BYTES_IN_KIB) {
     return sprintf(__('%{size} bytes'), { size });
   } else if (abs < BYTES_IN_KIB ** 2) {
-    return sprintf(__('%{size} KiB'), { size: bytesToKiB(size).toFixed(2) });
+    return sprintf(__('%{size} KiB'), { size: bytesToKiB(size).toFixed(digits) });
   } else if (abs < BYTES_IN_KIB ** 3) {
-    return sprintf(__('%{size} MiB'), { size: bytesToMiB(size).toFixed(2) });
+    return sprintf(__('%{size} MiB'), { size: bytesToMiB(size).toFixed(digits) });
   }
-  return sprintf(__('%{size} GiB'), { size: bytesToGiB(size).toFixed(2) });
+  return sprintf(__('%{size} GiB'), { size: bytesToGiB(size).toFixed(digits) });
 }
 
+/**
+ * Converts a number to kilos or megas.
+ *
+ * For example:
+ * - 123 becomes 123
+ * - 123456 becomes 123.4k
+ * - 123456789 becomes 123.4m
+ *
+ * @param number Number to format
+ * @param digits The number of digits to appear after the decimal point
+ * @return {string} Formatted number
+ */
+export function numberToMetricPrefix(number, digits = 1) {
+  if (number < THOUSAND) {
+    return number.toString();
+  }
+  if (number < THOUSAND ** 2) {
+    return `${(number / THOUSAND).toFixed(digits)}k`;
+  }
+  return `${(number / THOUSAND ** 2).toFixed(digits)}m`;
+}
 /**
  * A simple method that returns the value of a + b
  * It seems unessesary, but when combined with a reducer it

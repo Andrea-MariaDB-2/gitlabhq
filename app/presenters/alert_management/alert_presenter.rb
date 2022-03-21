@@ -2,9 +2,10 @@
 
 module AlertManagement
   class AlertPresenter < Gitlab::View::Presenter::Delegated
-    include Gitlab::Utils::StrongMemoize
     include IncidentManagement::Settings
-    include ActionView::Helpers::UrlHelper
+
+    presents ::AlertManagement::Alert
+    delegator_override_with Gitlab::Utils::StrongMemoize # This module inclusion is expected. See https://gitlab.com/gitlab-org/gitlab/-/issues/352884.
 
     MARKDOWN_LINE_BREAK = "  \n"
     HORIZONTAL_LINE = "\n\n---\n\n"
@@ -30,6 +31,7 @@ module AlertManagement
       started_at&.strftime('%d %B %Y, %-l:%M%p (%Z)')
     end
 
+    delegator_override :details_url
     def details_url
       details_project_alert_management_url(project, alert.iid)
     end
@@ -65,6 +67,7 @@ module AlertManagement
     private
 
     attr_reader :alert, :project
+
     delegate :alert_markdown, :full_query, to: :parsed_payload
 
     def issue_summary_markdown

@@ -268,31 +268,69 @@ RSpec.describe Deployment do
       end
     end
 
-    describe 'synching status to Jira' do
-      let(:deployment) { create(:deployment) }
+    context 'when deployment is blocked' do
+      let(:deployment) { create(:deployment, :created) }
 
+      it 'has correct status' do
+        deployment.block!
+
+        expect(deployment).to be_blocked
+        expect(deployment.finished_at).to be_nil
+      end
+
+      it 'does not execute Deployments::LinkMergeRequestWorker asynchronously' do
+        expect(Deployments::LinkMergeRequestWorker).not_to receive(:perform_async)
+
+        deployment.block!
+      end
+
+      it 'does not execute Deployments::HooksWorker' do
+        expect(Deployments::HooksWorker).not_to receive(:perform_async)
+
+        deployment.block!
+      end
+    end
+
+    describe 'synching status to Jira' do
+      let_it_be(:project) { create(:project, :repository) }
+
+      let(:deployment) { create(:deployment, project: project) }
       let(:worker) { ::JiraConnect::SyncDeploymentsWorker }
 
-      it 'calls the worker on creation' do
-        expect(worker).to receive(:perform_async).with(Integer)
+      context 'when Jira Connect subscription does not exist' do
+        it 'does not call the worker' do
+          expect(worker).not_to receive(:perform_async)
 
-        deployment
+          deployment
+        end
       end
 
-      it 'does not call the worker for skipped deployments' do
-        expect(deployment).to be_present # warm-up, ignore the creation trigger
+      context 'when Jira Connect subscription exists' do
+        before_all do
+          create(:jira_connect_subscription, namespace: project.namespace)
+        end
 
-        expect(worker).not_to receive(:perform_async)
+        it 'calls the worker on creation' do
+          expect(worker).to receive(:perform_async).with(Integer)
 
-        deployment.skip!
-      end
+          deployment
+        end
 
-      %i[run! succeed! drop! cancel!].each do |event|
-        context "when we call pipeline.#{event}" do
-          it 'triggers a Jira synch worker' do
-            expect(worker).to receive(:perform_async).with(deployment.id)
+        it 'does not call the worker for skipped deployments' do
+          expect(deployment).to be_present # warm-up, ignore the creation trigger
 
-            deployment.send(event)
+          expect(worker).not_to receive(:perform_async)
+
+          deployment.skip!
+        end
+
+        %i[run! succeed! drop! cancel!].each do |event|
+          context "when we call pipeline.#{event}" do
+            it 'triggers a Jira synch worker' do
+              expect(worker).to receive(:perform_async).with(deployment.id)
+
+              deployment.send(event)
+            end
           end
         end
       end
@@ -331,38 +369,6 @@ RSpec.describe Deployment do
     end
   end
 
-  describe '#finished_at' do
-    subject { deployment.finished_at }
-
-    context 'when deployment status is created' do
-      let(:deployment) { create(:deployment) }
-
-      it { is_expected.to be_nil }
-    end
-
-    context 'when deployment status is success' do
-      let(:deployment) { create(:deployment, :success) }
-
-      it { is_expected.to eq(deployment.read_attribute(:finished_at)) }
-    end
-
-    context 'when deployment status is success' do
-      let(:deployment) { create(:deployment, :success, finished_at: nil) }
-
-      before do
-        deployment.update_column(:finished_at, nil)
-      end
-
-      it { is_expected.to eq(deployment.read_attribute(:created_at)) }
-    end
-
-    context 'when deployment status is running' do
-      let(:deployment) { create(:deployment, :running) }
-
-      it { is_expected.to be_nil }
-    end
-  end
-
   describe '#deployed_at' do
     subject { deployment.deployed_at }
 
@@ -382,6 +388,43 @@ RSpec.describe Deployment do
       let(:deployment) { create(:deployment, :running) }
 
       it { is_expected.to be_nil }
+    end
+  end
+
+  describe '.archivables_in' do
+    subject { described_class.archivables_in(project, limit: limit) }
+
+    let_it_be(:project) { create(:project, :repository) }
+    let_it_be(:deployment_1) { create(:deployment, project: project) }
+    let_it_be(:deployment_2) { create(:deployment, project: project) }
+    let_it_be(:deployment_3) { create(:deployment, project: project) }
+
+    let(:limit) { 100 }
+
+    context 'when there are no archivable deployments in the project' do
+      it 'returns nothing' do
+        expect(subject).to be_empty
+      end
+    end
+
+    context 'when there are archivable deployments in the project' do
+      before do
+        stub_const("::Deployment::ARCHIVABLE_OFFSET", 1)
+      end
+
+      it 'returns all archivable deployments' do
+        expect(subject.count).to eq(2)
+        expect(subject).to contain_exactly(deployment_1, deployment_2)
+      end
+
+      context 'with limit' do
+        let(:limit) { 1 }
+
+        it 'takes the limit into account' do
+          expect(subject.count).to eq(1)
+          expect(subject.take).to be_in([deployment_1, deployment_2])
+        end
+      end
     end
   end
 
@@ -411,11 +454,12 @@ RSpec.describe Deployment do
       subject { described_class.active }
 
       it 'retrieves the active deployments' do
-        deployment1 = create(:deployment, status: :created )
-        deployment2 = create(:deployment, status: :running )
-        create(:deployment, status: :failed )
-        create(:deployment, status: :canceled )
+        deployment1 = create(:deployment, status: :created)
+        deployment2 = create(:deployment, status: :running)
+        create(:deployment, status: :failed)
+        create(:deployment, status: :canceled)
         create(:deployment, status: :skipped)
+        create(:deployment, status: :blocked)
 
         is_expected.to contain_exactly(deployment1, deployment2)
       end
@@ -456,15 +500,14 @@ RSpec.describe Deployment do
       end
     end
 
-    describe 'with_deployable' do
-      subject { described_class.with_deployable }
+    describe '.ordered' do
+      let!(:deployment1) { create(:deployment, status: :running) }
+      let!(:deployment2) { create(:deployment, status: :success, finished_at: Time.current) }
+      let!(:deployment3) { create(:deployment, status: :canceled, finished_at: 1.day.ago) }
+      let!(:deployment4) { create(:deployment, status: :success, finished_at: 2.days.ago) }
 
-      it 'retrieves deployments with deployable builds' do
-        with_deployable = create(:deployment)
-        create(:deployment, deployable: nil)
-        create(:deployment, deployable_type: 'CommitStatus', deployable_id: non_existing_record_id)
-
-        is_expected.to contain_exactly(with_deployable)
+      it 'sorts by finished at' do
+        expect(described_class.ordered).to eq([deployment1, deployment2, deployment3, deployment4])
       end
     end
 
@@ -476,9 +519,25 @@ RSpec.describe Deployment do
         deployment2 = create(:deployment, status: :success)
         deployment3 = create(:deployment, status: :failed)
         deployment4 = create(:deployment, status: :canceled)
+        deployment5 = create(:deployment, status: :blocked)
         create(:deployment, status: :skipped)
 
-        is_expected.to contain_exactly(deployment1, deployment2, deployment3, deployment4)
+        is_expected.to contain_exactly(deployment1, deployment2, deployment3, deployment4, deployment5)
+      end
+    end
+
+    describe 'upcoming' do
+      subject { described_class.upcoming }
+
+      it 'retrieves the upcoming deployments' do
+        deployment1 = create(:deployment, status: :running)
+        deployment2 = create(:deployment, status: :blocked)
+        create(:deployment, status: :success)
+        create(:deployment, status: :failed)
+        create(:deployment, status: :canceled)
+        create(:deployment, status: :skipped)
+
+        is_expected.to contain_exactly(deployment1, deployment2)
       end
     end
   end
@@ -524,7 +583,7 @@ RSpec.describe Deployment do
       it 'returns false' do
         commit = project.commit('feature')
 
-        expect(deployment.includes_commit?(commit)).to be false
+        expect(deployment.includes_commit?(commit.id)).to be false
       end
     end
 
@@ -532,7 +591,7 @@ RSpec.describe Deployment do
       it 'returns true' do
         commit = project.commit
 
-        expect(deployment.includes_commit?(commit)).to be true
+        expect(deployment.includes_commit?(commit.id)).to be true
       end
     end
 
@@ -541,7 +600,7 @@ RSpec.describe Deployment do
         deployment.update!(sha: Gitlab::Git::BLANK_SHA)
         commit = project.commit
 
-        expect(deployment.includes_commit?(commit)).to be false
+        expect(deployment.includes_commit?(commit.id)).to be false
       end
     end
   end
@@ -610,6 +669,26 @@ RSpec.describe Deployment do
     it 'raises when no deployment is found' do
       expect { described_class.find_successful_deployment!(-1) }
         .to raise_error(ActiveRecord::RecordNotFound)
+    end
+  end
+
+  describe '.builds' do
+    let!(:deployment1) { create(:deployment) }
+    let!(:deployment2) { create(:deployment) }
+    let!(:deployment3) { create(:deployment) }
+
+    subject { described_class.builds }
+
+    it 'retrieves builds for the deployments' do
+      is_expected.to match_array(
+        [deployment1.deployable, deployment2.deployable, deployment3.deployable])
+    end
+
+    it 'does not fetch the null deployable_ids' do
+      deployment3.update!(deployable_id: nil, deployable_type: nil)
+
+      is_expected.to match_array(
+        [deployment1.deployable, deployment2.deployable])
     end
   end
 
@@ -755,9 +834,10 @@ RSpec.describe Deployment do
     it 'schedules workers when finishing a deploy' do
       expect(Deployments::UpdateEnvironmentWorker).to receive(:perform_async)
       expect(Deployments::LinkMergeRequestWorker).to receive(:perform_async)
+      expect(Deployments::ArchiveInProjectWorker).to receive(:perform_async)
       expect(Deployments::HooksWorker).to receive(:perform_async)
 
-      deploy.update_status('success')
+      expect(deploy.update_status('success')).to eq(true)
     end
 
     it 'updates finished_at when transitioning to a finished status' do
@@ -765,6 +845,180 @@ RSpec.describe Deployment do
         deploy.update_status('success')
 
         expect(deploy.read_attribute(:finished_at)).to eq(Time.current)
+      end
+    end
+
+    it 'tracks an exception if an invalid status transition is detected' do
+      expect(Gitlab::ErrorTracking)
+        .to receive(:track_exception)
+        .with(instance_of(described_class::StatusUpdateError), deployment_id: deploy.id)
+
+      expect(deploy.update_status('running')).to eq(false)
+    end
+
+    it 'tracks an exception if an invalid argument' do
+      expect(Gitlab::ErrorTracking)
+        .to receive(:track_exception)
+        .with(instance_of(described_class::StatusUpdateError), deployment_id: deploy.id)
+
+      expect(deploy.update_status('created')).to eq(false)
+    end
+
+    context 'mapping status to event' do
+      using RSpec::Parameterized::TableSyntax
+
+      where(:status, :method) do
+        'running'  | :run!
+        'success'  | :succeed!
+        'failed'   | :drop!
+        'canceled' | :cancel!
+        'skipped'  | :skip!
+        'blocked'  | :block!
+      end
+
+      with_them do
+        it 'calls the correct method for the given status' do
+          expect(deploy).to receive(method)
+
+          deploy.update_status(status)
+        end
+      end
+    end
+  end
+
+  describe '#sync_status_with' do
+    subject { deployment.sync_status_with(ci_build) }
+
+    let_it_be(:project) { create(:project, :repository) }
+
+    let(:deployment) { create(:deployment, project: project, status: deployment_status) }
+    let(:ci_build) { create(:ci_build, project: project, status: build_status) }
+
+    shared_examples_for 'synchronizing deployment' do
+      it 'changes deployment status' do
+        expect(Gitlab::ErrorTracking).not_to receive(:track_exception)
+
+        is_expected.to eq(true)
+
+        expect(deployment.status).to eq(build_status.to_s)
+        expect(deployment.errors).to be_empty
+      end
+    end
+
+    shared_examples_for 'gracefully handling error' do
+      it 'tracks an exception' do
+        expect(Gitlab::ErrorTracking).to receive(:track_exception).with(
+          instance_of(described_class::StatusSyncError),
+          deployment_id: deployment.id,
+          build_id: ci_build.id)
+
+        is_expected.to eq(false)
+
+        expect(deployment.status).to eq(deployment_status.to_s)
+        expect(deployment.errors.full_messages).to include(error_message)
+      end
+    end
+
+    shared_examples_for 'ignoring build' do
+      it 'does not change deployment status' do
+        expect(Gitlab::ErrorTracking).not_to receive(:track_exception)
+
+        is_expected.to eq(false)
+
+        expect(deployment.status).to eq(deployment_status.to_s)
+        expect(deployment.errors).to be_empty
+      end
+    end
+
+    context 'with created deployment' do
+      let(:deployment_status) { :created }
+
+      context 'with created build' do
+        let(:build_status) { :created }
+
+        it_behaves_like 'ignoring build'
+      end
+
+      context 'with running build' do
+        let(:build_status) { :running }
+
+        it_behaves_like 'synchronizing deployment'
+      end
+
+      context 'with finished build' do
+        let(:build_status) { :success }
+
+        it_behaves_like 'synchronizing deployment'
+      end
+
+      context 'with unrelated build' do
+        let(:build_status) { :waiting_for_resource }
+
+        it_behaves_like 'ignoring build'
+      end
+    end
+
+    context 'with running deployment' do
+      let(:deployment_status) { :running }
+
+      context 'with created build' do
+        let(:build_status) { :created }
+
+        it_behaves_like 'ignoring build'
+      end
+
+      context 'with running build' do
+        let(:build_status) { :running }
+
+        it_behaves_like 'ignoring build'
+      end
+
+      context 'with finished build' do
+        let(:build_status) { :success }
+
+        it_behaves_like 'synchronizing deployment'
+      end
+
+      context 'with unrelated build' do
+        let(:build_status) { :waiting_for_resource }
+
+        it_behaves_like 'ignoring build'
+      end
+    end
+
+    context 'with finished deployment' do
+      let(:deployment_status) { :success }
+
+      context 'with created build' do
+        let(:build_status) { :created }
+
+        it_behaves_like 'ignoring build'
+      end
+
+      context 'with running build' do
+        let(:build_status) { :running }
+
+        it_behaves_like 'gracefully handling error' do
+          let(:error_message) { %Q{Status cannot transition via \"run\"} }
+        end
+      end
+
+      context 'with finished build' do
+        let(:build_status) { :success }
+
+        it_behaves_like 'ignoring build'
+      end
+
+      context 'with failed build' do
+        let(:build_status) { :failed }
+
+        it_behaves_like 'synchronizing deployment'
+      end
+
+      context 'with unrelated build' do
+        let(:build_status) { :waiting_for_resource }
+
+        it_behaves_like 'ignoring build'
       end
     end
   end

@@ -9,6 +9,7 @@ itself: # project
     - external_webhook_token
     - has_external_issue_tracker
     - has_external_wiki
+    - hidden
     - import_source
     - import_type
     - import_url
@@ -32,6 +33,7 @@ itself: # project
     - pages_https_only
     - pending_delete
     - pool_repository_id
+    - project_namespace_id
     - pull_mirror_available_overridden
     - pull_mirror_branch_prefix
     - remote_mirror_available_overridden
@@ -120,8 +122,6 @@ project_feature:
     - created_at
     - metrics_dashboard_access_level
     - project_id
-    - requirements_access_level
-    - security_and_compliance_access_level
     - updated_at
   computed_attributes:
     - issues_enabled
@@ -136,8 +136,11 @@ project_setting:
   unexposed_attributes:
     - created_at
     - has_confluence
+    - has_shimo
     - has_vulnerabilities
+    - legacy_open_source_license_available
     - prevent_merge_without_jira_issue
+    - warn_about_potentially_unwanted_characters
     - previous_default_branch
     - project_id
     - push_rule_id

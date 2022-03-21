@@ -5,7 +5,7 @@ require 'spec_helper'
 RSpec.describe "Admin::Projects" do
   include Spec::Support::Helpers::Features::MembersHelpers
   include Spec::Support::Helpers::Features::InviteMembersModalHelper
-  include Select2Helper
+  include Spec::Support::Helpers::ModalHelpers
 
   let(:user) { create :user }
   let(:project) { create(:project) }
@@ -25,7 +25,7 @@ RSpec.describe "Admin::Projects" do
     end
 
     it "is ok" do
-      expect(current_path).to eq(admin_projects_path)
+      expect(page).to have_current_path(admin_projects_path, ignore_query: true)
     end
 
     it 'renders projects list without archived project' do
@@ -39,7 +39,7 @@ RSpec.describe "Admin::Projects" do
 
       expect(page).to have_content(project.name)
       expect(page).to have_content(archived_project.name)
-      expect(page).to have_xpath("//span[@class='badge badge-warning']", text: 'archived')
+      expect(page).to have_xpath("//span[@class='gl-badge badge badge-pill badge-warning md']", text: 'archived')
     end
 
     it 'renders only archived projects', :js do
@@ -62,7 +62,7 @@ RSpec.describe "Admin::Projects" do
     end
 
     it "has project info" do
-      expect(current_path).to eq admin_project_path(project)
+      expect(page).to have_current_path admin_project_path(project), ignore_query: true
       expect(page).to have_content(project.path)
       expect(page).to have_content(project.name)
       expect(page).to have_content(project.full_name)
@@ -96,7 +96,7 @@ RSpec.describe "Admin::Projects" do
       visit admin_project_path(project)
 
       click_button 'Search for Namespace'
-      click_link 'group: web'
+      click_button 'group: web'
       click_button 'Transfer'
 
       expect(page).to have_content("Web / #{project.name}")
@@ -116,18 +116,6 @@ RSpec.describe "Admin::Projects" do
 
       expect(find_member_row(current_user)).to have_content('Developer')
     end
-
-    context 'with the invite_members_group_modal feature flag disabled' do
-      it 'adds admin to the project as developer' do
-        stub_feature_flags(invite_members_group_modal: false)
-
-        visit project_project_members_path(project)
-
-        add_member_using_form(current_user.id, role: 'Developer')
-
-        expect(find_member_row(current_user)).to have_content('Developer')
-      end
-    end
   end
 
   describe 'admin removes themselves from the project', :js do
@@ -145,26 +133,11 @@ RSpec.describe "Admin::Projects" do
         click_button 'Leave'
       end
 
-      page.within('[role="dialog"]') do
+      within_modal do
         click_button('Leave')
       end
 
-      expect(current_path).to match dashboard_projects_path
-    end
-  end
-
-  # temporary method for the form until the :invite_members_group_modal feature flag is
-  # enabled: https://gitlab.com/gitlab-org/gitlab/-/issues/247208
-  def add_member_using_form(id, role: 'Developer')
-    page.within '.invite-users-form' do
-      select2(id, from: '#user_ids', multiple: true)
-
-      fill_in 'expires_at', with: 5.days.from_now.to_date
-      find_field('expires_at').native.send_keys :enter
-
-      select(role, from: "access_level")
-
-      click_on 'Invite'
+      expect(page).to have_current_path(dashboard_projects_path, ignore_query: true, url: false)
     end
   end
 end

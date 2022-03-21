@@ -9,6 +9,7 @@ module QA
         include Page::Component::Breadcrumbs
         include Page::Project::SubMenus::Settings
         include Page::File::Shared::CommitMessage
+        prepend Mobile::Page::Project::Show if Runtime::Env.mobile_layout?
 
         view 'app/assets/javascripts/repository/components/preview/index.vue' do
           element :blob_viewer_content
@@ -38,14 +39,12 @@ module QA
           element :forked_from_link
           element :project_name_content
           element :project_id_content
+          element :project_badges_content
+          element :badge_image_link
         end
 
         view 'app/views/projects/_files.html.haml' do
           element :tree_holder, '.tree-holder' # rubocop:disable QA/ElementWithPattern
-        end
-
-        view 'app/views/projects/buttons/_dropdown.html.haml' do
-          element :create_new_dropdown
         end
 
         view 'app/views/projects/buttons/_fork.html.haml' do
@@ -117,11 +116,13 @@ module QA
         end
 
         def go_to_new_issue
-          click_element :new_menu_toggle
+          click_element(:new_menu_toggle)
           click_element(:new_issue_link)
         end
 
         def has_file?(name)
+          return false unless has_element?(:file_tree_table)
+
           within_element(:file_tree_table) do
             has_element?(:file_name_link, text: name)
           end
@@ -153,6 +154,10 @@ module QA
           click_element(:web_ide_button)
         end
 
+        def open_web_ide_via_shortcut
+          page.driver.send_keys('.')
+        end
+
         def has_edit_fork_button?
           has_element?(:web_ide_button, text: 'Edit fork in Web IDE')
         end
@@ -176,6 +181,12 @@ module QA
         def wait_for_import
           wait_until(reload: true) do
             has_css?('.tree-holder')
+          end
+        end
+
+        def has_visible_badge_image_link?(link_url)
+          within_element(:project_badges_content) do
+            has_element?(:badge_image_link, link_url: link_url)
           end
         end
       end

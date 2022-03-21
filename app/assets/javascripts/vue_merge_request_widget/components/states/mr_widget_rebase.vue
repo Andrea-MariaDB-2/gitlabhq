@@ -1,9 +1,7 @@
 <script>
-/* eslint-disable vue/no-v-html */
 import { GlButton, GlSkeletonLoader } from '@gitlab/ui';
-import { escape } from 'lodash';
 import createFlash from '~/flash';
-import { __, sprintf } from '~/locale';
+import { __ } from '~/locale';
 import glFeatureFlagMixin from '~/vue_shared/mixins/gl_feature_flags_mixin';
 import simplePoll from '../../../lib/utils/simple_poll';
 import eventHub from '../../event_hub';
@@ -27,8 +25,8 @@ export default {
   },
   components: {
     statusIcon,
-    GlButton,
     GlSkeletonLoader,
+    GlButton,
   },
   mixins: [glFeatureFlagMixin(), mergeRequestQueryVariablesMixin],
   props: {
@@ -51,6 +49,9 @@ export default {
   computed: {
     isLoading() {
       return this.glFeatures.mergeRequestWidgetGraphql && this.$apollo.queries.state.loading;
+    },
+    showRebaseWithoutCi() {
+      return this.glFeatures?.rebaseWithoutCiUi;
     },
     rebaseInProgress() {
       if (this.glFeatures.mergeRequestWidgetGraphql) {
@@ -86,22 +87,16 @@ export default {
       return ['failed', 'loading'].includes(this.status);
     },
     fastForwardMergeText() {
-      return sprintf(
-        __('Merge blocked: the source branch must be rebased onto the target branch.'),
-        {
-          targetBranch: `<span class="label-branch">${escape(this.targetBranch)}</span>`,
-        },
-        false,
-      );
+      return __('Merge blocked: the source branch must be rebased onto the target branch.');
     },
   },
   methods: {
-    rebase() {
+    rebase({ skipCi = false } = {}) {
       this.isMakingRequest = true;
       this.rebasingError = null;
 
       this.service
-        .rebase()
+        .rebase({ skipCi })
         .then(() => {
           simplePoll(this.checkRebaseStatus);
         })
@@ -117,6 +112,9 @@ export default {
           }
         });
     },
+    rebaseWithoutCi() {
+      return this.rebase({ skipCi: true });
+    },
     checkRebaseStatus(continuePolling, stopPolling) {
       this.service
         .poll()
@@ -129,9 +127,6 @@ export default {
 
             if (res.merge_error && res.merge_error.length) {
               this.rebasingError = res.merge_error;
-              createFlash({
-                message: __('Something went wrong. Please try again.'),
-              });
             }
 
             eventHub.$emit('MRWidgetRebaseSuccess');
@@ -163,30 +158,45 @@ export default {
       <div class="rebase-state-find-class-convention media media-body space-children">
         <span
           v-if="rebaseInProgress || isMakingRequest"
+          :class="{ 'gl-ml-0! gl-text-body!': glFeatures.restructuredMrWidget }"
           class="gl-font-weight-bold"
           data-testid="rebase-message"
           >{{ __('Rebase in progress') }}</span
         >
         <span
           v-if="!rebaseInProgress && !canPushToSourceBranch"
+          :class="{ 'gl-text-body!': glFeatures.restructuredMrWidget }"
           class="gl-font-weight-bold gl-ml-0!"
           data-testid="rebase-message"
-          v-html="fastForwardMergeText"
-        ></span>
+          >{{ fastForwardMergeText }}</span
+        >
         <div
           v-if="!rebaseInProgress && canPushToSourceBranch && !isMakingRequest"
-          class="accept-merge-holder clearfix js-toggle-container accept-action media space-children"
+          class="accept-merge-holder clearfix js-toggle-container accept-action media space-children gl-align-items-center"
         >
           <gl-button
+            v-if="!glFeatures.restructuredMrWidget"
             :loading="isMakingRequest"
             variant="confirm"
             data-qa-selector="mr_rebase_button"
+            data-testid="standard-rebase-button"
             @click="rebase"
           >
             {{ __('Rebase') }}
           </gl-button>
+          <gl-button
+            v-if="!glFeatures.restructuredMrWidget && showRebaseWithoutCi"
+            :loading="isMakingRequest"
+            variant="confirm"
+            category="secondary"
+            data-testid="rebase-without-ci-button"
+            @click="rebaseWithoutCi"
+          >
+            {{ __('Rebase without pipeline') }}
+          </gl-button>
           <span
             v-if="!rebasingError"
+            :class="{ 'gl-ml-0! gl-text-body!': glFeatures.restructuredMrWidget }"
             class="gl-font-weight-bold"
             data-testid="rebase-message"
             data-qa-selector="no_fast_forward_message_content"
@@ -197,6 +207,17 @@ export default {
           <span v-else class="gl-font-weight-bold danger" data-testid="rebase-message">{{
             rebasingError
           }}</span>
+          <gl-button
+            v-if="glFeatures.restructuredMrWidget"
+            :loading="isMakingRequest"
+            variant="confirm"
+            size="small"
+            data-qa-selector="mr_rebase_button"
+            class="gl-ml-3!"
+            @click="rebase"
+          >
+            {{ __('Rebase') }}
+          </gl-button>
         </div>
       </div>
     </template>

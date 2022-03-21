@@ -8,6 +8,7 @@ module Projects
       @current_user = user
       @params = params.dup
       @skip_wiki = @params.delete(:skip_wiki)
+      @initialize_with_sast = Gitlab::Utils.to_boolean(@params.delete(:initialize_with_sast))
       @initialize_with_readme = Gitlab::Utils.to_boolean(@params.delete(:initialize_with_readme))
       @import_data = @params.delete(:import_data)
       @relations_block = @params.delete(:relations_block)
@@ -44,7 +45,7 @@ module Projects
       if namespace_id
         # Find matching namespace and check if it allowed
         # for current user if namespace_id passed.
-        unless current_user.can?(:create_projects, project_namespace)
+        unless current_user.can?(:create_projects, parent_namespace)
           @project.namespace_id = nil
           deny_namespace
           return @project
@@ -88,12 +89,16 @@ module Projects
     end
 
     def after_create_actions
-      log_info("#{@project.owner.name} created a new project \"#{@project.full_name}\"")
+      log_info("#{current_user.name} created a new project \"#{@project.full_name}\"")
 
-      # Skip writing the config for project imports/forks because it
-      # will always fail since the Git directory doesn't exist until
-      # a background job creates it (see Project#add_import_job).
-      @project.set_full_path unless @project.import?
+      if @project.import?
+        experiment(:combined_registration, user: current_user).track(:import_project)
+      else
+        # Skip writing the config for project imports/forks because it
+        # will always fail since the Git directory doesn't exist until
+        # a background job creates it (see Project#add_import_job).
+        @project.set_full_path
+      end
 
       unless @project.gitlab_project_import?
         @project.create_wiki unless skip_wiki?
@@ -114,6 +119,7 @@ module Projects
       Projects::PostCreationWorker.perform_async(@project.id)
 
       create_readme if @initialize_with_readme
+      create_sast_commit if @initialize_with_sast
     end
 
     # Add an authorization for the current user authorizations inline
@@ -130,7 +136,7 @@ module Projects
             access_level: group_access_level)
         end
 
-        AuthorizedProjectUpdate::ProjectCreateWorker.perform_async(@project.id)
+        AuthorizedProjectUpdate::ProjectRecalculateWorker.perform_async(@project.id)
         # AuthorizedProjectsWorker uses an exclusive lease per user but
         # specialized workers might have synchronization issues. Until we
         # compare the inconsistency rates of both approaches, we still run
@@ -141,7 +147,7 @@ module Projects
           priority: UserProjectAccessChangedService::LOW_PRIORITY
         )
       else
-        @project.add_maintainer(@project.namespace.owner, current_user: current_user)
+        @project.add_owner(@project.namespace.owner, current_user: current_user)
       end
     end
 
@@ -156,8 +162,12 @@ module Projects
       Files::CreateService.new(@project, current_user, commit_attrs).execute
     end
 
+    def create_sast_commit
+      ::Security::CiConfiguration::SastCreateService.new(@project, current_user, {}, commit_on_default: true).execute
+    end
+
     def readme_content
-      @readme_template.presence || experiment(:new_project_readme_content, namespace: @project.namespace).run_with(@project)
+      @readme_template.presence || ReadmeRendererService.new(@project, current_user).execute
     end
 
     def skip_wiki?
@@ -217,14 +227,14 @@ module Projects
     def extra_attributes_for_measurement
       {
         current_user: current_user&.name,
-        project_full_path: "#{project_namespace&.full_path}/#{@params[:path]}"
+        project_full_path: "#{parent_namespace&.full_path}/#{@params[:path]}"
       }
     end
 
     private
 
-    def project_namespace
-      @project_namespace ||= Namespace.find_by_id(@params[:namespace_id]) || current_user.namespace
+    def parent_namespace
+      @parent_namespace ||= Namespace.find_by_id(@params[:namespace_id]) || current_user.namespace
     end
 
     def create_from_template?

@@ -20,6 +20,10 @@ RSpec.describe RegistrationsController do
   end
 
   describe '#create' do
+    before do
+      allow(::Gitlab::ApplicationRateLimiter).to receive(:throttled?).and_return(false)
+    end
+
     let_it_be(:base_user_params) do
       { first_name: 'first', last_name: 'last', username: 'new_username', email: 'new@user.com', password: 'Any_password' }
     end
@@ -159,12 +163,11 @@ RSpec.describe RegistrationsController do
               let_it_be(:member) { create(:project_member, :invited, invite_email: user_params.dig(:user, :email)) }
 
               let(:originating_member_id) { member.id }
-              let(:extra_session_params) { {} }
               let(:session_params) do
                 {
                   invite_email: user_params.dig(:user, :email),
                   originating_member_id: originating_member_id
-                }.merge extra_session_params
+                }
               end
 
               context 'when member exists from the session key value' do
@@ -191,74 +194,6 @@ RSpec.describe RegistrationsController do
                     action: 'accepted',
                     label: 'invite_email'
                   )
-                end
-              end
-
-              context 'with the invite_email_preview_text experiment', :experiment do
-                let(:extra_session_params) { { invite_email_experiment_name: 'invite_email_preview_text' } }
-
-                context 'when member and invite_email_experiment_name exists from the session key value' do
-                  it 'tracks the invite acceptance' do
-                    expect(experiment(:invite_email_preview_text)).to track(:accepted)
-                                                                        .with_context(actor: member)
-                                                                        .on_next_instance
-
-                    subject
-                  end
-                end
-
-                context 'when member does not exist from the session key value' do
-                  let(:originating_member_id) { -1 }
-
-                  it 'does not track invite acceptance' do
-                    expect(experiment(:invite_email_preview_text)).not_to track(:accepted)
-
-                    subject
-                  end
-                end
-
-                context 'when invite_email_experiment_name does not exist from the session key value' do
-                  let(:extra_session_params) { {} }
-
-                  it 'does not track invite acceptance' do
-                    expect(experiment(:invite_email_preview_text)).not_to track(:accepted)
-
-                    subject
-                  end
-                end
-              end
-
-              context 'with the invite_email_preview_text experiment', :experiment do
-                let(:extra_session_params) { { invite_email_experiment_name: 'invite_email_from' } }
-
-                context 'when member and invite_email_experiment_name exists from the session key value' do
-                  it 'tracks the invite acceptance' do
-                    expect(experiment(:invite_email_from)).to track(:accepted)
-                                                                .with_context(actor: member)
-                                                                .on_next_instance
-
-                    subject
-                  end
-                end
-
-                context 'when member does not exist from the session key value' do
-                  let(:originating_member_id) { -1 }
-
-                  it 'does not track invite acceptance' do
-                    expect(experiment(:invite_email_from)).not_to track(:accepted)
-
-                    subject
-                  end
-                end
-
-                context 'when invite_email_experiment_name does not exist from the session key value' do
-                  let(:extra_session_params) { {} }
-
-                  it 'does not track invite acceptance' do
-                    expect(experiment(:invite_email_from)).not_to track(:accepted)
-
-                    subject
-                  end
                 end
               end
             end
@@ -479,6 +414,18 @@ RSpec.describe RegistrationsController do
       end
     end
 
+    context 'when the rate limit has been reached' do
+      it 'returns status 429 Too Many Requests', :aggregate_failures do
+        ip = '1.2.3.4'
+        expect(::Gitlab::ApplicationRateLimiter).to receive(:throttled?).with(:user_sign_up, scope: ip).and_return(true)
+
+        controller.request.env['REMOTE_ADDR'] = ip
+        post(:create, params: user_params, session: session_params)
+
+        expect(response).to have_gitlab_http_status(:too_many_requests)
+      end
+    end
+
     it "logs a 'User Created' message" do
       expect(Gitlab::AppLogger).to receive(:info).with(/\AUser Created: username=new_username email=new@user.com.+\z/).and_call_original
 
@@ -499,16 +446,37 @@ RSpec.describe RegistrationsController do
       expect(User.last.name).to eq("#{base_user_params[:first_name]} #{base_user_params[:last_name]}")
     end
 
-    it 'sets the username and caller_id in the context' do
+    it 'sets the caller_id in the context' do
       expect(controller).to receive(:create).and_wrap_original do |m, *args|
         m.call(*args)
 
         expect(Gitlab::ApplicationContext.current)
-          .to include('meta.user' => base_user_params[:username],
-                      'meta.caller_id' => 'RegistrationsController#create')
+          .to include('meta.caller_id' => 'RegistrationsController#create')
       end
 
       subject
+    end
+
+    describe 'logged_out_marketing_header experiment', :experiment do
+      before do
+        stub_experiments(logged_out_marketing_header: :candidate)
+      end
+
+      it 'tracks signed_up event' do
+        expect(experiment(:logged_out_marketing_header)).to track(:signed_up).on_next_instance
+
+        subject
+      end
+
+      context 'when registration fails' do
+        let_it_be(:user_params) { { user: base_user_params.merge({ username: '' }) } }
+
+        it 'does not track signed_up event' do
+          expect(experiment(:logged_out_marketing_header)).not_to track(:signed_up)
+
+          subject
+        end
+      end
     end
   end
 
@@ -553,7 +521,7 @@ RSpec.describe RegistrationsController do
       end
 
       it 'succeeds if password is confirmed' do
-        post :destroy, params: { password: '12345678' }
+        post :destroy, params: { password: Gitlab::Password.test_default }
 
         expect_success
       end
@@ -594,11 +562,27 @@ RSpec.describe RegistrationsController do
           end
 
           it 'fails' do
-            delete :destroy, params: { password: '12345678' }
+            delete :destroy, params: { password: Gitlab::Password.test_default }
 
             expect_failure(s_('Profiles|You must transfer ownership or delete groups you are an owner of before you can delete your account'))
           end
         end
+      end
+    end
+
+    context 'when user did not accept app terms' do
+      let(:user) { create(:user, accepted_term: nil) }
+
+      before do
+        stub_application_setting(password_authentication_enabled_for_web: false)
+        stub_application_setting(password_authentication_enabled_for_git: false)
+        stub_application_setting(enforce_terms: true)
+      end
+
+      it 'fails with message' do
+        post :destroy, params: { username: user.username }
+
+        expect_failure(s_('Profiles|You must accept the Terms of Service in order to perform this action.'))
       end
     end
 

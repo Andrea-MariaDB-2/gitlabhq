@@ -1,22 +1,49 @@
-/* global List */
-
 import { GlFilteredSearchToken } from '@gitlab/ui';
 import { keyBy } from 'lodash';
-import Vue from 'vue';
-import '~/boards/models/list';
 import { ListType } from '~/boards/constants';
-import boardsStore from '~/boards/stores/boards_store';
 import { __ } from '~/locale';
-import { DEFAULT_MILESTONES_GRAPHQL } from '~/vue_shared/components/filtered_search_bar/constants';
 import AuthorToken from '~/vue_shared/components/filtered_search_bar/tokens/author_token.vue';
+import EmojiToken from '~/vue_shared/components/filtered_search_bar/tokens/emoji_token.vue';
 import LabelToken from '~/vue_shared/components/filtered_search_bar/tokens/label_token.vue';
 import MilestoneToken from '~/vue_shared/components/filtered_search_bar/tokens/milestone_token.vue';
-import WeightToken from '~/vue_shared/components/filtered_search_bar/tokens/weight_token.vue';
+import ReleaseToken from '~/vue_shared/components/filtered_search_bar/tokens/release_token.vue';
+
+export const mockBoard = {
+  milestone: {
+    id: 'gid://gitlab/Milestone/114',
+    title: '14.9',
+  },
+  iteration: {
+    id: 'gid://gitlab/Iteration/124',
+    title: 'Iteration 9',
+  },
+  assignee: {
+    id: 'gid://gitlab/User/1',
+    username: 'admin',
+  },
+  labels: {
+    nodes: [{ id: 'gid://gitlab/Label/32', title: 'Deliverable' }],
+  },
+  weight: 2,
+};
+
+export const mockBoardConfig = {
+  milestoneId: 'gid://gitlab/Milestone/114',
+  milestoneTitle: '14.9',
+  iterationId: 'gid://gitlab/Iteration/124',
+  iterationTitle: 'Iteration 9',
+  assigneeId: 'gid://gitlab/User/1',
+  assigneeUsername: 'admin',
+  labels: [{ id: 'gid://gitlab/Label/32', title: 'Deliverable' }],
+  labelIds: ['gid://gitlab/Label/32'],
+  weight: 2,
+};
 
 export const boardObj = {
   id: 1,
   name: 'test',
   milestone_id: null,
+  labels: [],
 };
 
 export const listObj = {
@@ -24,7 +51,6 @@ export const listObj = {
   position: 0,
   title: 'Test',
   list_type: 'label',
-  weight: 3,
   label: {
     id: 5000,
     title: 'Test',
@@ -34,17 +60,106 @@ export const listObj = {
   },
 };
 
-export const listObjDuplicate = {
-  id: listObj.id,
-  position: 1,
-  title: 'Test',
-  list_type: 'label',
-  weight: 3,
-  label: {
-    id: listObj.label.id,
-    title: 'Test',
-    color: '#ff0000',
-    description: 'testing;',
+function boardGenerator(n) {
+  return new Array(n).fill().map((board, index) => {
+    const id = `${index}`;
+    const name = `board${id}`;
+
+    return {
+      node: {
+        id,
+        name,
+        weight: 0,
+        __typename: 'Board',
+      },
+    };
+  });
+}
+
+export const boards = boardGenerator(20);
+export const recentIssueBoards = boardGenerator(5);
+
+export const mockSmallProjectAllBoardsResponse = {
+  data: {
+    project: {
+      id: 'gid://gitlab/Project/114',
+      boards: { edges: boardGenerator(3) },
+      __typename: 'Project',
+    },
+  },
+};
+
+export const mockEmptyProjectRecentBoardsResponse = {
+  data: {
+    project: {
+      id: 'gid://gitlab/Project/114',
+      recentIssueBoards: { edges: [] },
+      __typename: 'Project',
+    },
+  },
+};
+
+export const mockGroupAllBoardsResponse = {
+  data: {
+    group: {
+      id: 'gid://gitlab/Group/114',
+      boards: { edges: boards },
+      __typename: 'Group',
+    },
+  },
+};
+
+export const mockProjectAllBoardsResponse = {
+  data: {
+    project: {
+      id: 'gid://gitlab/Project/1',
+      boards: { edges: boards },
+      __typename: 'Project',
+    },
+  },
+};
+
+export const mockGroupRecentBoardsResponse = {
+  data: {
+    group: {
+      id: 'gid://gitlab/Group/114',
+      recentIssueBoards: { edges: recentIssueBoards },
+      __typename: 'Group',
+    },
+  },
+};
+
+export const mockProjectRecentBoardsResponse = {
+  data: {
+    project: {
+      id: 'gid://gitlab/Project/1',
+      recentIssueBoards: { edges: recentIssueBoards },
+      __typename: 'Project',
+    },
+  },
+};
+
+export const mockGroupBoardResponse = {
+  data: {
+    workspace: {
+      board: {
+        id: 'gid://gitlab/Board/1',
+        name: 'Development',
+      },
+      __typename: 'Group',
+    },
+  },
+};
+
+export const mockProjectBoardResponse = {
+  data: {
+    workspace: {
+      board: {
+        id: 'gid://gitlab/Board/2',
+        name: 'Development',
+      },
+      __typename: 'Project',
+    },
   },
 };
 
@@ -147,7 +262,6 @@ export const rawIssue = {
   iid: '27',
   dueDate: null,
   timeEstimate: 0,
-  weight: null,
   confidential: false,
   referencePath: 'gitlab-org/test-subgroup/gitlab-test#27',
   path: '/gitlab-org/test-subgroup/gitlab-test/-/issues/27',
@@ -177,7 +291,6 @@ export const mockIssue = {
   title: 'Issue 1',
   dueDate: null,
   timeEstimate: 0,
-  weight: null,
   confidential: false,
   referencePath: `${mockIssueFullPath}#27`,
   path: `/${mockIssueFullPath}/-/issues/27`,
@@ -197,8 +310,7 @@ export const mockIssue = {
 
 export const mockActiveIssue = {
   ...mockIssue,
-  fullId: 'gid://gitlab/Issue/436',
-  id: 436,
+  id: 'gid://gitlab/Issue/436',
   iid: '27',
   subscribed: false,
   emailsDisabled: false,
@@ -210,7 +322,6 @@ export const mockIssue2 = {
   title: 'Issue 2',
   dueDate: null,
   timeEstimate: 0,
-  weight: null,
   confidential: false,
   referencePath: 'gitlab-org/test-subgroup/gitlab-test#28',
   path: '/gitlab-org/test-subgroup/gitlab-test/-/issues/28',
@@ -228,7 +339,6 @@ export const mockIssue3 = {
   referencePath: '#29',
   dueDate: null,
   timeEstimate: 0,
-  weight: null,
   confidential: false,
   path: '/gitlab-org/gitlab-test/-/issues/28',
   assignees,
@@ -243,7 +353,6 @@ export const mockIssue4 = {
   referencePath: '#30',
   dueDate: null,
   timeEstimate: 0,
-  weight: null,
   confidential: false,
   path: '/gitlab-org/gitlab-test/-/issues/28',
   assignees,
@@ -288,20 +397,6 @@ export const BoardsMockData = {
 export const boardsMockInterceptor = (config) => {
   const body = BoardsMockData[config.method.toUpperCase()][config.url];
   return [200, body];
-};
-
-export const setMockEndpoints = (opts = {}) => {
-  const boardsEndpoint = opts.boardsEndpoint || '/test/issue-boards/-/boards.json';
-  const listsEndpoint = opts.listsEndpoint || '/test/-/boards/1/lists';
-  const bulkUpdatePath = opts.bulkUpdatePath || '';
-  const boardId = opts.boardId || '1';
-
-  boardsStore.setEndpoints({
-    boardsEndpoint,
-    listsEndpoint,
-    bulkUpdatePath,
-    boardId,
-  });
 };
 
 export const mockList = {
@@ -355,10 +450,6 @@ export const mockMilestoneList = {
 export const mockLists = [mockList, mockLabelList];
 
 export const mockListsById = keyBy(mockLists, 'id');
-
-export const mockListsWithModel = mockLists.map((listMock) =>
-  Vue.observable(new List({ ...listMock, doNotFetchIssues: true })),
-);
 
 export const mockIssuesByListId = {
   'gid://gitlab/List/1': [mockIssue.id, mockIssue3.id, mockIssue4.id],
@@ -562,11 +653,33 @@ export const mockMoveData = {
   ...mockMoveIssueParams,
 };
 
-export const mockTokens = (fetchLabels, fetchAuthors, fetchMilestones) => [
+export const mockEmojiToken = {
+  type: 'my-reaction',
+  icon: 'thumb-up',
+  title: 'My-Reaction',
+  unique: true,
+  token: EmojiToken,
+  fetchEmojis: expect.any(Function),
+};
+
+export const mockConfidentialToken = {
+  type: 'confidential',
+  icon: 'eye-slash',
+  title: 'Confidential',
+  unique: true,
+  token: GlFilteredSearchToken,
+  operators: [{ value: '=', description: 'is' }],
+  options: [
+    { icon: 'eye-slash', value: 'yes', title: 'Yes' },
+    { icon: 'eye', value: 'no', title: 'No' },
+  ],
+};
+
+export const mockTokens = (fetchLabels, fetchAuthors, fetchMilestones, isSignedIn) => [
   {
     icon: 'user',
     title: __('Assignee'),
-    type: 'assignee_username',
+    type: 'assignee',
     operators: [
       { value: '=', description: 'is' },
       { value: '!=', description: 'is not' },
@@ -579,7 +692,7 @@ export const mockTokens = (fetchLabels, fetchAuthors, fetchMilestones) => [
   {
     icon: 'pencil',
     title: __('Author'),
-    type: 'author_username',
+    type: 'author',
     operators: [
       { value: '=', description: 'is' },
       { value: '!=', description: 'is not' },
@@ -593,7 +706,7 @@ export const mockTokens = (fetchLabels, fetchAuthors, fetchMilestones) => [
   {
     icon: 'labels',
     title: __('Label'),
-    type: 'label_name',
+    type: 'label',
     operators: [
       { value: '=', description: 'is' },
       { value: '!=', description: 'is not' },
@@ -603,21 +716,21 @@ export const mockTokens = (fetchLabels, fetchAuthors, fetchMilestones) => [
     symbol: '~',
     fetchLabels,
   },
+  ...(isSignedIn ? [mockEmojiToken, mockConfidentialToken] : []),
   {
     icon: 'clock',
     title: __('Milestone'),
     symbol: '%',
-    type: 'milestone_title',
+    type: 'milestone',
+    shouldSkipSort: true,
     token: MilestoneToken,
     unique: true,
-    defaultMilestones: DEFAULT_MILESTONES_GRAPHQL,
     fetchMilestones,
   },
   {
     icon: 'issues',
     title: __('Type'),
-    type: 'types',
-    operators: [{ value: '=', description: 'is' }],
+    type: 'type',
     token: GlFilteredSearchToken,
     unique: true,
     options: [
@@ -626,10 +739,61 @@ export const mockTokens = (fetchLabels, fetchAuthors, fetchMilestones) => [
     ],
   },
   {
-    icon: 'weight',
-    title: __('Weight'),
-    type: 'weight',
-    token: WeightToken,
-    unique: true,
+    type: 'release',
+    title: __('Release'),
+    icon: 'rocket',
+    token: ReleaseToken,
+    fetchReleases: expect.any(Function),
   },
 ];
+
+export const mockLabel1 = {
+  id: 'gid://gitlab/GroupLabel/121',
+  title: 'To Do',
+  color: '#F0AD4E',
+  textColor: '#FFFFFF',
+  description: null,
+};
+
+export const mockLabel2 = {
+  id: 'gid://gitlab/GroupLabel/122',
+  title: 'Doing',
+  color: '#F0AD4E',
+  textColor: '#FFFFFF',
+  description: null,
+};
+
+export const mockProjectLabelsResponse = {
+  data: {
+    workspace: {
+      id: 'gid://gitlab/Project/1',
+      labels: {
+        nodes: [mockLabel1, mockLabel2],
+      },
+      __typename: 'Project',
+    },
+  },
+};
+
+export const mockGroupLabelsResponse = {
+  data: {
+    workspace: {
+      id: 'gid://gitlab/Group/1',
+      labels: {
+        nodes: [mockLabel1, mockLabel2],
+      },
+      __typename: 'Group',
+    },
+  },
+};
+
+export const boardListQueryResponse = (issuesCount = 20) => ({
+  data: {
+    boardList: {
+      __typename: 'BoardList',
+      id: 'gid://gitlab/BoardList/5',
+      totalWeight: 5,
+      issuesCount,
+    },
+  },
+});

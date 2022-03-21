@@ -45,6 +45,39 @@ RSpec.describe NamespacesHelper do
     user_group.add_owner(user)
   end
 
+  describe '#namespaces_as_json' do
+    let(:result) { helper.namespaces_as_json(user) }
+
+    before do
+      allow(helper).to receive(:current_user).and_return(user)
+    end
+
+    it 'returns the user\'s groups' do
+      json_data = Gitlab::Json.parse(result)
+
+      expect(result).to include('group')
+      expect(json_data['group']).to include(
+        "id" => user_group.id,
+        "name" => user_group.name,
+        "display_path" => user_group.full_path,
+        "human_name" => user_group.human_name
+      )
+    end
+
+    it 'returns the user\'s namespace' do
+      user_namespace = user.namespace
+      json_data = Gitlab::Json.parse(result)
+
+      expect(result).to include('user')
+      expect(json_data['user']).to include(
+        "id" => user_namespace.id,
+        "name" => user_namespace.name,
+        "display_path" => user_namespace.full_path,
+        "human_name" => user_namespace.human_name
+      )
+    end
+  end
+
   describe '#namespaces_options' do
     context 'when admin mode is enabled', :enable_admin_mode do
       it 'returns groups without being a member for admin' do
@@ -153,44 +186,6 @@ RSpec.describe NamespacesHelper do
         allow(helper).to receive(:options_for_group).and_call_original
 
         helper.namespaces_options
-      end
-    end
-
-    describe 'include_groups_with_developer_maintainer_access parameter' do
-      context 'when DEVELOPER_MAINTAINER_PROJECT_ACCESS is set for a project' do
-        let!(:admin_project_creation_level) { ::Gitlab::Access::DEVELOPER_MAINTAINER_PROJECT_ACCESS }
-
-        it 'returns groups where user is a developer' do
-          allow(helper).to receive(:current_user).and_return(user)
-          stub_application_setting(default_project_creation: ::Gitlab::Access::MAINTAINER_PROJECT_ACCESS)
-          admin_group.add_user(user, GroupMember::DEVELOPER)
-
-          options = helper.namespaces_options_with_developer_maintainer_access
-
-          expect(options).to include(admin_group.name)
-          expect(options).not_to include(subgroup1.name)
-          expect(options).to include(subgroup2.name)
-          expect(options).not_to include(subgroup3.name)
-          expect(options).to include(user_group.name)
-          expect(options).to include(user.name)
-        end
-      end
-
-      context 'when DEVELOPER_MAINTAINER_PROJECT_ACCESS is set globally' do
-        it 'return groups where default is not overridden' do
-          allow(helper).to receive(:current_user).and_return(user)
-          stub_application_setting(default_project_creation: ::Gitlab::Access::DEVELOPER_MAINTAINER_PROJECT_ACCESS)
-          admin_group.add_user(user, GroupMember::DEVELOPER)
-
-          options = helper.namespaces_options_with_developer_maintainer_access
-
-          expect(options).to include(admin_group.name)
-          expect(options).to include(subgroup1.name)
-          expect(options).to include(subgroup2.name)
-          expect(options).not_to include(subgroup3.name)
-          expect(options).to include(user_group.name)
-          expect(options).to include(user.name)
-        end
       end
     end
   end

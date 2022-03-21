@@ -4,9 +4,7 @@ group: Integrations
 info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
 ---
 
-# Version API
-
-> Introduced in GitLab 8.13.
+# Version API **(FREE)**
 
 Retrieve version information for this GitLab instance. Responds `200 OK` for
 authenticated users.

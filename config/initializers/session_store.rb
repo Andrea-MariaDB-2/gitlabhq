@@ -13,16 +13,17 @@ end
 
 cookie_key = if Rails.env.development?
                "_gitlab_session_#{Digest::SHA256.hexdigest(Rails.root.to_s)}"
+             elsif ::Gitlab.ee? && ::Gitlab::Geo.connected? && ::Gitlab::Geo.secondary?
+               "_gitlab_session_geo_#{Digest::SHA256.hexdigest(GeoNode.current_node_name)}"
              else
                "_gitlab_session"
              end
 
-sessions_config = Gitlab::Redis::SharedState.params
-sessions_config[:namespace] = Gitlab::Redis::SharedState::SESSION_NAMESPACE
+store = Gitlab::Redis::Sessions.store(namespace: Gitlab::Redis::Sessions::SESSION_NAMESPACE)
 
 Gitlab::Application.config.session_store(
   :redis_store, # Using the cookie_store would enable session replay attacks.
-  servers: sessions_config,
+  redis_store: store,
   key: cookie_key,
   secure: Gitlab.config.gitlab.https,
   httponly: true,

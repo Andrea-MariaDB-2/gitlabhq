@@ -27,6 +27,10 @@ RSpec.describe Spam::SpamVerdictService do
     extra_attributes
   end
 
+  before do
+    stub_feature_flags(allow_possible_spam: false)
+  end
+
   describe '#execute' do
     subject { service.execute }
 
@@ -110,6 +114,32 @@ RSpec.describe Spam::SpamVerdictService do
 
         it 'renders the more restrictive verdict' do
           expect(subject).to eq(DISALLOW)
+        end
+      end
+    end
+
+    context 'if allow_possible_spam flag is true' do
+      before do
+        stub_feature_flags(allow_possible_spam: true)
+      end
+
+      context 'and a service returns a verdict that should be overridden' do
+        before do
+          allow(service).to receive(:spamcheck_verdict).and_return([BLOCK_USER, attribs])
+        end
+
+        it 'overrides and renders the override verdict' do
+          expect(subject).to eq OVERRIDE_VIA_ALLOW_POSSIBLE_SPAM
+        end
+      end
+
+      context 'and a service returns a verdict that does not need to be overridden' do
+        before do
+          allow(service).to receive(:spamcheck_verdict).and_return([ALLOW, attribs])
+        end
+
+        it 'does not override and renders the original verdict' do
+          expect(subject).to eq ALLOW
         end
       end
     end
@@ -267,8 +297,8 @@ RSpec.describe Spam::SpamVerdictService do
           where(:verdict_value, :expected) do
             ::Spam::SpamConstants::ALLOW               | ::Spam::SpamConstants::ALLOW
             ::Spam::SpamConstants::CONDITIONAL_ALLOW   | ::Spam::SpamConstants::CONDITIONAL_ALLOW
-            ::Spam::SpamConstants::DISALLOW            | ::Spam::SpamConstants::CONDITIONAL_ALLOW
-            ::Spam::SpamConstants::BLOCK_USER          | ::Spam::SpamConstants::CONDITIONAL_ALLOW
+            ::Spam::SpamConstants::DISALLOW            | ::Spam::SpamConstants::DISALLOW
+            ::Spam::SpamConstants::BLOCK_USER          | ::Spam::SpamConstants::BLOCK_USER
           end
           # rubocop: enable Lint/BinaryOperatorWithIdenticalOperands
 

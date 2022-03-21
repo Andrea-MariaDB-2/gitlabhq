@@ -5,7 +5,7 @@ info: To determine the technical writer assigned to the Stage/Group associated w
 type: reference
 ---
 
-# Directed Acyclic Graph
+# Directed Acyclic Graph **(FREE)**
 
 > - [Introduced](https://gitlab.com/gitlab-org/gitlab-foss/-/issues/47063) in GitLab 12.2.
 > - [Feature flag removed](https://gitlab.com/gitlab-org/gitlab/-/issues/206902) in GitLab 12.10.
@@ -66,28 +66,28 @@ as quickly as possible.
 
 ## Usage
 
-Relationships are defined between jobs using the [`needs:` keyword](../yaml/index.md#needs).
+Relationships are defined between jobs using the [`needs` keyword](../yaml/index.md#needs).
 
-Note that `needs:` also works with the [parallel](../yaml/index.md#parallel) keyword,
+Note that `needs` also works with the [parallel](../yaml/index.md#parallel) keyword,
 giving you powerful options for parallelization within your pipeline.
 
 ## Limitations
 
 A directed acyclic graph is a complicated feature, and as of the initial MVC there
-are certain use cases that you may need to work around. For more information:
+are certain use cases that you may need to work around. For more information, check the:
 
-- [`needs` requirements and limitations](../yaml/index.md#requirements-and-limitations).
+- [`needs` additional details](../yaml/index.md#needs).
 - Related epic [tracking planned improvements](https://gitlab.com/groups/gitlab-org/-/epics/1716).
 
 ## Needs Visualization
 
-> - [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/215517) in GitLab 13.1 as a [Beta feature](https://about.gitlab.com/handbook/product/#beta).
+> - [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/215517) in GitLab 13.1 as a [Beta feature](../../policy/alpha-beta-support.md#beta-features).
 > - It became a [standard feature](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/38517) in 13.3.
 > - [Feature flag removed](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/52208) in GitLab 13.9.
 
 The needs visualization makes it easier to visualize the relationships between dependent jobs in a DAG. This graph displays all the jobs in a pipeline that need or are needed by other jobs. Jobs with no relationships are not displayed in this view.
 
-To see the needs visualization, click on the **Needs** tab when viewing a pipeline that uses the `needs:` keyword.
+To see the needs visualization, click on the **Needs** tab when viewing a pipeline that uses the `needs` keyword.
 
 ![Needs visualization example](img/dag_graph_example_v13_1.png)
 

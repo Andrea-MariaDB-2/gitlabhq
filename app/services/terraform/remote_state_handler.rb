@@ -2,8 +2,6 @@
 
 module Terraform
   class RemoteStateHandler < BaseService
-    include Gitlab::OptimisticLocking
-
     StateLockedError = Class.new(StandardError)
     UnauthorizedError = Class.new(StandardError)
 
@@ -60,7 +58,7 @@ module Terraform
     private
 
     def retrieve_with_lock(find_only: false)
-      create_or_find!(find_only: find_only).tap { |state| retry_optimistic_lock(state, name: 'terraform_remote_state_handler_retrieve') { |state| yield state } }
+      create_or_find!(find_only: find_only).tap { |state| state.with_lock { yield state } }
     end
 
     def create_or_find!(find_only:)
@@ -70,7 +68,7 @@ module Terraform
 
       return find_state!(find_params) if find_only
 
-      state = Terraform::State.create_or_find_by(find_params) # rubocop:disable Performance/ActiveRecordSubtransactionMethods
+      state = Terraform::State.create_or_find_by(find_params)
 
       # https://github.com/rails/rails/issues/36027
       return state unless state.errors.of_kind? :name, :taken

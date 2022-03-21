@@ -16,32 +16,35 @@ In case custom inflection logic is needed, custom inflectors are added in the [q
 
 ## Link a test to its test case
 
-Every test should have a corresponding test case as well as a results issue in the [Quality Test Cases project](https://gitlab.com/gitlab-org/quality/testcases/).
-It's recommended that you reuse the issue created to plan the test as the results issue. If a test case or results issue does not already exist you
-can create them yourself. Alternatively, you can run the test in a pipeline that has reporting
-enabled and the test-case reporter will automatically create a new test case and/or results issue and link the results issue to it's corresponding test case.
+Every test should have a corresponding test case in the [GitLab project Test Cases](https://gitlab.com/gitlab-org/gitlab/-/quality/test_cases) as well as a results issue in the [Quality Test Cases project](https://gitlab.com/gitlab-org/quality/testcases/-/issues).
+If a test case issue does not yet exist you can create one yourself. To do so, create a new
+issue in the [Test Cases](https://gitlab.com/gitlab-org/gitlab/-/quality/test_cases) GitLab project
+with a placeholder title. After the test case URL is linked to a test in the code, when the test is
+run in a pipeline that has reporting enabled, the `report-results` script automatically updates the
+test case and the results issue.
+If a results issue does not yet exist, the `report-results` script automatically creates one and
+links it to its corresponding test case.
 
-Whether you create a new test case or one is created automatically, you will need to manually add
-a `testcase` RSpec metadata tag. In most cases, a single test will be associated with a single test case
- ([see below for exceptions](#exceptions)).
+To link a test case to a test in the code, you must manually add a `testcase` RSpec metadata tag.
+In most cases, a single test is associated with a single test case.
 
 For example:
 
 ```ruby
 RSpec.describe 'Stage' do
   describe 'General description of the feature under test' do
-    it 'test name', testcase: 'https://gitlab.com/gitlab-org/quality/testcases/-/quality/test_cases/:test_case_id' do
+    it 'test name', testcase: 'https://gitlab.com/gitlab-org/gitlab/-/quality/test_cases/:test_case_id' do
       ...
     end
 
-    it 'another test', testcase: 'https://gitlab.com/gitlab-org/quality/testcases/-/quality/test_cases/:another_test_case_id' do
+    it 'another test', testcase: 'https://gitlab.com/gitlab-org/gitlab/-/quality/test_cases/:another_test_case_id' do
       ...
     end
   end
 end
 ```
 
-### Exceptions
+### For shared tests
 
 Most tests are defined by a single line of a `spec` file, which is why those tests can be linked to a
 single test case via the `testcase` tag.
@@ -54,24 +57,19 @@ multiple tests, including:
 - Templated tests.
 - Tests in shared examples that include more than one example.
 
-In those and similar cases we can't assign a single `testcase` tag and so we rely on the test-case
-reporter to programmatically determine the correct test case based on the name and description of
-the test. In such cases, the test-case reporter will automatically create a test case and/or results issue
-the first time the test runs, if none exist already.
+In those and similar cases we need to include the test case link by other means.
 
-In such a case, if you create the test case or results issue yourself or want to reuse an existing issue,
-you must use this [end-to-end test issue template](https://gitlab.com/gitlab-org/quality/testcases/-/blob/master/.gitlab/issue_templates/End-to-end%20Test.md)
-to format the issue description. (Note you must copy/paste this for test cases as templates aren't currently available.)
-
-To illustrate, there are two tests in the shared examples in [`qa/specs/features/ee/browser_ui/3_create/repository/restrict_push_protected_branch_spec.rb`](https://gitlab.com/gitlab-org/gitlab/-/blob/47b17db82c38ab704a23b5ba5d296ea0c6a732c8/qa/qa/specs/features/ee/browser_ui/3_create/repository/restrict_push_protected_branch_spec.rb):
+To illustrate, there are two tests in the shared examples in [`qa/specs/features/ee/browser_ui/3_create/repository/restrict_push_protected_branch_spec.rb`](https://gitlab.com/gitlab-org/gitlab/-/blob/master/qa/qa/specs/features/ee/browser_ui/3_create/repository/restrict_push_protected_branch_spec.rb):
 
 ```ruby
-shared_examples 'only user with access pushes and merges' do
-  it 'unselected maintainer user fails to push' do
+shared_examples 'unselected maintainer' do |testcase|
+  it 'user fails to push', testcase: testcase do
     ...
   end
+end
 
-  it 'selected developer user pushes and merges' do
+shared_examples 'selected developer' do |testcase|
+  it 'user pushes and merges', testcase: testcase do
     ...
   end
 end
@@ -84,112 +82,22 @@ RSpec.describe 'Create' do
   describe 'Restricted protected branch push and merge' do
     context 'when only one user is allowed to merge and push to a protected branch' do
       ...
-      it_behaves_like 'only user with access pushes and merges'
+
+      it_behaves_like 'unselected maintainer', 'https://gitlab.com/gitlab-org/gitlab/-/quality/test_cases/347775'
+      it_behaves_like 'selected developer', 'https://gitlab.com/gitlab-org/gitlab/-/quality/test_cases/347774'
+    end
+
+    context 'when only one group is allowed to merge and push to a protected branch' do
+      ...
+
+      it_behaves_like 'unselected maintainer', 'https://gitlab.com/gitlab-org/gitlab/-/quality/test_cases/347772'
+      it_behaves_like 'selected developer', 'https://gitlab.com/gitlab-org/gitlab/-/quality/test_cases/347773'
     end
   end
 end
 ```
 
-There would be two associated test cases, one for each shared example, with the following content:
-
-[Test 1 Test Case](https://gitlab.com/gitlab-org/quality/testcases/-/quality/test_cases/1491):
-
-````markdown
-```markdown
-Title: browser_ui/3_create/repository/restrict_push_protected_branch_spec.rb | Create Restricted
-protected branch push and merge when only one user is allowed to merge and push to a protected
-branch behaves like only user with access pushes and merges selecte...
-
-Description:
-### Full description
-
-Create Restricted protected branch push and merge when only one user is allowed to merge and push
-to a protected branch behaves like only user with access pushes and merges selected developer user
-pushes and merges
-
-### File path
-
-./qa/specs/features/ee/browser_ui/3_create/repository/restrict_push_protected_branch_spec.rb
-
-### DO NOT EDIT BELOW THIS LINE
-
-Active and historical test results:
-
-https://gitlab.com/gitlab-org/quality/testcases/-/issues/600
-
-```
-````
-
-[Test 1 Results Issue](https://gitlab.com/gitlab-org/quality/testcases/-/issues/600):
-
-````markdown
-```markdown
-Title: browser_ui/3_create/repository/restrict_push_protected_branch_spec.rb | Create Restricted
-protected branch push and merge when only one user is allowed to merge and push to a protected
-branch behaves like only user with access pushes and merges selecte...
-
-Description:
-### Full description
-
-Create Restricted protected branch push and merge when only one user is allowed to merge and push
-to a protected branch behaves like only user with access pushes and merges selected developer user
-pushes and merges
-
-### File path
-
-./qa/specs/features/ee/browser_ui/3_create/repository/restrict_push_protected_branch_spec.rb
-
-```
-````
-
-[Test 2 Test Case](https://gitlab.com/gitlab-org/quality/testcases/-/quality/test_cases/602):
-
-````markdown
-```markdown
-Title: browser_ui/3_create/repository/restrict_push_protected_branch_spec.rb | Create Restricted
-protected branch push and merge when only one user is allowed to merge and push to a protected
-branch behaves like only user with access pushes and merges unselec...
-
-Description:
-### Full description
-
-Create Restricted protected branch push and merge when only one user is allowed to merge and push
-to a protected branch behaves like only user with access pushes and merges unselected maintainer
-user fails to push
-
-### File path
-
-./qa/specs/features/ee/browser_ui/3_create/repository/restrict_push_protected_branch_spec.rb
-
-### DO NOT EDIT BELOW THIS LINE
-
-Active and historical test results:
-
-https://gitlab.com/gitlab-org/quality/testcases/-/issues/602
-
-```
-````
-
-[Test 2 Results Issue](https://gitlab.com/gitlab-org/quality/testcases/-/issues/602):
-
-````markdown
-```markdown
-Title: browser_ui/3_create/repository/restrict_push_protected_branch_spec.rb | Create Restricted
-protected branch push and merge when only one user is allowed to merge and push to a protected
-branch behaves like only user with access pushes and merges unselec...
-
-Description:
-### Full description
-
-Create Restricted protected branch push and merge when only one user is allowed to merge and push
-to a protected branch behaves like only user with access pushes and merges unselected maintainer
-user fails to push
-
-### File path
-
-./qa/specs/features/ee/browser_ui/3_create/repository/restrict_push_protected_branch_spec.rb
-```
-````
+We recommend creating four associated test cases, two for each shared example.
 
 ## Prefer API over UI
 
@@ -245,7 +153,11 @@ end
 
 ## Prefer `aggregate_failures` when there are back-to-back expectations
 
-In cases where there must be multiple (back-to-back) expectations within a test case, it is preferable to use `aggregate_failures`.
+See [Prefer aggregate failures when there are multiple expectations](#prefer-aggregate_failures-when-there-are-multiple-expectations)
+
+## Prefer `aggregate_failures` when there are multiple expectations
+
+In cases where there must be multiple expectations within a test case, it is preferable to use `aggregate_failures`.
 
 This allows you to group a set of expectations and see all the failures altogether, rather than having the test being aborted on the first failure.
 
@@ -267,6 +179,32 @@ Page::Search::Results.perform do |search|
   search.switch_to_code
   expect(search).to have_file_in_project(template[:file_name], project.name)
   expect(search).to have_file_with_content(template[:file_name], content[0..33])
+end
+```
+
+Attach the `:aggregate_failures` metadata to the example if multiple expectations are separated by statements.
+
+```ruby
+#=> Good
+it 'searches', :aggregate_failures do
+  Page::Search::Results.perform do |search|
+    expect(search).to have_file_in_project(template[:file_name], project.name)
+    
+    search.switch_to_code
+    
+    expect(search).to have_file_with_content(template[:file_name], content[0..33])
+  end
+end
+
+#=> Bad
+it 'searches' do
+  Page::Search::Results.perform do |search|
+    expect(search).to have_file_in_project(template[:file_name], project.name)
+
+    search.switch_to_code
+
+    expect(search).to have_file_with_content(template[:file_name], content[0..33])
+  end
 end
 ```
 
@@ -333,11 +271,11 @@ after(:all) do
 end
 ```
 
-## Tag tests that require Administrator access
+## Tag tests that require administrator access
 
-We don't run tests that require Administrator access against our Production environments.
+We don't run tests that require administrator access against our Production environments.
 
-When you add a new test that requires Administrator access, apply the RSpec metadata `:requires_admin` so that the test will not be included in the test suites executed against Production and other environments on which we don't want to run those tests.
+When you add a new test that requires administrator access, apply the RSpec metadata `:requires_admin` so that the test will not be included in the test suites executed against Production and other environments on which we don't want to run those tests.
 
 When running tests locally or configuring a pipeline, the environment variable `QA_CAN_TEST_ADMIN_FEATURES` can be set to `false` to skip tests that have the `:requires_admin` tag.
 
@@ -488,3 +426,12 @@ Neither problem is present if we create a custom negatable matcher because the `
 would be used, which would wait only as long as necessary for the job to disappear.
 
 Lastly, negatable matchers are preferred over using matchers of the form `have_no_*` because it's a common and familiar practice to negate matchers using `not_to`. If we facilitate that practice by adding negatable matchers, we make it easier for subsequent test authors to write efficient tests.
+
+## Use logger over puts
+
+We currently use Rails `logger` to handle logs in both GitLab QA application and end-to-end tests.
+This provides additional functionalities when compared with `puts`, such as:
+
+- Ability to specify the logging level.
+- Ability to tag similar logs.
+- Auto-formatting log messages.

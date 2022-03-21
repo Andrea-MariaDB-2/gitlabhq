@@ -46,6 +46,15 @@ RSpec.describe ApplicationSettingsHelper do
       expect(helper.visible_attributes).to include(:deactivate_dormant_users)
     end
 
+    it 'contains rate limit parameters' do
+      expect(helper.visible_attributes).to include(*%i(
+        issues_create_limit notes_create_limit project_export_limit
+        project_download_export_limit project_export_limit project_import_limit
+        raw_blob_request_limit group_export_limit group_download_export_limit
+        group_import_limit users_get_by_id_limit search_rate_limit search_rate_limit_unauthenticated
+      ))
+    end
+
     context 'when GitLab.com' do
       before do
         allow(Gitlab).to receive(:com?).and_return(true)
@@ -158,26 +167,6 @@ RSpec.describe ApplicationSettingsHelper do
     end
   end
 
-  describe '.show_documentation_base_url_field?' do
-    subject { helper.show_documentation_base_url_field? }
-
-    before do
-      stub_feature_flags(help_page_documentation_redirect: feature_flag)
-    end
-
-    context 'when feature flag is enabled' do
-      let(:feature_flag) { true }
-
-      it { is_expected.to eq(true) }
-    end
-
-    context 'when feature flag is disabled' do
-      let(:feature_flag) { false }
-
-      it { is_expected.to eq(false) }
-    end
-  end
-
   describe '.valid_runner_registrars' do
     subject { helper.valid_runner_registrars }
 
@@ -271,17 +260,58 @@ RSpec.describe ApplicationSettingsHelper do
         expect(pending_user_count).to eq 1
       end
     end
+  end
 
-    context 'when the new_user_signups_cap is not present' do
-      let(:user_cap) { nil }
+  describe '.registration_features_can_be_prompted?' do
+    subject { helper.registration_features_can_be_prompted? }
 
-      it { is_expected.to eq 0 }
-
-      it 'does not query users unnecessarily' do
-        expect(User).not_to receive(:blocked_pending_approval)
-
-        pending_user_count
+    before do
+      if Gitlab.ee?
+        allow(License).to receive(:current).and_return(nil)
       end
+    end
+
+    context 'when service ping is enabled' do
+      before do
+        stub_application_setting(usage_ping_enabled: true)
+      end
+
+      it { is_expected.to be_falsey }
+    end
+
+    context 'when service ping is disabled' do
+      before do
+        stub_application_setting(usage_ping_enabled: false)
+      end
+
+      it { is_expected.to be_truthy }
+    end
+  end
+
+  describe '#sidekiq_job_limiter_modes_for_select' do
+    subject { helper.sidekiq_job_limiter_modes_for_select }
+
+    it { is_expected.to eq([%w(Track track), %w(Compress compress)]) }
+  end
+
+  describe '#instance_clusters_enabled?' do
+    let_it_be(:user) { create(:user) }
+
+    subject { helper.instance_clusters_enabled? }
+
+    before do
+      allow(helper).to receive(:current_user).and_return(user)
+      allow(helper).to receive(:can?).with(user, :read_cluster, instance_of(Clusters::Instance)).and_return(true)
+    end
+
+    it { is_expected.to be_truthy}
+
+    context ':certificate_based_clusters feature flag is disabled' do
+      before do
+        stub_feature_flags(certificate_based_clusters: false)
+      end
+
+      it { is_expected.to be_falsey }
     end
   end
 end

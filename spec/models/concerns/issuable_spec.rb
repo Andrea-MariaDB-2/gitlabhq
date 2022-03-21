@@ -18,7 +18,6 @@ RSpec.describe Issuable do
     it { is_expected.to have_many(:notes).dependent(:destroy) }
     it { is_expected.to have_many(:todos) }
     it { is_expected.to have_many(:labels) }
-    it { is_expected.to have_many(:note_authors).through(:notes) }
 
     context 'Notes' do
       let!(:note) { create(:note, noteable: issue, project: issue.project) }
@@ -27,6 +26,23 @@ RSpec.describe Issuable do
       it 'indicates if the notes have their authors loaded' do
         expect(issue.notes).not_to be_authors_loaded
         expect(scoped_issue.notes).to be_authors_loaded
+      end
+
+      describe 'note_authors' do
+        it { is_expected.to have_many(:note_authors).through(:notes) }
+      end
+
+      describe 'user_note_authors' do
+        let_it_be(:system_user) { create(:user) }
+
+        let!(:system_note) { create(:system_note, author: system_user, noteable: issue, project: issue.project) }
+
+        it 'filters the authors to those of user notes' do
+          authors = issue.user_note_authors
+
+          expect(authors).to include(note.author)
+          expect(authors).not_to include(system_user)
+        end
       end
     end
   end
@@ -368,6 +384,23 @@ RSpec.describe Issuable do
         expect(sorted_issue_ids).to eq(sorted_issue_ids.uniq)
       end
     end
+
+    context 'by title' do
+      let!(:issue1) { create(:issue, project: project, title: 'foo') }
+      let!(:issue2) { create(:issue, project: project, title: 'bar') }
+      let!(:issue3) { create(:issue, project: project, title: 'baz') }
+      let!(:issue4) { create(:issue, project: project, title: 'Baz 2') }
+
+      it 'sorts asc' do
+        issues = project.issues.sort_by_attribute('title_asc')
+        expect(issues).to eq([issue2, issue3, issue4, issue1])
+      end
+
+      it 'sorts desc' do
+        issues = project.issues.sort_by_attribute('title_desc')
+        expect(issues).to eq([issue1, issue4, issue3, issue2])
+      end
+    end
   end
 
   describe '#subscribed?' do
@@ -553,6 +586,27 @@ RSpec.describe Issuable do
           ))
 
         issue.to_hook_data(user, old_associations: { severity: 'unknown' })
+      end
+    end
+
+    context 'escalation status is updated' do
+      let(:issue) { create(:incident, :with_escalation_status) }
+      let(:acknowledged) { IncidentManagement::IssuableEscalationStatus::STATUSES[:acknowledged] }
+
+      before do
+        issue.escalation_status.update!(status: acknowledged)
+
+        expect(Gitlab::HookData::IssuableBuilder).to receive(:new).with(issue).and_return(builder)
+      end
+
+      it 'delegates to Gitlab::HookData::IssuableBuilder#build' do
+        expect(builder).to receive(:build).with(
+          user: user,
+          changes: hash_including(
+            'escalation_status' => %i(triggered acknowledged)
+          ))
+
+        issue.to_hook_data(user, old_associations: { escalation_status: :triggered })
       end
     end
   end
@@ -744,7 +798,7 @@ RSpec.describe Issuable do
       it 'updates issues updated_at' do
         issue
 
-        Timecop.travel(1.minute.from_now) do
+        travel_to(2.minutes.from_now) do
           expect { spend_time(1800) }.to change { issue.updated_at }
         end
       end
@@ -769,7 +823,7 @@ RSpec.describe Issuable do
 
       context 'when time to subtract exceeds the total time spent' do
         it 'raise a validation error' do
-          Timecop.travel(1.minute.from_now) do
+          travel_to(1.minute.from_now) do
             expect do
               expect do
                 spend_time(-3600)
@@ -902,6 +956,30 @@ RSpec.describe Issuable do
       subject { issuable.supports_severity? }
 
       it { is_expected.to eq(supports_severity) }
+    end
+  end
+
+  describe '#supports_escalation?' do
+    where(:issuable_type, :supports_escalation) do
+      :issue         | false
+      :incident      | true
+      :merge_request | false
+    end
+
+    with_them do
+      let(:issuable) { build_stubbed(issuable_type) }
+
+      subject { issuable.supports_escalation? }
+
+      it { is_expected.to eq(supports_escalation) }
+
+      context 'with feature disabled' do
+        before do
+          stub_feature_flags(incident_escalations: false)
+        end
+
+        it { is_expected.to eq(false) }
+      end
     end
   end
 

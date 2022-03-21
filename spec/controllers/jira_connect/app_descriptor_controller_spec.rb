@@ -46,7 +46,8 @@ RSpec.describe JiraConnect::AppDescriptorController do
         apiVersion: 1,
         apiMigrations: {
           'context-qsh': true,
-          gdpr: true
+          gdpr: true,
+          'signed-install': true
         }
       )
 

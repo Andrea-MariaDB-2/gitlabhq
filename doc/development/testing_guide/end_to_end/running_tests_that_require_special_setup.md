@@ -45,7 +45,7 @@ docker run \
 
 Jenkins is available on `http://localhost:8080`.
 
-Admin username is `admin` and password is `password`.
+Administrator username is `admin` and password is `password`.
 
 It is worth noting that this is not an orchestrated test. It is [tagged with the `:orchestrated` meta](https://gitlab.com/gitlab-org/gitlab/-/blob/163c8a8c814db26d11e104d1cb2dcf02eb567dbe/qa/qa/specs/features/ee/browser_ui/3_create/jenkins/jenkins_build_status_spec.rb#L5)
 only to prevent it from running in the pipelines for live environments such as Staging.
@@ -141,134 +141,33 @@ docker stop gitlab-gitaly-cluster praefect postgres gitaly3 gitaly2 gitaly1
 docker rm gitlab-gitaly-cluster praefect postgres gitaly3 gitaly2 gitaly1
 ```
 
-## Guide to run and debug Monitor tests
+## Tests that require a runner
 
-### How to set up
+To execute tests that use a runner without errors, while creating the GitLab Docker instance the `--hostname` parameter in the Docker `run` command should be given a specific interface IP address or a non-loopback hostname accessible from the runner container. Having `localhost` (or `127.0.0.1`) as the GitLab hostname won't work (unless the GitLab Runner is created with the Docker network as `host`)
 
-To run the Monitor tests locally, against the GDK, please follow the preparation steps below:
+Examples of tests which require a runner:
 
-1. Complete the [Prerequisites](https://gitlab.com/gitlab-org/gitlab-development-kit/-/blob/main/doc/howto/auto_devops/index.md#prerequisites-for-gitlab-team-members-only), at least through step 5. Note that the monitor tests do not require permissions to work with GKE because they use [k3s as a Kubernetes cluster provider](https://github.com/rancher/k3s).
-1. The test setup deploys the app in a Kubernetes cluster, using the Auto DevOps deployment strategy.
-To enable Auto DevOps in GDK, follow the [associated setup](https://gitlab.com/gitlab-org/gitlab-development-kit/-/blob/main/doc/howto/auto_devops/index.md#setup) instructions. If you have problems, review the [troubleshooting guide](https://gitlab.com/gitlab-org/gitlab-development-kit/-/blob/main/doc/howto/auto_devops/tips_and_troubleshooting.md) or reach out to the `#gdk` channel in the internal GitLab Slack.
-1. Do [secure your GitLab instance](https://gitlab.com/gitlab-org/gitlab-development-kit/-/blob/main/doc/howto/auto_devops/index.md#secure-your-gitlab-instance) since it is now publicly accessible on `https://[YOUR-PORT].qa-tunnel.gitlab.info`.
-1. Install the Kubernetes command line tool known as `kubectl`. Use the [official installation instructions](https://kubernetes.io/docs/tasks/tools/).
+- `qa/qa/specs/features/ee/browser_ui/13_secure/create_merge_request_with_secure_spec.rb`
+- `qa/qa/specs/features/browser_ui/4_verify/runner/register_runner_spec.rb`
 
-You might see NGINX issues when you run `gdk start` or `gdk restart`. In that case, run `sft login` to revalidate your credentials and regain access the QA Tunnel.
-
-### How to run
-
-Navigate to the folder in `/your-gdk/gitlab/qa` and issue the command:
+Example:
 
 ```shell
-QA_DEBUG=true WEBDRIVER_HEADLESS=false GITLAB_ADMIN_USERNAME=rootusername GITLAB_ADMIN_PASSWORD=rootpassword GITLAB_QA_ACCESS_TOKEN=your_token_here GITLAB_QA_ADMIN_ACCESS_TOKEN=your_token_here CLUSTER_API_URL=https://kubernetes.docker.internal:6443 bundle exec bin/qa Test::Instance::All https://[YOUR-PORT].qa-tunnel.gitlab.info/ -- qa/specs/features/browser_ui/8_monitor/all_monitor_core_features_spec.rb --tag kubernetes --tag orchestrated --tag requires_admin
+docker run \ 
+  --detach \
+  --hostname interface_ip_address \
+  --publish 80:80 \
+  --name gitlab \
+  --restart always \
+  --volume ~/ee_volume/config:/etc/gitlab \
+  --volume ~/ee_volume/logs:/var/log/gitlab \
+  --volume ~/ee_volume/data:/var/opt/gitlab \
+  --shm-size 256m \
+  gitlab/gitlab-ee:latest
 ```
 
-The following includes more information on the command:
-
--`QA_DEBUG` - Set to `true` to verbosely log page object actions.
--`WEBDRIVER_HEADLESS` - When running locally, set to `false` to allow browser tests to be visible - watch your tests being run.
--`GITLAB_ADMIN_USERNAME` - Admin username to use when adding a license.
--`GITLAB_ADMIN_PASSWORD` - Admin password to use when adding a license.
--`GITLAB_QA_ACCESS_TOKEN` and `GITLAB_QA_ADMIN_ACCESS_TOKEN` - A valid personal access token with the `api` scope. This is used for API access during tests, and is used in the version that staging is currently running. The `ADMIN_ACCESS_TOKEN` is from a user with admin access. Used for API access as an admin during tests.
--`CLUSTER_API_URL` - Use the address `https://kubernetes.docker.internal:6443` . This address is used to enable the cluster to be network accessible while deploying using Auto DevOps.
--`https://[YOUR-PORT].qa-tunnel.gitlab.info/` - The address of your local GDK
--`qa/specs/features/browser_ui/8_monitor/all_monitor_core_features_spec.rb` - The path to the monitor core specs
--`--tag` - the meta-tags used to filter the specs correctly
-
-At the moment of this writing, there are two specs which run monitor tests:
-
--`qa/specs/features/browser_ui/8_monitor/all_monitor_core_features_spec.rb` - has the specs of features in GitLab Free
--`qa/specs/features/ee/browser_ui/8_monitor/all_monitor_features_spec.rb` - has the specs of features for paid GitLab (Enterprise Edition)
-
-### How to debug
-
-The monitor tests follow this setup flow:
-
-1. Creates a k3s cluster on your local machine.
-1. Creates a project that has Auto DevOps enabled and uses an Express template (NodeJS) for the app to be deployed.
-1. Associates the created cluster to the project and installs GitLab Runner, Prometheus and Ingress which are the needed components for a successful deployment.
-1. Creates a CI pipeline with 2 jobs (`build` and `production`) to deploy the app on the Kubernetes cluster.
-1. Goes to Operation > Metrics menu to verify data is being received and the app is being monitored successfully.
-
-The test requires a number of components. The setup requires time to collect the metrics of a real deployment.
-The complexity of the setup may lead to problems unrelated to the app. The following sections include common strategies to debug possible issues.
-
-#### Deployment with Auto DevOps
-
-When debugging issues in the CI or locally in the CLI, open the Kubernetes job in the pipeline.
-In the job log window, click on the top right icon labeled as *"Show complete raw"* to reveal raw job logs.
-You can now search through the logs for *Job log*, which matches delimited sections like this one:
-
-```shell
-------- Job log: -------
-```
-
-A Job log is a subsection within these logs, related to app deployment. We use two jobs: `build` and `production`.
-You can find the root causes of deployment failures in these logs, which can compromise the entire test.
-If a `build` job fails, the `production` job doesn't run, and the test fails.
-
-The long test setup does not take screenshots of failures, which is a known [issue](https://gitlab.com/gitlab-org/quality/team-tasks/-/issues/270).
-However, if the spec fails (after a successful deployment) then you should be able to find screenshots which display the feature failure.
-To access them in CI, go to the main job log window, look on the left side panel's Job artifacts section, and click Browse.
-
-#### Common issues
-
-**Container Registry**
-
-When enabling Auto DevOps in the GDK, you may see issues with the Container Registry, which stores
-images of the app to be deployed.
-
-You can access the Registry is available by opening an existing project. On the left hand menu,
-select `Packages & Registries > Container Registries`. If the Registry is available, this page should load normally.
-
-Also, the Registry should be running in Docker:
-
-```shell
-$ docker ps
-
-CONTAINER ID        IMAGE                                                                              COMMAND                  CREATED             STATUS              PORTS                    NAMES
-f035f339506c        registry.gitlab.com/gitlab-org/build/cng/gitlab-container-registry:v2.9.1-gitlab   "/bin/sh -c 'exec /b…"   3 hours ago         Up 3 hours          0.0.0.0:5000->5000/tcp   jovial_proskuriakova
-```
-
-The `gdk status` command shows if the registry is running:
-
-```shell
-run: ./services/registry: (pid 2662) 10875s, normally down; run: log: (pid 65148) 177993s
-run: ./services/tunnel_gitlab: (pid 2650) 10875s, normally down; run: log: (pid 65154) 177993s
-run: ./services/tunnel_registry: (pid 2651) 10875s, normally down; run: log: (pid 65155) 177993s
-```
-
-Also, restarting Docker and then, on the Terminal, issue the command
-`docker login https://[YOUR-REGISTRY-PORT].qa-tunnel.gitlab.info:443` and use
-the GDK credentials to sign in. Note that the Registry port and GDK port aren't
-the same. When configuring Auto DevOps in GDK, the `gdk reconfigure` command
-outputs the port of the Registry:
-
-```shell
-*********************************************
-Tunnel URLs
-
-GitLab: https://[PORT].qa-tunnel.gitlab.info
-Registry: https://[PORT].qa-tunnel.gitlab.info
-*********************************************
-```
-
-These Tunnel URLs are used by the QA SSH Tunnel generated when enabling Auto DevOps on the GDK.
-
-**Pod Eviction**
-
-Pod eviction happens when a node in a Kubernetes cluster is running out of memory or disk. After many local deployments this issue can happen. The UI shows that installing Prometheus, GitLab Runner and Ingress failed. How to be sure it is an Eviction? While the test is running, open another Terminal window and debug the current Kubernetes cluster by `kubectl get pods --all-namespaces`. If you observe that Pods have *Evicted status* such as the install-runner here:
-
-```shell
-$ kubectl get pods --all-namespaces
-
-NAMESPACE             NAME                                      READY   STATUS    RESTARTS   AGE
-gitlab-managed-apps   install-ingress                           0/1     Pending   0          25s
-gitlab-managed-apps   install-prometheus                        0/1     Pending   0          12s
-gitlab-managed-apps   install-runner                            0/1     Evicted   0          75s
-```
-
-You can free some memory with either of the following commands: `docker prune system` or `docker prune volume`.
+Where `interface_ip_address` is your local network's interface IP, which you can find with the `ifconfig` command.
+The same would apply to GDK running with the instance address as `localhost` too.
 
 ## Geo tests
 
@@ -294,7 +193,7 @@ Geo requires an EE license. To visit the Geo sites in your browser, you need a r
    export EE_LICENSE=$(cat <path/to/your/gitlab_license>)
    ```
 
-1. (Optional) Pull the GitLab image
+1. Optional. Pull the GitLab image
 
    This step is optional because pulling the Docker image is part of the [`Test::Integration::Geo` orchestrated scenario](https://gitlab.com/gitlab-org/gitlab-qa/-/blob/d8c5c40607c2be0eda58bbca1b9f534b00889a0b/lib/gitlab/qa/scenario/test/integration/geo.rb). However, it's easier to monitor the download progress if you pull the image first, and the scenario skips this step after checking that the image is up to date.
 
@@ -410,9 +309,9 @@ Tests that are tagged with `:ldap_tls` and `:ldap_no_tls` meta are orchestrated 
 
 These tests spin up a Docker container [(`osixia/openldap`)](https://hub.docker.com/r/osixia/openldap) running an instance of [OpenLDAP](https://www.openldap.org/).
 The container uses fixtures [checked into the GitLab-QA repository](https://gitlab.com/gitlab-org/gitlab-qa/-/tree/9ffb9ad3be847a9054967d792d6772a74220fb42/fixtures/ldap) to create
-base data such as users and groups including the admin group. The password for [all users](https://gitlab.com/gitlab-org/gitlab-qa/-/blob/9ffb9ad3be847a9054967d792d6772a74220fb42/fixtures/ldap/2_add_users.ldif) including [the `tanuki` user](https://gitlab.com/gitlab-org/gitlab-qa/-/blob/9ffb9ad3be847a9054967d792d6772a74220fb42/fixtures/ldap/tanuki.ldif) is `password`.
+base data such as users and groups including the administrator group. The password for [all users](https://gitlab.com/gitlab-org/gitlab-qa/-/blob/9ffb9ad3be847a9054967d792d6772a74220fb42/fixtures/ldap/2_add_users.ldif) including [the `tanuki` user](https://gitlab.com/gitlab-org/gitlab-qa/-/blob/9ffb9ad3be847a9054967d792d6772a74220fb42/fixtures/ldap/tanuki.ldif) is `password`.
 
-A GitLab instance is also created in a Docker container based on our [General LDAP setup](../../../administration/auth/ldap/index.md#general-ldap-setup) documentation.
+A GitLab instance is also created in a Docker container based on our [LDAP setup](../../../administration/auth/ldap/index.md) documentation.
 
 Tests that are tagged `:ldap_tls` enable TLS on GitLab using the certificate [checked into the GitLab-QA repository](https://gitlab.com/gitlab-org/gitlab-qa/-/tree/9ffb9ad3be847a9054967d792d6772a74220fb42/tls_certificates/gitlab).
 
@@ -485,3 +384,109 @@ To run the LDAP tests on your local with TLS disabled, follow these steps:
    ```shell
    GITLAB_LDAP_USERNAME="tanuki" GITLAB_LDAP_PASSWORD="password" QA_DEBUG=true WEBDRIVER_HEADLESS=false bin/qa Test::Instance::All http://localhost qa/specs/features/browser_ui/1_manage/login/log_into_gitlab_via_ldap_spec.rb
    ```
+
+## Guide to the mobile suite
+
+### What are mobile tests
+
+Tests that are tagged with `:mobile` can be run against specified mobile devices using cloud emulator/simulator services.
+
+### How to run mobile tests with Sauce Labs
+
+Running directly against an environment like staging is not recommended because Sauce Labs test logs expose credentials. Therefore, it is best practice and the default to use a tunnel.
+
+For tunnel installation instructions, read [Sauce Connect Proxy Installation](https://docs.saucelabs.com/secure-connections/sauce-connect/installation). To start the tunnel, after following the installation above, copy the run command in Sauce Labs > Tunnels (must be logged in to Sauce Labs with the credentials found in 1Password) and run in terminal.
+
+NOTE:
+It is highly recommended to use `GITLAB_QA_ACCESS_TOKEN` to speed up tests and reduce flakiness.
+
+`QA_REMOTE_MOBILE_DEVICE_NAME` can be any device name listed in [Supported browsers and devices](https://saucelabs.com/platform/supported-browsers-devices) under Emulators/simulators and the latest versions of Android or iOS. `QA_BROWSER` must be set to `safari` for iOS devices and `chrome` for Android devices.
+
+1. To test against a local instance with a tunnel running, in `gitlab/qa` run:
+
+```shell
+$ QA_BROWSER="safari" \
+  QA_REMOTE_MOBILE_DEVICE_NAME="iPhone 12 Simulator" \
+  QA_REMOTE_GRID="ondemand.saucelabs.com:80" \
+  QA_REMOTE_GRID_USERNAME="gitlab-sl" \
+  QA_REMOTE_GRID_ACCESS_KEY="<found in Sauce Lab account>" \
+  GITLAB_QA_ACCESS_TOKEN="<token>" \
+  bundle exec bin/qa Test::Instance::All http://<local_ip>:3000 -- <relative_spec_path>
+```
+
+Results can be watched in real time while logged into Sauce Labs under AUTOMATED > Test Results.
+
+### How to add an existing test to the mobile suite
+
+The main reason a test might fail when adding the `:mobile` tag is navigation differences in desktop vs mobile layouts, therefore the test needs to be updated to use mobile navigation when running mobile tests.
+
+If an existing method needs to be changed or a new one created, a new mobile page object should be created in `qa/qa/mobile/page/` and it should be prepended in the original page object by adding:
+
+```ruby
+prepend Mobile::Page::NewPageObject if Runtime::Env.mobile_layout?
+```
+
+For example to change an existing method when running mobile tests:
+
+New mobile page object:
+
+```ruby
+module QA
+  module Mobile
+    module Page
+      module Project
+        module Show
+          extend QA::Page::PageConcern
+
+          def self.prepended(base)
+            super
+
+            base.class_eval do
+              prepend QA::Mobile::Page::Main::Menu
+
+              view 'app/assets/javascripts/nav/components/top_nav_new_dropdown.vue' do
+                element :new_issue_mobile_button
+              end
+            end
+          end
+
+          def go_to_new_issue
+            open_mobile_new_dropdown
+
+            click_element(:new_issue_mobile_button)
+          end
+        end
+      end
+    end
+  end
+end
+```
+
+Original page object prepending the new mobile if there's a mobile layout:
+
+```ruby
+module QA
+  module Page
+    module Project
+      class Show < Page::Base
+        prepend Mobile::Page::Project::Show if Runtime::Env.mobile_layout?
+
+        view 'app/views/layouts/header/_new_dropdown.html.haml' do
+          element :new_menu_toggle
+        end
+
+        view 'app/helpers/nav/new_dropdown_helper.rb' do
+          element :new_issue_link
+        end
+
+        def go_to_new_issue
+          click_element(:new_menu_toggle)
+          click_element(:new_issue_link)
+        end
+      end
+    end
+  end
+end
+```
+
+When running mobile tests for phone layouts, both `remote_mobile_device_name` and `mobile_layout` are `true` but when using a tablet layout, only `remote_mobile_device_name` is true. This is because phone layouts have more menus closed by default such as how both tablets and phones have the left nav closed but unlike phone layouts, tablets have the regular top navigation bar, not the mobile one. So in the case where the navigation being edited needs to be used in tablet layouts as well, use `remote_mobile_device_name` instead of `mobile_layout?` when prepending so it will use it if it's a tablet layout as well.

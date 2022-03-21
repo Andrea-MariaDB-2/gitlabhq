@@ -5,7 +5,7 @@ import {
   issuable3,
   issuable4,
   issuable5,
-} from 'jest/vue_shared/components/issue/related_issuable_mock_data';
+} from 'jest/issuable/components/related_issuable_mock_data';
 import IssueDueDate from '~/boards/components/issue_due_date.vue';
 import RelatedIssuesList from '~/related_issues/components/related_issues_list.vue';
 import { PathIdSeparator } from '~/related_issues/constants';
@@ -28,9 +28,14 @@ describe('RelatedIssuesList', () => {
         propsData: {
           pathIdSeparator: PathIdSeparator.Issue,
           issuableType: 'issue',
+          listLinkType: 'relates_to',
           heading,
         },
       });
+    });
+
+    it('assigns value of listLinkType prop to data attribute', () => {
+      expect(wrapper.attributes('data-link-type')).toBe('relates_to');
     });
 
     it('shows a heading', () => {

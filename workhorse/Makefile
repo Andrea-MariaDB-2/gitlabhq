@@ -12,7 +12,9 @@ ifdef SOURCE_DATE_EPOCH
 else
 	BUILD_TIME := $(shell date -u "$(DATE_FMT)")
 endif
-GOBUILD := go build -ldflags "-X main.Version=$(VERSION_STRING) -X main.BuildTime=$(BUILD_TIME)"
+GO_BUILD_GENERIC_LDFLAGS := -X main.Version=$(VERSION_STRING) -X main.BuildTime=$(BUILD_TIME)
+GITALY  := tmp/tests/gitaly/_build/bin/gitaly
+GITALY_PID_FILE := gitaly.pid
 EXE_ALL := gitlab-resize-image gitlab-zip-cat gitlab-zip-metadata gitlab-workhorse
 INSTALL := install
 BUILD_TAGS := tracer_static tracer_static_jaeger continuous_profiler_stackdriver
@@ -28,31 +30,35 @@ define message
 	@echo "### $(1)"
 endef
 
+# To compute a unique and deterministic value for GNU build-id, we build the Go binary a second time.
+# From the first build, we extract its unique and deterministic Go build-id, and use that to derive
+# a comparably unique and deterministic GNU build-id to inject into the final binary.
+# If we cannot extract a Go build-id, we punt and fallback to using a random 32-byte hex string.
+# This fallback is unique but non-deterministic.  Uniqueness is critical, because the GNU build-id
+# can be used as a cache key in a build cache.  Without the fallback, we risk cache key collisions.
+## Skip generation of the GNU build ID if set to speed up builds.
+WITHOUT_BUILD_ID ?=
 
 .NOTPARALLEL:
 
 .PHONY:	all
 all:	clean-build $(EXE_ALL)
 
-.PHONY: gitlab-resize-image
-gitlab-resize-image:
+.PHONY: gitlab-resize-image gitlab-zip-cat gitlab-zip-metadata
+gitlab-resize-image gitlab-zip-cat gitlab-zip-metadata:
 	$(call message,Building $@)
-	$(GOBUILD) -tags "$(BUILD_TAGS)" -o $(BUILD_DIR)/$@ $(PKG)/cmd/$@
-
-.PHONY: gitlab-zip-cat
-gitlab-zip-cat:
-	$(call message,Building $@)
-	$(GOBUILD) -tags "$(BUILD_TAGS)" -o $(BUILD_DIR)/$@ $(PKG)/cmd/$@
-
-.PHONY: gitlab-zip-metadata
-gitlab-zip-metadata:
-	$(call message,Building $@)
-	$(GOBUILD) -tags "$(BUILD_TAGS)" -o $(BUILD_DIR)/$@ $(PKG)/cmd/$@
+	go build -ldflags "$(GO_BUILD_GENERIC_LDFLAGS)" -tags "$(BUILD_TAGS)" -o $(BUILD_DIR)/$@ $(PKG)/cmd/$@
+ifndef WITHOUT_BUILD_ID
+	go build -ldflags "$(GO_BUILD_GENERIC_LDFLAGS) -B 0x$$(_support/make-gnu-build-id.sh $(BUILD_DIR)/$@)" -tags "$(BUILD_TAGS)" -o $(BUILD_DIR)/$@ $(PKG)/cmd/$@
+endif
 
 .PHONY: gitlab-workhorse
 gitlab-workhorse:
 	$(call message,Building $@)
-	$(GOBUILD) -tags "$(BUILD_TAGS)" -o $(BUILD_DIR)/$@ $(PKG)
+	go build -ldflags "$(GO_BUILD_GENERIC_LDFLAGS)" -tags "$(BUILD_TAGS)" -o $(BUILD_DIR)/$@ $(PKG)
+ifndef WITHOUT_BUILD_ID
+	go build -ldflags "$(GO_BUILD_GENERIC_LDFLAGS) -B 0x$$(_support/make-gnu-build-id.sh $(BUILD_DIR)/$@)" -tags "$(BUILD_TAGS)" -o $(BUILD_DIR)/$@ $(PKG)
+endif
 
 .PHONY:	install
 install: $(EXE_ALL)
@@ -63,7 +69,21 @@ install: $(EXE_ALL)
 .PHONY:	test
 test: prepare-tests
 	$(call message,$@)
-	@go test -tags "$(BUILD_TAGS)" ./...
+	@if [ -z "$${GITALY_ADDRESS+x}" ] ; then \
+		echo "To run gitaly integration tests set GITALY_ADDRESS=tcp://127.0.0.1:8075" ; \
+	else \
+		$(MAKE) run-gitaly ; \
+	fi
+	@go test -tags "$(BUILD_TAGS)" ./... ;\
+	status="$$?" ;\
+	if [ -f "$(GITALY_PID_FILE)" ] ; then \
+		echo "Clean up Gitaly server for workhorse integration test" ;\
+		kill -9 $$(cat $(GITALY_PID_FILE)) ;\
+		rm $(GITALY_PID_FILE) ;\
+	else \
+		echo "Gitaly integration test not running" ;\
+	fi ;\
+	exit "$$status"
 	@echo SUCCESS
 
 .PHONY:	clean
@@ -84,6 +104,21 @@ clean-build:
 .PHONY:	prepare-tests
 prepare-tests:	testdata/data/group/test.git $(EXE_ALL)
 prepare-tests:	testdata/scratch
+
+.PHONY: run-gitaly
+run-gitaly: $(GITALY_PID_FILE)
+
+$(GITALY_PID_FILE): gitaly.toml
+	$(call message, "Starting gitaly")
+	cd ..; GITALY_TESTING_NO_GIT_HOOKS=1 GITALY_PID_FILE=workhorse/$(GITALY_PID_FILE) scripts/gitaly-test-spawn workhorse/gitaly.toml
+
+gitaly.toml: ../tmp/tests/gitaly/config.toml
+	sed -e 's/^socket_path.*$$/listen_addr = "0.0.0.0:8075"/;s/^\[auth\]$$//;s/^token.*$$//;s/^internal_socket_dir.*$$//' \
+		$< > $@
+
+../tmp/tests/gitaly/config.toml:
+	$(call message, "Building a complete test environment")
+	cd .. ; ./scripts/setup-test-env
 
 testdata/data/group/test.git:
 	$(call message,$@)

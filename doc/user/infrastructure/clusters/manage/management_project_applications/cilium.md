@@ -4,7 +4,7 @@ group: Container Security
 info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
 ---
 
-# Install Cilium with a cluster management project
+# Install Cilium with a cluster management project **(FREE)**
 
 > [Introduced](https://gitlab.com/gitlab-org/project-templates/cluster-management/-/merge_requests/5) in GitLab 14.0.
 
@@ -37,7 +37,7 @@ You can check the recommended variables for each cluster type in the official do
 - [Google GKE](https://docs.cilium.io/en/v1.8/gettingstarted/k8s-install-gke/#deploy-cilium)
 - [AWS EKS](https://docs.cilium.io/en/v1.8/gettingstarted/k8s-install-eks/#deploy-cilium)
 
-Do not use `clusterType` for sandbox environments like [Minikube](https://minikube.sigs.k8s.io/docs/).
+Do not use `clusterType` for sandbox environments like [minikube](https://minikube.sigs.k8s.io/docs/).
 
 You can customize Cilium's Helm variables by defining the
 `applications/cilium/values.yaml` file in your cluster
@@ -120,9 +120,3 @@ global:
       enabled:
       - 'flow:sourceContext=namespace;destinationContext=namespace'
 ```
-
-Support for installing the Cilium managed application is provided by the
-GitLab Container Security group. If you run into unknown issues,
-[open a new issue](https://gitlab.com/gitlab-org/gitlab/-/issues/new), and ping at
-least 2 people from the
-[Container Security group](https://about.gitlab.com/handbook/product/categories/#container-security-group).

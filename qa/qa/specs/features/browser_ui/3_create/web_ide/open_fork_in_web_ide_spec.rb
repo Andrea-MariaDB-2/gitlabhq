@@ -2,7 +2,10 @@
 
 module QA
   RSpec.describe 'Create' do
-    describe 'Open a fork in Web IDE' do
+    describe 'Open a fork in Web IDE', quarantine: {
+        issue: "https://gitlab.com/gitlab-org/gitlab/-/issues/351696",
+        type: :flaky
+    } do
       let(:parent_project) do
         Resource::Project.fabricate_via_api! do |project|
           project.name = 'parent-project'
@@ -11,10 +14,10 @@ module QA
       end
 
       context 'when a user does not have permissions to commit to the project' do
-        let(:user) { Resource::User.fabricate_or_use(Runtime::Env.gitlab_qa_username_1, Runtime::Env.gitlab_qa_password_1) }
+        let(:user) { Resource::User.fabricate_or_use(Runtime::Env.gitlab_qa_username_2, Runtime::Env.gitlab_qa_password_2) }
 
         context 'when no fork is present' do
-          it 'suggests to create a fork when a user clicks Web IDE in the main project', testcase: 'https://gitlab.com/gitlab-org/quality/testcases/-/quality/test_cases/1289' do
+          it 'suggests to create a fork when a user clicks Web IDE in the main project', testcase: 'https://gitlab.com/gitlab-org/gitlab/-/quality/test_cases/347823' do
             Flow::Login.sign_in(as: user)
 
             parent_project.visit!
@@ -34,7 +37,7 @@ module QA
             end
           end
 
-          it 'opens the fork when a user clicks Web IDE in the main project', testcase: 'https://gitlab.com/gitlab-org/quality/testcases/-/quality/test_cases/1288' do
+          it 'opens the fork when a user clicks Web IDE in the main project', testcase: 'https://gitlab.com/gitlab-org/gitlab/-/quality/test_cases/347824' do
             Flow::Login.sign_in(as: user)
             fork_project.upstream.visit!
             Page::Project::Show.perform do |project_page|
@@ -44,6 +47,10 @@ module QA
             end
 
             submit_merge_request_upstream
+          end
+
+          after do
+            fork_project.project.remove_via_api!
           end
         end
 

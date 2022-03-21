@@ -40,6 +40,7 @@ export const ACTION_LABELS = {
     trialRequired: true,
     section: 'workspace',
     position: 4,
+    videoTutorial: 'https://vimeo.com/670896787',
   },
   requiredMrApprovalsEnabled: {
     title: s__('LearnGitLab|Add merge request approval'),
@@ -48,6 +49,7 @@ export const ACTION_LABELS = {
     trialRequired: true,
     section: 'workspace',
     position: 5,
+    videoTutorial: 'https://vimeo.com/670904904',
   },
   mergeRequestCreated: {
     title: s__('LearnGitLab|Submit a merge request'),
@@ -94,3 +96,5 @@ export const ACTION_SECTIONS = {
     ),
   },
 };
+
+export const INVITE_MODAL_OPEN_COOKIE = 'confetti_post_signup';

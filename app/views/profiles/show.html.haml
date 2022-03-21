@@ -5,7 +5,7 @@
 - availability = availability_values
 - custom_emoji = show_status_emoji?(@user.status)
 
-= bootstrap_form_for @user, url: profile_path, method: :put, html: { multipart: true, class: 'edit-user gl-mt-3 js-quick-submit gl-show-field-errors' }, authenticity_token: true do |f|
+= bootstrap_form_for @user, url: profile_path, method: :put, html: { multipart: true, class: 'edit-user gl-mt-3 js-quick-submit gl-show-field-errors js-password-prompt-form', remote: true }, authenticity_token: true do |f|
   = form_errors(@user)
 
   .row.js-search-settings-section
@@ -71,7 +71,7 @@
           placeholder: s_("Profiles|What's your status?")
         .checkbox-icon-inline-wrapper
           = status_form.check_box :availability, { data: { testid: "user-availability-checkbox" }, label: s_("Profiles|Busy"), wrapper_class: 'gl-mr-0 gl-font-weight-bold' }, availability["busy"], availability["not_set"]
-          .gl-text-gray-600.gl-ml-5= s_('Profiles|"Busy" will be shown next to your name')
+          .gl-text-gray-600.gl-ml-5= s_('Profiles|An indicator appears next to your name and avatar')
     .col-lg-12
       %hr
   .row.user-time-preferences.js-search-settings-section
@@ -80,7 +80,7 @@
       %p= s_("Profiles|Set your local time zone")
     .col-lg-8
       %h5= _("Time zone")
-      = dropdown_tag(_("Select a time zone"), options: { toggle_class: 'gl-button btn js-timezone-dropdown input-lg', title: _("Select a time zone"), filter: true, placeholder: s_("OfSearchInADropdown|Filter"), data: { data: timezone_data } } )
+      = dropdown_tag(_("Select a time zone"), options: { toggle_class: 'gl-button btn js-timezone-dropdown input-lg gl-w-full!', title: _("Select a time zone"), filter: true, placeholder: s_("OfSearchInADropdown|Filter"), data: { data: timezone_data } } )
       %input.hidden{ :type => 'hidden', :id => 'user_timezone', :name => 'user[timezone]', value: @user.timezone }
     .col-lg-12
       %hr
@@ -97,25 +97,26 @@
         = render 'profiles/name', form: f, user: @user
         = f.text_field :id, class: 'gl-form-input', readonly: true, label: s_('Profiles|User ID'), wrapper: { class: 'col-md-3' }
 
-      = f.text_field :pronouns, class: 'input-md gl-form-input', help: s_("Profiles|Enter your pronouns to let people know how to refer to you")
-      = f.text_field :pronunciation, class: 'input-md gl-form-input', help: s_("Profiles|Enter how your name is pronounced to help people address you correctly")
+      = f.text_field :pronouns, label: s_('Profiles|Pronouns'), class: 'input-md gl-form-input', help: s_("Profiles|Enter your pronouns to let people know how to refer to you")
+      = f.text_field :pronunciation, label: s_('Profiles|Pronunciation'), class: 'input-md gl-form-input', help: s_("Profiles|Enter how your name is pronounced to help people address you correctly")
+      = render_if_exists 'profiles/extra_settings', form: f
       = render_if_exists 'profiles/email_settings', form: f
       = f.text_field :skype, class: 'input-md gl-form-input', placeholder: s_("Profiles|username")
       = f.text_field :linkedin, class: 'input-md gl-form-input', help: s_("Profiles|Your LinkedIn profile name from linkedin.com/in/profilename")
       = f.text_field :twitter, class: 'input-md gl-form-input', placeholder: s_("Profiles|@username")
-      = f.text_field :website_url, class: 'input-lg gl-form-input', placeholder: s_("Profiles|website.com")
+      = f.text_field :website_url, label: s_('Profiles|Website url'), class: 'input-lg gl-form-input', placeholder: s_("Profiles|https://website.com")
       - if @user.read_only_attribute?(:location)
         = f.text_field :location, class: 'gl-form-input', readonly: true, help: s_("Profiles|Your location was automatically set based on your %{provider_label} account") % { provider_label: attribute_provider_label(:location) }
       - else
         = f.text_field :location, label: s_('Profiles|Location'), class: 'input-lg gl-form-input', placeholder: s_("Profiles|City, country")
-      = f.text_field :job_title, class: 'input-md gl-form-input'
+      = f.text_field :job_title, label: s_('Profiles|Job title'), class: 'input-md gl-form-input'
       = f.text_field :organization, label: s_('Profiles|Organization'), class: 'input-md gl-form-input', help: s_("Profiles|Who you represent or work for")
       = f.text_area :bio, class: 'gl-form-input', label: s_('Profiles|Bio'), rows: 4, maxlength: 250, help: s_("Profiles|Tell us about yourself in fewer than 250 characters")
       %hr
       %h5= _('Private profile')
       .checkbox-icon-inline-wrapper
         - private_profile_label = capture do
-          = s_("Profiles|Don't display activity-related personal information on your profiles")
+          = s_("Profiles|Don't display activity-related personal information on your profile")
         = f.check_box :private_profile, label: private_profile_label, inline: true, wrapper_class: 'mr-0'
         = link_to sprite_icon('question-o'), help_page_path('user/profile/index.md', anchor: 'make-your-user-profile-page-private')
       %h5= s_("Profiles|Private contributions")
@@ -123,8 +124,10 @@
       .help-block
         = s_("Profiles|Choose to show contributions of private projects on your public profile without any project, repository or organization information")
   %hr
-  = f.submit s_("Profiles|Update profile settings"), class: 'gl-button btn btn-confirm gl-mr-3'
+  = f.submit s_("Profiles|Update profile settings"), class: 'gl-button btn btn-confirm gl-mr-3 js-password-prompt-btn'
   = link_to _("Cancel"), user_path(current_user), class: 'gl-button btn btn-default btn-cancel'
+
+#password-prompt-modal
 
 .modal.modal-profile-crop{ data: { cropper_css_path: ActionController::Base.helpers.stylesheet_path('lazy_bundles/cropper.css') } }
   .modal-dialog
@@ -139,10 +142,10 @@
           %img.modal-profile-crop-image{ alt: s_("Profiles|Avatar cropper") }
         .crop-controls
           .btn-group
-            %button.btn.gl-button.btn-confirm{ data: { method: 'zoom', option: '-0.1' } }
+            %button.btn.gl-button.btn-default{ data: { method: 'zoom', option: '-0.1' } }
               %span
                 = sprite_icon('search-minus')
-            %button.btn.gl-button.btn-confirm{ data: { method: 'zoom', option: '0.1' } }
+            %button.btn.gl-button.btn-default{ data: { method: 'zoom', option: '0.1' } }
               %span
                 = sprite_icon('search-plus')
       .modal-footer

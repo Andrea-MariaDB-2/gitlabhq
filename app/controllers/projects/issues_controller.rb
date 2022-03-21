@@ -10,7 +10,7 @@ class Projects::IssuesController < Projects::ApplicationController
   include RecordUserLastActivity
 
   ISSUES_EXCEPT_ACTIONS = %i[index calendar new create bulk_update import_csv export_csv service_desk].freeze
-  SET_ISSUEABLES_INDEX_ONLY_ACTIONS = %i[index calendar service_desk].freeze
+  SET_ISSUABLES_INDEX_ONLY_ACTIONS = %i[calendar service_desk].freeze
 
   prepend_before_action(only: [:index]) { authenticate_sessionless_user!(:rss) }
   prepend_before_action(only: [:calendar]) { authenticate_sessionless_user!(:ics) }
@@ -22,7 +22,7 @@ class Projects::IssuesController < Projects::ApplicationController
   before_action :issue, unless: ->(c) { ISSUES_EXCEPT_ACTIONS.include?(c.action_name.to_sym) }
   after_action :log_issue_show, unless: ->(c) { ISSUES_EXCEPT_ACTIONS.include?(c.action_name.to_sym) }
 
-  before_action :set_issuables_index, if: ->(c) { SET_ISSUEABLES_INDEX_ONLY_ACTIONS.include?(c.action_name.to_sym) }
+  before_action :set_issuables_index, if: ->(c) { SET_ISSUABLES_INDEX_ONLY_ACTIONS.include?(c.action_name.to_sym) }
 
   # Allow write(create) issue
   before_action :authorize_create_issue!, only: [:new, :create]
@@ -36,33 +36,19 @@ class Projects::IssuesController < Projects::ApplicationController
   before_action :authorize_import_issues!, only: [:import_csv]
   before_action :authorize_download_code!, only: [:related_branches]
 
-  # Limit the amount of issues created per minute
-  before_action :create_rate_limit, only: [:create]
-
   before_action do
-    push_frontend_feature_flag(:tribute_autocomplete, @project)
-    push_frontend_feature_flag(:vue_issuables_list, project)
     push_frontend_feature_flag(:improved_emoji_picker, project, default_enabled: :yaml)
-    push_frontend_feature_flag(:vue_issues_list, project)
+    push_frontend_feature_flag(:vue_issues_list, project&.group, default_enabled: :yaml)
     push_frontend_feature_flag(:iteration_cadences, project&.group, default_enabled: :yaml)
+    push_frontend_feature_flag(:contacts_autocomplete, project&.group, default_enabled: :yaml)
+    push_frontend_feature_flag(:markdown_continue_lists, project, default_enabled: :yaml)
   end
 
   before_action only: :show do
-    real_time_enabled = Gitlab::ActionCable::Config.in_app? || Feature.enabled?(:real_time_issue_sidebar, @project)
-
-    push_to_gon_attributes(:features, :real_time_issue_sidebar, real_time_enabled)
-    push_frontend_feature_flag(:confidential_notes, @project, default_enabled: :yaml)
-    push_frontend_feature_flag(:issue_assignees_widget, @project, default_enabled: :yaml)
-    push_frontend_feature_flag(:labels_widget, @project, default_enabled: :yaml)
-
-    experiment(:invite_members_in_comment, namespace: @project.root_ancestor) do |experiment_instance|
-      experiment_instance.exclude! unless helpers.can_admin_project_member?(@project)
-
-      experiment_instance.use {}
-      experiment_instance.try(:invite_member_link) {}
-
-      experiment_instance.track(:view, property: @project.root_ancestor.id.to_s)
-    end
+    push_frontend_feature_flag(:confidential_notes, project&.group, default_enabled: :yaml)
+    push_frontend_feature_flag(:issue_assignees_widget, project, default_enabled: :yaml)
+    push_frontend_feature_flag(:paginated_issue_discussions, project, default_enabled: :yaml)
+    push_frontend_feature_flag(:work_items, project&.group, default_enabled: :yaml)
   end
 
   around_action :allow_gitaly_ref_name_caching, only: [:discussions]
@@ -71,7 +57,7 @@ class Projects::IssuesController < Projects::ApplicationController
 
   alias_method :designs, :show
 
-  feature_category :issue_tracking, [
+  feature_category :team_planning, [
                      :index, :calendar, :show, :new, :create, :edit, :update,
                      :destroy, :move, :reorder, :designs, :toggle_subscription,
                      :discussions, :bulk_update, :realtime_changes,
@@ -80,16 +66,22 @@ class Projects::IssuesController < Projects::ApplicationController
                    ]
 
   feature_category :service_desk, [:service_desk]
+  urgency :low, [:service_desk]
   feature_category :importers, [:import_csv, :export_csv]
 
   attr_accessor :vulnerability_id
 
   def index
-    @issues = @issuables
+    if html_request? && Feature.enabled?(:vue_issues_list, project&.group, default_enabled: :yaml)
+      set_sort_order
+    else
+      set_issuables_index
+      @issues = @issuables
+    end
 
     respond_to do |format|
       format.html
-      format.atom { render layout: 'xml.atom' }
+      format.atom { render layout: 'xml' }
       format.json do
         render json: {
           html: view_to_html_string("projects/issues/_issues"),
@@ -116,8 +108,14 @@ class Projects::IssuesController < Projects::ApplicationController
 
     @issue = @noteable = service.execute
 
+    @add_related_issue = add_related_issue
+
     @merge_request_to_resolve_discussions_of = service.merge_request_to_resolve_discussions_of
-    @discussion_to_resolve = service.discussions_to_resolve.first if params[:discussion_to_resolve]
+
+    if params[:discussion_to_resolve]
+      Gitlab::UsageDataCounters::MergeRequestActivityUniqueCounter.track_resolve_thread_in_issue_action(user: current_user)
+      @discussion_to_resolve = service.discussions_to_resolve.first
+    end
 
     respond_with(@issue)
   end
@@ -128,6 +126,7 @@ class Projects::IssuesController < Projects::ApplicationController
 
   def create
     create_params = issue_params.merge(
+      add_related_issue: add_related_issue,
       merge_request_to_resolve_discussions_of: params[:merge_request_to_resolve_discussions_of],
       discussion_to_resolve: params[:discussion_to_resolve]
     )
@@ -150,7 +149,7 @@ class Projects::IssuesController < Projects::ApplicationController
       redirect_to project_issue_path(@project, @issue)
     else
       # NOTE: this CAPTCHA support method is indirectly included via IssuableActions
-      with_captcha_check_html_format { render :new }
+      with_captcha_check_html_format(spammable: spammable) { render :new }
     end
   end
 
@@ -227,7 +226,7 @@ class Projects::IssuesController < Projects::ApplicationController
     IssuableExportCsvWorker.perform_async(:issue, current_user.id, project.id, finder_options.to_h) # rubocop:disable CodeReuse/Worker
 
     index_path = project_issues_path(project)
-    message = _('Your CSV export has started. It will be emailed to %{email} when complete.') % { email: current_user.notification_email }
+    message = _('Your CSV export has started. It will be emailed to %{email} when complete.') % { email: current_user.notification_email_or_default }
     redirect_to(index_path, notice: message)
   end
 
@@ -296,10 +295,12 @@ class Projects::IssuesController < Projects::ApplicationController
   end
 
   def issue_params
-    params.require(:issue).permit(
+    all_params = params.require(:issue).permit(
       *issue_params_attributes,
       sentry_issue_attributes: [:sentry_issue_identifier]
     )
+
+    clean_params(all_params)
   end
 
   def issue_params_attributes
@@ -320,7 +321,7 @@ class Projects::IssuesController < Projects::ApplicationController
   end
 
   def reorder_params
-    params.permit(:move_before_id, :move_after_id, :group_full_path)
+    params.permit(:move_before_id, :move_after_id)
   end
 
   def store_uri
@@ -353,6 +354,13 @@ class Projects::IssuesController < Projects::ApplicationController
 
   private
 
+  def clean_params(all_params)
+    issue_type = all_params[:issue_type].to_s
+    all_params.delete(:issue_type) unless WorkItems::Type.allowed_types_for_issues.include?(issue_type)
+
+    all_params
+  end
+
   def finder_options
     options = super
 
@@ -370,22 +378,13 @@ class Projects::IssuesController < Projects::ApplicationController
     project_compare_path(project, from: project.default_branch, to: branch[:name])
   end
 
-  def create_rate_limit
-    key = :issues_create
-
-    if rate_limiter.throttled?(key, scope: [@project, @current_user])
-      rate_limiter.log_request(request, "#{key}_request_limit".to_sym, current_user)
-
-      render plain: _('This endpoint has been requested too many times. Try again later.'), status: :too_many_requests
-    end
-  end
-
-  def rate_limiter
-    ::Gitlab::ApplicationRateLimiter
-  end
-
   def service_desk?
     action_name == 'service_desk'
+  end
+
+  def add_related_issue
+    add_related_issue = project.issues.find_by_iid(params[:add_related_issue])
+    add_related_issue if Ability.allowed?(current_user, :read_issue, add_related_issue)
   end
 
   # Overridden in EE

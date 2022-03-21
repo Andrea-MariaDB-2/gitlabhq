@@ -10,9 +10,9 @@ module Sidebars
         def configure_menu_items
           return false unless can?(context.current_user, :read_analytics, context.project)
 
+          add_item(cycle_analytics_menu_item)
           add_item(ci_cd_analytics_menu_item)
           add_item(repository_analytics_menu_item)
-          add_item(cycle_analytics_menu_item)
 
           true
         end
@@ -60,7 +60,7 @@ module Sidebars
         end
 
         def repository_analytics_menu_item
-          if context.project.empty_repo?
+          if context.project.empty_repo? || !can?(context.current_user, :read_repository_graphs, context.project)
             return ::Sidebars::NilMenuItem.new(item_id: :repository_analytics)
           end
 

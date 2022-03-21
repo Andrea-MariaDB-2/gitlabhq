@@ -27,7 +27,7 @@ can't link to files outside it.
 
 ### Cache
 
-- Define cache per job by using the `cache:` keyword. Otherwise it is disabled.
+- Define cache per job by using the `cache` keyword. Otherwise it is disabled.
 - Subsequent pipelines can use the cache.
 - Subsequent jobs in the same pipeline can use the cache, if the dependencies are identical.
 - Different projects cannot share the cache.
@@ -45,7 +45,7 @@ can't link to files outside it.
 
 To ensure maximum availability of the cache, do one or more of the following:
 
-- [Tag your runners](../runners/configure_runners.md#use-tags-to-limit-the-number-of-jobs-using-the-runner) and use the tag on jobs
+- [Tag your runners](../runners/configure_runners.md#use-tags-to-control-which-jobs-a-runner-can-run) and use the tag on jobs
   that share the cache.
 - [Use runners that are only available to a particular project](../runners/runners_scope.md#prevent-a-specific-runner-from-being-enabled-for-other-projects).
 - [Use a `key`](../yaml/index.md#cachekey) that fits your workflow. For example,
@@ -134,7 +134,7 @@ job:
 ## Inherit global configuration, but override specific settings per job
 
 You can override cache settings without overwriting the global cache by using
-[anchors](../yaml/index.md#anchors). For example, if you want to override the
+[anchors](../yaml/yaml_optimization.md#anchors). For example, if you want to override the
 `policy` for one job:
 
 ```yaml
@@ -233,6 +233,39 @@ before_script:
 test_async:
   script:
     - node ./specs/start.js ./specs/async.spec.js
+```
+
+#### Compute the cache key from the lock file
+
+You can use [`cache:key:files`](../yaml/index.md#cachekeyfiles) to compute the cache
+key from a lock file like `package-lock.json` or `yarn.lock`, and reuse it in many jobs.
+
+```yaml
+# Cache modules using lock file
+cache:
+  key:
+    files:
+      - package-lock.json
+  paths:
+    - .npm/
+```
+
+If you're using [Yarn](https://yarnpkg.com/), you can use [`yarn-offline-mirror`](https://classic.yarnpkg.com/blog/2016/11/24/offline-mirror/)
+to cache the zipped `node_modules` tarballs. The cache generates more quickly, because
+fewer files have to be compressed:
+
+```yaml
+job:
+  script:
+    - echo 'yarn-offline-mirror ".yarn-cache/"' >> .yarnrc
+    - echo 'yarn-offline-mirror-pruning true' >> .yarnrc
+    - yarn install --frozen-lockfile --no-progress
+  cache:
+    key:
+      files:
+        - yarn.lock
+    paths:
+      - .yarn-cache/
 ```
 
 ### Cache PHP dependencies

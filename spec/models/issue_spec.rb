@@ -15,7 +15,7 @@ RSpec.describe Issue do
     it { is_expected.to belong_to(:iteration) }
     it { is_expected.to belong_to(:project) }
     it { is_expected.to have_one(:namespace).through(:project) }
-    it { is_expected.to belong_to(:work_item_type).class_name('WorkItem::Type') }
+    it { is_expected.to belong_to(:work_item_type).class_name('WorkItems::Type') }
     it { is_expected.to belong_to(:moved_to).class_name('Issue') }
     it { is_expected.to have_one(:moved_from).class_name('Issue') }
     it { is_expected.to belong_to(:duplicated_to).class_name('Issue') }
@@ -32,8 +32,11 @@ RSpec.describe Issue do
     it { is_expected.to have_and_belong_to_many(:self_managed_prometheus_alert_events) }
     it { is_expected.to have_many(:prometheus_alerts) }
     it { is_expected.to have_many(:issue_email_participants) }
+    it { is_expected.to have_one(:email) }
     it { is_expected.to have_many(:timelogs).autosave(true) }
     it { is_expected.to have_one(:incident_management_issuable_escalation_status) }
+    it { is_expected.to have_many(:issue_customer_relations_contacts) }
+    it { is_expected.to have_many(:customer_relations_contacts) }
 
     describe 'versions.most_recent' do
       it 'returns the most recent version' do
@@ -165,8 +168,8 @@ RSpec.describe Issue do
       expect(described_class.simple_sorts.keys).to include(
         *%w(created_asc created_at_asc created_date created_desc created_at_desc
             closest_future_date closest_future_date_asc due_date due_date_asc due_date_desc
-            id_asc id_desc relative_position relative_position_asc
-            updated_desc updated_asc updated_at_asc updated_at_desc))
+            id_asc id_desc relative_position relative_position_asc updated_desc updated_asc
+            updated_at_asc updated_at_desc title_asc title_desc))
     end
   end
 
@@ -203,18 +206,64 @@ RSpec.describe Issue do
     end
   end
 
-  describe '#order_by_position_and_priority' do
+  describe '.order_title' do
+    let_it_be(:issue1) { create(:issue, title: 'foo') }
+    let_it_be(:issue2) { create(:issue, title: 'bar') }
+    let_it_be(:issue3) { create(:issue, title: 'baz') }
+    let_it_be(:issue4) { create(:issue, title: 'Baz 2') }
+
+    context 'sorting ascending' do
+      subject { described_class.order_title_asc }
+
+      it { is_expected.to eq([issue2, issue3, issue4, issue1]) }
+    end
+
+    context 'sorting descending' do
+      subject { described_class.order_title_desc }
+
+      it { is_expected.to eq([issue1, issue4, issue3, issue2]) }
+    end
+  end
+
+  describe '#order_by_relative_position' do
     let(:project) { reusable_project }
-    let(:p1) { create(:label, title: 'P1', project: project, priority: 1) }
-    let(:p2) { create(:label, title: 'P2', project: project, priority: 2) }
-    let!(:issue1) { create(:labeled_issue, project: project, labels: [p1]) }
-    let!(:issue2) { create(:labeled_issue, project: project, labels: [p2]) }
+    let!(:issue1) { create(:issue, project: project) }
+    let!(:issue2) { create(:issue, project: project) }
     let!(:issue3) { create(:issue, project: project, relative_position: -200) }
     let!(:issue4) { create(:issue, project: project, relative_position: -100) }
 
     it 'returns ordered list' do
-      expect(project.issues.order_by_position_and_priority)
+      expect(project.issues.order_by_relative_position)
         .to match [issue3, issue4, issue1, issue2]
+    end
+  end
+
+  context 'order by escalation status' do
+    let_it_be(:triggered_incident) { create(:incident_management_issuable_escalation_status, :triggered).issue }
+    let_it_be(:resolved_incident) { create(:incident_management_issuable_escalation_status, :resolved).issue }
+    let_it_be(:issue_no_status) { create(:issue) }
+
+    describe '.order_escalation_status_asc' do
+      subject { described_class.order_escalation_status_asc }
+
+      it { is_expected.to eq([triggered_incident, resolved_incident, issue_no_status]) }
+    end
+
+    describe '.order_escalation_status_desc' do
+      subject { described_class.order_escalation_status_desc }
+
+      it { is_expected.to eq([resolved_incident, triggered_incident, issue_no_status]) }
+    end
+  end
+
+  # TODO: Remove when NOT NULL constraint is added to the relationship
+  describe '#work_item_type' do
+    let(:issue) { create(:issue, :incident, project: reusable_project, work_item_type: nil) }
+
+    it 'returns a default type if the legacy issue does not have a work item type associated yet' do
+      expect(issue.work_item_type_id).to be_nil
+      expect(issue.issue_type).to eq('incident')
+      expect(issue.work_item_type).to eq(WorkItems::Type.default_by_type(:incident))
     end
   end
 
@@ -287,7 +336,7 @@ RSpec.describe Issue do
   end
 
   describe '#reopen' do
-    let(:issue) { create(:issue, project: reusable_project, state: 'closed', closed_at: Time.current, closed_by: user) }
+    let_it_be_with_reload(:issue) { create(:issue, project: reusable_project, state: 'closed', closed_at: Time.current, closed_by: user) }
 
     it 'sets closed_at to nil when an issue is reopened' do
       expect { issue.reopen }.to change { issue.closed_at }.to(nil)
@@ -295,6 +344,22 @@ RSpec.describe Issue do
 
     it 'sets closed_by to nil when an issue is reopened' do
       expect { issue.reopen }.to change { issue.closed_by }.from(user).to(nil)
+    end
+
+    it 'clears moved_to_id for moved issues' do
+      moved_issue = create(:issue)
+
+      issue.update!(moved_to_id: moved_issue.id)
+
+      expect { issue.reopen }.to change { issue.moved_to_id }.from(moved_issue.id).to(nil)
+    end
+
+    it 'clears duplicated_to_id for duplicated issues' do
+      duplicate_issue = create(:issue)
+
+      issue.update!(duplicated_to_id: duplicate_issue.id)
+
+      expect { issue.reopen }.to change { issue.duplicated_to_id }.from(duplicate_issue.id).to(nil)
     end
 
     it 'changes the state to opened' do
@@ -840,6 +905,8 @@ RSpec.describe Issue do
         end
       end
 
+      # TODO update when we have multiple owners of a project
+      # https://gitlab.com/gitlab-org/gitlab/-/issues/350605
       context 'with an owner' do
         before do
           project.add_maintainer(user)
@@ -951,6 +1018,7 @@ RSpec.describe Issue do
           issue = build(:issue, project: project)
           user = build(:user)
 
+          allow(::Gitlab::ExternalAuthorization).to receive(:access_allowed?).with(user, 'a-label', project.full_path).and_call_original
           expect(::Gitlab::ExternalAuthorization).to receive(:access_allowed?).with(user, 'a-label') { false }
           expect(issue.visible_to_user?(user)).to be_falsy
         end
@@ -984,6 +1052,7 @@ RSpec.describe Issue do
               issue = build(:issue, project: project)
               user = build(:admin)
 
+              allow(::Gitlab::ExternalAuthorization).to receive(:access_allowed?).with(user, 'a-label', project.full_path).and_call_original
               expect(::Gitlab::ExternalAuthorization).to receive(:access_allowed?).with(user, 'a-label') { false }
               expect(issue.visible_to_user?(user)).to be_falsy
             end
@@ -1116,7 +1185,6 @@ RSpec.describe Issue do
   end
 
   describe '#check_for_spam?' do
-    using RSpec::Parameterized::TableSyntax
     let_it_be(:support_bot) { ::User.support_bot }
 
     where(:support_bot?, :visibility_level, :confidential, :new_attributes, :check_for_spam?) do
@@ -1176,17 +1244,32 @@ RSpec.describe Issue do
     it 'refreshes the number of open issues of the project' do
       project = subject.project
 
-      expect { subject.destroy! }
-        .to change { project.open_issues_count }.from(1).to(0)
+      expect do
+        subject.destroy!
+
+        BatchLoader::Executor.clear_current
+      end.to change { project.open_issues_count }.from(1).to(0)
     end
   end
 
   describe '.public_only' do
-    it 'only returns public issues' do
-      public_issue = create(:issue, project: reusable_project)
-      create(:issue, project: reusable_project, confidential: true)
+    let_it_be(:banned_user) { create(:user, :banned) }
+    let_it_be(:public_issue) { create(:issue, project: reusable_project) }
+    let_it_be(:confidential_issue) { create(:issue, project: reusable_project, confidential: true) }
+    let_it_be(:hidden_issue) { create(:issue, project: reusable_project, author: banned_user) }
 
+    it 'only returns public issues' do
       expect(described_class.public_only).to eq([public_issue])
+    end
+
+    context 'when feature flag is disabled' do
+      before do
+        stub_feature_flags(ban_user_feature_flag: false)
+      end
+
+      it 'returns public and hidden issues' do
+        expect(described_class.public_only).to contain_exactly(public_issue, hidden_issue)
+      end
     end
   end
 
@@ -1214,7 +1297,7 @@ RSpec.describe Issue do
       end
 
       it 'returns public and hidden issues' do
-        expect(described_class.without_hidden).to eq([public_issue, hidden_issue])
+        expect(described_class.without_hidden).to contain_exactly(public_issue, hidden_issue)
       end
     end
   end
@@ -1367,26 +1450,6 @@ RSpec.describe Issue do
     end
   end
 
-  describe '.with_label_attributes' do
-    subject { described_class.with_label_attributes(label_attributes) }
-
-    let(:label_attributes) { { title: 'hello world', description: 'hi' } }
-
-    it 'gets issues with given label attributes' do
-      label = create(:label, **label_attributes)
-      labeled_issue = create(:labeled_issue, project: label.project, labels: [label])
-
-      expect(subject).to include(labeled_issue)
-    end
-
-    it 'excludes issues without given label attributes' do
-      label = create(:label, title: 'GitLab', description: 'tanuki')
-      labeled_issue = create(:labeled_issue, project: label.project, labels: [label])
-
-      expect(subject).not_to include(labeled_issue)
-    end
-  end
-
   describe 'banzai_render_context' do
     let(:project) { build(:project_empty_repo) }
     let(:issue) { build :issue, project: project }
@@ -1401,19 +1464,19 @@ RSpec.describe Issue do
   describe 'scheduling rebalancing' do
     before do
       allow_next_instance_of(RelativePositioning::Mover) do |mover|
-        allow(mover).to receive(:move) { raise ActiveRecord::QueryCanceled }
+        allow(mover).to receive(:move) { raise RelativePositioning::NoSpaceLeft }
       end
     end
 
     shared_examples 'schedules issues rebalancing' do
       let(:issue) { build_stubbed(:issue, relative_position: 100, project: project) }
 
-      it 'schedules rebalancing if we time-out when moving' do
+      it 'schedules rebalancing if there is no space left' do
         lhs = build_stubbed(:issue, relative_position: 99, project: project)
         to_move = build(:issue, project: project)
-        expect(IssueRebalancingWorker).to receive(:perform_async).with(nil, project_id, namespace_id)
+        expect(Issues::RebalancingWorker).to receive(:perform_async).with(nil, project_id, namespace_id)
 
-        expect { to_move.move_between(lhs, issue) }.to raise_error(ActiveRecord::QueryCanceled)
+        expect { to_move.move_between(lhs, issue) }.to raise_error(RelativePositioning::NoSpaceLeft)
       end
     end
 
@@ -1471,6 +1534,26 @@ RSpec.describe Issue do
     end
   end
 
+  describe '#supports_move_and_clone?' do
+    let_it_be(:project) { create(:project) }
+    let_it_be_with_refind(:issue) { create(:incident, project: project) }
+
+    where(:issue_type, :supports_move_and_clone) do
+      :issue | true
+      :incident | true
+    end
+
+    with_them do
+      before do
+        issue.update!(issue_type: issue_type)
+      end
+
+      it do
+        expect(issue.supports_move_and_clone?).to eq(supports_move_and_clone)
+      end
+    end
+  end
+
   describe '#email_participants_emails' do
     let_it_be(:issue) { create(:issue) }
 
@@ -1487,6 +1570,15 @@ RSpec.describe Issue do
       participant = create(:issue_email_participant, email: 'SomEoNe@ExamPLe.com')
 
       expect(participant.issue.email_participants_emails_downcase).to match([participant.email.downcase])
+    end
+  end
+
+  describe '#escalation_status' do
+    it 'returns the incident_management_issuable_escalation_status association' do
+      escalation_status = create(:incident_management_issuable_escalation_status)
+      issue = escalation_status.issue
+
+      expect(issue.escalation_status).to eq(escalation_status)
     end
   end
 end

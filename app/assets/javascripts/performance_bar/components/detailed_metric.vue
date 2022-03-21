@@ -1,7 +1,7 @@
 <script>
-import { GlButton, GlModal, GlModalDirective, GlSegmentedControl } from '@gitlab/ui';
+import { GlButton, GlDropdown, GlDropdownItem, GlModal, GlModalDirective } from '@gitlab/ui';
 
-import { s__ } from '~/locale';
+import { __, s__ } from '~/locale';
 import { sortOrders, sortOrderOptions } from '../constants';
 import RequestWarning from './request_warning.vue';
 
@@ -9,8 +9,9 @@ export default {
   components: {
     RequestWarning,
     GlButton,
+    GlDropdown,
+    GlDropdownItem,
     GlModal,
-    GlSegmentedControl,
   },
   directives: {
     'gl-modal': GlModalDirective,
@@ -55,7 +56,7 @@ export default {
       const summary = {};
 
       if (!this.metricDetails.summaryOptions?.hideTotal) {
-        summary[s__('Total')] = this.metricDetails.calls;
+        summary[__('Total')] = this.metricDetails.calls;
       }
 
       if (!this.metricDetails.summaryOptions?.hideDuration) {
@@ -156,13 +157,19 @@ export default {
             </div>
           </div>
         </div>
-        <gl-segmented-control
+        <gl-dropdown
           v-if="displaySortOrder"
+          :text="$options.sortOrderOptions[sortOrder]"
+          right
           data-testid="performance-bar-sort-order"
-          :options="$options.sortOrderOptions"
-          :checked="sortOrder"
-          @input="changeSortOrder"
-        />
+        >
+          <gl-dropdown-item
+            v-for="option in Object.keys($options.sortOrderOptions)"
+            :key="option"
+            @click="changeSortOrder(option)"
+            >{{ $options.sortOrderOptions[option] }}</gl-dropdown-item
+          >
+        </gl-dropdown>
       </div>
       <hr />
       <table class="table gl-table">

@@ -3,6 +3,8 @@
 require 'action_dispatch/testing/test_request'
 require 'fileutils'
 
+require_relative '../../../lib/gitlab/popen'
+
 module JavaScriptFixturesHelpers
   extend ActiveSupport::Concern
   include Gitlab::Popen
@@ -11,6 +13,12 @@ module JavaScriptFixturesHelpers
 
   included do |base|
     base.around do |example|
+      # Don't actually run the example when we're only interested in the `test file -> JSON frontend fixture` mapping
+      if ENV['GENERATE_FRONTEND_FIXTURES_MAPPING'] == 'true'
+        $fixtures_mapping[example.metadata[:file_path].delete_prefix('./')] << File.join(fixture_root_path, example.description) # rubocop:disable Style/GlobalVars
+        next
+      end
+
       # pick an arbitrary date from the past, so tests are not time dependent
       # Also see spec/frontend/__helpers__/fake_date/jest.js
       Timecop.freeze(Time.utc(2015, 7, 3, 10)) { example.run }
@@ -25,26 +33,18 @@ module JavaScriptFixturesHelpers
     'tmp/tests/frontend/fixtures' + (Gitlab.ee? ? '-ee' : '')
   end
 
-  # Public: Removes all fixture files from given directory
-  #
-  # directory_name - directory of the fixtures (relative to .fixture_root_path)
-  #
-  def clean_frontend_fixtures(directory_name)
-    full_directory_name = File.expand_path(directory_name, fixture_root_path)
-    Dir[File.expand_path('*.{html,json,md}', full_directory_name)].each do |file_name|
-      FileUtils.rm(file_name)
-    end
-  end
-
   def remove_repository(project)
     Gitlab::Shell.new.remove_repository(project.repository_storage, project.disk_path)
   end
 
   # Public: Reads a GraphQL query from the filesystem as a string
   #
-  # query_path - file path to the GraphQL query, relative to `app/assets/javascripts`
-  def get_graphql_query_as_string(query_path)
-    path = Rails.root / 'app/assets/javascripts' / query_path
+  # query_path - file path to the GraphQL query, relative to `app/assets/javascripts`.
+  # ee - boolean, when true `query_path` will be looked up in `/ee`.
+  def get_graphql_query_as_string(query_path, ee: false)
+    base = (ee ? 'ee/' : '') + 'app/assets/javascripts'
+
+    path = Rails.root / base / query_path
     queries = Gitlab::Graphql::Queries.find(path)
     if queries.length == 1
       queries.first.text(mode: Gitlab.ee? ? :ee : :ce )

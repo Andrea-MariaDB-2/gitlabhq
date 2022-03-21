@@ -74,4 +74,93 @@ RSpec.describe Gitlab::ImportExport::AttributesPermitter do
       expect(subject.permitted_attributes_for(:labels)).to contain_exactly(:title, :description, :type, :priorities)
     end
   end
+
+  describe '#permitted_attributes_defined?' do
+    using RSpec::Parameterized::TableSyntax
+
+    let(:attributes_permitter) { described_class.new }
+
+    where(:relation_name, :permitted_attributes_defined ) do
+      :user                        | true
+      :author                      | false
+      :ci_cd_settings              | true
+      :metrics_setting             | true
+      :project_badges              | true
+      :pipeline_schedules          | true
+      :error_tracking_setting      | true
+      :auto_devops                 | true
+      :boards                      | true
+      :custom_attributes           | true
+      :label                       | true
+      :labels                      | true
+      :protected_branches          | true
+      :protected_tags              | true
+      :create_access_levels        | true
+      :merge_access_levels         | true
+      :push_access_levels          | true
+      :releases                    | true
+      :links                       | true
+      :priorities                  | true
+      :milestone                   | true
+      :milestones                  | true
+      :snippets                    | true
+      :project_members             | true
+      :merge_request               | true
+      :merge_requests              | true
+      :award_emoji                 | true
+      :commit_author               | true
+      :committer                   | true
+      :events                      | true
+      :label_links                 | true
+      :merge_request_diff          | true
+      :merge_request_diff_commits  | true
+      :merge_request_diff_files    | true
+      :metrics                     | true
+      :notes                       | true
+      :push_event_payload          | true
+      :resource_label_events       | true
+      :suggestions                 | true
+      :system_note_metadata        | true
+      :timelogs                    | true
+      :container_expiration_policy | true
+      :project_feature             | true
+      :prometheus_metrics          | true
+      :service_desk_setting        | true
+      :external_pull_request       | true
+      :external_pull_requests      | true
+      :statuses                    | true
+      :ci_pipelines                | true
+      :stages                      | true
+      :actions                     | true
+      :design                      | true
+      :designs                     | true
+      :design_versions             | true
+      :issue_assignees             | true
+      :sentry_issue                | true
+      :zoom_meetings               | true
+      :issues                      | true
+      :group_members               | true
+      :project                     | true
+    end
+
+    with_them do
+      it { expect(attributes_permitter.permitted_attributes_defined?(relation_name)).to eq(permitted_attributes_defined) }
+    end
+  end
+
+  describe 'included_attributes for Project' do
+    subject { described_class.new }
+
+    # these are attributes for which either a special exception is made or are available only via included modules and not attribute introspection
+    additional_attributes = {
+      user: %w[id],
+      project: %w[auto_devops_deploy_strategy auto_devops_enabled issues_enabled jobs_enabled merge_requests_enabled snippets_enabled wiki_enabled build_git_strategy build_enabled security_and_compliance_enabled requirements_enabled]
+    }
+
+    Gitlab::ImportExport::Config.new.to_h[:included_attributes].each do |relation_sym, permitted_attributes|
+      context "for #{relation_sym}" do
+        it_behaves_like 'a permitted attribute', relation_sym, permitted_attributes, additional_attributes[relation_sym]
+      end
+    end
+  end
 end

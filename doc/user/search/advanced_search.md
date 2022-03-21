@@ -7,7 +7,7 @@ type: reference
 
 # GitLab Advanced Search **(PREMIUM)**
 
-> - Moved to GitLab Premium in 13.9.
+> Moved to GitLab Premium in 13.9.
 
 NOTE:
 This is the user documentation. To configure the Advanced Search,
@@ -26,7 +26,7 @@ when searching in:
 - Comments
 - Code
 - Commits
-- Wiki
+- Wiki (except [group wikis](../project/wiki/group.md))
 - Users
 
 The Advanced Search can be useful in various scenarios:
@@ -48,13 +48,13 @@ The Advanced Search can be useful in various scenarios:
 
 ## Use the Advanced Search syntax
 
-Elasticsearch has only data for the default branch. That means that if you go
+Elasticsearch has data for the default branch only. That means that if you go
 to the repository tree and switch the branch from the default to something else,
-then the "Code" tab in the search result page will be served by the basic
+then the **Code** tab in the search result page is served by the basic
 search even if Elasticsearch is enabled.
 
 The Advanced Search syntax supports fuzzy or exact search queries with prefixes,
-boolean operators, and much more. Use the search as before and GitLab will show
+boolean operators, and much more. Use the search as before and GitLab shows
 you matching code from each project you have access to.
 
 ![Advanced Search](img/advanced_search_v13.10.png)
@@ -62,8 +62,8 @@ you matching code from each project you have access to.
 Full details can be found in the [Elasticsearch documentation](https://www.elastic.co/guide/en/elasticsearch/reference/5.3/query-dsl-simple-query-string-query.html#_simple_query_string_syntax), but
 here's a quick guide:
 
-- Searches look for all the words in a query, in any order - e.g.: searching
-  issues for [`display bug`](https://gitlab.com/search?snippets=&scope=issues&repository_ref=&search=display+bug&group_id=9970&project_id=278964) and [`bug display`](https://gitlab.com/search?snippets=&scope=issues&repository_ref=&search=bug+Display&group_id=9970&project_id=278964) will return the same results.
+- Searches look for all the words in a query, in any order - for example: searching
+  issues for [`display bug`](https://gitlab.com/search?snippets=&scope=issues&repository_ref=&search=display+bug&group_id=9970&project_id=278964) and [`bug display`](https://gitlab.com/search?snippets=&scope=issues&repository_ref=&search=bug+Display&group_id=9970&project_id=278964) return the same results.
 - To find the exact phrase (stemming still applies), use double quotes: [`"display bug"`](https://gitlab.com/search?snippets=&scope=issues&repository_ref=&search=%22display+bug%22&group_id=9970&project_id=278964)
 - To find bugs not mentioning display, use `-`: [`bug -display`](https://gitlab.com/search?snippets=&scope=issues&repository_ref=&search=bug+-display&group_id=9970&project_id=278964)
 - To find a bug in display or banner, use `|`: [`bug display | banner`](https://gitlab.com/search?snippets=&scope=issues&repository_ref=&search=bug+display+%7C+banner&group_id=9970&project_id=278964)
@@ -81,7 +81,7 @@ Advanced Search also supports the use of filters. The available filters are:
 - `blob`: Filters by Git `object ID`. Exact match only.
 
 To use them, add them to your keyword in the format `<filter_name>:<value>` without
-any spaces between the colon (`:`) and the value. When no keyword is provided, an asterisk (`*`) will be used as the keyword.
+any spaces between the colon (`:`) and the value. When no keyword is provided, an asterisk (`*`) is used as the keyword.
 
 Examples:
 
@@ -139,4 +139,29 @@ its performance:
 | Commits | `global_search_commits_tab` | When enabled, the global search includes commits as part of the search. |
 | Issues | `global_search_issues_tab` | When enabled, the global search includes issues as part of the search. |
 | Merge Requests | `global_search_merge_requests_tab` | When enabled, the global search includes merge requests as part of the search. |
-| Wiki | `global_search_wiki_tab` | When enabled, the global search includes wiki as part of the search. |
+| Wiki | `global_search_wiki_tab` | When enabled, the global search includes wiki as part of the search. [Group wikis](../project/wiki/group.md) are not included. |
+
+## Global Search validation
+
+> [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/346263) in GitLab 14.6 [with a flag](../../administration/feature_flags.md) named `prevent_abusive_searches`. Disabled by default.
+
+FLAG:
+On self-managed GitLab, by default this feature is not available. To make it available,
+ask an administrator to [enable the feature flag](../../administration/feature_flags.md) named `prevent_abusive_searches`.
+The feature is not ready for production use.
+
+To prevent abusive searches, such as searches that may result in a Distributed Denial of Service (DDoS), Global Search ignores, logs, and
+doesn't return any results for searches considered abusive according to the following criteria, if `prevent_abusive_searches` feature flag is enabled:
+
+- Searches with less than 2 characters.
+- Searches with any term greater than 100 characters. URL search terms have a maximum of 200 characters.
+- Searches with a stop word as the only term (ie: "the", "and", "if", etc.).
+- Searches with a `group_id` or `project_id` parameter that is not completely numeric.
+- Searches with a `repository_ref` or `project_ref` parameter that has special characters not allowed by [Git refname](https://git-scm.com/docs/git-check-ref-format).
+- Searches with a `scope` that is unknown.
+
+Regardless of the status of the `prevent_abusive_searches` feature flag, searches that don't
+comply with the criteria described below aren't logged as abusive but are flagged with an error:
+
+- Searches with more than 4096 characters.
+- Searches with more than 64 terms.

@@ -63,7 +63,7 @@ If the case of `404.html`, there are different scenarios. For example:
 You can configure redirects for your site using a `_redirects` file. To learn more, read
 the [redirects documentation](redirects.md).
 
-## GitLab Pages Access Control **(FREE)**
+## GitLab Pages Access Control
 
 To restrict access to your website, enable [GitLab Pages Access Control](pages_access_control.md).
 
@@ -76,17 +76,21 @@ website.
 
 ![Remove pages](img/remove_pages.png)
 
-## Limitations
+## Subdomains of subdomains
 
-When using Pages under the general domain of a GitLab instance (`*.example.io`),
-you _cannot_ use HTTPS with sub-subdomains. That means that if your
-username or group name contains a dot, for example `foo.bar`, the domain
-`https://foo.bar.example.io` does _not_ work. This is a limitation of the
-[HTTP Over TLS protocol](https://tools.ietf.org/html/rfc2818#section-3.1).
-HTTP pages continue to work provided you don't redirect HTTP to HTTPS.
+When using Pages under the top-level domain of a GitLab instance (`*.example.io`), you can't use HTTPS with subdomains
+of subdomains. If your namespace or group name contains a dot (for example, `foo.bar`) the domain
+`https://foo.bar.example.io` does _not_ work.
 
-GitLab Pages [does **not** support group websites for subgroups](../../group/subgroups/index.md#limitations).
-You can only create the highest-level group website.
+This limitation is because of the [HTTP Over TLS protocol](https://tools.ietf.org/html/rfc2818#section-3.1). HTTP pages
+work as long as you don't redirect HTTP to HTTPS.
+
+## GitLab Pages and subgroups
+
+You must host your GitLab Pages website in a project. This project can belong to a [group](../../group/index.md) or
+[subgroup](../../group/subgroups/index.md). For
+[group websites](../../project/pages/getting_started_part_one.md#gitlab-pages-default-domain-names), the group must be
+at the top level and not a subgroup.
 
 ## Specific configuration options for Pages
 
@@ -118,7 +122,7 @@ pages:
     paths:
       - public
   only:
-    - master
+    - main
 ```
 
 ### `.gitlab-ci.yml` for a static site generator
@@ -133,7 +137,7 @@ the `pages` job with the [`only` parameter](../../../ci/yaml/index.md#only--exce
 whenever a new commit is pushed to a branch used specifically for your
 pages.
 
-That way, you can have your project's code in the `master` branch and use an
+That way, you can have your project's code in the `main` branch and use an
 orphan branch (let's name it `pages`) to host your static generator site.
 
 You can create a new empty branch like this:
@@ -163,7 +167,7 @@ pages:
     - pages
 ```
 
-See an example that has different files in the [`master` branch](https://gitlab.com/pages/jekyll-branched/tree/master)
+See an example that has different files in the [`main` branch](https://gitlab.com/pages/jekyll-branched/tree/main)
 and the source files for Jekyll are in a [`pages` branch](https://gitlab.com/pages/jekyll-branched/tree/pages) which
 also includes `.gitlab-ci.yml`.
 
@@ -214,8 +218,6 @@ needing to compress files on-demand.
 
 ### Resolving ambiguous URLs
 
-> [Introduced](https://gitlab.com/gitlab-org/gitlab-pages/-/issues/95) in GitLab 11.8
-
 GitLab Pages makes assumptions about which files to serve when receiving a
 request for a URL that does not include an extension.
 
@@ -223,16 +225,13 @@ Consider a Pages site deployed with the following files:
 
 ```plaintext
 public/
-├─┬ index.html
-│ ├ data.html
-│ └ info.html
-│
+├── index.html
+├── data.html
+├── info.html
 ├── data/
 │   └── index.html
-├── info/
-│   └── details.html
-└── other/
-    └── index.html
+└── info/
+    └── details.html
 ```
 
 Pages supports reaching each of these files through several different URLs. In
@@ -241,23 +240,19 @@ specifies the directory. If the URL references a file that doesn't exist, but
 adding `.html` to the URL leads to a file that *does* exist, it's served
 instead. Here are some examples of what happens given the above Pages site:
 
-| URL path             | HTTP response | File served |
-| -------------------- | ------------- | ----------- |
-| `/`                  | `200 OK`      | `public/index.html` |
-| `/index.html`        | `200 OK`      | `public/index.html` |
-| `/index`             | `200 OK`      | `public/index.html` |
-| `/data`              | `200 OK`      | `public/data/index.html` |
-| `/data/`             | `200 OK`      | `public/data/index.html` |
-| `/data.html`         | `200 OK`      | `public/data.html` |
-| `/info`              | `200 OK`      | `public/info.html` |
-| `/info/`             | `200 OK`      | `public/info.html` |
-| `/info.html`         | `200 OK`      | `public/info.html` |
-| `/info/details`      | `200 OK`      | `public/info/details.html` |
-| `/info/details.html` | `200 OK`      | `public/info/details.html` |
-| `/other`             | `302 Found`   | `public/other/index.html` |
-| `/other/`            | `200 OK`      | `public/other/index.html` |
-| `/other/index`       | `200 OK`      | `public/other/index.html` |
-| `/other/index.html`  | `200 OK`      | `public/other/index.html` |
+| URL path             | HTTP response |
+| -------------------- | ------------- |
+| `/`                  | `200 OK`: `public/index.html` |
+| `/index.html`        | `200 OK`: `public/index.html` |
+| `/index`             | `200 OK`: `public/index.html` |
+| `/data`              | `302 Found`: redirecting to `/data/` |
+| `/data/`             | `200 OK`: `public/data/index.html` |
+| `/data.html`         | `200 OK`: `public/data.html` |
+| `/info`              | `302 Found`: redirecting to `/info/` |
+| `/info/`             | `404 Not Found` Error Page |
+| `/info.html`         | `200 OK`: `public/info.html` |
+| `/info/details`      | `200 OK`: `public/info/details.html` |
+| `/info/details.html` | `200 OK`: `public/info/details.html` |
 
 Note that when `public/data/index.html` exists, it takes priority over the `public/data.html` file
 for both the `/data` and `/data/` URL paths.

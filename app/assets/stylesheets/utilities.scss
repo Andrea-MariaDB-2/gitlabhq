@@ -58,6 +58,13 @@
   }
 }
 
+.gl-first-child-ml-sm-0 > a:first-child,
+.gl-first-child-ml-sm-0 > button:first-child {
+  @include media-breakpoint-up(sm) {
+    @include gl-ml-0;
+  }
+}
+
 .mh-50vh { max-height: 50vh; }
 
 .min-width-0 {
@@ -193,6 +200,12 @@
   }
 }
 
+.gl-xl-ml-3 {
+  @include media-breakpoint-up(lg) {
+    margin-left: $gl-spacing-scale-3;
+  }
+}
+
 .gl-mb-n3 {
   margin-bottom: -$gl-spacing-scale-3;
 }
@@ -226,40 +239,135 @@ $gl-line-height-42: px-to-rem(42px);
   max-height: none !important;
 }
 
+// Will be moved to @gitlab/ui in https://gitlab.com/gitlab-org/gitlab-ui/-/issues/1655
+.gl-max-w-62 {
+  max-width: $grid-size * 62;
+}
+
+// Will be moved to @gitlab/ui in https://gitlab.com/gitlab-org/gitlab-ui/-/issues/1655
+.gl-max-w-26 {
+  max-width: $grid-size * 26;
+}
+
 .gl-max-w-50p {
   max-width: 50%;
 }
 
-// Will be moved to @gitlab/ui by https://gitlab.com/gitlab-org/gitlab-ui/-/issues/1465
-.gl-popover {
-  .popover-header {
-    .gl-button.close {
-      margin-top: -$gl-spacing-scale-3;
-      margin-right: -$gl-spacing-scale-4;
-    }
+/**
+  Note: ::-webkit-scrollbar is a non-standard rule only
+  supported by webkit browsers.
+
+  It is added here to migrate components that use
+  scrolling-links() mixin from `app/assets/stylesheets/framework/mixins.scss`.
+
+  It should not be used elsewhere: it may impact accessibility as well as
+  add browser compatibility issues.
+
+  See: https://developer.mozilla.org/en-US/docs/Web/CSS/::-webkit-scrollbar
+**/
+.gl-webkit-scrollbar-display-none {
+  &::-webkit-scrollbar {
+    display: none;
   }
 }
 
-// Will be moved to @gitlab/ui by https://gitlab.com/gitlab-org/gitlab-ui/-/issues/1490
-.gl-w-grid-size-28 {
-  width: $grid-size * 28;
+// Will both be moved to @gitlab/ui by https://gitlab.com/gitlab-org/gitlab-ui/-/issues/1465
+.gl-text-transparent {
+  color: transparent;
 }
 
-// Will be removed after https://gitlab.com/gitlab-org/gitlab-ui/-/merge_requests/2347 is merged
-.gl-min-w-8 {
-  min-width: $gl-spacing-scale-8;
+.gl-focus-ring-border-1-gray-900\! {
+  @include gl-focus($gl-border-size-1, $gray-900, true);
 }
 
-// Will be removed after https://gitlab.com/gitlab-org/gitlab-ui/-/merge_requests/2347 is merged
-.gl-min-w-10 {
-  min-width: $gl-spacing-scale-10;
+// Will be moved to @gitlab/ui by https://gitlab.com/gitlab-org/gitlab-ui/-/merge_requests/2600
+.gl-pr-10 {
+  padding-right: $gl-spacing-scale-10;
 }
 
-// Will both be moved to @gitlab/ui by https://gitlab.com/gitlab-org/gitlab-ui/-/issues/1526
-.gl-opacity-6 {
-  opacity: 0.6;
+/*
+All of the following (up until the "End gitlab-ui#1709" comment) will be moved
+to @gitlab/ui by https://gitlab.com/gitlab-org/gitlab-ui/-/issues/1709
+*/
+.gl-sm-grid-template-columns-2 {
+  @include media-breakpoint-up(sm) {
+    grid-template-columns: 1fr 1fr;
+  }
 }
 
-.gl-opacity-7 {
-  opacity: 0.7;
+.gl-md-grid-template-columns-2 {
+  @include media-breakpoint-up(md) {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.gl-md-grid-template-columns-3 {
+  @include media-breakpoint-up(md) {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+.gl-lg-grid-template-columns-4 {
+  @include media-breakpoint-up(lg) {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+.gl-gap-6 {
+  gap: $gl-spacing-scale-6;
+}
+
+.gl-max-w-48 {
+  max-width: $gl-spacing-scale-48;
+}
+
+.gl-max-w-75 {
+  max-width: $gl-spacing-scale-75;
+}
+
+.gl-md-pt-11 {
+  @include media-breakpoint-up(md) {
+    padding-top: $gl-spacing-scale-11 !important; // only need !important for now so that it overrides styles from @gitlab/ui which currently take precedence
+  }
+}
+
+.gl-md-mb-6 {
+  @include media-breakpoint-up(md) {
+    margin-bottom: $gl-spacing-scale-6 !important; // only need !important for now so that it overrides styles from @gitlab/ui which currently take precedence
+  }
+}
+
+.gl-md-mb-12 {
+  @include media-breakpoint-up(md) {
+    margin-bottom: $gl-spacing-scale-12 !important; // only need !important for now so that it overrides styles from @gitlab/ui which currently take precedence
+  }
+}
+
+/* End gitlab-ui#1709 */
+
+/*
+ * The below two styles will be moved to @gitlab/ui by
+ * https://gitlab.com/gitlab-org/gitlab-ui/-/issues/1750
+ */
+.gl-max-w-34 {
+  max-width: 34 * $grid-size;
+}
+
+.gl-max-w-80 {
+  max-width: 80 * $grid-size;
+}
+
+/*
+ * The below style will be moved to @gitlab/ui by
+ * https://gitlab.com/gitlab-org/gitlab-ui/-/issues/1751
+ */
+.gl-filter-blur-1 {
+  backdrop-filter: blur(2px);
+  /* stylelint-disable property-no-vendor-prefix */
+  -webkit-backdrop-filter: blur(2px); // still required by Safari
+}
+
+// Will be moved to @gitlab/ui by https://gitlab.com/gitlab-org/gitlab-ui/-/merge_requests/2708
+.gl-inset-border-l-3-red-600 {
+  box-shadow: inset $gl-border-size-3 0 0 0 $red-600;
 }

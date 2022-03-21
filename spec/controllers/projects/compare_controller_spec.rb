@@ -25,14 +25,24 @@ RSpec.describe Projects::CompareController do
   end
 
   describe 'GET index' do
+    let(:params) { { namespace_id: project.namespace, project_id: project } }
+
     render_views
 
     before do
-      get :index, params: { namespace_id: project.namespace, project_id: project }
+      get :index, params: params
     end
 
     it 'returns successfully' do
       expect(response).to be_successful
+    end
+
+    context 'with incorrect parameters' do
+      let(:params) { super().merge(from: { invalid: :param }, to: { also: :invalid }) }
+
+      it 'returns successfully' do
+        expect(response).to be_successful
+      end
     end
   end
 
@@ -340,12 +350,13 @@ RSpec.describe Projects::CompareController do
 
     context 'when sending invalid params' do
       where(:from_ref, :to_ref, :from_project_id, :expected_redirect_params) do
-        ''     | ''     | ''  | {}
-        'main' | ''     | ''  | { from: 'main' }
-        ''     | 'main' | ''  | { to: 'main' }
-        ''     | ''     | '1' | { from_project_id: 1 }
-        'main' | ''     | '1' | { from: 'main', from_project_id: 1 }
-        ''     | 'main' | '1' | { to: 'main', from_project_id: 1 }
+        ''     | ''     | ''    | {}
+        'main' | ''     | ''    | { from: 'main' }
+        ''     | 'main' | ''    | { to: 'main' }
+        ''     | ''     | '1'   | { from_project_id: 1 }
+        'main' | ''     | '1'   | { from: 'main', from_project_id: 1 }
+        ''     | 'main' | '1'   | { to: 'main', from_project_id: 1 }
+        ['a']  | ['b']  | ['c'] | {}
       end
 
       with_them do
@@ -409,7 +420,7 @@ RSpec.describe Projects::CompareController do
         end
       end
 
-      context 'when the user does not have access to the project' do
+      context 'when the user does not have access to the project', :sidekiq_inline do
         before do
           project.team.truncate
           project.update!(visibility: 'private')

@@ -102,7 +102,6 @@
 
   .tree-table {
     margin-bottom: 0;
-    table-layout: fixed;
 
     tr {
       border-bottom: 1px solid $white-normal;
@@ -222,11 +221,6 @@
   border-style: dashed;
   border-color: $border-color;
   min-height: 200px;
-}
-
-.upload-link {
-  font-weight: $gl-font-weight-normal;
-  color: $blue-600;
 }
 
 .repo-charts {

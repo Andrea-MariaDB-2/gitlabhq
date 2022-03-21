@@ -149,10 +149,12 @@ To change the namespace linked to a subscription:
    [linked](#change-the-linked-account) GitLab SaaS account.
 1. Navigate to the **Manage Purchases** page.
 1. Select **Change linked namespace**.
-1. Select the desired group from the **This subscription is for** dropdown.
+1. Select the desired group from the **This subscription is for** dropdown. For a group to appear
+   here, you must have the Owner role
+   for that group.
 1. Select **Proceed to checkout**.
 
-Subscription charges are calculated based on the total number of users in a group, including its subgroups and nested projects. If the total number of users exceeds the number of seats in your subscription, your account is charged for the additional users.
+Subscription charges are calculated based on the total number of users in a group, including its subgroups and nested projects. If the [total number of users](gitlab_com/index.md#view-seat-usage) exceeds the number of seats in your subscription, your account is charged for the additional users and you need to pay for the overage before you can change the linked namespace.
 
 Only one namespace can be linked to a subscription.
 
@@ -170,7 +172,7 @@ To change the password for this customers portal account:
 ### GitLab for Education
 
 For qualifying non-profit educational institutions, the [GitLab for Education](https://about.gitlab.com/solutions/education/) program provides
-the top GitLab tier, plus 50,000 CI minutes per month.
+the top GitLab tier, plus 50,000 CI/CD minutes per month.
 
 The GitLab for Education license can only be used for instructional-use or
 non-commercial academic research.
@@ -181,7 +183,7 @@ Find more information on how to apply and renew at
 ### GitLab for Open Source
 
 For qualifying open source projects, the [GitLab for Open Source](https://about.gitlab.com/solutions/open-source/) program provides
-the top GitLab tier, plus 50,000 CI minutes per month.
+the top GitLab tier, plus 50,000 CI/CD minutes per month.
 
 You can find more information about the [program requirements](https://about.gitlab.com/solutions/open-source/join/#requirements),
 [renewals](https://about.gitlab.com/solutions/open-source/join/#renewals),
@@ -246,7 +248,7 @@ if a project holds sensitive data. Email `opensource@gitlab.com` with details of
 ### GitLab for Startups
 
 For qualifying startups, the [GitLab for Startups](https://about.gitlab.com/solutions/startups/) program provides
-the top GitLab tier, plus 50,000 CI minutes per month for 12 months.
+the top GitLab tier, plus 50,000 CI/CD minutes per month for 12 months.
 
 For more information, including program requirements, see the [Startup program's landing page](https://about.gitlab.com/solutions/startups/).
 

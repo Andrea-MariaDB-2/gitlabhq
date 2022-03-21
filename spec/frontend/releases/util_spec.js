@@ -1,20 +1,12 @@
 import { cloneDeep } from 'lodash';
-import { getJSONFixture } from 'helpers/fixtures';
+import originalAllReleasesQueryResponse from 'test_fixtures/graphql/releases/graphql/queries/all_releases.query.graphql.json';
+import originalOneReleaseQueryResponse from 'test_fixtures/graphql/releases/graphql/queries/one_release.query.graphql.json';
+import originalOneReleaseForEditingQueryResponse from 'test_fixtures/graphql/releases/graphql/queries/one_release_for_editing.query.graphql.json';
 import {
   convertGraphQLRelease,
   convertAllReleasesGraphQLResponse,
   convertOneReleaseGraphQLResponse,
 } from '~/releases/util';
-
-const originalAllReleasesQueryResponse = getJSONFixture(
-  'graphql/releases/graphql/queries/all_releases.query.graphql.json',
-);
-const originalOneReleaseQueryResponse = getJSONFixture(
-  'graphql/releases/graphql/queries/one_release.query.graphql.json',
-);
-const originalOneReleaseForEditingQueryResponse = getJSONFixture(
-  'graphql/releases/graphql/queries/one_release_for_editing.query.graphql.json',
-);
 
 describe('releases/util.js', () => {
   describe('convertGraphQLRelease', () => {
@@ -112,13 +104,32 @@ describe('releases/util.js', () => {
 
   describe('convertAllReleasesGraphQLResponse', () => {
     it('matches snapshot', () => {
-      expect(convertAllReleasesGraphQLResponse(originalAllReleasesQueryResponse)).toMatchSnapshot();
+      expect(convertAllReleasesGraphQLResponse(originalAllReleasesQueryResponse)).toMatchSnapshot({
+        data: [
+          {
+            author: {
+              id: expect.any(String),
+            },
+          },
+          {
+            author: {
+              id: expect.any(String),
+            },
+          },
+        ],
+      });
     });
   });
 
   describe('convertOneReleaseGraphQLResponse', () => {
     it('matches snapshot', () => {
-      expect(convertOneReleaseGraphQLResponse(originalOneReleaseQueryResponse)).toMatchSnapshot();
+      expect(convertOneReleaseGraphQLResponse(originalOneReleaseQueryResponse)).toMatchSnapshot({
+        data: {
+          author: {
+            id: expect.any(String),
+          },
+        },
+      });
     });
   });
 

@@ -12,23 +12,17 @@ module Environments
 
     # rubocop: disable CodeReuse/ActiveRecord
     def execute
-      deployments = project.deployments
       deployments =
         if ref
-          deployments_query = params[:with_tags] ? 'ref = :ref OR tag IS TRUE' : 'ref = :ref'
-          deployments.where(deployments_query, ref: ref.to_s)
-        elsif commit
-          deployments.where(sha: commit.sha)
+          Deployment.where(ref: ref.to_s)
+        elsif sha
+          Deployment.where(sha: sha)
         else
-          deployments.none
+          Deployment.none
         end
 
-      environment_ids = deployments
-        .group(:environment_id)
-        .select(:environment_id)
-
       environments = project.environments.available
-        .where(id: environment_ids)
+                       .where('EXISTS (?)', deployments.where('environment_id = environments.id'))
 
       if params[:find_latest]
         find_one(environments.order_by_last_deployed_at_desc)
@@ -53,7 +47,7 @@ module Environments
       return false unless Ability.allowed?(current_user, :read_environment, environment)
 
       return false if ref && params[:recently_updated] && !environment.recently_updated_on_branch?(ref)
-      return false if ref && commit && !environment.includes_commit?(commit)
+      return false if ref && sha && !environment.includes_commit?(sha)
 
       true
     end
@@ -62,8 +56,8 @@ module Environments
       params[:ref].try(:to_s)
     end
 
-    def commit
-      params[:commit]
+    def sha
+      params[:sha] || params[:commit]&.id
     end
   end
 end

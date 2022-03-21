@@ -108,6 +108,34 @@ RSpec.describe Note do
   end
 
   describe 'callbacks' do
+    describe '#keep_around_commit' do
+      let!(:noteable) { create(:issue) }
+
+      it "calls #keep_around_commit normally" do
+        note = build(:note, project: noteable.project, noteable: noteable)
+
+        expect(note).to receive(:keep_around_commit)
+
+        note.save!
+      end
+
+      it "skips #keep_around_commit if 'skip_keep_around_commits' is true" do
+        note = build(:note, project: noteable.project, noteable: noteable, skip_keep_around_commits: true)
+
+        expect(note).not_to receive(:keep_around_commit)
+
+        note.save!
+      end
+
+      it "skips #keep_around_commit if 'importing' is true" do
+        note = build(:note, project: noteable.project, noteable: noteable, importing: true)
+
+        expect(note).not_to receive(:keep_around_commit)
+
+        note.save!
+      end
+    end
+
     describe '#notify_after_create' do
       it 'calls #after_note_created on the noteable' do
         noteable = create(:issue)
@@ -127,7 +155,7 @@ RSpec.describe Note do
         expect(note).to receive(:notify_after_destroy).and_call_original
         expect(note.noteable).to receive(:after_note_destroyed).with(note)
 
-        note.destroy
+        note.destroy!
       end
 
       it 'does not error if noteable is nil' do
@@ -135,7 +163,7 @@ RSpec.describe Note do
 
         expect(note).to receive(:notify_after_destroy).and_call_original
         expect(note).to receive(:noteable).at_least(:once).and_return(nil)
-        expect { note.destroy }.not_to raise_error
+        expect { note.destroy! }.not_to raise_error
       end
     end
   end
@@ -198,8 +226,8 @@ RSpec.describe Note do
 
     describe 'read' do
       before do
-        @p1.project_members.create(user: @u2, access_level: ProjectMember::GUEST)
-        @p2.project_members.create(user: @u3, access_level: ProjectMember::GUEST)
+        @p1.project_members.create!(user: @u2, access_level: ProjectMember::GUEST)
+        @p2.project_members.create!(user: @u3, access_level: ProjectMember::GUEST)
       end
 
       it { expect(Ability.allowed?(@u1, :read_note, @p1)).to be_falsey }
@@ -209,8 +237,8 @@ RSpec.describe Note do
 
     describe 'write' do
       before do
-        @p1.project_members.create(user: @u2, access_level: ProjectMember::DEVELOPER)
-        @p2.project_members.create(user: @u3, access_level: ProjectMember::DEVELOPER)
+        @p1.project_members.create!(user: @u2, access_level: ProjectMember::DEVELOPER)
+        @p2.project_members.create!(user: @u3, access_level: ProjectMember::DEVELOPER)
       end
 
       it { expect(Ability.allowed?(@u1, :create_note, @p1)).to be_falsey }
@@ -220,9 +248,9 @@ RSpec.describe Note do
 
     describe 'admin' do
       before do
-        @p1.project_members.create(user: @u1, access_level: ProjectMember::REPORTER)
-        @p1.project_members.create(user: @u2, access_level: ProjectMember::MAINTAINER)
-        @p2.project_members.create(user: @u3, access_level: ProjectMember::MAINTAINER)
+        @p1.project_members.create!(user: @u1, access_level: ProjectMember::REPORTER)
+        @p1.project_members.create!(user: @u2, access_level: ProjectMember::MAINTAINER)
+        @p2.project_members.create!(user: @u3, access_level: ProjectMember::MAINTAINER)
       end
 
       it { expect(Ability.allowed?(@u1, :admin_note, @p1)).to be_falsey }
@@ -417,7 +445,7 @@ RSpec.describe Note do
     end
   end
 
-  describe "#system_note_with_references_visible_for?" do
+  describe "#system_note_visible_for?" do
     let(:project) { create(:project, :public) }
     let(:user) { create(:user) }
     let(:guest) { create(:project_member, :guest, project: project, user: create(:user)).user }
@@ -441,22 +469,25 @@ RSpec.describe Note do
       end
 
       it 'returns visible but not readable for non-member user' do
-        expect(note.system_note_with_references_visible_for?(non_member)).to be_truthy
+        expect(note.system_note_visible_for?(non_member)).to be_truthy
         expect(note.readable_by?(non_member)).to be_falsy
       end
 
       it 'returns visible but not readable for a nil user' do
-        expect(note.system_note_with_references_visible_for?(nil)).to be_truthy
+        expect(note.system_note_visible_for?(nil)).to be_truthy
         expect(note.readable_by?(nil)).to be_falsy
       end
     end
   end
 
   describe "#system_note_viewable_by?(user)" do
-    let_it_be(:note) { create(:note) }
+    let_it_be(:group) { create(:group, :private) }
+    let_it_be(:project) { create(:project, group: group) }
+    let_it_be(:note) { create(:note, project: project) }
     let_it_be(:user) { create(:user) }
 
-    let!(:metadata) { create(:system_note_metadata, note: note, action: "branch") }
+    let(:action) { "commit" }
+    let!(:metadata) { create(:system_note_metadata, note: note, action: action) }
 
     context "when system_note_metadata is not present" do
       it "returns true" do
@@ -466,32 +497,50 @@ RSpec.describe Note do
       end
     end
 
-    context "system_note_metadata isn't of type 'branch'" do
-      before do
-        metadata.action = "not_a_branch"
-      end
-
+    context "system_note_metadata isn't of type 'branch' or 'contact'" do
       it "returns true" do
         expect(note.send(:system_note_viewable_by?, user)).to be_truthy
       end
     end
 
-    context "user doesn't have :download_code ability" do
-      it "returns false" do
-        expect(note.send(:system_note_viewable_by?, user)).to be_falsey
+    context "system_note_metadata is of type 'branch'" do
+      let(:action) { "branch" }
+
+      context "user doesn't have :download_code ability" do
+        it "returns false" do
+          expect(note.send(:system_note_viewable_by?, user)).to be_falsey
+        end
+      end
+
+      context "user has the :download_code ability" do
+        it "returns true" do
+          expect(Ability).to receive(:allowed?).with(user, :download_code, note.project).and_return(true)
+
+          expect(note.send(:system_note_viewable_by?, user)).to be_truthy
+        end
       end
     end
 
-    context "user has the :download_code ability" do
-      it "returns true" do
-        expect(Ability).to receive(:allowed?).with(user, :download_code, note.project).and_return(true)
+    context "system_note_metadata is of type 'contact'" do
+      let(:action) { "contact" }
 
-        expect(note.send(:system_note_viewable_by?, user)).to be_truthy
+      context "user doesn't have :read_crm_contact ability" do
+        it "returns false" do
+          expect(note.send(:system_note_viewable_by?, user)).to be_falsey
+        end
+      end
+
+      context "user has the :read_crm_contact ability" do
+        it "returns true" do
+          expect(Ability).to receive(:allowed?).with(user, :read_crm_contact, note.project.group).and_return(true)
+
+          expect(note.send(:system_note_viewable_by?, user)).to be_truthy
+        end
       end
     end
   end
 
-  describe "system_note_with_references_visible_for?" do
+  describe "system_note_visible_for?" do
     let_it_be(:private_user)    { create(:user) }
     let_it_be(:private_project) { create(:project, namespace: private_user.namespace) { |p| p.add_maintainer(private_user) } }
     let_it_be(:private_issue)   { create(:issue, project: private_project) }
@@ -501,11 +550,11 @@ RSpec.describe Note do
 
     shared_examples "checks references" do
       it "returns false" do
-        expect(note.system_note_with_references_visible_for?(ext_issue.author)).to be_falsy
+        expect(note.system_note_visible_for?(ext_issue.author)).to be_falsy
       end
 
       it "returns true" do
-        expect(note.system_note_with_references_visible_for?(private_user)).to be_truthy
+        expect(note.system_note_visible_for?(private_user)).to be_truthy
       end
 
       it "returns true if user visible reference count set" do
@@ -513,7 +562,7 @@ RSpec.describe Note do
         note.total_reference_count = 1
 
         expect(note).not_to receive(:reference_mentionables)
-        expect(note.system_note_with_references_visible_for?(ext_issue.author)).to be_truthy
+        expect(note.system_note_visible_for?(ext_issue.author)).to be_truthy
       end
 
       it "returns false if user visible reference count set but does not match total reference count" do
@@ -521,14 +570,14 @@ RSpec.describe Note do
         note.total_reference_count = 2
 
         expect(note).not_to receive(:reference_mentionables)
-        expect(note.system_note_with_references_visible_for?(ext_issue.author)).to be_falsy
+        expect(note.system_note_visible_for?(ext_issue.author)).to be_falsy
       end
 
       it "returns false if ref count is 0" do
         note.user_visible_reference_count = 0
 
         expect(note).not_to receive(:reference_mentionables)
-        expect(note.system_note_with_references_visible_for?(ext_issue.author)).to be_falsy
+        expect(note.system_note_visible_for?(ext_issue.author)).to be_falsy
       end
     end
 
@@ -589,16 +638,16 @@ RSpec.describe Note do
       let(:note) do
         create :note,
           noteable: ext_issue, project: ext_proj,
-          note: "mentioned in #{ext_proj.owner.to_reference}",
+          note: "mentioned in #{ext_proj.first_owner.to_reference}",
           system: true
       end
 
       it "returns true for other users" do
-        expect(note.system_note_with_references_visible_for?(ext_issue.author)).to be_truthy
+        expect(note.system_note_visible_for?(ext_issue.author)).to be_truthy
       end
 
       it "returns true for anonymous users" do
-        expect(note.system_note_with_references_visible_for?(nil)).to be_truthy
+        expect(note.system_note_visible_for?(nil)).to be_truthy
       end
     end
   end
@@ -1440,7 +1489,7 @@ RSpec.describe Note do
     shared_examples 'assignee check' do
       context 'when the provided user is one of the assignees' do
         before do
-          note.noteable.update(assignees: [user, create(:user)])
+          note.noteable.update!(assignees: [user, create(:user)])
         end
 
         it 'returns true' do
@@ -1452,7 +1501,7 @@ RSpec.describe Note do
     shared_examples 'author check' do
       context 'when the provided user is the author' do
         before do
-          note.noteable.update(author: user)
+          note.noteable.update!(author: user)
         end
 
         it 'returns true' do
@@ -1573,7 +1622,7 @@ RSpec.describe Note do
     let(:note) { build(:note) }
 
     it 'returns cache key and author cache key by default' do
-      expect(note.post_processed_cache_key).to eq("#{note.cache_key}:#{note.author.cache_key}")
+      expect(note.post_processed_cache_key).to eq("#{note.cache_key}:#{note.author.cache_key}:#{note.project.team.human_max_access(note.author_id)}")
     end
 
     context 'when note has no author' do
@@ -1592,8 +1641,18 @@ RSpec.describe Note do
       end
 
       it 'returns cache key with redacted_note_html sha' do
-        expect(note.post_processed_cache_key).to eq("#{note.cache_key}:#{note.author.cache_key}:#{Digest::SHA1.hexdigest(redacted_note_html)}")
+        expect(note.post_processed_cache_key).to eq("#{note.cache_key}:#{note.author.cache_key}:#{note.project.team.human_max_access(note.author_id)}:#{Digest::SHA1.hexdigest(redacted_note_html)}")
       end
+    end
+  end
+
+  describe '#commands_changes' do
+    let(:note) { build(:note) }
+
+    it 'only returns allowed keys' do
+      note.commands_changes = { emoji_award: {}, time_estimate: {}, spend_time: {}, target_project: build(:project) }
+
+      expect(note.commands_changes.keys).to contain_exactly(:emoji_award, :time_estimate, :spend_time)
     end
   end
 end

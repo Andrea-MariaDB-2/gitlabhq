@@ -1,9 +1,10 @@
-import Vue from 'vue';
-import createFlash from '~/flash';
+import Vue, { nextTick } from 'vue';
+import waitForPromises from 'helpers/wait_for_promises';
 import WorkInProgress from '~/vue_merge_request_widget/components/states/work_in_progress.vue';
+import toast from '~/vue_shared/plugins/global_toast';
 import eventHub from '~/vue_merge_request_widget/event_hub';
 
-jest.mock('~/flash');
+jest.mock('~/vue_shared/plugins/global_toast');
 
 const createComponent = () => {
   const Component = Vue.extend(WorkInProgress);
@@ -46,8 +47,8 @@ describe('Wip', () => {
       is_new_mr_data: true,
     };
 
-    describe('handleRemoveWIP', () => {
-      it('should make a request to service and handle response', (done) => {
+    describe('handleRemoveDraft', () => {
+      it('should make a request to service and handle response', async () => {
         const vm = createComponent();
 
         jest.spyOn(eventHub, '$emit').mockImplementation(() => {});
@@ -59,16 +60,13 @@ describe('Wip', () => {
           }),
         );
 
-        vm.handleRemoveWIP();
-        setImmediate(() => {
-          expect(vm.isMakingRequest).toBeTruthy();
-          expect(eventHub.$emit).toHaveBeenCalledWith('UpdateWidgetData', mrObj);
-          expect(createFlash).toHaveBeenCalledWith({
-            message: 'The merge request can now be merged.',
-            type: 'notice',
-          });
-          done();
-        });
+        vm.handleRemoveDraft();
+
+        await waitForPromises();
+
+        expect(vm.isMakingRequest).toBeTruthy();
+        expect(eventHub.$emit).toHaveBeenCalledWith('UpdateWidgetData', mrObj);
+        expect(toast).toHaveBeenCalledWith('Marked as ready. Merging is now allowed.');
       });
     });
   });
@@ -84,21 +82,22 @@ describe('Wip', () => {
 
     it('should have correct elements', () => {
       expect(el.classList.contains('mr-widget-body')).toBeTruthy();
-      expect(el.innerText).toContain('This merge request is still a draft.');
+      expect(el.innerText).toContain(
+        "Merge blocked: merge request must be marked as ready. It's still marked as draft.",
+      );
       expect(el.querySelector('button').getAttribute('disabled')).toBeTruthy();
       expect(el.querySelector('button').innerText).toContain('Merge');
-      expect(el.querySelector('.js-remove-wip').innerText.replace(/\s\s+/g, ' ')).toContain(
+      expect(el.querySelector('.js-remove-draft').innerText.replace(/\s\s+/g, ' ')).toContain(
         'Mark as ready',
       );
     });
 
-    it('should not show removeWIP button is user cannot update MR', (done) => {
+    it('should not show removeWIP button is user cannot update MR', async () => {
       vm.mr.removeWIPPath = '';
 
-      Vue.nextTick(() => {
-        expect(el.querySelector('.js-remove-wip')).toEqual(null);
-        done();
-      });
+      await nextTick();
+
+      expect(el.querySelector('.js-remove-draft')).toEqual(null);
     });
   });
 });

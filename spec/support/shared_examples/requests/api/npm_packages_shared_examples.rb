@@ -8,6 +8,8 @@ RSpec.shared_examples 'handling get metadata requests' do |scope: :project|
   let_it_be(:package_dependency_link3) { create(:packages_dependency_link, package: package, dependency_type: :bundleDependencies) }
   let_it_be(:package_dependency_link4) { create(:packages_dependency_link, package: package, dependency_type: :peerDependencies) }
 
+  let_it_be(:package_metadatum) { create(:npm_metadatum, package: package) }
+
   let(:headers) { {} }
 
   subject { get(url, headers: headers) }

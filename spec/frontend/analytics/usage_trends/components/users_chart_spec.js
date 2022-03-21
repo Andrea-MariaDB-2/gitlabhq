@@ -1,8 +1,10 @@
 import { GlAlert } from '@gitlab/ui';
 import { GlAreaChart } from '@gitlab/ui/dist/charts';
-import { createLocalVue, shallowMount } from '@vue/test-utils';
+import { shallowMount } from '@vue/test-utils';
+import Vue, { nextTick } from 'vue';
 import VueApollo from 'vue-apollo';
 import createMockApollo from 'helpers/mock_apollo_helper';
+import waitForPromises from 'helpers/wait_for_promises';
 import UsersChart from '~/analytics/usage_trends/components/users_chart.vue';
 import usersQuery from '~/analytics/usage_trends/graphql/queries/users.query.graphql';
 import ChartSkeletonLoader from '~/vue_shared/components/resizable_chart/skeleton_loader.vue';
@@ -13,8 +15,7 @@ import {
   roundedSortedCountsMonthlyChartData2,
 } from '../mock_data';
 
-const localVue = createLocalVue();
-localVue.use(VueApollo);
+Vue.use(VueApollo);
 
 describe('UsersChart', () => {
   let wrapper;
@@ -34,7 +35,6 @@ describe('UsersChart', () => {
         endDate: new Date(2020, 10, 1),
         totalDataPoints: mockCountsData2.length,
       },
-      localVue,
       apolloProvider: createMockApollo([[usersQuery, queryHandler]]),
       data() {
         return { loadingError };
@@ -68,7 +68,7 @@ describe('UsersChart', () => {
   describe('without data', () => {
     beforeEach(async () => {
       wrapper = createComponent({ users: [] });
-      await wrapper.vm.$nextTick();
+      await nextTick();
     });
 
     it('renders an no data message', () => {
@@ -87,7 +87,7 @@ describe('UsersChart', () => {
   describe('with data', () => {
     beforeEach(async () => {
       wrapper = createComponent({ users: mockCountsData2 });
-      await wrapper.vm.$nextTick();
+      await waitForPromises();
     });
 
     it('hides the skeleton loader', () => {
@@ -108,7 +108,7 @@ describe('UsersChart', () => {
   describe('with errors', () => {
     beforeEach(async () => {
       wrapper = createComponent({ loadingError: true });
-      await wrapper.vm.$nextTick();
+      await nextTick();
     });
 
     it('renders an error message', () => {
@@ -135,7 +135,7 @@ describe('UsersChart', () => {
         });
 
         jest.spyOn(wrapper.vm.$apollo.queries.users, 'fetchMore');
-        await wrapper.vm.$nextTick();
+        await nextTick();
       });
 
       it('requests data twice', () => {
@@ -148,7 +148,7 @@ describe('UsersChart', () => {
     });
 
     describe('when the fetchMore query throws an error', () => {
-      beforeEach(() => {
+      beforeEach(async () => {
         wrapper = createComponent({
           users: mockCountsData2,
           additionalData: mockCountsData1,
@@ -157,7 +157,7 @@ describe('UsersChart', () => {
         jest
           .spyOn(wrapper.vm.$apollo.queries.users, 'fetchMore')
           .mockImplementation(jest.fn().mockRejectedValue());
-        return wrapper.vm.$nextTick();
+        await waitForPromises();
       });
 
       it('calls fetchMore', () => {

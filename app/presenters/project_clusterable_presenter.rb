@@ -2,7 +2,8 @@
 
 class ProjectClusterablePresenter < ClusterablePresenter
   extend ::Gitlab::Utils::Override
-  include ActionView::Helpers::UrlHelper
+
+  presents ::Project
 
   override :cluster_status_cluster_path
   def cluster_status_cluster_path(cluster, params = {})
@@ -21,12 +22,12 @@ class ProjectClusterablePresenter < ClusterablePresenter
 
   override :sidebar_text
   def sidebar_text
-    s_('ClusterIntegration|With a Kubernetes cluster associated to this project, you can use review apps, deploy your applications, run your pipelines, and much more in an easy way.')
+    s_('ClusterIntegration|Use GitLab to deploy to your cluster, run jobs, use review apps, and more.')
   end
 
   override :learn_more_link
   def learn_more_link
-    link_to(s_('ClusterIntegration|Learn more about Kubernetes'), help_page_path('user/project/clusters/index'), target: '_blank', rel: 'noopener noreferrer')
+    ApplicationController.helpers.link_to(s_('ClusterIntegration|Learn more about Kubernetes.'), help_page_path('user/project/clusters/index'), target: '_blank', rel: 'noopener noreferrer')
   end
 
   def metrics_dashboard_path(cluster)

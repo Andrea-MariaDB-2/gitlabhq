@@ -7,12 +7,30 @@ module QA
     class GroupBase < Base
       include Members
 
-      attr_accessor :path
+      MAX_NAME_LENGTH = 255
+
+      attr_accessor :path, :avatar
 
       attributes :id,
                  :runners_token,
                  :name,
                  :full_path
+
+      # Get group projects
+      #
+      # @return [Array<QA::Resource::Project>]
+      def projects
+        parse_body(api_get_from("#{api_get_path}/projects")).map do |project|
+          Project.init do |resource|
+            resource.api_client = api_client
+            resource.group = self
+            resource.id = project[:id]
+            resource.name = project[:name]
+            resource.description = project[:description]
+            resource.path_with_namespace = project[:path_with_namespace]
+          end
+        end
+      end
 
       # Get group labels
       #
@@ -26,6 +44,42 @@ module QA
             resource.title = label[:name]
             resource.description = label[:description]
             resource.color = label[:color]
+          end
+        end
+      end
+
+      # Get group milestones
+      #
+      # @return [Array<QA::Resource::GroupMilestone>]
+      def milestones
+        parse_body(api_get_from("#{api_get_path}/milestones")).map do |milestone|
+          GroupMilestone.init do |resource|
+            resource.api_client = api_client
+            resource.group = self
+            resource.id = milestone[:id]
+            resource.iid = milestone[:iid]
+            resource.title = milestone[:title]
+            resource.description = milestone[:description]
+          end
+        end
+      end
+
+      def marked_for_deletion?
+        reload!.api_response[:marked_for_deletion_on].present?
+      end
+
+      # Get group badges
+      #
+      # @return [Array<QA::Resource::GroupBadge>]
+      def badges
+        parse_body(api_get_from("#{api_get_path}/badges")).map do |badge|
+          GroupBadge.init do |resource|
+            resource.api_client = api_client
+            resource.group = self
+            resource.id = badge[:id]
+            resource.name = badge[:name]
+            resource.link_url = badge[:link_url]
+            resource.image_url = badge[:image_url]
           end
         end
       end
@@ -59,18 +113,12 @@ module QA
       end
 
       # Object comparison
+      # Override to make sure we are comparing descendands of GroupBase
       #
       # @param [QA::Resource::GroupBase] other
       # @return [Boolean]
       def ==(other)
-        other.is_a?(GroupBase) && comparable_group == other.comparable_group
-      end
-
-      # Override inspect for a better rspec failure diff output
-      #
-      # @return [String]
-      def inspect
-        JSON.pretty_generate(comparable_group)
+        other.is_a?(GroupBase) && comparable == other.comparable
       end
 
       protected
@@ -78,7 +126,7 @@ module QA
       # Return subset of fields for comparing groups
       #
       # @return [Hash]
-      def comparable_group
+      def comparable
         reload! if api_response.nil?
 
         api_resource.slice(

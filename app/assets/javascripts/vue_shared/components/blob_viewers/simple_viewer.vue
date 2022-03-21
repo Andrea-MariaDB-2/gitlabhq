@@ -1,7 +1,7 @@
 <script>
-/* eslint-disable vue/no-v-html */
-import { GlIcon } from '@gitlab/ui';
+import { GlIcon, GlSafeHtmlDirective } from '@gitlab/ui';
 import glFeatureFlagsMixin from '~/vue_shared/mixins/gl_feature_flags_mixin';
+import LineHighlighter from '~/blob/line_highlighter';
 import { HIGHLIGHT_CLASS_NAME } from './constants';
 import ViewerMixin from './mixins';
 
@@ -9,8 +9,9 @@ export default {
   name: 'SimpleViewer',
   components: {
     GlIcon,
-    SourceEditor: () =>
-      import(/* webpackChunkName: 'SourceEditor' */ '~/vue_shared/components/source_editor.vue'),
+  },
+  directives: {
+    SafeHtml: GlSafeHtmlDirective,
   },
   mixins: [ViewerMixin, glFeatureFlagsMixin()],
   inject: ['blobHash'],
@@ -20,16 +21,22 @@ export default {
     };
   },
   computed: {
-    lineNumbers() {
-      return this.content.split('\n').length;
-    },
     refactorBlobViewerEnabled() {
       return this.glFeatures.refactorBlobViewer;
     },
+
+    lineNumbers() {
+      return this.content.split('\n').length;
+    },
   },
   mounted() {
-    const { hash } = window.location;
-    if (hash) this.scrollToLine(hash, true);
+    if (this.refactorBlobViewerEnabled) {
+      // This line will be removed once we start using highlight.js on the frontend (https://gitlab.com/groups/gitlab-org/-/epics/7146)
+      new LineHighlighter(); // eslint-disable-line no-new
+    } else {
+      const { hash } = window.location;
+      if (hash) this.scrollToLine(hash, true);
+    }
   },
   methods: {
     scrollToLine(hash, scroll = false) {
@@ -53,14 +60,8 @@ export default {
 </script>
 <template>
   <div>
-    <source-editor
-      v-if="isRawContent && refactorBlobViewerEnabled"
-      :value="content"
-      :file-name="fileName"
-      :editor-options="{ readOnly: true }"
-    />
-    <div v-else class="file-content code js-syntax-highlight" :class="$options.userColorScheme">
-      <div class="line-numbers">
+    <div class="file-content code js-syntax-highlight" :class="$options.userColorScheme">
+      <div v-if="!hideLineNumbers" class="line-numbers gl-pt-0!">
         <a
           v-for="line in lineNumbers"
           :id="`L${line}`"
@@ -75,7 +76,9 @@ export default {
         </a>
       </div>
       <div class="blob-content">
-        <pre class="code highlight"><code :data-blob-hash="blobHash" v-html="content"></code></pre>
+        <pre
+          class="code highlight gl-p-0! gl-display-flex"
+        ><code v-safe-html="content" :data-blob-hash="blobHash"></code></pre>
       </div>
     </div>
   </div>

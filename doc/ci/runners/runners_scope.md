@@ -5,7 +5,7 @@ info: To determine the technical writer assigned to the Stage/Group associated w
 type: reference
 ---
 
-# The scope of runners
+# The scope of runners **(FREE)**
 
 Runners are available based on who you want to have access:
 
@@ -28,13 +28,13 @@ If you are using a self-managed instance of GitLab:
   going to your project's **Settings > CI/CD**, expanding the **Runners** section,
   and clicking **Show runner installation instructions**.
   These instructions are also available [in the documentation](https://docs.gitlab.com/runner/install/index.html).
-- The administrator can also configure a maximum number of shared runner [pipeline minutes for
-  each group](../../user/admin_area/settings/continuous_integration.md#shared-runners-pipeline-minutes-quota).
+- The administrator can also configure a maximum number of shared runner [CI/CD minutes for
+  each group](../pipelines/cicd_minutes.md#set-the-quota-of-cicd-minutes-for-a-specific-namespace).
 
 If you are using GitLab.com:
 
 - You can select from a list of [shared runners that GitLab maintains](index.md).
-- The shared runners consume the [pipelines minutes](../../subscriptions/gitlab_com/index.md#ci-pipeline-minutes)
+- The shared runners consume the [CI/CD minutes](../pipelines/cicd_minutes.md)
   included with your account.
 
 ### Enable shared runners
@@ -55,7 +55,7 @@ To enable shared runners:
 ### Disable shared runners
 
 You can disable shared runners for individual projects or for groups.
-You must have the [Owner role](../../user/permissions.md#group-members-permissions) for the project
+You must have the Owner role for the project
 or group.
 
 To disable shared runners for a project:
@@ -144,7 +144,7 @@ Group runners process jobs by using a first in, first out ([FIFO](https://en.wik
 ### Create a group runner
 
 You can create a group runner for your self-managed GitLab instance or for GitLab.com.
-You must have the [Owner role](../../user/permissions.md#group-members-permissions) for the group.
+You must have the Owner role for the group.
 
 To create a group runner:
 
@@ -160,7 +160,7 @@ To create a group runner:
 
 You can view and manage all runners for a group, its subgroups, and projects.
 You can do this for your self-managed GitLab instance or for GitLab.com.
-You must have the [Owner role](../../user/permissions.md#group-members-permissions) for the group.
+You must have the Owner role for the group.
 
 1. Go to the group where you want to view the runners.
 1. Go to **Settings > CI/CD** and expand the **Runners** section.
@@ -183,7 +183,7 @@ From this page, you can edit, pause, and remove runners from the group, its subg
 ### Pause or remove a group runner
 
 You can pause or remove a group runner for your self-managed GitLab instance or for GitLab.com.
-You must have the [Owner role](../../user/permissions.md#group-members-permissions) for the group.
+You must have the Owner role for the group.
 
 1. Go to the group you want to remove or pause the runner for.
 1. Go to **Settings > CI/CD** and expand the **Runners** section.
@@ -213,7 +213,7 @@ A fork *does* copy the CI/CD settings of the cloned repository.
 ### Create a specific runner
 
 You can create a specific runner for your self-managed GitLab instance or for GitLab.com.
-You must have the [Owner role](../../user/permissions.md#project-members-permissions) for the project.
+You must have the Owner role for the project.
 
 To create a specific runner:
 
@@ -227,7 +227,7 @@ To create a specific runner:
 A specific runner is available in the project it was created for. An administrator can
 enable a specific runner to apply to additional projects.
 
-- You must have the [Owner role](../../user/permissions.md#group-members-permissions) for the
+- You must have the Owner role for the
   project.
 - The specific runner must not be [locked](#prevent-a-specific-runner-from-being-enabled-for-other-projects).
 
@@ -235,6 +235,10 @@ To enable or disable a specific runner for a project:
 
 1. Go to the project's **Settings > CI/CD** and expand the **Runners** section.
 1. Click **Enable for this project** or **Disable for this project**.
+
+You can edit a specific runner from any of the projects it's enabled for.
+The modifications, which include unlocking, editing tags and the description,
+affect all projects that use the runner.
 
 ### Prevent a specific runner from being enabled for other projects
 

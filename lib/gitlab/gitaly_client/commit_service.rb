@@ -127,6 +127,7 @@ module Gitlab
 
         entries = response.flat_map do |message|
           cursor = message.pagination_cursor if message.pagination_cursor
+
           message.entries.map do |gitaly_tree_entry|
             Gitlab::Git::Tree.new(
               id: gitaly_tree_entry.oid,
@@ -203,17 +204,6 @@ module Gitlab
         Gitlab::Git::Commit.new(@repository, gitaly_commit)
       end
 
-      def between(from, to)
-        request = Gitaly::CommitsBetweenRequest.new(
-          repository: @gitaly_repo,
-          from: from,
-          to: to
-        )
-
-        response = GitalyClient.call(@repository.storage, :commit_service, :commits_between, request, timeout: GitalyClient.medium_timeout)
-        consume_commits_response(response)
-      end
-
       def diff_stats(left_commit_sha, right_commit_sha)
         request = Gitaly::DiffStatsRequest.new(
           repository: @gitaly_repo,
@@ -222,7 +212,7 @@ module Gitlab
         )
 
         response = GitalyClient.call(@repository.storage, :diff_service, :diff_stats, request, timeout: GitalyClient.medium_timeout)
-        response.flat_map(&:stats)
+        response.flat_map { |rsp| rsp.stats.to_a }
       end
 
       def find_changed_paths(commits)

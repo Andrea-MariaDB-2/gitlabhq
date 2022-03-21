@@ -12,8 +12,12 @@ RSpec.describe ErrorTracking::Error, type: :model do
 
   describe 'validations' do
     it { is_expected.to validate_presence_of(:name) }
+    it { is_expected.to validate_length_of(:name).is_at_most(255) }
     it { is_expected.to validate_presence_of(:description) }
+    it { is_expected.to validate_length_of(:description).is_at_most(1024) }
     it { is_expected.to validate_presence_of(:actor) }
+    it { is_expected.to validate_length_of(:actor).is_at_most(255) }
+    it { is_expected.to validate_length_of(:platform).is_at_most(255) }
   end
 
   describe '.report_error' do
@@ -81,6 +85,13 @@ RSpec.describe ErrorTracking::Error, type: :model do
   end
 
   describe '#to_sentry_detailed_error' do
-    it { expect(error.to_sentry_detailed_error).to be_kind_of(Gitlab::ErrorTracking::DetailedError) }
+    let_it_be(:event) { create(:error_tracking_error_event, error: error) }
+
+    subject { error.to_sentry_detailed_error }
+
+    it { is_expected.to be_kind_of(Gitlab::ErrorTracking::DetailedError) }
+    it { expect(subject.integrated).to be_truthy }
+    it { expect(subject.first_release_version).to eq('db853d7') }
+    it { expect(subject.last_release_version).to eq('db853d7') }
   end
 end

@@ -31,12 +31,20 @@ class Admin::PlanLimitsController < Admin::ApplicationController
     params.require(:plan_limits).permit(%i[
       plan_id
       conan_max_file_size
+      helm_max_file_size
       maven_max_file_size
       npm_max_file_size
       nuget_max_file_size
       pypi_max_file_size
       terraform_module_max_file_size
       generic_packages_max_file_size
+      ci_pipeline_size
+      ci_active_jobs
+      ci_project_subscriptions
+      ci_pipeline_schedules
+      ci_needs_size_limit
+      ci_registered_group_runners
+      ci_registered_project_runners
     ])
   end
 end

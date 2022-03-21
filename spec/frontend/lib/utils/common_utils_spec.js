@@ -51,31 +51,6 @@ describe('common_utils', () => {
     });
   });
 
-  describe('parseUrl', () => {
-    it('returns an anchor tag with url', () => {
-      expect(commonUtils.parseUrl('/some/absolute/url').pathname).toContain('some/absolute/url');
-    });
-
-    it('url is escaped', () => {
-      // IE11 will return a relative pathname while other browsers will return a full pathname.
-      // parseUrl uses an anchor element for parsing an url. With relative urls, the anchor
-      // element will create an absolute url relative to the current execution context.
-      // The JavaScript test suite is executed at '/' which will lead to an absolute url
-      // starting with '/'.
-      expect(commonUtils.parseUrl('" test="asf"').pathname).toContain('/%22%20test=%22asf%22');
-    });
-  });
-
-  describe('parseUrlPathname', () => {
-    it('returns an absolute url when given an absolute url', () => {
-      expect(commonUtils.parseUrlPathname('/some/absolute/url')).toEqual('/some/absolute/url');
-    });
-
-    it('returns an absolute url when given a relative url', () => {
-      expect(commonUtils.parseUrlPathname('some/relative/url')).toEqual('/some/relative/url');
-    });
-  });
-
   describe('handleLocationHash', () => {
     beforeEach(() => {
       jest.spyOn(window.document, 'getElementById');
@@ -279,6 +254,14 @@ describe('common_utils', () => {
           top: elementTopWithContext,
         });
       });
+
+      it('passes through behaviour', () => {
+        commonUtils.scrollToElementWithContext(`#${id}`, { behavior: 'smooth' });
+        expect(window.scrollTo).toHaveBeenCalledWith({
+          behavior: 'smooth',
+          top: elementTopWithContext,
+        });
+      });
     });
   });
 
@@ -386,8 +369,7 @@ describe('common_utils', () => {
 
   describe('backOff', () => {
     beforeEach(() => {
-      // shortcut our timeouts otherwise these tests will take a long time to finish
-      jest.spyOn(window, 'setTimeout').mockImplementation((cb) => setImmediate(cb, 0));
+      jest.spyOn(window, 'setTimeout');
     });
 
     it('solves the promise from the callback', (done) => {
@@ -438,6 +420,7 @@ describe('common_utils', () => {
               if (numberOfCalls < 3) {
                 numberOfCalls += 1;
                 next();
+                jest.runOnlyPendingTimers();
               } else {
                 stop(resp);
               }
@@ -456,7 +439,10 @@ describe('common_utils', () => {
 
     it('rejects the backOff promise after timing out', (done) => {
       commonUtils
-        .backOff((next) => next(), 64000)
+        .backOff((next) => {
+          next();
+          jest.runOnlyPendingTimers();
+        }, 64000)
         .catch((errBackoffResp) => {
           const timeouts = window.setTimeout.mock.calls.map(([, timeout]) => timeout);
 
@@ -1000,6 +986,21 @@ describe('common_utils', () => {
     });
   });
 
+  describe('scopedLabelKey', () => {
+    it.each`
+      label                           | expectedLabelKey
+      ${undefined}                    | ${''}
+      ${''}                           | ${''}
+      ${'title'}                      | ${'title'}
+      ${'scoped::value'}              | ${'scoped'}
+      ${'scoped::label::value'}       | ${'scoped::label'}
+      ${'scoped::label-some::value'}  | ${'scoped::label-some'}
+      ${'scoped::label::some::value'} | ${'scoped::label::some'}
+    `('returns "$expectedLabelKey" when label is "$label"', ({ label, expectedLabelKey }) => {
+      expect(commonUtils.scopedLabelKey({ title: label })).toBe(expectedLabelKey);
+    });
+  });
+
   describe('getDashPath', () => {
     it('returns the path following /-/', () => {
       expect(commonUtils.getDashPath('/some/-/url-with-dashes-/')).toEqual('url-with-dashes-/');
@@ -1015,6 +1016,17 @@ describe('common_utils', () => {
       const result = commonUtils.convertArrayToCamelCase(['hello', 'hello_world']);
 
       expect(result).toEqual(['hello', 'helloWorld']);
+    });
+  });
+
+  describe('convertArrayOfObjectsToCamelCase', () => {
+    it('returns a new array with snake_case object property names converted camelCase', () => {
+      const result = commonUtils.convertArrayOfObjectsToCamelCase([
+        { hello: '' },
+        { hello_world: '' },
+      ]);
+
+      expect(result).toEqual([{ hello: '' }, { helloWorld: '' }]);
     });
   });
 });

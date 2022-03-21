@@ -28,6 +28,16 @@ export default {
       required: false,
       default: () => [],
     },
+    right: {
+      type: Boolean,
+      required: false,
+      default: true,
+    },
+    boundary: {
+      type: String,
+      required: false,
+      default: '',
+    },
   },
   data() {
     return {
@@ -62,7 +72,7 @@ export default {
       addToFrequentlyUsed(name);
     },
     getBoundaryElement() {
-      return document.querySelector('.content-wrapper') || 'scrollParent';
+      return this.boundary || document.querySelector('.content-wrapper') || 'scrollParent';
     },
     onSearchInput() {
       this.$refs.virtualScoller.setScrollTop(0);
@@ -87,7 +97,7 @@ export default {
       menu-class="dropdown-extended-height"
       category="secondary"
       no-flip
-      right
+      :right="right"
       lazy
       @shown="$emit('shown')"
       @hidden="$emit('hidden')"
@@ -98,6 +108,7 @@ export default {
         class="gl-mx-5! gl-mb-2!"
         autofocus
         debounce="500"
+        :aria-label="__('Search for an emoji')"
         @input="onSearchInput"
       />
       <div
@@ -115,7 +126,7 @@ export default {
           :aria-label="category.name"
           @click="scrollToCategory(category.name)"
         >
-          <gl-icon :name="category.icon" :size="12" />
+          <gl-icon :name="category.icon" />
         </button>
       </div>
       <emoji-list :search-value="searchValue">

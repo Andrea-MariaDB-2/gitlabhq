@@ -208,10 +208,10 @@ RSpec.describe BranchesFinder do
       context 'by page_token only' do
         let(:params) { { page_token: 'feature' } }
 
-        it 'returns nothing' do
-          result = subject
-
-          expect(result.count).to eq(0)
+        it 'raises an error' do
+          expect do
+            subject
+          end.to raise_error(Gitlab::Git::CommandError, '13:could not find page token.')
         end
       end
 
@@ -258,5 +258,12 @@ RSpec.describe BranchesFinder do
         end
       end
     end
+  end
+
+  describe '#total' do
+    subject { branch_finder.total }
+
+    it { is_expected.to be_an(Integer) }
+    it { is_expected.to eq(repository.branch_count) }
   end
 end

@@ -1,6 +1,6 @@
 ---
-stage: Release
-group: Release
+stage: Verify
+group: Pipeline Authoring
 info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
 type: concepts, howto
 ---
@@ -9,6 +9,7 @@ type: concepts, howto
 
 > - [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/218746) in GitLab 13.4 and GitLab Runner 13.4.
 > - `file` setting [introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/250695) in GitLab 14.1 and GitLab Runner 14.1.
+> - `VAULT_NAMESPACE` setting [introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/255619) in GitLab 14.9 and GitLab Runner 14.9.
 
 Secrets represent sensitive information your CI job needs to complete work. This
 sensitive information can be items like API tokens, database credentials, or private keys.
@@ -53,6 +54,7 @@ and supports multiple secrets engines.
 
 To configure your Vault server:
 
+1. Ensure your Vault server is running on version 1.2.0 or higher.
 1. Enable the authentication method by running these commands. They provide your Vault
    server the [JSON Web Key Set](https://tools.ietf.org/html/rfc7517) (JWKS) endpoint for your GitLab instance, so Vault
    can fetch the public signing key and verify the JSON Web Token (JWT) when authenticating:
@@ -85,17 +87,20 @@ To configure your Vault server:
    to provide details about your Vault server:
    - `VAULT_SERVER_URL` - The URL of your Vault server, such as `https://vault.example.com:8200`.
      Required.
-   - `VAULT_AUTH_ROLE` - (Optional) The role to use when attempting to authenticate.
+   - `VAULT_AUTH_ROLE` - Optional. The role to use when attempting to authenticate.
      If no role is specified, Vault uses the [default role](https://www.vaultproject.io/api/auth/jwt#default_role)
      specified when the authentication method was configured.
-   - `VAULT_AUTH_PATH` - (Optional) The path where the authentication method is mounted, default is `jwt`.
+   - `VAULT_AUTH_PATH` - Optional. The path where the authentication method is mounted, default is `jwt`.
+   - `VAULT_NAMESPACE` - Optional. The [Vault Enterprise namespace](https://www.vaultproject.io/docs/enterprise/namespaces) to use for reading secrets and authentication.
+     If no namespace is specified, Vault uses the `root` ("`/`") namespace. 
+     The setting is ignored by Vault Open Source. 
 
    NOTE:
    Support for providing these values in the user interface [is tracked in this issue](https://gitlab.com/gitlab-org/gitlab/-/issues/218677).
 
 ## Use Vault secrets in a CI job **(PREMIUM)**
 
-> [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/28321) in [GitLab Premium](https://about.gitlab.com/pricing/) 13.4 and GitLab Runner 13.4.
+> [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/28321) in GitLab 13.4 and GitLab Runner 13.4.
 
 After [configuring your Vault server](#configure-your-vault-server), you can use
 the secrets stored in Vault by defining them with the `vault` keyword:

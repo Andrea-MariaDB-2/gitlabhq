@@ -249,15 +249,13 @@ RSpec.describe GlobalPolicy do
 
     context 'user with expired password' do
       before do
-        current_user.update!(password_expires_at: 2.minutes.ago, password_automatically_set: true)
+        current_user.update!(password_expires_at: 2.minutes.ago)
       end
 
       it { is_expected.not_to be_allowed(:access_api) }
 
       context 'when user is using ldap' do
-        before do
-          allow(current_user).to receive(:ldap_user?).and_return(true)
-        end
+        let(:current_user) { create(:omniauth_user, provider: 'ldap', password_expires_at: 2.minutes.ago) }
 
         it { is_expected.to be_allowed(:access_api) }
       end
@@ -445,15 +443,13 @@ RSpec.describe GlobalPolicy do
 
     context 'user with expired password' do
       before do
-        current_user.update!(password_expires_at: 2.minutes.ago, password_automatically_set: true)
+        current_user.update!(password_expires_at: 2.minutes.ago)
       end
 
       it { is_expected.not_to be_allowed(:access_git) }
 
       context 'when user is using ldap' do
-        before do
-          allow(current_user).to receive(:ldap_user?).and_return(true)
-        end
+        let(:current_user) { create(:omniauth_user, provider: 'ldap', password_expires_at: 2.minutes.ago) }
 
         it { is_expected.to be_allowed(:access_git) }
       end
@@ -537,15 +533,13 @@ RSpec.describe GlobalPolicy do
 
     context 'user with expired password' do
       before do
-        current_user.update!(password_expires_at: 2.minutes.ago, password_automatically_set: true)
+        current_user.update!(password_expires_at: 2.minutes.ago)
       end
 
       it { is_expected.not_to be_allowed(:use_slash_commands) }
 
       context 'when user is using ldap' do
-        before do
-          allow(current_user).to receive(:ldap_user?).and_return(true)
-        end
+        let(:current_user) { create(:omniauth_user, provider: 'ldap', password_expires_at: 2.minutes.ago) }
 
         it { is_expected.to be_allowed(:use_slash_commands) }
       end
@@ -595,36 +589,6 @@ RSpec.describe GlobalPolicy do
       end
 
       it { is_expected.not_to be_allowed(:log_in) }
-    end
-  end
-
-  describe 'update_runners_registration_token' do
-    context 'when anonymous' do
-      let(:current_user) { nil }
-
-      it { is_expected.not_to be_allowed(:update_runners_registration_token) }
-    end
-
-    context 'regular user' do
-      it { is_expected.not_to be_allowed(:update_runners_registration_token) }
-    end
-
-    context 'when external' do
-      let(:current_user) { build(:user, :external) }
-
-      it { is_expected.not_to be_allowed(:update_runners_registration_token) }
-    end
-
-    context 'admin' do
-      let(:current_user) { create(:admin) }
-
-      context 'when admin mode is enabled', :enable_admin_mode do
-        it { is_expected.to be_allowed(:update_runners_registration_token) }
-      end
-
-      context 'when admin mode is disabled' do
-        it { is_expected.to be_disallowed(:update_runners_registration_token) }
-      end
     end
   end
 end

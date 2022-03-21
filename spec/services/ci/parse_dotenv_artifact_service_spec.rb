@@ -18,9 +18,49 @@ RSpec.describe Ci::ParseDotenvArtifactService do
       it 'parses the artifact' do
         expect(subject[:status]).to eq(:success)
 
-        expect(build.job_variables.as_json).to contain_exactly(
+        expect(build.job_variables.as_json(only: [:key, :value])).to contain_exactly(
           hash_including('key' => 'KEY1', 'value' => 'VAR1'),
           hash_including('key' => 'KEY2', 'value' => 'VAR2'))
+      end
+
+      context 'when dotenv variables are conflicting against manual variables' do
+        before do
+          create(:ci_job_variable, job: build, key: 'KEY1')
+        end
+
+        it 'returns an error message that there is a duplicate variable' do
+          subject
+
+          expect(subject[:status]).to eq(:error)
+          expect(subject[:message]).to include("Key (key, job_id)=(KEY1, #{build.id}) already exists.")
+          expect(subject[:http_status]).to eq(:bad_request)
+        end
+      end
+
+      context 'when dotenv variables have duplicate variables' do
+        let!(:artifact) { create(:ci_job_artifact, :dotenv, job: build) }
+        let(:blob) do
+          <<~EOS
+            KEY1=VAR1
+            KEY2=VAR2
+            KEY2=VAR3
+            KEY1=VAR4
+          EOS
+        end
+
+        before do
+          allow(artifact).to receive(:each_blob).and_yield(blob)
+        end
+
+        it 'latest values get used' do
+          subject
+
+          expect(subject[:status]).to eq(:success)
+
+          expect(build.job_variables.as_json(only: [:key, :value])).to contain_exactly(
+            hash_including('key' => 'KEY1', 'value' => 'VAR4'),
+            hash_including('key' => 'KEY2', 'value' => 'VAR3'))
+        end
       end
 
       context 'when parse error happens' do
@@ -45,7 +85,7 @@ RSpec.describe Ci::ParseDotenvArtifactService do
 
         it 'returns error' do
           expect(subject[:status]).to eq(:error)
-          expect(subject[:message]).to eq("Dotenv Artifact Too Big. Maximum Allowable Size: #{described_class::MAX_ACCEPTABLE_DOTENV_SIZE}")
+          expect(subject[:message]).to eq("Dotenv Artifact Too Big. Maximum Allowable Size: #{service.send(:dotenv_size_limit)}")
           expect(subject[:http_status]).to eq(:bad_request)
         end
       end
@@ -61,7 +101,7 @@ RSpec.describe Ci::ParseDotenvArtifactService do
           it 'trims the trailing space' do
             subject
 
-            expect(build.job_variables.as_json).to contain_exactly(
+            expect(build.job_variables.as_json(only: [:key, :value])).to contain_exactly(
               hash_including('key' => 'KEY1', 'value' => 'VAR1'))
           end
         end
@@ -72,7 +112,7 @@ RSpec.describe Ci::ParseDotenvArtifactService do
           it 'parses the dotenv data' do
             subject
 
-            expect(build.job_variables.as_json).to contain_exactly(
+            expect(build.job_variables.as_json(only: [:key, :value])).to contain_exactly(
               hash_including('key' => 'KEY', 'value' => 'VARCONTAINING=EQLS'))
           end
         end
@@ -93,7 +133,7 @@ RSpec.describe Ci::ParseDotenvArtifactService do
           it 'parses the dotenv data' do
             subject
 
-            expect(build.job_variables.as_json).to contain_exactly(
+            expect(build.job_variables.as_json(only: [:key, :value])).to contain_exactly(
               hash_including('key' => 'skateboard', 'value' => '🛹'))
           end
         end
@@ -114,7 +154,7 @@ RSpec.describe Ci::ParseDotenvArtifactService do
           it 'parses the dotenv data' do
             subject
 
-            expect(build.job_variables.as_json).to contain_exactly(
+            expect(build.job_variables.as_json(only: [:key, :value])).to contain_exactly(
               hash_including('key' => 'KEY1', 'value' => 'V A R 1'))
           end
         end
@@ -125,7 +165,7 @@ RSpec.describe Ci::ParseDotenvArtifactService do
           it 'parses the value as-is' do
             subject
 
-            expect(build.job_variables.as_json).to contain_exactly(
+            expect(build.job_variables.as_json(only: [:key, :value])).to contain_exactly(
               hash_including('key' => 'KEY1', 'value' => '"VAR1"'))
           end
         end
@@ -136,7 +176,7 @@ RSpec.describe Ci::ParseDotenvArtifactService do
           it 'parses the value as-is' do
             subject
 
-            expect(build.job_variables.as_json).to contain_exactly(
+            expect(build.job_variables.as_json(only: [:key, :value])).to contain_exactly(
               hash_including('key' => 'KEY1', 'value' => "'VAR1'"))
           end
         end
@@ -147,7 +187,7 @@ RSpec.describe Ci::ParseDotenvArtifactService do
           it 'parses the value as-is' do
             subject
 
-            expect(build.job_variables.as_json).to contain_exactly(
+            expect(build.job_variables.as_json(only: [:key, :value])).to contain_exactly(
               hash_including('key' => 'KEY1', 'value' => '"  VAR1  "'))
           end
         end
@@ -168,7 +208,7 @@ RSpec.describe Ci::ParseDotenvArtifactService do
           it 'parses the dotenv data' do
             subject
 
-            expect(build.job_variables.as_json).to contain_exactly(
+            expect(build.job_variables.as_json(only: [:key, :value])).to contain_exactly(
               hash_including('key' => 'KEY1', 'value' => ''))
           end
         end
@@ -186,7 +226,7 @@ RSpec.describe Ci::ParseDotenvArtifactService do
         context 'when more than limitated variables are specified in dotenv' do
           let(:blob) do
             StringIO.new.tap do |s|
-              (described_class::MAX_ACCEPTABLE_VARIABLES_COUNT + 1).times do |i|
+              (service.send(:dotenv_variable_limit) + 1).times do |i|
                 s << "KEY#{i}=VAR#{i}\n"
               end
             end.string
@@ -194,7 +234,7 @@ RSpec.describe Ci::ParseDotenvArtifactService do
 
           it 'returns error' do
             expect(subject[:status]).to eq(:error)
-            expect(subject[:message]).to eq("Dotenv files cannot have more than #{described_class::MAX_ACCEPTABLE_VARIABLES_COUNT} variables")
+            expect(subject[:message]).to eq("Dotenv files cannot have more than #{service.send(:dotenv_variable_limit)} variables")
             expect(subject[:http_status]).to eq(:bad_request)
           end
         end
@@ -210,7 +250,7 @@ RSpec.describe Ci::ParseDotenvArtifactService do
           it 'does not support variable expansion in dotenv parser' do
             subject
 
-            expect(build.job_variables.as_json).to contain_exactly(
+            expect(build.job_variables.as_json(only: [:key, :value])).to contain_exactly(
               hash_including('key' => 'KEY1', 'value' => 'VAR1'),
               hash_including('key' => 'KEY2', 'value' => '${KEY1}_Test'))
           end
@@ -244,7 +284,7 @@ RSpec.describe Ci::ParseDotenvArtifactService do
           it 'does not support comment in dotenv parser' do
             subject
 
-            expect(build.job_variables.as_json).to contain_exactly(
+            expect(build.job_variables.as_json(only: [:key, :value])).to contain_exactly(
               hash_including('key' => 'KEY1', 'value' => 'VAR1         # This is variable'))
           end
         end

@@ -16,11 +16,11 @@
             = image_tag @appearance.header_logo_path, class: 'appearance-light-logo-preview'
             - if @appearance.persisted?
               %br
-              = link_to _('Remove header logo'), header_logos_admin_application_settings_appearances_path, data: { confirm: _("Header logo will be removed. Are you sure?") }, method: :delete, class: "btn gl-button btn-danger btn-danger-secondary btn-sm"
+              = link_to _('Remove header logo'), header_logos_admin_application_settings_appearances_path, data: { confirm: _("Header logo will be removed. Are you sure?"), confirm_btn_variant: "danger" }, aria: { label: _('Remove header logo') }, method: :delete, class: "btn gl-button btn-danger btn-danger-secondary btn-sm"
             %hr
           = f.hidden_field :header_logo_cache
           = f.file_field :header_logo, class: "", accept: 'image/*'
-          .hint
+          .form-text.text-muted
             = _('Maximum file size is 1MB. Pages are optimized for a 28px tall header logo')
   %hr
   .row
@@ -35,11 +35,11 @@
             = image_tag @appearance.favicon_path, class: 'appearance-light-logo-preview'
             - if @appearance.persisted?
               %br
-              = link_to _('Remove favicon'), favicon_admin_application_settings_appearances_path, data: { confirm: _("Favicon will be removed. Are you sure?") }, method: :delete, class: "btn gl-button btn-danger btn-danger-secondary btn-sm"
+              = link_to _('Remove favicon'), favicon_admin_application_settings_appearances_path, data: { confirm: _("Favicon will be removed. Are you sure?"), confirm_btn_variant: "danger" }, aria: { label: _('Remove favicon') }, method: :delete, class: "btn gl-button btn-danger btn-danger-secondary btn-sm"
             %hr
           = f.hidden_field :favicon_cache
           = f.file_field :favicon, class: '', accept: 'image/*'
-          .hint
+          .form-text.text-muted
             = _("Maximum file size is 1 MB. Image size must be 32 x 32 pixels. Allowed image formats are %{favicon_extension_whitelist}.") % { favicon_extension_whitelist: favicon_extension_whitelist }
             %br
             = _("Images with incorrect dimensions are not resized automatically, and may result in unexpected behavior.")
@@ -58,7 +58,7 @@
       .form-group
         = f.label :description, class: 'col-form-label label-bold'
         = f.text_area :description, class: "form-control gl-form-input", rows: 10
-        .hint
+        .form-text.text-muted
           = parsed_with_gfm
       .form-group
         = f.label :logo, class: 'col-form-label label-bold pt-0'
@@ -67,11 +67,11 @@
             = image_tag @appearance.logo_path, class: 'appearance-logo-preview'
             - if @appearance.persisted?
               %br
-              = link_to _('Remove logo'), logo_admin_application_settings_appearances_path, data: { confirm: _("Logo will be removed. Are you sure?") }, method: :delete, class: "btn gl-button btn-danger btn-danger-secondary btn-sm remove-logo"
+              = link_to _('Remove logo'), logo_admin_application_settings_appearances_path, data: { confirm: _("Logo will be removed. Are you sure?"), confirm_btn_variant: "danger" }, aria: { label: _('Remove logo') }, method: :delete, class: "btn gl-button btn-danger btn-danger-secondary btn-sm remove-logo"
             %hr
           = f.hidden_field :logo_cache
           = f.file_field :logo, class: "", accept: 'image/*'
-          .hint
+          .form-text.text-muted
             = _('Maximum file size is 1MB. Pages are optimized for a 640x360 px logo.')
 
   %hr
@@ -84,7 +84,7 @@
         = f.label :new_project_guidelines, class: 'col-form-label label-bold'
         %p
           = f.text_area :new_project_guidelines, class: "form-control gl-form-input", rows: 10
-          .hint
+          .form-text.text-muted
             = parsed_with_gfm
 
   %hr
@@ -97,7 +97,7 @@
         = f.label :profile_image_guidelines, class: 'col-form-label label-bold'
         %p
           = f.text_area :profile_image_guidelines, class: "form-control gl-form-input", rows: 10
-          .hint
+          .form-text.text-muted
             = parsed_with_gfm
 
       .gl-mt-3.gl-mb-3

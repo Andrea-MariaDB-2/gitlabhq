@@ -19,6 +19,9 @@ export const AWS_TIP_MESSAGE = __(
   '%{deployLinkStart}Use a template to deploy to ECS%{deployLinkEnd}, or use a docker image to %{commandsLinkStart}run AWS commands in GitLab CI/CD%{commandsLinkEnd}.',
 );
 
+export const EVENT_LABEL = 'ci_variable_modal';
+export const EVENT_ACTION = 'validation_error';
+
 // AWS TOKEN CONSTANTS
 export const AWS_ACCESS_KEY_ID = 'AWS_ACCESS_KEY_ID';
 export const AWS_DEFAULT_REGION = 'AWS_DEFAULT_REGION';
@@ -26,5 +29,5 @@ export const AWS_SECRET_ACCESS_KEY = 'AWS_SECRET_ACCESS_KEY';
 export const AWS_TOKEN_CONSTANTS = [AWS_ACCESS_KEY_ID, AWS_DEFAULT_REGION, AWS_SECRET_ACCESS_KEY];
 
 export const CONTAINS_VARIABLE_REFERENCE_MESSAGE = __(
-  'Variable references indicated by %{codeStart}$%{codeEnd} may be expanded. If this is not what you want, consider %{docsLinkStart}using a workaround to prevent expansion%{docsLinkEnd}.',
+  'Values that contain the %{codeStart}$%{codeEnd} character can be considered a variable reference and expanded. %{docsLinkStart}Learn more.%{docsLinkEnd}',
 );

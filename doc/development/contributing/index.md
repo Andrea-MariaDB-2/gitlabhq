@@ -91,7 +91,7 @@ Sign up for the mailing list, answer GitLab questions on StackOverflow or respon
 If you would like to contribute to GitLab:
 
 - Issues with the
-  [`~Accepting merge requests` label](issue_workflow.md#label-for-community-contributors)
+  [`~Seeking community contributions` label](issue_workflow.md#label-for-community-contributors)
   are a great place to start.
 - Optimizing our tests is another great opportunity to contribute. You can use
   [RSpec profiling statistics](https://gitlab-org.gitlab.io/rspec_profiling_stats/) to identify
@@ -129,7 +129,7 @@ The general flow of contributing to GitLab is:
 1. In the merge request's description:
    - Ensure you provide complete and accurate information.
    - Review the provided checklist.
-1. Assign the merge request (if possible) to, or [mention](../../user/project/issues/issue_data_and_actions.md#mentions),
+1. Assign the merge request (if possible) to, or [mention](../../user/discussions/index.md#mentions),
    one of the [code owners](../../user/project/code_owners.md) for the relevant project,
    and explain that you are ready for review.
 

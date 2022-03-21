@@ -16,45 +16,74 @@ import {
   ListTypeTitles,
   DraggableItemTypes,
 } from 'ee_else_ce/boards/constants';
-import createBoardListMutation from 'ee_else_ce/boards/graphql/board_list_create.mutation.graphql';
-import issueMoveListMutation from 'ee_else_ce/boards/graphql/issue_move_list.mutation.graphql';
-import { getIdFromGraphQLId } from '~/graphql_shared/utils';
-import createGqClient, { fetchPolicies } from '~/lib/graphql';
-import { convertObjectPropsToCamelCase } from '~/lib/utils/common_utils';
-import { queryToObject } from '~/lib/utils/url_utility';
-import { s__ } from '~/locale';
 import {
+  formatIssueInput,
   formatBoardLists,
   formatListIssues,
   formatListsPageInfo,
   formatIssue,
-  formatIssueInput,
   updateListPosition,
   moveItemListHelper,
   getMoveData,
   FiltersInfo,
   filterVariables,
-} from '../boards_util';
+} from 'ee_else_ce/boards/boards_util';
+import createBoardListMutation from 'ee_else_ce/boards/graphql/board_list_create.mutation.graphql';
+import issueMoveListMutation from 'ee_else_ce/boards/graphql/issue_move_list.mutation.graphql';
+import totalCountAndWeightQuery from 'ee_else_ce/boards/graphql/board_lists_deferred.query.graphql';
+import { getIdFromGraphQLId } from '~/graphql_shared/utils';
+import { convertObjectPropsToCamelCase } from '~/lib/utils/common_utils';
+import { queryToObject } from '~/lib/utils/url_utility';
+import { s__ } from '~/locale';
+import { gqlClient } from '../graphql';
+import projectBoardQuery from '../graphql/project_board.query.graphql';
+import groupBoardQuery from '../graphql/group_board.query.graphql';
 import boardLabelsQuery from '../graphql/board_labels.query.graphql';
 import groupBoardMilestonesQuery from '../graphql/group_board_milestones.query.graphql';
 import groupProjectsQuery from '../graphql/group_projects.query.graphql';
 import issueCreateMutation from '../graphql/issue_create.mutation.graphql';
-import issueSetLabelsMutation from '../graphql/issue_set_labels.mutation.graphql';
 import listsIssuesQuery from '../graphql/lists_issues.query.graphql';
 import projectBoardMilestonesQuery from '../graphql/project_board_milestones.query.graphql';
 
 import * as types from './mutation_types';
 
-export const gqlClient = createGqClient(
-  {},
-  {
-    fetchPolicy: fetchPolicies.NO_CACHE,
-  },
-);
-
 export default {
+  fetchBoard: ({ commit, dispatch }, { fullPath, fullBoardId, boardType }) => {
+    const variables = {
+      fullPath,
+      boardId: fullBoardId,
+    };
+
+    return gqlClient
+      .query({
+        query: boardType === BoardType.group ? groupBoardQuery : projectBoardQuery,
+        variables,
+      })
+      .then(({ data }) => {
+        const board = data.workspace?.board;
+        commit(types.RECEIVE_BOARD_SUCCESS, board);
+        dispatch('setBoardConfig', board);
+      })
+      .catch(() => commit(types.RECEIVE_BOARD_FAILURE));
+  },
+
   setInitialBoardData: ({ commit }, data) => {
     commit(types.SET_INITIAL_BOARD_DATA, data);
+  },
+
+  setBoardConfig: ({ commit }, board) => {
+    const config = {
+      milestoneId: board.milestone?.id || null,
+      milestoneTitle: board.milestone?.title || null,
+      iterationId: board.iteration?.id || null,
+      iterationTitle: board.iteration?.title || null,
+      assigneeId: board.assignee?.id || null,
+      assigneeUsername: board.assignee?.username || null,
+      labels: board.labels?.nodes || [],
+      labelIds: board.labels?.nodes?.map((label) => label.id) || [],
+      weight: board.weight,
+    };
+    commit(types.SET_BOARD_CONFIG, config);
   },
 
   setActiveId({ commit }, { id, sidebarType }) {
@@ -380,7 +409,6 @@ export default {
     commit(types.REQUEST_ITEMS_FOR_LIST, { listId, fetchNext });
 
     const { fullPath, fullBoardId, boardType, filterParams } = state;
-
     const variables = {
       fullPath,
       boardId: fullBoardId,
@@ -510,9 +538,10 @@ export default {
 
   updateIssueOrder: async ({ commit, dispatch, state }, { moveData, mutationVariables = {} }) => {
     try {
-      const { itemId, fromListId, toListId, moveBeforeId, moveAfterId } = moveData;
+      const { itemId, fromListId, toListId, moveBeforeId, moveAfterId, itemNotInToList } = moveData;
       const {
         fullBoardId,
+        filterParams,
         boardItems: {
           [itemId]: { iid, referencePath },
         },
@@ -526,10 +555,71 @@ export default {
           boardId: fullBoardId,
           fromListId: getIdFromGraphQLId(fromListId),
           toListId: getIdFromGraphQLId(toListId),
-          moveBeforeId,
-          moveAfterId,
+          moveBeforeId: moveBeforeId ? getIdFromGraphQLId(moveBeforeId) : undefined,
+          moveAfterId: moveAfterId ? getIdFromGraphQLId(moveAfterId) : undefined,
           // 'mutationVariables' allows EE code to pass in extra parameters.
           ...mutationVariables,
+        },
+        update(
+          cache,
+          {
+            data: {
+              issueMoveList: {
+                issue: { weight },
+              },
+            },
+          },
+        ) {
+          if (fromListId === toListId) return;
+
+          const updateFromList = () => {
+            const fromList = cache.readQuery({
+              query: totalCountAndWeightQuery,
+              variables: { id: fromListId, filters: filterParams },
+            });
+
+            const updatedFromList = {
+              boardList: {
+                __typename: 'BoardList',
+                id: fromList.boardList.id,
+                issuesCount: fromList.boardList.issuesCount - 1,
+                totalWeight: fromList.boardList.totalWeight - Number(weight),
+              },
+            };
+
+            cache.writeQuery({
+              query: totalCountAndWeightQuery,
+              variables: { id: fromListId, filters: filterParams },
+              data: updatedFromList,
+            });
+          };
+
+          const updateToList = () => {
+            if (!itemNotInToList) return;
+
+            const toList = cache.readQuery({
+              query: totalCountAndWeightQuery,
+              variables: { id: toListId, filters: filterParams },
+            });
+
+            const updatedToList = {
+              boardList: {
+                __typename: 'BoardList',
+                id: toList.boardList.id,
+                issuesCount: toList.boardList.issuesCount + 1,
+                totalWeight: toList.boardList.totalWeight + Number(weight),
+              },
+            };
+
+            cache.writeQuery({
+              query: totalCountAndWeightQuery,
+              variables: { id: toListId, filters: filterParams },
+              data: updatedToList,
+            });
+          };
+
+          updateFromList();
+          updateToList();
         },
       });
 
@@ -555,7 +645,7 @@ export default {
     });
   },
 
-  addListItem: ({ commit }, { list, item, position, inProgress = false }) => {
+  addListItem: ({ commit, dispatch }, { list, item, position, inProgress = false }) => {
     commit(types.ADD_BOARD_ITEM_TO_LIST, {
       listId: list.id,
       itemId: item.id,
@@ -563,6 +653,9 @@ export default {
       inProgress,
     });
     commit(types.UPDATE_BOARD_ITEM, item);
+    if (!inProgress) {
+      dispatch('setActiveId', { id: item.id, sidebarType: ISSUABLE });
+    }
   },
 
   removeListItem: ({ commit }, { listId, itemId }) => {
@@ -571,7 +664,7 @@ export default {
   },
 
   addListNewIssue: (
-    { state: { boardConfig, boardType, fullPath }, dispatch, commit },
+    { state: { boardConfig, boardType, fullPath, filterParams }, dispatch, commit },
     { issueInput, list, placeholderId = `tmp-${new Date().getTime()}` },
   ) => {
     const input = formatIssueInput(issueInput, boardConfig);
@@ -587,6 +680,27 @@ export default {
       .mutate({
         mutation: issueCreateMutation,
         variables: { input },
+        update(cache) {
+          const fromList = cache.readQuery({
+            query: totalCountAndWeightQuery,
+            variables: { id: list.id, filters: filterParams },
+          });
+
+          const updatedList = {
+            boardList: {
+              __typename: 'BoardList',
+              id: fromList.boardList.id,
+              issuesCount: fromList.boardList.issuesCount + 1,
+              totalWeight: fromList.boardList.totalWeight,
+            },
+          };
+
+          cache.writeQuery({
+            query: totalCountAndWeightQuery,
+            variables: { id: list.id, filters: filterParams },
+            data: updatedList,
+          });
+        },
       })
       .then(({ data }) => {
         if (data.createIssue.errors.length) {
@@ -594,7 +708,7 @@ export default {
         }
 
         const rawIssue = data.createIssue?.issue;
-        const formattedIssue = formatIssue({ ...rawIssue, id: getIdFromGraphQLId(rawIssue.id) });
+        const formattedIssue = formatIssue(rawIssue);
         dispatch('removeListItem', { listId: list.id, itemId: placeholderId });
         dispatch('addListItem', { list, item: formattedIssue, position: 0 });
       })
@@ -613,26 +727,17 @@ export default {
 
   setActiveIssueLabels: async ({ commit, getters }, input) => {
     const { activeBoardItem } = getters;
-    const { data } = await gqlClient.mutate({
-      mutation: issueSetLabelsMutation,
-      variables: {
-        input: {
-          iid: input.iid || String(activeBoardItem.iid),
-          addLabelIds: input.addLabelIds ?? [],
-          removeLabelIds: input.removeLabelIds ?? [],
-          projectPath: input.projectPath,
-        },
-      },
-    });
 
-    if (data.updateIssue?.errors?.length > 0) {
-      throw new Error(data.updateIssue.errors);
+    let labels = input?.labels || [];
+    if (input.removeLabelIds) {
+      labels = activeBoardItem.labels.filter(
+        (label) => input.removeLabelIds[0] !== getIdFromGraphQLId(label.id),
+      );
     }
-
     commit(types.UPDATE_BOARD_ITEM_BY_ID, {
-      itemId: getIdFromGraphQLId(data.updateIssue?.issue?.id) || activeBoardItem.id,
+      itemId: input.id || activeBoardItem.id,
       prop: 'labels',
-      value: data.updateIssue.issue.labels.nodes,
+      value: labels,
     });
   },
 

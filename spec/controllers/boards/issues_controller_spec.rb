@@ -116,7 +116,7 @@ RSpec.describe Boards::IssuesController do
 
         it 'does not query issues table more than once' do
           recorder = ActiveRecord::QueryRecorder.new { list_issues(user: user, board: board, list: list1) }
-          query_count = recorder.occurrences.select { |query,| query.start_with?('SELECT issues.*') }.each_value.first
+          query_count = recorder.occurrences.select { |query,| query.match?(/FROM "?issues"?/) }.each_value.first
 
           expect(query_count).to eq(1)
         end
@@ -428,16 +428,20 @@ RSpec.describe Boards::IssuesController do
 
   describe 'POST create' do
     context 'with valid params' do
-      it 'returns a successful 200 response' do
+      before do
         create_issue user: user, board: board, list: list1, title: 'New issue'
+      end
 
+      it 'returns a successful 200 response' do
         expect(response).to have_gitlab_http_status(:ok)
       end
 
       it 'returns the created issue' do
-        create_issue user: user, board: board, list: list1, title: 'New issue'
-
         expect(response).to match_response_schema('entities/issue_board')
+      end
+
+      it 'sets the default work_item_type' do
+        expect(Issue.last.work_item_type.base_type).to eq('issue')
       end
     end
 
@@ -480,7 +484,7 @@ RSpec.describe Boards::IssuesController do
     context 'with guest user' do
       context 'in open list' do
         it 'returns a successful 200 response' do
-          open_list = board.lists.create(list_type: :backlog)
+          open_list = board.lists.create!(list_type: :backlog)
           create_issue user: guest, board: board, list: open_list, title: 'New issue'
 
           expect(response).to have_gitlab_http_status(:ok)

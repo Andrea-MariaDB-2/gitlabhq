@@ -59,7 +59,7 @@ module EnvironmentsHelper
     return {} unless project
 
     {
-      'settings_path'               => edit_project_service_path(project, 'prometheus'),
+      'settings_path'               => edit_project_integration_path(project, 'prometheus'),
       'clusters_path'               => project_clusters_path(project),
       'dashboards_endpoint'         => project_performance_monitoring_dashboards_path(project, format: :json),
       'default_branch'              => project.default_branch,
@@ -69,9 +69,7 @@ module EnvironmentsHelper
       'custom_metrics_path'         => project_prometheus_metrics_path(project),
       'validate_query_path'         => validate_query_project_prometheus_metrics_path(project),
       'custom_metrics_available'    => "#{custom_metrics_available?(project)}",
-      'prometheus_alerts_available' => "#{can?(current_user, :read_prometheus_alerts, project)}",
-      'dashboard_timezone'          => project.metrics_setting_dashboard_timezone.to_s.upcase,
-      'has_managed_prometheus'      => has_managed_prometheus?(project).to_s
+      'dashboard_timezone'          => project.metrics_setting_dashboard_timezone.to_s.upcase
     }
   end
 
@@ -84,10 +82,6 @@ module EnvironmentsHelper
       'has_metrics'                 => "#{environment.has_metrics?}",
       'environment_state'           => "#{environment.state}"
     }
-  end
-
-  def has_managed_prometheus?(project)
-    project.prometheus_integration&.prometheus_available? == true
   end
 
   def metrics_dashboard_base_path(environment, project)

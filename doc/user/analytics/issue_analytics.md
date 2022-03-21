@@ -5,11 +5,11 @@ group: Optimize
 info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
 ---
 
-# Issue Analytics **(PREMIUM)**
+# Issue analytics for projects **(PREMIUM)**
 
-> [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/196561) in [GitLab Premium](https://about.gitlab.com/pricing/) 12.9.
+> [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/196561) in GitLab 12.9.
 
-Issue Analytics is a bar graph which illustrates the number of issues created each month.
+Issue analytics is a bar graph which illustrates the number of issues created each month.
 The default time span is 13 months, which includes the current month, and the 12 months
 prior.
 
@@ -34,7 +34,7 @@ You can change the total number of months displayed by setting a URL parameter.
 For example, `https://gitlab.com/groups/gitlab-org/-/issues_analytics?months_back=15`
 shows a total of 15 months for the chart in the GitLab.org group.
 
-![Issues created per month](img/issues_created_per_month_v13_11.png)
+![Issues created per month](img/issues_created_per_month_v14_8.png)
 
 ## Drill into the information
 

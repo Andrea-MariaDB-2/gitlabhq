@@ -33,22 +33,22 @@ module Types
             method: :note,
             description: 'Content of the note.'
 
-      markdown_field :body_html, null: true, method: :note
-
+      field :confidential, GraphQL::Types::Boolean, null: true,
+            description: 'Indicates if this note is confidential.',
+            method: :confidential?
       field :created_at, Types::TimeType, null: false,
             description: 'Timestamp of the note creation.'
-      field :updated_at, Types::TimeType, null: false,
-            description: "Timestamp of the note's last activity."
       field :discussion, Types::Notes::DiscussionType, null: true,
             description: 'Discussion this note is a part of.'
       field :position, Types::Notes::DiffPositionType, null: true,
             description: 'Position of this note on a diff.'
-      field :confidential, GraphQL::Types::Boolean, null: true,
-            description: 'Indicates if this note is confidential.',
-            method: :confidential?
+      field :updated_at, Types::TimeType, null: false,
+            description: "Timestamp of the note's last activity."
       field :url, GraphQL::Types::String,
             null: true,
             description: 'URL to view this Note in the Web UI.'
+
+      markdown_field :body_html, null: true, method: :note
 
       def url
         ::Gitlab::UrlBuilder.build(object)

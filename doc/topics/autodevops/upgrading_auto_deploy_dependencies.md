@@ -5,7 +5,7 @@ info: To determine the technical writer assigned to the Stage/Group associated w
 type: reference
 ---
 
-# Upgrading deployments for newer Auto Deploy dependencies
+# Upgrading deployments for newer Auto Deploy dependencies **(FREE)**
 
 [Auto Deploy](stages.md#auto-deploy) is a feature that deploys your application to a Kubernetes cluster.
 It consists of several dependencies:
@@ -180,7 +180,7 @@ used the `v0.17.0` chart, add `AUTO_DEVOPS_FORCE_DEPLOY_V2`.
 
 ## Early adopters
 
-If you want to use the latest beta or unstable version of `auto-deploy-image`, include
+If you want to use the latest [Beta](../../policy/alpha-beta-support.md#beta-features) or unstable version of `auto-deploy-image`, include
 the latest Auto Deploy template into your `.gitlab-ci.yml`:
 
 ```yaml
@@ -190,7 +190,7 @@ include:
 ```
 
 WARNING:
-Using a beta or unstable `auto-deploy-image` could cause unrecoverable damage to
+Using a [Beta](../../policy/alpha-beta-support.md#beta-features) or unstable `auto-deploy-image` could cause unrecoverable damage to
 your environments. Do not test it with important projects or environments.
 
 The next stable template update is [planned for GitLab v14.0](https://gitlab.com/gitlab-org/gitlab/-/issues/232788).

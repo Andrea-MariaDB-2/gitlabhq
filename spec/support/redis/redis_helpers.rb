@@ -22,4 +22,21 @@ module RedisHelpers
   def redis_trace_chunks_cleanup!
     Gitlab::Redis::TraceChunks.with(&:flushdb)
   end
+
+  # Usage: rate limiting state (for Rack::Attack)
+  def redis_rate_limiting_cleanup!
+    Gitlab::Redis::RateLimiting.with(&:flushdb)
+  end
+
+  # Usage: session state
+  def redis_sessions_cleanup!
+    Gitlab::Redis::Sessions.with(&:flushdb)
+  end
+
+  # Usage: reset cached instance config
+  def redis_clear_raw_config!(instance_class)
+    instance_class.remove_instance_variable(:@_raw_config)
+  rescue NameError
+    # raised if @_raw_config was not set; ignore
+  end
 end

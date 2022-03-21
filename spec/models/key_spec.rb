@@ -20,7 +20,31 @@ RSpec.describe Key, :mailer do
     it { is_expected.to allow_value(attributes_for(:dsa_key_2048)[:key]).for(:key) }
     it { is_expected.to allow_value(attributes_for(:ecdsa_key_256)[:key]).for(:key) }
     it { is_expected.to allow_value(attributes_for(:ed25519_key_256)[:key]).for(:key) }
+    it { is_expected.to allow_value(attributes_for(:ecdsa_sk_key_256)[:key]).for(:key) }
+    it { is_expected.to allow_value(attributes_for(:ed25519_sk_key_256)[:key]).for(:key) }
     it { is_expected.not_to allow_value('foo-bar').for(:key) }
+
+    context 'key format' do
+      let(:key) { build(:key) }
+
+      it 'does not allow the key that begins with an algorithm name that is unsupported' do
+        key.key = 'unsupported-ssh-rsa key'
+
+        key.valid?
+
+        expect(key.errors.of_kind?(:key, :invalid)).to eq(true)
+      end
+
+      Gitlab::SSHPublicKey.supported_algorithms.each do |supported_algorithm|
+        it "allows the key that begins with supported algorithm name '#{supported_algorithm}'" do
+          key.key = "#{supported_algorithm} key"
+
+          key.valid?
+
+          expect(key.errors.of_kind?(:key, :invalid)).to eq(false)
+        end
+      end
+    end
   end
 
   describe "Methods" do
@@ -85,9 +109,9 @@ RSpec.describe Key, :mailer do
       let_it_be(:expiring_soon_notified) { create(:key, expires_at: 4.days.from_now, user: user, before_expiry_notification_delivered_at: Time.current) }
       let_it_be(:future_expiry) { create(:key, expires_at: 1.month.from_now, user: user) }
 
-      describe '.expired_and_not_notified' do
+      describe '.expired_today_and_not_notified' do
         it 'returns keys that expire today and in the past' do
-          expect(described_class.expired_and_not_notified).to contain_exactly(expired_today_not_notified, expired_yesterday)
+          expect(described_class.expired_today_and_not_notified).to contain_exactly(expired_today_not_notified)
         end
       end
 
@@ -165,10 +189,12 @@ RSpec.describe Key, :mailer do
       forbidden = ApplicationSetting::FORBIDDEN_KEY_VALUE
 
       [
-        [:rsa_key_2048,    0, true],
-        [:dsa_key_2048,    0, true],
-        [:ecdsa_key_256,   0, true],
-        [:ed25519_key_256, 0, true],
+        [:rsa_key_2048,       0, true],
+        [:dsa_key_2048,       0, true],
+        [:ecdsa_key_256,      0, true],
+        [:ed25519_key_256,    0, true],
+        [:ecdsa_sk_key_256,   0, true],
+        [:ed25519_sk_key_256, 0, true],
 
         [:rsa_key_2048, 1024, true],
         [:rsa_key_2048, 2048, true],
@@ -184,10 +210,18 @@ RSpec.describe Key, :mailer do
         [:ed25519_key_256, 256, true],
         [:ed25519_key_256, 384, false],
 
-        [:rsa_key_2048,    forbidden, false],
-        [:dsa_key_2048,    forbidden, false],
-        [:ecdsa_key_256,   forbidden, false],
-        [:ed25519_key_256, forbidden, false]
+        [:ecdsa_sk_key_256, 256, true],
+        [:ecdsa_sk_key_256, 384, false],
+
+        [:ed25519_sk_key_256, 256, true],
+        [:ed25519_sk_key_256, 384, false],
+
+        [:rsa_key_2048,       forbidden, false],
+        [:dsa_key_2048,       forbidden, false],
+        [:ecdsa_key_256,      forbidden, false],
+        [:ed25519_key_256,    forbidden, false],
+        [:ecdsa_sk_key_256,   forbidden, false],
+        [:ed25519_sk_key_256, forbidden, false]
       ]
     end
 

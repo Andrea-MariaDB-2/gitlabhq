@@ -13,9 +13,7 @@ _every_ merge request **should** adhere to the guidelines outlined in this
 document. There are no exceptions to this rule unless specifically discussed
 with and agreed upon by backend maintainers and performance specialists.
 
-To measure the impact of a merge request you can use
-[Sherlock](profiling.md#sherlock). It's also highly recommended that you read
-the following guides:
+It's also highly recommended that you read the following guides:
 
 - [Performance Guidelines](performance.md)
 - [Avoiding downtime in migrations](avoiding_downtime_in_migrations.md)
@@ -160,10 +158,10 @@ query. This in turn makes it much harder for this code to overload a database.
 
 ## Use read replicas when possible
 
-In a DB cluster we have many read replicas and one primary. A classic use of scaling the DB is to have read-only actions be performed by the replicas. We use [load balancing](../administration/database_load_balancing.md) to distribute this load. This allows for the replicas to grow as the pressure on the DB grows.
+In a DB cluster we have many read replicas and one primary. A classic use of scaling the DB is to have read-only actions be performed by the replicas. We use [load balancing](../administration/postgresql/database_load_balancing.md) to distribute this load. This allows for the replicas to grow as the pressure on the DB grows.
 
 By default, queries use read-only replicas, but due to
-[primary sticking](../administration/database_load_balancing.md#primary-sticking), GitLab uses the
+[primary sticking](../administration/postgresql/database_load_balancing.md#primary-sticking), GitLab uses the
 primary for some time and reverts to secondaries after they have either caught up or after 30 seconds.
 Doing this can lead to a considerable amount of unnecessary load on the primary.
 To prevent switching to the primary [merge request 56849](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/56849) introduced the
@@ -187,7 +185,7 @@ Internally, our database load balancer classifies the queries based on their mai
 - Sidekiq background jobs
 
 After the above queries are executed, GitLab
-[sticks to the primary](../administration/database_load_balancing.md#primary-sticking).
+[sticks to the primary](../administration/postgresql/database_load_balancing.md#primary-sticking).
 To make the inside queries prefer using the replicas,
 [merge request 59086](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/59086) introduced
 `fallback_to_replicas_for_ambiguous_queries`. This MR is also an example of how we redirected a
@@ -205,7 +203,7 @@ Keeping the old behavior requires marking CTEs with the keyword `MATERIALIZED`.
 When building CTE statements, use the `Gitlab::SQL::CTE` class [introduced](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/56976) in GitLab 13.11.
 By default, this `Gitlab::SQL::CTE` class forces materialization through adding the `MATERIALIZED` keyword for PostgreSQL 12 and higher.
 `Gitlab::SQL::CTE` automatically omits materialization when PostgreSQL 11 is running
-(this behavior is implemented using a custom arel node `Gitlab::Database::AsWithMaterialized` under the surface).
+(this behavior is implemented using a custom Arel node `Gitlab::Database::AsWithMaterialized` under the surface).
 
 WARNING:
 We plan to drop the support for PostgreSQL 11. Upgrading to GitLab 14.0 requires PostgreSQL 12 or higher.
@@ -257,15 +255,15 @@ It re-instantiates project object for each build, instead of using the same in-m
 In this particular case the workaround is fairly easy:
 
 ```ruby
+ActiveRecord::Associations::Preloader.new.preload(pipeline, [builds: :project])
+
 pipeline.builds.each do |build|
-  build.project = pipeline.project
   build.to_json(only: [:name], include: [project: { only: [:name]}])
 end
 ```
 
-We can assign `pipeline.project` to each `build.project`, since we know it should point to the same project.
-This allows us that each build point to the same in-memory project,
-avoiding the cached SQL query and re-instantiation of the project object for each build.
+`ActiveRecord::Associations::Preloader` uses the same in-memory object for the same project.
+This avoids the cached SQL query and also avoids re-instantiation of the project object for each build.
 
 ## Executing Queries in Loops
 
@@ -377,16 +375,6 @@ comment. Instead of always rendering these kind of elements they should only be
 rendered when actually needed. This ensures we don't spend time generating
 Haml/HTML when it's not used.
 
-## Instrumenting New Code
-
-**Summary:** always add instrumentation for new classes, modules, and methods.
-
-Newly added classes, modules, and methods must be instrumented. This ensures
-we can track the performance of this code over time.
-
-For more information see [Instrumentation](instrumentation.md). This guide
-describes how to add instrumentation and where to add it.
-
 ## Use of Caching
 
 **Summary:** cache data in memory or in Redis when it's needed multiple times in
@@ -457,49 +445,6 @@ that accepts an upper limit of counting rows.
 
 In some cases it's desired that badge counters are loaded asynchronously.
 This can speed up the initial page load and give a better user experience overall.
-
-## Application/misuse limits
-
-Every new feature should have safe usage quotas introduced.
-The quota should be optimised to a level that we consider the feature to
-be performant and usable for the user, but **not limiting**.
-
-**We want the features to be fully usable for the users.**
-**However, we want to ensure that the feature continues to perform well if used at its limit**
-**and it doesn't cause availability issues.**
-
-Consider that it's always better to start with some kind of limitation,
-instead of later introducing a breaking change that would result in some
-workflows breaking.
-
-The intent is to provide a safe usage pattern for the feature,
-as our implementation decisions are optimised for the given data set.
-Our feature limits should reflect the optimisations that we introduced.
-
-The intent of quotas could be different:
-
-1. We want to provide higher quotas for higher tiers of features:
-   we want to provide on GitLab.com more capabilities for different tiers,
-1. We want to prevent misuse of the feature: someone accidentally creates
-   10000 deploy tokens, because of a broken API script,
-1. We want to prevent abuse of the feature: someone purposely creates
-   a 10000 pipelines to take advantage of the system.
-
-Examples:
-
-1. Pipeline Schedules: It's very unlikely that user wants to create
-   more than 50 schedules.
-   In such cases it's rather expected that this is either misuse
-   or abuse of the feature. Lack of the upper limit can result
-   in service degradation as the system tries to process all schedules
-   assigned the project.
-
-1. GitLab CI/CD includes: We started with the limit of maximum of 50 nested includes.
-   We understood that performance of the feature was acceptable at that level.
-   We received a request from the community that the limit is too small.
-   We had a time to understand the customer requirement, and implement an additional
-   fail-safe mechanism (time-based one) to increase the limit 100, and if needed increase it
-   further without negative impact on availability of the feature and GitLab.
 
 ## Usage of feature flags
 
@@ -581,7 +526,7 @@ end
 
 The usage of shared temporary storage is required if your intent
 is to persistent file for a disk-based storage, and not Object Storage.
-[Workhorse direct_upload](uploads.md#direct-upload) when accepting file
+[Workhorse direct_upload](uploads/implementation.md#direct-upload) when accepting file
 can write it to shared storage, and later GitLab Rails can perform a move operation.
 The move operation on the same destination is instantaneous.
 The system instead of performing `copy` operation just re-attaches file into a new place.
@@ -605,7 +550,7 @@ that implements a seamless support for Shared and Object Storage-based persisten
 #### Data access
 
 Each feature that accepts data uploads or allows to download them needs to use
-[Workhorse direct_upload](uploads.md#direct-upload). It means that uploads needs to be
+[Workhorse direct_upload](uploads/implementation.md#direct-upload). It means that uploads needs to be
 saved directly to Object Storage by Workhorse, and all downloads needs to be served
 by Workhorse.
 
@@ -617,5 +562,5 @@ can time out, which is especially problematic for slow clients. If clients take 
 to upload/download the processing slot might be killed due to request processing
 timeout (usually between 30s-60s).
 
-For the above reasons it is required that [Workhorse direct_upload](uploads.md#direct-upload) is implemented
+For the above reasons it is required that [Workhorse direct_upload](uploads/implementation.md#direct-upload) is implemented
 for all file uploads and downloads.

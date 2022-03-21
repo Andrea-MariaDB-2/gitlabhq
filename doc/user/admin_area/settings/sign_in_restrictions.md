@@ -2,7 +2,6 @@
 stage: none
 group: unassigned
 info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
-type: reference
 ---
 
 # Sign-in restrictions **(FREE SELF)**
@@ -14,15 +13,20 @@ You can use **Sign-in restrictions** to customize authentication restrictions fo
 To access sign-in restriction settings:
 
 1. On the top bar, select **Menu > Admin**.
-1. In the left sidebar, select **Settings > General**.
+1. On the left sidebar, select **Settings > General**.
 1. Expand the **Sign-in restrictions** section.
 
 ## Password authentication enabled
 
 You can restrict the password authentication for web interface and Git over HTTP(S):
 
-- **Web interface**: When this feature is disabled, the **Standard** sign-in tab is removed and an [external authentication provider](../../../administration/auth/index.md) must be used.
-- **Git over HTTP(S)**: When this feature is disabled, a [Personal Access Token](../../profile/personal_access_tokens.md) must be used to authenticate.
+- **Web interface**: When this feature is disabled, the **Standard** sign-in tab
+  is removed and an [external authentication provider](../../../administration/auth/index.md)
+  must be used.
+- **Git over HTTP(S)**: When this feature is disabled, a [Personal Access Token](../../profile/personal_access_tokens.md)
+  or LDAP password must be used to authenticate.
+
+In the event of an external authentication provider outage, use the [GitLab Rails console](../../../administration/operations/rails_console.md) to [re-enable the standard web sign-in form](../../../administration/troubleshooting/gitlab_rails_cheat_sheet.md#re-enable-standard-web-sign-in-form). This configuration can also be changed over the [Application settings REST API](../../../api/settings.md#change-application-settings) while authenticating with an administrator account's personal access token.
 
 ## Admin Mode
 
@@ -34,7 +38,7 @@ they do not have access to all projects, groups, or the **Admin Area** menu.
 To access potentially dangerous resources, an administrator can activate Admin Mode by:
 
 - Selecting the *Enable Admin Mode* button
-- Trying to access any part of the UI that requires an administrator role, specifically those which call `/admin` endpoints.
+- Trying to access any part of the UI that requires administrator access, specifically those which call `/admin` endpoints.
 
 The main use case allows administrators to perform their regular tasks as a regular
 user, based on their memberships, without having to set up a second account for
@@ -104,7 +108,7 @@ see [Email notification for unknown sign-ins](../../profile/unknown_sign_in_noti
 All users that are not logged in are redirected to the page represented by the configured
 **Home page URL** if value is not empty.
 
-All users are redirected to the page represented by the configured **After sign out path**
+All users are redirected to the page represented by the configured **After sign-out path**
 after sign out if value is not empty.
 
 In the **Sign-in restrictions** section, scroll to the **Sign-in text** field. You can add a
@@ -118,7 +122,7 @@ For example, if you include the following information in the noted text box:
 To access this text box:
 
 1. On the top bar, select **Menu > Admin**.
-1. In the left sidebar, select **Settings > General**, and expand the **Sign-in restrictions** section.
+1. On the left sidebar, select **Settings > General**, and expand the **Sign-in restrictions** section.
 ```
 
 Your users see the **Custom sign-in text** when they navigate to the sign-in screen for your

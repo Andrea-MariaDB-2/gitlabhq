@@ -425,6 +425,9 @@ RSpec.describe Gitlab::PathRegex do
     it { is_expected.not_to match('gitlab.org/') }
     it { is_expected.not_to match('/gitlab.org') }
     it { is_expected.not_to match('gitlab git') }
+    it { is_expected.not_to match('gitlab?') }
+    it { is_expected.to match('gitlab.org-') }
+    it { is_expected.to match('gitlab.org_') }
   end
 
   describe '.project_path_format_regex' do
@@ -437,6 +440,14 @@ RSpec.describe Gitlab::PathRegex do
     it { is_expected.not_to match('?gitlab') }
     it { is_expected.not_to match('git lab') }
     it { is_expected.not_to match('gitlab.git') }
+    it { is_expected.not_to match('gitlab?') }
+    it { is_expected.not_to match('gitlab git') }
+    it { is_expected.to match('gitlab.org') }
+    it { is_expected.to match('gitlab.org-') }
+    it { is_expected.to match('gitlab.org_') }
+    it { is_expected.to match('gitlab.org.') }
+    it { is_expected.not_to match('gitlab.org/') }
+    it { is_expected.not_to match('/gitlab.org') }
   end
 
   context 'repository routes' do
@@ -538,10 +549,11 @@ RSpec.describe Gitlab::PathRegex do
     it { is_expected.to match('gitlab-foss') }
     it { is_expected.to match('gitlab_foss') }
     it { is_expected.to match('gitlab-org/gitlab-foss') }
+    it { is_expected.to match('a/b/c/d/e') }
     it { is_expected.to match('100px.com/100px.ruby') }
 
-    it 'only matches at most one slash' do
-      expect(subject.match('foo/bar/baz')[0]).to eq('foo/bar')
+    it 'does not match beyond 4 slashes' do
+      expect(subject.match('foo/bar/baz/buz/zip/zap/zoo')[0]).to eq('foo/bar/baz/buz/zip')
     end
 
     it 'does not match other non-word characters' do
@@ -560,5 +572,26 @@ RSpec.describe Gitlab::PathRegex do
     it 'does not match malicious characters' do
       expect(subject.match('sha256:asdf1234%2f')[0]).to eq('sha256:asdf1234')
     end
+  end
+
+  describe '.dependency_proxy_route_regex' do
+    subject { described_class.dependency_proxy_route_regex }
+
+    it { is_expected.to match('/v2/group1/dependency_proxy/containers/alpine/manifests/latest') }
+    it { is_expected.to match('/v2/group1/dependency_proxy/containers/alpine/blobs/sha256:14119a10abf4669e8cdbdff324a9f9605d99697215a0d21c360fe8dfa8471bab') }
+
+    it { is_expected.not_to match('') }
+    it { is_expected.not_to match('/v3/group1/dependency_proxy/containers/alpine/manifests/latest') }
+    it { is_expected.not_to match('/v2/group1/dependency_proxy/container/alpine/manifests/latest') }
+    it { is_expected.not_to match('/v2/group1/dependency_prox/containers/alpine/manifests/latest') }
+    it { is_expected.not_to match('/v2/group1/dependency_proxy/containers/alpine/manifest/latest') }
+    it { is_expected.not_to match('/v2/group1/dependency_proxy/containers/alpine/manifest/la%2Ftest') }
+    it { is_expected.not_to match('/v2/group1/dependency_proxy/containers/alpine/manifest/latest/../one') }
+    it { is_expected.not_to match('/v3/group1/dependency_proxy/containers/alpine/blobs/sha256:14119a10abf4669e8cdbdff324a9f9605d99697215a0d21c360fe8dfa8471bab') }
+    it { is_expected.not_to match('/v2/group1/dependency_proxy/container/alpine/blobs/sha256:14119a10abf4669e8cdbdff324a9f9605d99697215a0d21c360fe8dfa8471bab') }
+    it { is_expected.not_to match('/v2/group1/dependency_prox/containers/alpine/blobs/sha256:14119a10abf4669e8cdbdff324a9f9605d99697215a0d21c360fe8dfa8471bab') }
+    it { is_expected.not_to match('/v2/group1/dependency_proxy/containers/alpine/blob/sha256:14119a10abf4669e8cdbdff324a9f9605d99697215a0d21c360fe8dfa8471bab') }
+    it { is_expected.not_to match('/v2/group1/dependency_proxy/containers/alpine/blob/sha256:F14119a10abf4669e8cdbdff324a9f9605d99697215a0d21c360fe8dfa8471bab/../latest') }
+    it { is_expected.not_to match('/v2/group1/dependency_proxy/containers/alpine/blob/sha256:F14119a10abf4669e8cdbdff324a9f9605d99697215a0d21c360fe8dfa8471bab/latest') }
   end
 end

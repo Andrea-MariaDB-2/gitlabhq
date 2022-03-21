@@ -12,13 +12,14 @@ module QA
                     :auto_devops_enabled,
                     :github_personal_access_token,
                     :github_repository_path,
-                    :gitlab_repository_path
+                    :gitlab_repository_path,
+                    :personal_namespace
 
       attributes :id,
                  :name,
+                 :path,
                  :add_name_uuid,
                  :description,
-                 :personal_namespace,
                  :runners_token,
                  :visibility,
                  :template_name,
@@ -27,17 +28,21 @@ module QA
                  :import_error
 
       attribute :group do
-        Group.fabricate!
+        Group.fabricate! do |group|
+          group.api_client = api_client
+        end
       end
 
       attribute :path_with_namespace do
-        "#{group.full_path}/#{name}"
+        "#{personal_namespace || group.full_path}/#{name}"
       end
 
       alias_method :full_path, :path_with_namespace
 
       def sandbox_path
-        group.respond_to?('sandbox') ? "#{group.sandbox.path}/" : ''
+        return '' if personal_namespace || !group.respond_to?('sandbox')
+
+        "#{group.sandbox.path}/"
       end
 
       attribute :repository_ssh_location do
@@ -50,12 +55,12 @@ module QA
 
       def initialize
         @add_name_uuid = true
-        @personal_namespace = false
         @description = 'My awesome project'
         @initialize_with_readme = false
         @auto_devops_enabled = false
         @visibility = :public
         @template_name = nil
+        @personal_namespace = nil
         @import = false
 
         self.name = "the_awesome_project"
@@ -68,7 +73,7 @@ module QA
       def fabricate!
         return if @import
 
-        if @personal_namespace
+        if personal_namespace
           Page::Dashboard::Projects.perform(&:click_new_project_button)
         else
           group.visit!
@@ -89,6 +94,7 @@ module QA
           new_page.choose_name(@name)
           new_page.add_description(@description)
           new_page.set_visibility(@visibility)
+          new_page.disable_initialize_with_sast
           new_page.disable_initialize_with_readme unless @initialize_with_readme
           new_page.create_new_project
         end
@@ -100,32 +106,6 @@ module QA
         resource_web_url(api_get)
       rescue ResourceNotFoundError
         super
-      end
-
-      def has_file?(file_path)
-        response = repository_tree
-
-        raise ResourceNotFoundError, (response[:message]).to_s if response.is_a?(Hash) && response.has_key?(:message)
-
-        response.any? { |file| file[:path] == file_path }
-      end
-
-      def has_branch?(branch)
-        has_branches?(Array(branch))
-      end
-
-      def has_branches?(branches)
-        branches.all? do |branch|
-          response = get(request_url("#{api_repository_branches_path}/#{branch}"))
-          response.code == HTTP_STATUS_OK
-        end
-      end
-
-      def has_tags?(tags)
-        tags.all? do |tag|
-          response = get(request_url("#{api_repository_tags_path}/#{tag}"))
-          response.code == HTTP_STATUS_OK
-        end
       end
 
       def api_get_path
@@ -232,9 +212,34 @@ module QA
         post_body
       end
 
+      def has_file?(file_path)
+        response = repository_tree
+
+        raise ResourceNotFoundError, (response[:message]).to_s if response.is_a?(Hash) && response.has_key?(:message)
+
+        response.any? { |file| file[:path] == file_path }
+      end
+
+      def has_branch?(branch)
+        has_branches?(Array(branch))
+      end
+
+      def has_branches?(branches)
+        branches.all? do |branch|
+          response = get(request_url("#{api_repository_branches_path}/#{branch}"))
+          response.code == HTTP_STATUS_OK
+        end
+      end
+
+      def has_tags?(tags)
+        tags.all? do |tag|
+          response = get(request_url("#{api_repository_tags_path}/#{tag}"))
+          response.code == HTTP_STATUS_OK
+        end
+      end
+
       def change_repository_storage(new_storage)
-        put_body = { repository_storage: new_storage }
-        response = put(request_url(api_put_path), put_body)
+        response = put(request_url(api_put_path), repository_storage: new_storage)
 
         unless response.code == HTTP_STATUS_OK
           raise(
@@ -257,7 +262,7 @@ module QA
         reload!.api_response[:default_branch] || Runtime::Env.default_branch
       end
 
-      def import_status
+      def project_import_status
         response = get(request_url("/projects/#{id}/import"))
 
         unless response.code == HTTP_STATUS_OK
@@ -271,7 +276,7 @@ module QA
           Runtime::Logger.error("Failed relations: #{result[:failed_relations]}")
         end
 
-        result[:import_status]
+        result
       end
 
       def commits(auto_paginate: false, attempts: 0)
@@ -313,9 +318,17 @@ module QA
         auto_paginated_response(request_url(api_repository_branches_path, per_page: '100'), attempts: attempts)
       end
 
+      def create_repository_branch(branch_name, ref = default_branch)
+        api_post_to(api_repository_branches_path, branch: branch_name, ref: ref)
+      end
+
       def repository_tags
         response = get(request_url(api_repository_tags_path))
         parse_body(response)
+      end
+
+      def create_repository_tag(tag_name, ref = default_branch)
+        api_post_to(api_repository_tags_path, tag_name: tag_name, ref: ref)
       end
 
       def repository_tree
@@ -356,6 +369,59 @@ module QA
         parse_body(response)
       end
 
+      def create_wiki_page(title:, content:)
+        api_post_to(api_wikis_path, title: title, content: content)
+      end
+
+      # Uses the API to wait until a pull mirroring update is successful (pull mirroring is treated as an import)
+      def wait_for_pull_mirroring
+        mirror_succeeded = Support::Retrier.retry_until(max_duration: 180, raise_on_failure: false, sleep_interval: 1) do
+          reload!
+          api_resource[:import_status] == "finished"
+        end
+
+        unless mirror_succeeded
+          raise "Mirroring failed with error: #{api_resource[:import_error]}"
+        end
+      end
+
+      def remove_via_api!
+        super
+
+        Support::Retrier.retry_until(max_duration: 60, sleep_interval: 1, message: "Waiting for #{self.class.name} to be removed") do
+          !exists?
+        rescue InternalServerError
+          # Retry on transient errors that are likely to be due to race conditions between concurrent delete operations
+          # when parts of a resource are stored in multiple tables
+          false
+        end
+      end
+
+      protected
+
+      # Return subset of fields for comparing projects
+      #
+      # @return [Hash]
+      def comparable
+        reload! if api_response.nil?
+
+        api_resource.slice(
+          :name,
+          :path,
+          :description,
+          :tag_list,
+          :archived,
+          :issues_enabled,
+          :merge_request_enabled,
+          :wiki_enabled,
+          :jobs_enabled,
+          :snippets_enabled,
+          :shared_runners_enabled,
+          :request_access_enabled,
+          :avatar_url
+        )
+      end
+
       private
 
       def transform_api_resource(api_resource)
@@ -365,14 +431,8 @@ module QA
           Git::Location.new(api_resource[:http_url_to_repo])
         api_resource
       end
-
-      # Get api request url
-      #
-      # @param [String] path
-      # @return [String]
-      def request_url(path, **opts)
-        Runtime::API::Request.new(api_client, path, **opts).url
-      end
     end
   end
 end
+
+QA::Resource::Project.prepend_mod_with('Resource::Project', namespace: QA)

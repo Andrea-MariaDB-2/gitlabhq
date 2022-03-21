@@ -1,6 +1,7 @@
 import Vue from 'vue';
+import initInviteMembersModal from '~/invite_members/init_invite_members_modal';
 import { convertObjectPropsToCamelCase } from '~/lib/utils/common_utils';
-import LearnGitlabA from '../components/learn_gitlab_a.vue';
+import LearnGitlab from '../components/learn_gitlab.vue';
 
 function initLearnGitlab() {
   const el = document.getElementById('js-learn-gitlab-app');
@@ -11,15 +12,17 @@ function initLearnGitlab() {
 
   const actions = convertObjectPropsToCamelCase(JSON.parse(el.dataset.actions));
   const sections = convertObjectPropsToCamelCase(JSON.parse(el.dataset.sections));
+  const project = convertObjectPropsToCamelCase(JSON.parse(el.dataset.project));
 
   return new Vue({
     el,
     render(createElement) {
-      return createElement(LearnGitlabA, {
-        props: { actions, sections },
+      return createElement(LearnGitlab, {
+        props: { actions, sections, project },
       });
     },
   });
 }
 
 initLearnGitlab();
+initInviteMembersModal();

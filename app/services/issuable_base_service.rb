@@ -56,11 +56,14 @@ class IssuableBaseService < ::BaseProjectService
     # confidential attribute is a special type of metadata and needs to be allowed to be set
     # by non-members on issues in public projects so that security issues can be reported as confidential.
     params.delete(:confidential) unless can?(current_user, :set_confidentiality, issuable)
+    params.delete(:add_contacts) unless can?(current_user, :set_issue_crm_contacts, issuable)
+    params.delete(:remove_contacts) unless can?(current_user, :set_issue_crm_contacts, issuable)
 
     filter_assignees(issuable)
     filter_milestone
     filter_labels
     filter_severity(issuable)
+    filter_escalation_status(issuable)
   end
 
   def filter_assignees(issuable)
@@ -142,11 +145,26 @@ class IssuableBaseService < ::BaseProjectService
   def filter_severity(issuable)
     severity = params.delete(:severity)
     return unless severity && issuable.supports_severity?
+    return unless can_admin_issuable?(issuable)
 
     severity = IssuableSeverity::DEFAULT unless IssuableSeverity.severities.key?(severity)
     return if severity == issuable.severity
 
     params[:issuable_severity_attributes] = { severity: severity }
+  end
+
+  def filter_escalation_status(issuable)
+    result = ::IncidentManagement::IssuableEscalationStatuses::PrepareUpdateService.new(
+      issuable,
+      current_user,
+      params.delete(:escalation_status)
+    ).execute
+
+    return unless result.success? && result[:escalation_status].present?
+
+    @escalation_status_change_reason = result[:escalation_status].delete(:status_change_reason)
+
+    params[:incident_management_issuable_escalation_status_attributes] = result[:escalation_status]
   end
 
   def process_label_ids(attributes, existing_label_ids: nil, extra_label_ids: [])
@@ -205,6 +223,9 @@ class IssuableBaseService < ::BaseProjectService
       params[:assignee_ids] = process_assignee_ids(params, extra_assignee_ids: issuable.assignee_ids.to_a)
     end
 
+    params.delete(:remove_contacts)
+    add_crm_contact_emails = params.delete(:add_contacts)
+
     issuable.assign_attributes(allowed_create_params(params))
 
     before_create(issuable)
@@ -218,6 +239,7 @@ class IssuableBaseService < ::BaseProjectService
       handle_changes(issuable, { params: params })
 
       after_create(issuable)
+      set_crm_contacts(issuable, add_crm_contact_emails)
       execute_hooks(issuable)
 
       users_to_invalidate = issuable.allows_reviewers? ? issuable.assignees | issuable.reviewers : issuable.assignees
@@ -226,6 +248,12 @@ class IssuableBaseService < ::BaseProjectService
     end
 
     issuable
+  end
+
+  def set_crm_contacts(issuable, add_crm_contact_emails, remove_crm_contact_emails = [])
+    return unless add_crm_contact_emails.present? || remove_crm_contact_emails.present?
+
+    ::Issues::SetCrmContactsService.new(project: project, current_user: current_user, params: { add_emails: add_crm_contact_emails, remove_emails: remove_crm_contact_emails }).execute(issuable)
   end
 
   def before_create(issuable)
@@ -253,6 +281,7 @@ class IssuableBaseService < ::BaseProjectService
 
     assign_requested_labels(issuable)
     assign_requested_assignees(issuable)
+    assign_requested_crm_contacts(issuable)
 
     if issuable.changed? || params.present?
       issuable.assign_attributes(allowed_update_params(params))
@@ -413,6 +442,12 @@ class IssuableBaseService < ::BaseProjectService
     issuable.touch
   end
 
+  def assign_requested_crm_contacts(issuable)
+    add_crm_contact_emails = params.delete(:add_contacts)
+    remove_crm_contact_emails = params.delete(:remove_contacts)
+    set_crm_contacts(issuable, add_crm_contact_emails, remove_crm_contact_emails)
+  end
+
   def assign_requested_assignees(issuable)
     return if issuable.is_a?(Epic)
 
@@ -452,17 +487,22 @@ class IssuableBaseService < ::BaseProjectService
     associations[:reviewers] = issuable.reviewers.to_a if issuable.allows_reviewers?
     associations[:severity] = issuable.severity if issuable.supports_severity?
 
+    if issuable.supports_escalation? && issuable.escalation_status
+      associations[:escalation_status] = issuable.escalation_status.status_name
+    end
+
     associations
   end
 
   def handle_move_between_ids(issuable_position)
     return unless params[:move_between_ids]
 
-    after_id, before_id = params.delete(:move_between_ids)
-    positioning_scope_id = params.delete(positioning_scope_key)
+    before_id, after_id = params.delete(:move_between_ids)
 
-    issuable_before = issuable_for_positioning(before_id, positioning_scope_id)
-    issuable_after = issuable_for_positioning(after_id, positioning_scope_id)
+    positioning_scope = issuable_position.class.relative_positioning_query_base(issuable_position)
+
+    issuable_before = issuable_for_positioning(before_id, positioning_scope)
+    issuable_after = issuable_for_positioning(after_id, positioning_scope)
 
     raise ActiveRecord::RecordNotFound unless issuable_before || issuable_after
 
@@ -487,7 +527,7 @@ class IssuableBaseService < ::BaseProjectService
 
   def invalidate_cache_counts(issuable, users: [])
     users.each do |user|
-      user.public_send("invalidate_#{issuable.model_name.singular}_cache_counts") # rubocop:disable GitlabSecurity/PublicSend
+      user.public_send("invalidate_#{issuable.noteable_target_type_name}_cache_counts") # rubocop:disable GitlabSecurity/PublicSend
     end
   end
 

@@ -1,3 +1,5 @@
+import capitalize from 'lodash/capitalize';
+
 export const packageTags = () => [
   { id: 'gid://gitlab/Packages::Tag/87', name: 'bananas_9', __typename: 'PackageTag' },
   { id: 'gid://gitlab/Packages::Tag/86', name: 'bananas_8', __typename: 'PackageTag' },
@@ -14,11 +16,13 @@ export const packagePipelines = (extend) => [
     ref: 'master',
     sha: 'b83d6e391c22777fca1ed3012fce84f633d7fed0',
     project: {
+      id: '1',
       name: 'project14',
       webUrl: 'http://gdk.test:3000/namespace14/project14',
       __typename: 'Project',
     },
     user: {
+      id: 'user-1',
       name: 'Administrator',
     },
     ...extend,
@@ -86,6 +90,13 @@ export const dependencyLinks = () => [
   },
 ];
 
+export const packageProject = () => ({
+  id: '1',
+  fullPath: 'gitlab-org/gitlab-test',
+  webUrl: 'http://gdk.test:3000/gitlab-org/gitlab-test',
+  __typename: 'Project',
+});
+
 export const packageVersions = () => [
   {
     createdAt: '2021-08-10T09:33:54Z',
@@ -108,17 +119,29 @@ export const packageVersions = () => [
 ];
 
 export const packageData = (extend) => ({
+  __typename: 'Package',
   id: 'gid://gitlab/Packages::Package/111',
+  canDestroy: true,
   name: '@gitlab-org/package-15',
   packageType: 'NPM',
   version: '1.0.0',
   createdAt: '2020-08-17T14:23:32Z',
   updatedAt: '2020-08-17T14:23:32Z',
   status: 'DEFAULT',
+  mavenUrl: 'http://gdk.test:3000/api/v4/projects/1/packages/maven',
+  npmUrl: 'http://gdk.test:3000/api/v4/projects/1/packages/npm',
+  nugetUrl: 'http://gdk.test:3000/api/v4/projects/1/packages/nuget/index.json',
+  composerConfigRepositoryUrl: 'gdk.test/22',
+  composerUrl: 'http://gdk.test:3000/api/v4/group/22/-/packages/composer/packages.json',
+  conanUrl: 'http://gdk.test:3000/api/v4/projects/1/packages/conan',
+  pypiUrl:
+    'http://__token__:<your_personal_token>@gdk.test:3000/api/v4/projects/1/packages/pypi/simple',
+  pypiSetupUrl: 'http://gdk.test:3000/api/v4/projects/1/packages/pypi',
   ...extend,
 });
 
 export const conanMetadata = () => ({
+  id: 'conan-1',
   packageChannel: 'stable',
   packageUsername: 'gitlab-org+gitlab-test',
   recipe: 'package-8/1.0.0@gitlab-org+gitlab-test/stable',
@@ -133,7 +156,7 @@ export const composerMetadata = () => ({
   },
 });
 
-export const pypyMetadata = () => ({
+export const pypiMetadata = () => ({
   requiredPython: '1.0.0',
 });
 
@@ -150,6 +173,15 @@ export const nugetMetadata = () => ({
   projectUrl: 'projectUrl',
 });
 
+export const pagination = (extend) => ({
+  endCursor: 'eyJpZCI6IjIwNSIsIm5hbWUiOiJteS9jb21wYW55L2FwcC9teS1hcHAifQ',
+  hasNextPage: true,
+  hasPreviousPage: true,
+  startCursor: 'eyJpZCI6IjI0NyIsIm5hbWUiOiJ2ZXJzaW9uX3Rlc3QxIn0',
+  __typename: 'PageInfo',
+  ...extend,
+});
+
 export const packageDetailsQuery = (extendPackage) => ({
   data: {
     package: {
@@ -157,12 +189,14 @@ export const packageDetailsQuery = (extendPackage) => ({
       metadata: {
         ...conanMetadata(),
         ...composerMetadata(),
-        ...pypyMetadata(),
+        ...pypiMetadata(),
         ...mavenMetadata(),
         ...nugetMetadata(),
       },
       project: {
+        id: '1',
         path: 'projectPath',
+        name: 'gitlab-test',
       },
       tags: {
         nodes: packageTags(),
@@ -248,4 +282,35 @@ export const packageDestroyFileMutationError = () => ({
       path: ['destroyPackageFile'],
     },
   ],
+});
+
+export const packagesListQuery = ({ type = 'group', extend = {}, extendPagination = {} } = {}) => ({
+  data: {
+    [type]: {
+      id: '1',
+      packages: {
+        count: 2,
+        nodes: [
+          {
+            ...packageData(),
+            project: packageProject(),
+            tags: { nodes: packageTags() },
+            pipelines: {
+              nodes: packagePipelines(),
+            },
+          },
+          {
+            ...packageData(),
+            project: packageProject(),
+            tags: { nodes: [] },
+            pipelines: { nodes: [] },
+          },
+        ],
+        pageInfo: pagination(extendPagination),
+        __typename: 'PackageConnection',
+      },
+      ...extend,
+      __typename: capitalize(type),
+    },
+  },
 });

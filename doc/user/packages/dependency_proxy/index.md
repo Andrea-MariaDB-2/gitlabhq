@@ -6,11 +6,10 @@ info: To determine the technical writer assigned to the Stage/Group associated w
 
 # Dependency Proxy **(FREE)**
 
-> - [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/7934) in [GitLab Premium](https://about.gitlab.com/pricing/) 11.11.
-> - [Moved](https://gitlab.com/gitlab-org/gitlab/-/issues/273655) to GitLab Free in GitLab 13.6.
-> - [Support for private groups](https://gitlab.com/gitlab-org/gitlab/-/issues/11582) in GitLab Free 13.7.
-> - Anonymous access to images in public groups is no longer available starting in GitLab Free 13.7.
-> - [Support for pull-by-digest and Docker version 20.x](https://gitlab.com/gitlab-org/gitlab/-/issues/290944) in GitLab Free 13.10.
+> - [Moved](https://gitlab.com/gitlab-org/gitlab/-/issues/273655) from GitLab Premium to GitLab Free in 13.6.
+> - [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/11582) support for private groups in GitLab 13.7.
+> - Anonymous access to images in public groups is no longer available starting in GitLab 13.7.
+> - [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/290944) support for pull-by-digest and Docker version 20.x in GitLab 13.10.
 
 The GitLab Dependency Proxy is a local proxy you can use for your frequently-accessed
 upstream images.
@@ -20,7 +19,8 @@ upstream image from a registry, acting as a pull-through cache.
 
 ## Prerequisites
 
-- The Dependency Proxy is enabled by default but can be [turned off by an administrator](../../../administration/packages/dependency_proxy.md).
+To use the Dependency Proxy, it must be enabled for the GitLab instance. It's enabled by default,
+but [administrators can turn it off](../../../administration/packages/dependency_proxy.md).
 
 ### Supported images and packages
 
@@ -32,6 +32,18 @@ The following images and packages are supported.
 
 For a list of planned additions, view the
 [direction page](https://about.gitlab.com/direction/package/#dependency-proxy).
+
+## Enable or turn off the Dependency Proxy for a group
+
+To enable or turn off the Dependency Proxy for a group:
+
+1. Go to your group's **Settings > Packages & Registries**.
+1. Expand the **Dependency Proxy** section.
+1. To enable the proxy, turn on **Enable Proxy**. To turn it off, turn the toggle off.
+
+This setting only affects the Dependency Proxy for a group. Only an administrator can
+[turn the Dependency Proxy on or off](../../../administration/packages/dependency_proxy.md)
+for the entire GitLab instance.
 
 ## View the Dependency Proxy
 
@@ -51,7 +63,7 @@ Prerequisites:
 
 ### Authenticate with the Dependency Proxy
 
-> - [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/11582) in GitLab Free 13.7.
+> - [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/11582) in GitLab 13.7.
 > - It's [deployed behind a feature flag](../../feature_flags.md), enabled by default.
 > - It's enabled on GitLab.com.
 > - It's recommended for production use.
@@ -66,7 +78,7 @@ has disrupted your existing Dependency Proxy usage.
 Because the Dependency Proxy is storing Docker images in a space associated with your group,
 you must authenticate against the Dependency Proxy.
 
-Follow the [instructions for using images from a private registry](../../../ci/docker/using_docker_images.md#define-an-image-from-a-private-container-registry),
+Follow the [instructions for using images from a private registry](../../../ci/docker/using_docker_images.md#access-an-image-from-a-private-container-registry),
 but instead of using `registry.example.com:5000`, use your GitLab domain with no port `gitlab.example.com`.
 
 For example, to manually log in:
@@ -81,6 +93,9 @@ You can authenticate using:
 - A [personal access token](../../../user/profile/personal_access_tokens.md) with the scope set to `read_registry` and `write_registry`.
 - A [group deploy token](../../../user/project/deploy_tokens/index.md#group-deploy-token) with the scope set to `read_registry` and `write_registry`.
 
+Users accessing the Dependency Proxy with a personal access token or username and password must
+have at least the Guest role for the group they pull images from.
+
 #### SAML SSO
 
 When [SSO enforcement](../../group/saml_sso/index.md#sso-enforcement)
@@ -90,7 +105,7 @@ Proxy.
 #### Authenticate within CI/CD
 
 > - [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/280582) in GitLab 13.7.
-> - Automatic runner authentication [added](https://gitlab.com/gitlab-org/gitlab-runner/-/issues/27302) in GitLab 13.9.
+> - Automatic runner authentication, when using the Dependency Proxy to pull the image for the job, was [added](https://gitlab.com/gitlab-org/gitlab-runner/-/issues/27302) in GitLab 13.9.
 > - The prefix for group names containing uppercase letters was [fixed](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/54559) in GitLab 13.10.
 
 Runners log in to the Dependency Proxy automatically. To pull through
@@ -124,6 +139,32 @@ Proxy manually without including the port:
 
 ```shell
 docker pull gitlab.example.com:443/my-group/dependency_proxy/containers/alpine:latest
+```
+
+Example when using the Dependency Proxy to build an image:
+
+```plaintext
+# Dockerfile
+FROM gitlab.example.com:443/my-group/dependency_proxy/containers/alpine:latest
+```
+
+```yaml
+# .gitlab-ci.yml
+image: docker:19.03.12
+
+variables:
+  DOCKER_HOST: tcp://docker:2375
+  DOCKER_TLS_CERTDIR: ""
+
+services:
+  - docker:19.03.12-dind
+
+build:
+  image: docker:19.03.12
+  before_script:
+    - docker login -u $CI_DEPENDENCY_PROXY_USER -p $CI_DEPENDENCY_PROXY_PASSWORD $CI_DEPENDENCY_PROXY_SERVER
+  script:
+    -  docker build -t test .
 ```
 
 You can also use [custom CI/CD variables](../../../ci/variables/index.md#custom-cicd-variables) to store and access your personal access token or deploy token.
@@ -166,17 +207,14 @@ on the GitLab server. The next time you pull the same image, GitLab gets the lat
 information about the image from Docker Hub, but serves the existing blobs
 from the GitLab server.
 
-## Clear the Dependency Proxy cache
+## Reduce storage usage
 
-Blobs are kept forever on the GitLab server, and there is no hard limit on how much data can be
-stored.
-
-To reclaim disk space used by image blobs that are no longer needed, use
-the [Dependency Proxy API](../../../api/dependency_proxy.md).
+For information on reducing your storage use on the Dependency Proxy, see
+[Reduce Dependency Proxy storage use](reduce_dependency_proxy_storage.md).
 
 ## Docker Hub rate limits and the Dependency Proxy
 
-> - [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/241639) in GitLab Free 13.7.
+> [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/241639) in GitLab 13.7.
 
 <i class="fa fa-youtube-play youtube" aria-hidden="true"></i>
 Watch how to [use the Dependency Proxy to help avoid Docker Hub rate limits](https://youtu.be/Nc4nUo7Pq08).
@@ -227,7 +265,7 @@ script:
 
 ```shell
 # Note, you must have jq installed to run this command
-TOKEN=$(curl "https://auth.docker.io/token?service=registry.docker.io&scope=repository:ratelimitpreview/test:pull" | jq --raw-output .token) && curl --head --header "Authorization: Bearer $TOKEN" "https://registry-1.docker.io/v2/ratelimitpreview/test/manifests/latest" 2>&1 | grep RateLimit
+TOKEN=$(curl "https://auth.docker.io/token?service=registry.docker.io&scope=repository:ratelimitpreview/test:pull" | jq --raw-output .token) && curl --head --header "Authorization: Bearer $TOKEN" "https://registry-1.docker.io/v2/ratelimitpreview/test/manifests/latest" 2>&1 | grep --ignore-case RateLimit
 ...
 ```
 
@@ -256,10 +294,6 @@ hub_docker_quota_check:
         TOKEN=$(curl "https://auth.docker.io/token?service=registry.docker.io&scope=repository:ratelimitpreview/test:pull" | jq --raw-output .token) && curl --head --header "Authorization: Bearer $TOKEN" "https://registry-1.docker.io/v2/ratelimitpreview/test/manifests/latest" 2>&1
 ```
 
-## Use the NPM Dependency Proxy for NPM packages
-
-For information on this, see [Dependency Proxy](../npm_registry/#dependency-proxy).
-
 ## Troubleshooting
 
 ### Dependency Proxy Connection Failure
@@ -277,4 +311,15 @@ This can be resolved by setting a service alias for the Docker service:
 services:
     - name: ${CI_DEPENDENCY_PROXY_GROUP_IMAGE_PREFIX}/docker:18.09.7-dind
       alias: docker
+```
+
+### "Not Found" error when pulling image
+
+Docker errors similar to the following may indicate that the user running the build job doesn't have
+a minimum of the Guest role in the specified Dependency Proxy group:
+
+```plaintext
+ERROR: gitlab.example.com:443/group1/dependency_proxy/containers/alpine:latest: not found
+
+failed to solve with frontend dockerfile.v0: failed to create LLB definition: gitlab.example.com:443/group1/dependency_proxy/containers/alpine:latest: not found
 ```

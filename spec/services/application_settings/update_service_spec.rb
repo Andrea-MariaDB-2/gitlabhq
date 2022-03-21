@@ -336,6 +336,31 @@ RSpec.describe ApplicationSettings::UpdateService do
     end
   end
 
+  context 'when general rate limits are passed' do
+    let(:params) do
+      {
+        throttle_authenticated_api_enabled: true,
+        throttle_authenticated_api_period_in_seconds: 10,
+        throttle_authenticated_api_requests_per_period: 20,
+        throttle_authenticated_web_enabled: true,
+        throttle_authenticated_web_period_in_seconds: 30,
+        throttle_authenticated_web_requests_per_period: 40,
+        throttle_unauthenticated_api_enabled: true,
+        throttle_unauthenticated_api_period_in_seconds: 50,
+        throttle_unauthenticated_api_requests_per_period: 60,
+        throttle_unauthenticated_enabled: true,
+        throttle_unauthenticated_period_in_seconds: 50,
+        throttle_unauthenticated_requests_per_period: 60
+      }
+    end
+
+    it 'updates general throttle settings' do
+      subject.execute
+
+      expect(application_settings.reload).to have_attributes(params)
+    end
+  end
+
   context 'when package registry rate limits are passed' do
     let(:params) do
       {
@@ -388,6 +413,32 @@ RSpec.describe ApplicationSettings::UpdateService do
     end
   end
 
+  context 'when deprecated API rate limits are passed' do
+    let(:params) do
+      {
+        throttle_unauthenticated_deprecated_api_enabled: 1,
+        throttle_unauthenticated_deprecated_api_period_in_seconds: 500,
+        throttle_unauthenticated_deprecated_api_requests_per_period: 20,
+        throttle_authenticated_deprecated_api_enabled: 1,
+        throttle_authenticated_deprecated_api_period_in_seconds: 600,
+        throttle_authenticated_deprecated_api_requests_per_period: 10
+      }
+    end
+
+    it 'updates deprecated API throttle settings' do
+      subject.execute
+
+      application_settings.reload
+
+      expect(application_settings.throttle_unauthenticated_deprecated_api_enabled).to be_truthy
+      expect(application_settings.throttle_unauthenticated_deprecated_api_period_in_seconds).to eq(500)
+      expect(application_settings.throttle_unauthenticated_deprecated_api_requests_per_period).to eq(20)
+      expect(application_settings.throttle_authenticated_deprecated_api_enabled).to be_truthy
+      expect(application_settings.throttle_authenticated_deprecated_api_period_in_seconds).to eq(600)
+      expect(application_settings.throttle_authenticated_deprecated_api_requests_per_period).to eq(10)
+    end
+  end
+
   context 'when git lfs rate limits are passed' do
     let(:params) do
       {
@@ -421,6 +472,24 @@ RSpec.describe ApplicationSettings::UpdateService do
       application_settings.reload
 
       expect(application_settings.issues_create_limit).to eq(600)
+    end
+  end
+
+  context 'when users_get_by_id_limit and users_get_by_id_limit_allowlist_raw are passed' do
+    let(:params) do
+      {
+        users_get_by_id_limit: 456,
+        users_get_by_id_limit_allowlist_raw: 'someone, someone_else'
+      }
+    end
+
+    it 'updates users_get_by_id_limit and users_get_by_id_limit_allowlist value' do
+      subject.execute
+
+      application_settings.reload
+
+      expect(application_settings.users_get_by_id_limit).to eq(456)
+      expect(application_settings.users_get_by_id_limit_allowlist).to eq(%w[someone someone_else])
     end
   end
 

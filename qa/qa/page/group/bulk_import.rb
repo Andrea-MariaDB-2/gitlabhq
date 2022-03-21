@@ -7,7 +7,6 @@ module QA
         view "app/assets/javascripts/import_entities/import_groups/components/import_table.vue" do
           element :import_table
           element :import_item
-          element :import_group_button
           element :import_status_indicator
         end
 
@@ -17,6 +16,10 @@ module QA
 
         view "app/assets/javascripts/import_entities/components/group_dropdown.vue" do
           element :target_namespace_selector_dropdown
+        end
+
+        view "app/assets/javascripts/import_entities/import_groups/components/import_actions_cell.vue" do
+          element :import_group_button
         end
 
         # Import source group in to target group
@@ -30,7 +33,12 @@ module QA
           within_element(:import_item, source_group: source_group_name) do
             click_element(:target_namespace_selector_dropdown)
             click_element(:target_group_dropdown_item, group_name: target_group_name)
-            click_element(:import_group_button)
+
+            retry_until(message: "Triggering import") do
+              click_element(:import_group_button)
+              # Make sure import started before waiting for completion
+              has_no_element?(:import_status_indicator, text: "Not started", wait: 1)
+            end
           end
         end
 

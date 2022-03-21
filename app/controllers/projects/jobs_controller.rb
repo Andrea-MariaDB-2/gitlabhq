@@ -4,8 +4,10 @@ class Projects::JobsController < Projects::ApplicationController
   include SendFileUpload
   include ContinueParams
 
-  before_action :find_job_as_build, except: [:index, :play]
-  before_action :find_job_as_processable, only: [:play]
+  urgency :low, [:index, :show, :trace, :retry, :play, :cancel, :unschedule, :status, :erase, :raw]
+
+  before_action :find_job_as_build, except: [:index, :play, :show]
+  before_action :find_job_as_processable, only: [:play, :show]
   before_action :authorize_read_build_trace!, only: [:trace, :raw]
   before_action :authorize_read_build!
   before_action :authorize_update_build!,
@@ -19,6 +21,7 @@ class Projects::JobsController < Projects::ApplicationController
 
   before_action do
     push_frontend_feature_flag(:infinitely_collapsible_sections, @project, default_enabled: :yaml)
+    push_frontend_feature_flag(:trigger_job_retry_action, @project, default_enabled: :yaml)
   end
 
   layout 'project'
@@ -42,9 +45,9 @@ class Projects::JobsController < Projects::ApplicationController
       format.json do
         Gitlab::PollingInterval.set_header(response, interval: 10_000)
 
-        render json: BuildSerializer
+        render json: Ci::JobSerializer
           .new(project: @project, current_user: @current_user)
-          .represent(@build, {}, BuildDetailsEntity)
+          .represent(@build.present(current_user: current_user), {}, BuildDetailsEntity)
       end
     end
   end
@@ -118,9 +121,9 @@ class Projects::JobsController < Projects::ApplicationController
   end
 
   def status
-    render json: BuildSerializer
+    render json: Ci::JobSerializer
       .new(project: @project, current_user: @current_user)
-      .represent_status(@build)
+      .represent_status(@build.present(current_user: current_user))
   end
 
   def erase
@@ -133,9 +136,9 @@ class Projects::JobsController < Projects::ApplicationController
   end
 
   def raw
-    if trace_artifact_file
+    if @build.trace.archived_trace_exist?
       workhorse_set_content_type!
-      send_upload(trace_artifact_file,
+      send_upload(@build.job_artifacts_trace.file,
                   send_params: raw_send_params,
                   redirect_params: raw_redirect_params)
     else
@@ -219,13 +222,8 @@ class Projects::JobsController < Projects::ApplicationController
     params.permit(job_variables_attributes: %i[key secret_value])
   end
 
-  def trace_artifact_file
-    @trace_artifact_file ||= @build.job_artifacts_trace&.file
-  end
-
   def find_job_as_build
     @build = project.builds.find(params[:id])
-      .present(current_user: current_user)
   end
 
   def find_job_as_processable

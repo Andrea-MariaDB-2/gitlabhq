@@ -6,8 +6,8 @@ info: To determine the technical writer assigned to the Stage/Group associated w
 
 # Deprecation guidelines
 
-This page includes information about how and when to remove or make breaking
-changes to GitLab features.
+This page includes information about how and when to remove or make [breaking
+changes](../contributing/index.md#breaking-changes) to GitLab features.
 
 ## Terminology
 
@@ -23,7 +23,9 @@ deprecated.
 
 A feature can be deprecated at any time, provided there is a viable alternative.
 
-Deprecations should be announced via [release posts](https://about.gitlab.com/handbook/marketing/blog/release-posts/#deprecations).
+Deprecations should be announced on the [Deprecated feature removal schedule](../../update/deprecations.md).
+
+For steps to create a deprecation entry, see [Deprecations](https://about.gitlab.com/handbook/marketing/blog/release-posts/#deprecations).
 
 ## When can a feature be removed/changed?
 
@@ -32,6 +34,6 @@ It also should be [deprecated in advance](https://about.gitlab.com/handbook/mark
 
 For API removals, see the [GraphQL](../../api/graphql/index.md#deprecation-and-removal-process) and [GitLab API](../../api/index.md#compatibility-guidelines) guidelines.
 
-For configuration removals, see the [Omnibus deprecation policy](https://docs.gitlab.com/omnibus/package-information/deprecation_policy.html).
+For configuration removals, see the [Omnibus deprecation policy](../../administration/package_information/deprecation_policy.md).
 
 For versioning and upgrade details, see our [Release and Maintenance policy](../../policy/maintenance.md).

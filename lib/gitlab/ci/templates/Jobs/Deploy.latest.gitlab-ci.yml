@@ -1,5 +1,8 @@
+variables:
+  AUTO_DEPLOY_IMAGE_VERSION: 'v2.22.0'
+
 .auto-deploy:
-  image: "registry.gitlab.com/gitlab-org/cluster-integration/auto-deploy-image:v2.6.0"
+  image: "registry.gitlab.com/gitlab-org/cluster-integration/auto-deploy-image:${AUTO_DEPLOY_IMAGE_VERSION}"
   dependencies: []
 
 review:
@@ -8,6 +11,7 @@ review:
   script:
     - auto-deploy check_kube_domain
     - auto-deploy download_chart
+    - auto-deploy use_kube_context
     - auto-deploy ensure_namespace
     - auto-deploy initialize_tiller
     - auto-deploy create_secret
@@ -21,7 +25,7 @@ review:
     paths: [environment_url.txt, tiller.log]
     when: always
   rules:
-    - if: '$CI_KUBERNETES_ACTIVE == null || $CI_KUBERNETES_ACTIVE == ""'
+    - if: '($CI_KUBERNETES_ACTIVE == null || $CI_KUBERNETES_ACTIVE == "") && ($KUBECONFIG == null || $KUBECONFIG == "")'
       when: never
     - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
       when: never
@@ -35,6 +39,7 @@ stop_review:
   variables:
     GIT_STRATEGY: none
   script:
+    - auto-deploy use_kube_context
     - auto-deploy initialize_tiller
     - auto-deploy delete
   environment:
@@ -42,7 +47,7 @@ stop_review:
     action: stop
   allow_failure: true
   rules:
-    - if: '$CI_KUBERNETES_ACTIVE == null || $CI_KUBERNETES_ACTIVE == ""'
+    - if: '($CI_KUBERNETES_ACTIVE == null || $CI_KUBERNETES_ACTIVE == "") && ($KUBECONFIG == null || $KUBECONFIG == "")'
       when: never
     - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
       when: never
@@ -63,6 +68,7 @@ staging:
   script:
     - auto-deploy check_kube_domain
     - auto-deploy download_chart
+    - auto-deploy use_kube_context
     - auto-deploy ensure_namespace
     - auto-deploy initialize_tiller
     - auto-deploy create_secret
@@ -71,7 +77,7 @@ staging:
     name: staging
     url: http://$CI_PROJECT_PATH_SLUG-staging.$KUBE_INGRESS_BASE_DOMAIN
   rules:
-    - if: '$CI_KUBERNETES_ACTIVE == null || $CI_KUBERNETES_ACTIVE == ""'
+    - if: '($CI_KUBERNETES_ACTIVE == null || $CI_KUBERNETES_ACTIVE == "") && ($KUBECONFIG == null || $KUBECONFIG == "")'
       when: never
     - if: '$CI_COMMIT_BRANCH != $CI_DEFAULT_BRANCH'
       when: never
@@ -88,6 +94,7 @@ canary:
   script:
     - auto-deploy check_kube_domain
     - auto-deploy download_chart
+    - auto-deploy use_kube_context
     - auto-deploy ensure_namespace
     - auto-deploy initialize_tiller
     - auto-deploy create_secret
@@ -96,7 +103,9 @@ canary:
     name: production
     url: http://$CI_PROJECT_PATH_SLUG.$KUBE_INGRESS_BASE_DOMAIN
   rules:
-    - if: '$CI_KUBERNETES_ACTIVE == null || $CI_KUBERNETES_ACTIVE == ""'
+    - if: '$CI_DEPLOY_FREEZE'
+      when: never
+    - if: '($CI_KUBERNETES_ACTIVE == null || $CI_KUBERNETES_ACTIVE == "") && ($KUBECONFIG == null || $KUBECONFIG == "")'
       when: never
     - if: '$CI_COMMIT_BRANCH != $CI_DEFAULT_BRANCH'
       when: never
@@ -109,6 +118,7 @@ canary:
   script:
     - auto-deploy check_kube_domain
     - auto-deploy download_chart
+    - auto-deploy use_kube_context
     - auto-deploy ensure_namespace
     - auto-deploy initialize_tiller
     - auto-deploy create_secret
@@ -125,7 +135,9 @@ canary:
 production:
   <<: *production_template
   rules:
-    - if: '$CI_KUBERNETES_ACTIVE == null || $CI_KUBERNETES_ACTIVE == ""'
+    - if: '$CI_DEPLOY_FREEZE'
+      when: never
+    - if: '($CI_KUBERNETES_ACTIVE == null || $CI_KUBERNETES_ACTIVE == "") && ($KUBECONFIG == null || $KUBECONFIG == "")'
       when: never
     - if: '$STAGING_ENABLED'
       when: never
@@ -141,7 +153,9 @@ production_manual:
   <<: *production_template
   allow_failure: false
   rules:
-    - if: '$CI_KUBERNETES_ACTIVE == null || $CI_KUBERNETES_ACTIVE == ""'
+    - if: '$CI_DEPLOY_FREEZE'
+      when: never
+    - if: '($CI_KUBERNETES_ACTIVE == null || $CI_KUBERNETES_ACTIVE == "") && ($KUBECONFIG == null || $KUBECONFIG == "")'
       when: never
     - if: '$INCREMENTAL_ROLLOUT_ENABLED'
       when: never
@@ -159,6 +173,7 @@ production_manual:
   script:
     - auto-deploy check_kube_domain
     - auto-deploy download_chart
+    - auto-deploy use_kube_context
     - auto-deploy ensure_namespace
     - auto-deploy initialize_tiller
     - auto-deploy create_secret
@@ -177,7 +192,9 @@ production_manual:
   resource_group: production
   allow_failure: true
   rules:
-    - if: '$CI_KUBERNETES_ACTIVE == null || $CI_KUBERNETES_ACTIVE == ""'
+    - if: '$CI_DEPLOY_FREEZE'
+      when: never
+    - if: '($CI_KUBERNETES_ACTIVE == null || $CI_KUBERNETES_ACTIVE == "") && ($KUBECONFIG == null || $KUBECONFIG == "")'
       when: never
     - if: '$INCREMENTAL_ROLLOUT_MODE == "timed"'
       when: never
@@ -190,7 +207,9 @@ production_manual:
 .timed_rollout_template: &timed_rollout_template
   <<: *rollout_template
   rules:
-    - if: '$CI_KUBERNETES_ACTIVE == null || $CI_KUBERNETES_ACTIVE == ""'
+    - if: '$CI_DEPLOY_FREEZE'
+      when: never
+    - if: '($CI_KUBERNETES_ACTIVE == null || $CI_KUBERNETES_ACTIVE == "") && ($KUBECONFIG == null || $KUBECONFIG == "")'
       when: never
     - if: '$INCREMENTAL_ROLLOUT_MODE == "manual"'
       when: never

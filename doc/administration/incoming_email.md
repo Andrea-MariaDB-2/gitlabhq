@@ -10,7 +10,7 @@ GitLab has several features based on receiving incoming email messages:
 
 - [Reply by Email](reply_by_email.md): allow GitLab users to comment on issues
   and merge requests by replying to notification email.
-- [New issue by email](../user/project/issues/managing_issues.md#new-issue-via-email):
+- [New issue by email](../user/project/issues/managing_issues.md#by-sending-an-email):
   allow GitLab users to create a new issue by sending an email to a
   user-specific email address.
 - [New merge request by email](../user/project/merge_requests/creating_merge_requests.md#by-sending-an-email):
@@ -62,9 +62,43 @@ can reserve your catch-all mailbox for other purposes.
 
 ### Dedicated email address
 
-This solution is relatively simple to set up: you just need to create an email
-address dedicated to receive your users' replies to GitLab notifications. However,
+To set up this solution, you must create a dedicated email
+address to receive your users' replies to GitLab notifications. However,
 this method only supports replies, and not the other features of [incoming email](#incoming-email).
+
+## Accepted headers
+
+> Accepting `Received` headers [introduced](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/81489) in GitLab 14.9 [with a flag](feature_flags.md) named `use_received_header_for_incoming_emails`. Enabled by default.
+
+Email is processed correctly when a configured email address is present in one of the following headers
+(sorted in the order they are checked):
+
+- `To`
+- `References`
+- `Delivered-To`
+- `Envelope-To` or `X-Envelope-To`
+- `Received`
+
+In GitLab 14.6 and later, [Service Desk](../user/project/service_desk.md)
+also checks accepted headers.
+
+Usually, the "To" field contains the email address of the primary receiver.
+However, it might not include the configured GitLab email address if:
+
+- The address is in the "CC" field.
+- The address was included when using "Reply all".
+- The email was forwarded.
+
+The `Received` header can contain multiple email addresses. These are checked in the order that they appear.
+The first match is used.
+
+## Rejected headers
+
+To prevent unwanted issue creation from automatic email systems, GitLab ignores all incoming email
+containing the following headers:
+
+- `Auto-Submitted` with a value other than `no`
+- `X-Autoreply` with a value of `yes`
 
 ## Set it up
 
@@ -76,7 +110,7 @@ and use [an application password](https://support.google.com/mail/answer/185833)
 
 If you want to use Office 365, and two-factor authentication is enabled, make sure
 you're using an
-[app password](https://docs.microsoft.com/en-us/azure/active-directory/user-help/multi-factor-authentication-end-user-app-passwords)
+[app password](https://support.microsoft.com/en-us/account-billing/manage-app-passwords-for-two-step-verification-d6dc8c6d-4bf7-4851-ad95-6d07799387e9)
 instead of the regular password for the mailbox.
 
 To set up a basic Postfix mail server with IMAP access on Ubuntu, follow the
@@ -152,8 +186,61 @@ Reply by email should now be working.
    cd /home/git/gitlab
    ```
 
+1. Install the `gitlab-mail_room` gem manually:
+
+   ```shell
+   gem install gitlab-mail_room
+   ```
+
+   NOTE: This step is necessary to avoid thread deadlocks and to support the latest MailRoom features. See
+   [this explanation](../development/emails.md#mailroom-gem-updates) for more details.
+
 1. Find the `incoming_email` section in `config/gitlab.yml`, enable the feature
   and fill in the details for your specific IMAP server and email account (see [examples](#configuration-examples) below).
+
+If you use systemd units to manage GitLab:
+
+1. Add `gitlab-mailroom.service` as a dependency to `gitlab.target`:
+
+   ```shell
+   sudo systemctl edit gitlab.target
+   ```
+
+   In the editor that opens, add the following and save the file:
+
+   ```plaintext
+   [Unit]
+   Wants=gitlab-mailroom.service
+   ```
+
+1. If you run Redis and PostgreSQL on the same machine, you should add a
+   dependency on Redis. Run:
+
+   ```shell
+   sudo systemctl edit gitlab-mailroom.service
+   ```
+
+   In the editor that opens, add the following and save the file:
+
+   ```plaintext
+   [Unit]
+   Wants=redis-server.service
+   After=redis-server.service
+   ```
+
+1. Start `gitlab-mailroom.service`:
+
+   ```shell
+   sudo systemctl start gitlab-mailroom.service
+   ```
+
+1. Verify that everything is configured correctly:
+
+   ```shell
+   sudo -u git -H bundle exec rake gitlab:incoming_email:check RAILS_ENV=production
+   ```
+
+If you use the SysV init script to manage GitLab:
 
 1. Enable `mail_room` in the init script at `/etc/default/gitlab`:
 
@@ -408,6 +495,10 @@ incoming_email:
 
 ##### Dedicated email address
 
+NOTE:
+Supports [Reply by Email](reply_by_email.md) only.
+Cannot support [Service Desk](../user/project/service_desk.md).
+
 Assumes the dedicated email address `incoming@exchange.example.com`.
 
 Example for Omnibus installs:
@@ -464,24 +555,25 @@ Example configurations for Microsoft Office 365 with IMAP enabled.
 
 NOTE:
 As of September 2020 sub-addressing support
-[has been added to Office 365](https://office365.uservoice.com/forums/273493-office-365-admin/suggestions/18612754-support-for-dynamic-email-aliases-in-office-36). This feature is not
+[has been added to Office 365](https://support.microsoft.com/en-us/office/uservoice-pages-430e1a78-e016-472a-a10f-dc2a3df3450a). This feature is not
 enabled by default, and must be enabled through PowerShell.
 
 This series of PowerShell commands enables [sub-addressing](#email-sub-addressing)
 at the organization level in Office 365. This allows all mailboxes in the organization
-to receive sub-addressed mail:
+to receive sub-addressed mail.
 
-```powershell
-Set-ExecutionPolicy RemoteSigned -Scope CurrentUser
+To enable sub-addressing:
 
-$UserCredential = Get-Credential
+1. Download and install the `ExchangeOnlineManagement` module from the [PowerShell gallery](https://www.powershellgallery.com/packages/ExchangeOnlineManagement/).
+1. In PowerShell, run the following commands:
 
-$Session = New-PSSession -ConfigurationName Microsoft.Exchange -ConnectionUri https://outlook.office365.com/powershell-liveid/ -Credential $UserCredential -Authentication Basic -AllowRedirection
-
-Import-PSSession $Session -DisableNameChecking
-
-Set-OrganizationConfig -AllowPlusAddressInRecipients $true
-```
+   ```powershell
+   Set-ExecutionPolicy RemoteSigned -Scope CurrentUser
+   Import-Module ExchangeOnlineManagement
+   Connect-ExchangeOnline
+   Set-OrganizationConfig -AllowPlusAddressInRecipients $true
+   Disconnect-ExchangeOnline
+   ```
 
 This example for Omnibus GitLab assumes the mailbox `incoming@office365.example.com`:
 
@@ -593,6 +685,10 @@ incoming_email:
 
 ##### Dedicated email address
 
+NOTE:
+Supports [Reply by Email](reply_by_email.md) only.
+Cannot support [Service Desk](../user/project/service_desk.md).
+
 This example for Omnibus installs assumes the dedicated email address `incoming@office365.example.com`:
 
 ```ruby
@@ -638,7 +734,7 @@ incoming_email:
 
 #### Microsoft Graph
 
-> Introduced in [GitLab 13.11](https://gitlab.com/gitlab-org/gitlab/-/issues/214900).
+> [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/214900) in GitLab 13.11.
 
 GitLab can read incoming email using the Microsoft Graph API instead of
 IMAP. Because [Microsoft is deprecating IMAP usage with Basic Authentication](https://techcommunity.microsoft.com/t5/exchange-team-blog/announcing-oauth-2-0-support-for-imap-and-smtp-auth-protocols-in/ba-p/1330432), the Microsoft Graph API will soon be required for new Microsoft Exchange Online

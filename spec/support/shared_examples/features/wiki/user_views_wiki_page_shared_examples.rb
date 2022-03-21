@@ -37,12 +37,12 @@ RSpec.shared_examples 'User views a wiki page' do
     end
 
     it 'shows the history of a page that has a path' do
-      expect(current_path).to include('one/two/three-test')
+      expect(page).to have_current_path(%r(one/two/three-test))
 
       first(:link, text: 'three').click
       click_on('Page history')
 
-      expect(current_path).to include('one/two/three-test')
+      expect(page).to have_current_path(%r(one/two/three-test))
 
       page.within(:css, '.wiki-page-header') do
         expect(page).to have_content('History')
@@ -50,7 +50,7 @@ RSpec.shared_examples 'User views a wiki page' do
     end
 
     it 'shows an old version of a page', :js do
-      expect(current_path).to include('one/two/three-test')
+      expect(page).to have_current_path(%r(one/two/three-test))
       expect(find('.wiki-pages')).to have_content('three')
 
       first(:link, text: 'three').click
@@ -59,7 +59,7 @@ RSpec.shared_examples 'User views a wiki page' do
 
       click_on('Edit')
 
-      expect(current_path).to include('one/two/three-test')
+      expect(page).to have_current_path(%r(one/two/three-test))
       expect(page).to have_content('Edit Page')
 
       fill_in('Content', with: 'Updated Wiki Content')
@@ -93,13 +93,12 @@ RSpec.shared_examples 'User views a wiki page' do
       let(:path) { upload_file_to_wiki(wiki, user, 'dk.png') }
 
       it do
-        expect(page).to have_xpath("//img[@data-src='#{wiki.wiki_base_path}/#{path}']")
+        expect(page).to have_xpath("//img[@src='#{wiki.wiki_base_path}/#{path}']")
         expect(page).to have_link('image', href: "#{wiki.wiki_base_path}/#{path}")
 
         click_on('image')
 
-        expect(current_path).to match("wikis/#{path}")
-        expect(page).not_to have_xpath('/html') # Page should render the image which means there is no html involved
+        expect(page).to have_current_path(%r(wikis/#{path}))
       end
     end
 
@@ -108,7 +107,7 @@ RSpec.shared_examples 'User views a wiki page' do
 
       click_on('image')
 
-      expect(current_path).to match("wikis/#{path}")
+      expect(page).to have_current_path(%r(wikis/#{path}))
       expect(page).to have_content('Create New Page')
     end
   end
@@ -157,11 +156,11 @@ RSpec.shared_examples 'User views a wiki page' do
         expect(page).to have_link('updated home', href: wiki_page_path(wiki, wiki_page, version_id: commit2, action: :diff))
       end
 
-      it 'between the current and the previous version of a page' do
+      it 'between the current and the previous version of a page', :js do
         commit = wiki.commit
         visit wiki_page_path(wiki, wiki_page, version_id: commit, action: :diff)
 
-        expect(page).to have_content('by John Doe')
+        expect(page).to have_content('by Sidney Jones')
         expect(page).to have_content('updated home')
         expect(page).to have_content('Showing 1 changed file with 1 addition and 3 deletions')
         expect(page).to have_content('some link')
@@ -169,12 +168,12 @@ RSpec.shared_examples 'User views a wiki page' do
         expect_diff_links(commit)
       end
 
-      it 'between two old versions of a page' do
+      it 'between two old versions of a page', :js do
         wiki_page.update(message: 'latest home change', content: 'updated [another link](other-page)') # rubocop:disable Rails/SaveBang:
         commit = wiki.commit('HEAD^')
         visit wiki_page_path(wiki, wiki_page, version_id: commit, action: :diff)
 
-        expect(page).to have_content('by John Doe')
+        expect(page).to have_content('by Sidney Jones')
         expect(page).to have_content('updated home')
         expect(page).to have_content('Showing 1 changed file with 1 addition and 3 deletions')
         expect(page).to have_content('some link')
@@ -184,11 +183,11 @@ RSpec.shared_examples 'User views a wiki page' do
         expect_diff_links(commit)
       end
 
-      it 'for the oldest version of a page' do
+      it 'for the oldest version of a page', :js do
         commit = wiki.commit('HEAD^')
         visit wiki_page_path(wiki, wiki_page, version_id: commit, action: :diff)
 
-        expect(page).to have_content('by John Doe')
+        expect(page).to have_content('by Sidney Jones')
         expect(page).to have_content('created page: home')
         expect(page).to have_content('Showing 1 changed file with 4 additions and 0 deletions')
         expect(page).to have_content('Look at this')

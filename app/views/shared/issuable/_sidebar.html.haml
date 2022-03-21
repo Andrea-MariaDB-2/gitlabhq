@@ -7,6 +7,7 @@
 - can_edit_issuable = issuable_sidebar.dig(:current_user, :can_edit)
 - add_page_startup_api_call "#{issuable_sidebar[:issuable_json_path]}?serializer=sidebar_extras"
 - reviewers = local_assigns.fetch(:reviewers, nil)
+- in_group_context_with_iterations = @project.group.present? && issuable_sidebar[:supports_iterations]
 
 %aside.right-sidebar.js-right-sidebar.js-issuable-sidebar{ data: { signed: { in: signed_in }, issuable_type: issuable_type }, class: sidebar_gutter_collapsed_class, 'aria-live' => 'polite', 'aria-label': issuable_type }
   .issuable-sidebar
@@ -24,23 +25,32 @@
         .block.reviewer.qa-reviewer-block
           = render "shared/issuable/sidebar_reviewers", issuable_sidebar: issuable_sidebar, reviewers: reviewers, signed_in: signed_in
 
+      - if issuable_sidebar[:supports_escalation]
+        .block.escalation-status{ data: { testid: 'escalation_status_container' } }
+          #js-escalation-status{ data: { can_update: issuable_sidebar.dig(:current_user, :can_update_escalation_status).to_s, project_path: issuable_sidebar[:project_full_path], issue_iid: issuable_sidebar[:iid] } }
+        = render_if_exists 'shared/issuable/sidebar_escalation_policy', issuable_sidebar: issuable_sidebar
+
       - if @project.group.present?
         = render_if_exists 'shared/issuable/sidebar_item_epic', issuable_sidebar: issuable_sidebar, group_path: @project.group.full_path, project_path: issuable_sidebar[:project_full_path], issue_iid: issuable_sidebar[:iid], issuable_type: issuable_type
 
       - if issuable_sidebar[:supports_milestone]
-        .block.milestone{ :class => ("gl-border-b-0!" if issuable_sidebar[:supports_iterations]), data: { qa_selector: 'milestone_block' } }
+        .block.milestone{ :class => ("gl-border-b-0!" if in_group_context_with_iterations), data: { qa_selector: 'milestone_block', testid: 'sidebar-milestones' } }
           .js-milestone-select{ data: { can_edit: can_edit_issuable.to_s, project_path: issuable_sidebar[:project_full_path], issue_iid: issuable_sidebar[:iid] } }
 
-      - if @project.group.present? && issuable_sidebar[:supports_iterations]
-        .block{ class: 'gl-pt-0!', data: { qa_selector: 'iteration_container' } }
+      - if in_group_context_with_iterations
+        .block{ class: 'gl-pt-0! gl-collapse-empty', data: { qa_selector: 'iteration_container', testid: 'iteration_container' } }<
           = render_if_exists 'shared/issuable/iteration_select', can_edit: can_edit_issuable.to_s, group_path: @project.group.full_path, project_path: issuable_sidebar[:project_full_path], issue_iid: issuable_sidebar[:iid], issuable_type: issuable_type
+
+      - if issuable_sidebar[:show_crm_contacts]
+        .block.contact
+          #js-issue-crm-contacts{ data: { issue_id: issuable_sidebar[:id] } }
 
       - if issuable_sidebar[:supports_time_tracking]
         #issuable-time-tracker.block
           // Fallback while content is loading
           .title.hide-collapsed
             = _('Time tracking')
-            = loading_icon(css_class: 'gl-vertical-align-text-bottom')
+            = gl_loading_icon(inline: true)
       - if issuable_sidebar.has_key?(:due_date)
         #js-due-date-entry-point
 
@@ -55,11 +65,13 @@
         .js-sidebar-status-entry-point{ data: sidebar_status_data(issuable_sidebar, @project) }
 
       - if issuable_sidebar.has_key?(:confidential)
+        -# haml-lint:disable InlineJavaScript
         %script#js-confidential-issue-data{ type: "application/json" }= { is_confidential: issuable_sidebar[:confidential], is_editable: can_edit_issuable }.to_json.html_safe
         #js-confidential-entry-point
 
         = render_if_exists 'shared/issuable/sidebar_cve_id_request', issuable_sidebar: issuable_sidebar
 
+      -# haml-lint:disable InlineJavaScript
       %script#js-lock-issue-data{ type: "application/json" }= { is_locked: !!issuable_sidebar[:discussion_locked], is_editable: can_edit_issuable }.to_json.html_safe
       #js-lock-entry-point
 
@@ -72,7 +84,7 @@
         #js-reference-entry-point
         - if issuable_type == 'merge_request'
           .sub-block.js-sidebar-source-branch
-            .sidebar-collapsed-icon.dont-change-state
+            .sidebar-collapsed-icon.js-dont-change-state
               = clipboard_button(text: source_branch, title: _('Copy branch name'), placement: "left", boundary: 'viewport')
             .gl-display-flex.gl-align-items-center.gl-justify-content-space-between.gl-mb-2.hide-collapsed
               %span.gl-overflow-hidden.gl-text-overflow-ellipsis.gl-white-space-nowrap
@@ -88,7 +100,7 @@
             = custom_icon('icon_arrow_right')
           .dropdown.sidebar-move-issue-dropdown.hide-collapsed
             %button.gl-button.btn.btn-default.btn-block.js-sidebar-dropdown-toggle.js-move-issue{ type: 'button',
-              data: { toggle: 'dropdown', display: 'static', track_label: "right_sidebar", track_property: "move_issue", track_event: "click_button", track_value: "" } }
+              data: { toggle: 'dropdown', display: 'static', track_label: "right_sidebar", track_property: "move_issue", track_action: "click_button", track_value: "" } }
               = _('Move issue')
             .dropdown-menu.dropdown-menu-selectable.dropdown-extended-height
               = dropdown_title(_('Move issue'))
@@ -97,8 +109,8 @@
               = dropdown_loading
               = dropdown_footer add_content_class: true do
                 %button.gl-button.btn.btn-confirm.sidebar-move-issue-confirmation-button.js-move-issue-confirmation-button{ type: 'button', disabled: true }
+                  = gl_loading_icon(inline: true, css_class: 'sidebar-move-issue-confirmation-loading-icon gl-mr-2')
                   = _('Move')
-                  = loading_icon(css_class: 'gl-vertical-align-text-bottom sidebar-move-issue-confirmation-loading-icon')
 
     -# haml-lint:disable InlineJavaScript
     %script.js-sidebar-options{ type: "application/json" }= issuable_sidebar_options(issuable_sidebar).to_json.html_safe

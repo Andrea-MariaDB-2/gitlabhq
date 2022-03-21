@@ -1,11 +1,16 @@
 # frozen_string_literal: true
 
 class GraphqlController < ApplicationController
+  extend ::Gitlab::Utils::Override
+
   # Unauthenticated users have access to the API for public data
   skip_before_action :authenticate_user!
 
   # Header can be passed by tests to disable SQL query limits.
   DISABLE_SQL_QUERY_LIMIT_HEADER = 'HTTP_X_GITLAB_DISABLE_SQL_QUERY_LIMIT'
+
+  # Max size of the query text in characters
+  MAX_QUERY_SIZE = 10_000
 
   # If a user is using their session to access GraphQL, we need to have session
   # storage, since the admin-mode check is session wide.
@@ -26,7 +31,9 @@ class GraphqlController < ApplicationController
   before_action :authorize_access_api!
   before_action :set_user_last_activity
   before_action :track_vs_code_usage
+  before_action :track_jetbrains_usage
   before_action :disable_query_limiting
+  before_action :limit_query_size
 
   before_action :disallow_mutations_for_get
 
@@ -35,7 +42,15 @@ class GraphqlController < ApplicationController
   # callback execution order here
   around_action :sessionless_bypass_admin_mode!, if: :sessionless_user?
 
+  # The default feature category is overridden to read from request
   feature_category :not_owned
+
+  # We don't know what the query is going to be, so we can't set a high urgency
+  # See https://gitlab.com/groups/gitlab-org/-/epics/5841 for the work that will
+  # allow us to specify an urgency per query.
+  # Currently, all queries have a default urgency. And this is measured in the `graphql_queries`
+  # SLI. But queries could be multiplexed, so the total duration could be longer.
+  urgency :low, [:execute]
 
   def execute
     result = multiplex? ? execute_multiplex : execute_query
@@ -43,6 +58,8 @@ class GraphqlController < ApplicationController
   end
 
   rescue_from StandardError do |exception|
+    @exception_object = exception
+
     log_exception(exception)
 
     if Rails.env.test? || Rails.env.development?
@@ -64,6 +81,11 @@ class GraphqlController < ApplicationController
     render_error(exception.message, status: :unprocessable_entity)
   end
 
+  override :feature_category
+  def feature_category
+    ::Gitlab::FeatureCategories.default.from_request(request) || super
+  end
+
   private
 
   def disallow_mutations_for_get
@@ -71,6 +93,16 @@ class GraphqlController < ApplicationController
     return unless any_mutating_query?
 
     raise ::Gitlab::Graphql::Errors::ArgumentError, "Mutations are forbidden in #{request.request_method} requests"
+  end
+
+  def limit_query_size
+    total_size = if multiplex?
+                   params[:_json].sum { _1[:query].size }
+                 else
+                   query.size
+                 end
+
+    raise ::Gitlab::Graphql::Errors::ArgumentError, "Query too large" if total_size > MAX_QUERY_SIZE
   end
 
   def any_mutating_query?
@@ -106,6 +138,11 @@ class GraphqlController < ApplicationController
       .track_api_request_when_trackable(user_agent: request.user_agent, user: current_user)
   end
 
+  def track_jetbrains_usage
+    Gitlab::UsageDataCounters::JetBrainsPluginActivityUniqueCounter
+      .track_api_request_when_trackable(user_agent: request.user_agent, user: current_user)
+  end
+
   def execute_multiplex
     GitlabSchema.multiplex(multiplex_queries, context: context)
   end
@@ -118,7 +155,7 @@ class GraphqlController < ApplicationController
   end
 
   def query
-    params[:query]
+    params.fetch(:query, '')
   end
 
   def multiplex_queries
@@ -175,11 +212,12 @@ class GraphqlController < ApplicationController
 
     # Merging to :metadata will ensure these are logged as top level keys
     payload[:metadata] ||= {}
-    payload[:metadata].merge!(graphql: logs)
+    payload[:metadata][:graphql] = logs
+
+    payload[:exception_object] = @exception_object if @exception_object
   end
 
   def logs
     RequestStore.store[:graphql_logs].to_a
-                .map { |log| log.except(:duration_s, :query_string) }
   end
 end

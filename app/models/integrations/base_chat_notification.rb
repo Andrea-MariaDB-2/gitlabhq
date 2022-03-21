@@ -73,7 +73,12 @@ module Integrations
         { type: 'text', name: 'webhook', placeholder: "#{webhook_placeholder}", required: true }.freeze,
         { type: 'text', name: 'username', placeholder: 'GitLab-integration' }.freeze,
         { type: 'checkbox', name: 'notify_only_broken_pipelines', help: 'Do not send notifications for successful pipelines.' }.freeze,
-        { type: 'select', name: 'branches_to_be_notified', choices: branch_choices }.freeze,
+        {
+          type: 'select',
+          name: 'branches_to_be_notified',
+          title: s_('Integrations|Branches for which notifications are to be sent'),
+          choices: branch_choices
+        }.freeze,
         {
           type: 'text',
           name: 'labels_to_be_notified',
@@ -199,7 +204,7 @@ module Integrations
       when "wiki_page"
         Integrations::ChatMessage::WikiPageMessage.new(data)
       when "deployment"
-        Integrations::ChatMessage::DeploymentMessage.new(data)
+        Integrations::ChatMessage::DeploymentMessage.new(data) if notify_for_ref?(data)
       end
     end
 
@@ -236,7 +241,10 @@ module Integrations
 
     def notify_for_ref?(data)
       return true if data[:object_kind] == 'tag_push'
-      return true if data.dig(:object_attributes, :tag)
+
+      ref = data[:ref] || data.dig(:object_attributes, :ref)
+      return true if ref.blank? # No need to check protected branches when there is no ref
+      return true if Gitlab::Git.tag_ref?(ref) # Skip protected branch check because it doesn't support tags
 
       notify_for_branch?(data)
     end
@@ -253,3 +261,5 @@ module Integrations
     end
   end
 end
+
+Integrations::BaseChatNotification.prepend_mod_with('Integrations::BaseChatNotification')

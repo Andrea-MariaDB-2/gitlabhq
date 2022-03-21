@@ -5,16 +5,16 @@
  *
  * Makes a post request when the button is clicked.
  */
-import { GlTooltipDirective, GlModalDirective, GlButton } from '@gitlab/ui';
+import { GlModalDirective, GlDropdownItem } from '@gitlab/ui';
 import { s__ } from '~/locale';
 import eventHub from '../event_hub';
+import setEnvironmentToRollback from '../graphql/mutations/set_environment_to_rollback.mutation.graphql';
 
 export default {
   components: {
-    GlButton,
+    GlDropdownItem,
   },
   directives: {
-    GlTooltip: GlTooltipDirective,
     GlModal: GlModalDirective,
   },
   props: {
@@ -33,11 +33,12 @@ export default {
       type: String,
       required: true,
     },
-  },
-  data() {
-    return {
-      isLoading: false,
-    };
+
+    graphql: {
+      type: Boolean,
+      required: false,
+      default: false,
+    },
   },
 
   computed: {
@@ -50,29 +51,24 @@ export default {
 
   methods: {
     onClick() {
-      eventHub.$emit('requestRollbackEnvironment', {
-        ...this.environment,
-        retryUrl: this.retryUrl,
-        isLastDeployment: this.isLastDeployment,
-      });
-      eventHub.$on('rollbackEnvironment', (environment) => {
-        if (environment.id === this.environment.id) {
-          this.isLoading = true;
-        }
-      });
+      if (this.graphql) {
+        this.$apollo.mutate({
+          mutation: setEnvironmentToRollback,
+          variables: { environment: this.environment },
+        });
+      } else {
+        eventHub.$emit('requestRollbackEnvironment', {
+          ...this.environment,
+          retryUrl: this.retryUrl,
+          isLastDeployment: this.isLastDeployment,
+        });
+      }
     },
   },
 };
 </script>
 <template>
-  <gl-button
-    v-gl-tooltip
-    v-gl-modal.confirm-rollback-modal
-    class="gl-display-none gl-md-display-block text-secondary"
-    :loading="isLoading"
-    :title="title"
-    :aria-label="title"
-    :icon="isLastDeployment ? 'repeat' : 'redo'"
-    @click="onClick"
-  />
+  <gl-dropdown-item v-gl-modal.confirm-rollback-modal @click="onClick">
+    {{ title }}
+  </gl-dropdown-item>
 </template>

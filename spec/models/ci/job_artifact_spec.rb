@@ -143,6 +143,17 @@ RSpec.describe Ci::JobArtifact do
     end
   end
 
+  describe '.erasable_file_types' do
+    subject { described_class.erasable_file_types }
+
+    it 'returns a list of erasable file types' do
+      all_types = described_class.file_types.keys
+      erasable_types = all_types - described_class::NON_ERASABLE_FILE_TYPES
+
+      expect(subject).to contain_exactly(*erasable_types)
+    end
+  end
+
   describe '.erasable' do
     subject { described_class.erasable }
 
@@ -351,6 +362,21 @@ RSpec.describe Ci::JobArtifact do
     end
   end
 
+  context 'when updating any field except the file' do
+    let(:artifact) { create(:ci_job_artifact, :unarchived_trace_artifact, file_store: 2) }
+
+    before do
+      stub_artifacts_object_storage(direct_upload: true)
+      artifact.file.object_store = 1
+    end
+
+    it 'the `after_commit` hook does not update `file_store`' do
+      artifact.update!(expire_at: Time.current)
+
+      expect(artifact.file_store).to be(2)
+    end
+  end
+
   describe 'validates file format' do
     subject { artifact }
 
@@ -507,6 +533,41 @@ RSpec.describe Ci::JobArtifact do
     end
   end
 
+  describe '#store_after_commit?' do
+    let(:file_type) { :archive }
+    let(:artifact) { build(:ci_job_artifact, file_type) }
+
+    context 'when direct upload is enabled' do
+      before do
+        stub_artifacts_object_storage(direct_upload: true)
+      end
+
+      context 'when the artifact is a trace' do
+        let(:file_type) { :trace }
+
+        it 'returns true' do
+          expect(artifact.store_after_commit?).to be_truthy
+        end
+      end
+
+      context 'when the artifact is not a trace' do
+        it 'returns false' do
+          expect(artifact.store_after_commit?).to be_falsey
+        end
+      end
+    end
+
+    context 'when direct upload is disabled' do
+      before do
+        stub_artifacts_object_storage(direct_upload: false)
+      end
+
+      it 'returns false' do
+        expect(artifact.store_after_commit?).to be_falsey
+      end
+    end
+  end
+
   describe 'file is being stored' do
     subject { create(:ci_job_artifact, :archive) }
 
@@ -637,5 +698,16 @@ RSpec.describe Ci::JobArtifact do
       non-zero default values. Also, remember to update the plan limits documentation (doc/administration/instance_limits.md)
       when changes or new entries are made.
     MSG
+  end
+
+  it_behaves_like 'it has loose foreign keys' do
+    let(:factory_name) { :ci_job_artifact }
+  end
+
+  context 'loose foreign key on ci_job_artifacts.project_id' do
+    it_behaves_like 'cleanup by a loose foreign key' do
+      let!(:parent) { create(:project) }
+      let!(:model) { create(:ci_job_artifact, project: parent) }
+    end
   end
 end

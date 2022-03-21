@@ -10,7 +10,7 @@ module QA
           super
 
           base.view 'app/assets/javascripts/snippets/components/snippet_title.vue' do
-            element :snippet_title_content, required: true
+            element :snippet_title_content
           end
 
           base.view 'app/assets/javascripts/snippets/components/snippet_description_view.vue' do
@@ -26,7 +26,7 @@ module QA
           end
 
           base.view 'app/assets/javascripts/blob/components/blob_content.vue' do
-            element :file_content
+            element :blob_viewer_file_content
           end
 
           base.view 'app/assets/javascripts/snippets/components/snippet_header.vue' do
@@ -79,10 +79,15 @@ module QA
             element :default_actions_container
             element :copy_contents_button
           end
+
+          base.view 'app/views/layouts/nav/_breadcrumbs.html.haml' do
+            element :breadcrumb_links_content
+            element :breadcrumb_sub_title_content
+          end
         end
 
         def has_snippet_title?(snippet_title)
-          has_element? :snippet_title_content, text: snippet_title
+          has_element?(:snippet_title_content, text: snippet_title, wait: 10)
         end
 
         def has_snippet_description?(snippet_description)
@@ -125,11 +130,11 @@ module QA
 
         def has_file_content?(file_content, file_number = nil)
           if file_number
-            within_element_by_index(:file_content, file_number - 1) do
+            within_element_by_index(:blob_viewer_file_content, file_number - 1) do
               has_text?(file_content)
             end
           else
-            within_element(:file_content) do
+            within_element(:blob_viewer_file_content) do
               has_text?(file_content)
             end
           end
@@ -137,11 +142,11 @@ module QA
 
         def has_no_file_content?(file_content, file_number = nil)
           if file_number
-            within_element_by_index(:file_content, file_number - 1) do
+            within_element_by_index(:blob_viewer_file_content, file_number - 1) do
               has_no_text?(file_content)
             end
           else
-            within_element(:file_content) do
+            within_element(:blob_viewer_file_content) do
               has_no_text?(file_content)
             end
           end
@@ -202,7 +207,7 @@ module QA
         end
 
         def has_syntax_highlighting?(language)
-          within_element(:file_content) do
+          within_element(:blob_viewer_file_content) do
             find('.line')['lang'].to_s == language
           end
         end
@@ -247,6 +252,12 @@ module QA
 
           unless has_element?(:note_author_content)
             raise ElementNotFound, "Comment did not appear as expected"
+          end
+        end
+
+        def snippet_id
+          within_element(:breadcrumb_links_content) do
+            find_element(:breadcrumb_sub_title_content).text.delete_prefix('$')
           end
         end
       end

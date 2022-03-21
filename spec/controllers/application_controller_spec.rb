@@ -502,14 +502,27 @@ RSpec.describe ApplicationController do
     controller(described_class) do
       attr_reader :last_payload
 
+      urgency :high, [:foo]
+
       def index
         render html: 'authenticated'
+      end
+
+      def foo
+        render html: ''
       end
 
       def append_info_to_payload(payload)
         super
 
         @last_payload = payload
+      end
+    end
+
+    before do
+      routes.draw do
+        get 'index' => 'anonymous#index'
+        get 'foo' => 'anonymous#foo'
       end
     end
 
@@ -533,6 +546,22 @@ RSpec.describe ApplicationController do
       get :index
 
       expect(controller.last_payload[:metadata]).to include('meta.user' => user.username)
+    end
+
+    context 'urgency information' do
+      it 'adds default urgency information to the payload' do
+        get :index
+
+        expect(controller.last_payload[:request_urgency]).to eq(:default)
+        expect(controller.last_payload[:target_duration_s]).to eq(1)
+      end
+
+      it 'adds customized urgency information to the payload' do
+        get :foo
+
+        expect(controller.last_payload[:request_urgency]).to eq(:high)
+        expect(controller.last_payload[:target_duration_s]).to eq(0.25)
+      end
     end
   end
 
@@ -704,16 +733,7 @@ RSpec.describe ApplicationController do
 
         get :index
 
-        expect(response.headers['Cache-Control']).to eq 'no-store'
         expect(response.headers['Pragma']).to eq 'no-cache'
-      end
-
-      it 'does not set the "no-store" header for XHR requests' do
-        sign_in(user)
-
-        get :index, xhr: true
-
-        expect(response.headers['Cache-Control']).to eq 'max-age=0, private, must-revalidate'
       end
     end
   end
@@ -740,7 +760,7 @@ RSpec.describe ApplicationController do
     it 'sets no-cache headers', :aggregate_failures do
       subject
 
-      expect(response.headers['Cache-Control']).to eq 'no-store'
+      expect(response.headers['Cache-Control']).to eq 'private, no-store'
       expect(response.headers['Pragma']).to eq 'no-cache'
       expect(response.headers['Expires']).to eq 'Fri, 01 Jan 1990 00:00:00 GMT'
     end
@@ -895,7 +915,7 @@ RSpec.describe ApplicationController do
 
   describe '#set_current_context' do
     controller(described_class) do
-      feature_category :issue_tracking
+      feature_category :team_planning
 
       def index
         Gitlab::ApplicationContext.with_raw_context do |context|
@@ -949,7 +969,7 @@ RSpec.describe ApplicationController do
     it 'sets the feature_category as defined in the controller' do
       get :index, format: :json
 
-      expect(json_response['meta.feature_category']).to eq('issue_tracking')
+      expect(json_response['meta.feature_category']).to eq('team_planning')
     end
 
     it 'assigns the context to a variable for logging' do
@@ -964,6 +984,14 @@ RSpec.describe ApplicationController do
       expect { get :index, format: :json }.to raise_error('Broken')
 
       expect(assigns(:current_context)).to include('meta.user' => user.username)
+    end
+  end
+
+  describe '.endpoint_id_for_action' do
+    controller(described_class) { }
+
+    it 'returns an expected endpoint id' do
+      expect(controller.class.endpoint_id_for_action('hello')).to eq('AnonymousController#hello')
     end
   end
 
@@ -1031,15 +1059,25 @@ RSpec.describe ApplicationController do
   describe 'setting permissions-policy header' do
     controller do
       skip_before_action :authenticate_user!
+      before_action :redirect_to_example, only: [:redirect]
 
       def index
         render html: 'It is a flock of sheep, not a floc of sheep.'
+      end
+
+      def redirect
+        raise 'Should not be reached'
+      end
+
+      def redirect_to_example
+        redirect_to('https://example.com')
       end
     end
 
     before do
       routes.draw do
         get 'index' => 'anonymous#index'
+        get 'redirect' => 'anonymous#redirect'
       end
     end
 
@@ -1063,6 +1101,13 @@ RSpec.describe ApplicationController do
       it 'sets the Permissions-Policy header' do
         get :index
 
+        expect(response.headers['Permissions-Policy']).to eq('interest-cohort=()')
+      end
+
+      it 'sets the Permissions-Policy header even when redirected before_action' do
+        get :redirect
+
+        expect(response).to have_gitlab_http_status(:redirect)
         expect(response.headers['Permissions-Policy']).to eq('interest-cohort=()')
       end
     end

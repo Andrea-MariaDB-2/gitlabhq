@@ -24,9 +24,12 @@ module API
           requires :access_level, type: Integer, values: Gitlab::Access.all_values, desc: 'A valid access level (defaults: `30`, developer access level)'
           optional :expires_at, type: DateTime, desc: 'Date string in the format YEAR-MONTH-DAY'
           optional :invite_source, type: String, desc: 'Source that triggered the member creation process', default: 'invitations-api'
-          optional :areas_of_focus, type: Array[String], coerce_with: Validations::Types::CommaSeparatedToArray.coerce, desc: 'Areas the inviter wants the member to focus upon'
+          optional :tasks_to_be_done, type: Array[String], coerce_with: Validations::Types::CommaSeparatedToArray.coerce, desc: 'Tasks the inviter wants the member to do'
+          optional :tasks_project_id, type: Integer, desc: 'The project ID in which to create the task issues'
         end
         post ":id/invitations" do
+          ::Gitlab::QueryLimiting.disable!('https://gitlab.com/gitlab-org/gitlab/-/issues/354016')
+
           params[:source] = find_source(source_type, params[:id])
 
           authorize_admin_source!(source_type, params[:source])
@@ -45,6 +48,8 @@ module API
         get ":id/invitations" do
           source = find_source(source_type, params[:id])
           query = params[:query]
+
+          authorize_admin_source!(source_type, source)
 
           invitations = paginate(retrieve_member_invitations(source, query))
 

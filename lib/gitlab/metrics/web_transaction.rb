@@ -2,11 +2,36 @@
 
 module Gitlab
   module Metrics
+    # Exclusive transaction-type metrics for web servers (including Web/Api/Git
+    # fleet). One instance of this class is created for each request going
+    # through the Rack metric middleware. Any metrics dispatched with this
+    # instance include metadata such as controller, action, feature category,
+    # etc.
     class WebTransaction < Transaction
+      THREAD_KEY = :_gitlab_metrics_transaction
+      BASE_LABEL_KEYS = %i(controller action feature_category).freeze
+
       CONTROLLER_KEY = 'action_controller.instance'
       ENDPOINT_KEY = 'api.endpoint'
       ALLOWED_SUFFIXES = Set.new(%w[json js atom rss xml zip])
       SMALL_BUCKETS = [0.1, 0.25, 0.5, 1.0, 2.5, 5.0].freeze
+
+      class << self
+        def current
+          Thread.current[THREAD_KEY]
+        end
+
+        def prometheus_metric(name, type, &block)
+          fetch_metric(type, name) do
+            # set default metric options
+            docstring "#{name.to_s.humanize} #{type}"
+
+            evaluate(&block)
+            # always filter sensitive labels and merge with base ones
+            label_keys BASE_LABEL_KEYS | (label_keys - ::Gitlab::Metrics::Transaction::FILTERED_LABEL_KEYS)
+          end
+        end
+      end
 
       def initialize(env)
         super()
@@ -57,10 +82,6 @@ module Gitlab
 
         action = "#{controller.action_name}"
 
-        # Try to get the feature category, but don't fail when the controller is
-        # not an ApplicationController.
-        feature_category = controller.class.try(:feature_category_for_action, action).to_s
-
         # Devise exposes a method called "request_format" that does the below.
         # However, this method is not available to all controllers (e.g. certain
         # Doorkeeper controllers). As such we use the underlying code directly.
@@ -91,9 +112,6 @@ module Gitlab
         if route
           path = endpoint_paths_cache[route.request_method][route.path]
 
-          grape_class = endpoint.options[:for]
-          feature_category = grape_class.try(:feature_category_for_app, endpoint).to_s
-
           { controller: 'Grape', action: "#{route.request_method} #{path}", feature_category: feature_category }
         end
       end
@@ -108,6 +126,10 @@ module Gitlab
 
       def endpoint_instrumentable_path(raw_path)
         raw_path.sub('(.:format)', '').sub('/:version', '')
+      end
+
+      def feature_category
+        ::Gitlab::ApplicationContext.current_context_attribute(:feature_category) || ::Gitlab::FeatureCategories::FEATURE_CATEGORY_DEFAULT
       end
     end
   end

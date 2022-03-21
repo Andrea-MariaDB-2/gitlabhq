@@ -15,6 +15,22 @@ RSpec.describe Gitlab::Database do
     end
   end
 
+  describe '.default_pool_size' do
+    before do
+      allow(Gitlab::Runtime).to receive(:max_threads).and_return(7)
+    end
+
+    it 'returns the max thread size plus a fixed headroom of 10' do
+      expect(described_class.default_pool_size).to eq(17)
+    end
+
+    it 'returns the max thread size plus a DB_POOL_HEADROOM if this env var is present' do
+      stub_env('DB_POOL_HEADROOM', '7')
+
+      expect(described_class.default_pool_size).to eq(14)
+    end
+  end
+
   describe '.has_config?' do
     context 'two tier database config' do
       before do
@@ -88,19 +104,59 @@ RSpec.describe Gitlab::Database do
     end
   end
 
+  describe '.check_for_non_superuser' do
+    subject { described_class.check_for_non_superuser }
+
+    let(:non_superuser) { Gitlab::Database::PgUser.new(usename: 'foo', usesuper: false ) }
+    let(:superuser) { Gitlab::Database::PgUser.new(usename: 'bar', usesuper: true) }
+
+    it 'prints user details if not superuser' do
+      allow(Gitlab::Database::PgUser).to receive(:find_by).with('usename = CURRENT_USER').and_return(non_superuser)
+
+      expect(Gitlab::AppLogger).to receive(:info).with("Account details: User: \"foo\", UseSuper: (false)")
+
+      subject
+    end
+
+    it 'raises an exception if superuser' do
+      allow(Gitlab::Database::PgUser).to receive(:find_by).with('usename = CURRENT_USER').and_return(superuser)
+
+      expect(Gitlab::AppLogger).to receive(:info).with("Account details: User: \"bar\", UseSuper: (true)")
+      expect { subject }.to raise_error('Error: detected superuser')
+    end
+
+    it 'catches exception if find_by fails' do
+      allow(Gitlab::Database::PgUser).to receive(:find_by).with('usename = CURRENT_USER').and_raise(ActiveRecord::StatementInvalid)
+
+      expect { subject }.to raise_error('User CURRENT_USER not found')
+    end
+  end
+
   describe '.check_postgres_version_and_print_warning' do
+    let(:reflect) { instance_spy(Gitlab::Database::Reflection) }
+
     subject { described_class.check_postgres_version_and_print_warning }
 
-    it 'prints a warning if not compliant with minimum postgres version' do
-      allow(described_class.main).to receive(:postgresql_minimum_supported_version?).and_return(false)
+    before do
+      allow(Gitlab::Database::Reflection)
+        .to receive(:new)
+        .and_return(reflect)
+    end
 
-      expect(Kernel).to receive(:warn).with(/You are using PostgreSQL/)
+    it 'prints a warning if not compliant with minimum postgres version' do
+      allow(reflect).to receive(:postgresql_minimum_supported_version?).and_return(false)
+
+      expect(Kernel)
+        .to receive(:warn)
+        .with(/You are using PostgreSQL/)
+        .exactly(Gitlab::Database.database_base_models.length)
+        .times
 
       subject
     end
 
     it 'doesnt print a warning if compliant with minimum postgres version' do
-      allow(described_class.main).to receive(:postgresql_minimum_supported_version?).and_return(true)
+      allow(reflect).to receive(:postgresql_minimum_supported_version?).and_return(true)
 
       expect(Kernel).not_to receive(:warn).with(/You are using PostgreSQL/)
 
@@ -108,7 +164,7 @@ RSpec.describe Gitlab::Database do
     end
 
     it 'doesnt print a warning in Rails runner environment' do
-      allow(described_class.main).to receive(:postgresql_minimum_supported_version?).and_return(false)
+      allow(reflect).to receive(:postgresql_minimum_supported_version?).and_return(false)
       allow(Gitlab::Runtime).to receive(:rails_runner?).and_return(true)
 
       expect(Kernel).not_to receive(:warn).with(/You are using PostgreSQL/)
@@ -117,13 +173,13 @@ RSpec.describe Gitlab::Database do
     end
 
     it 'ignores ActiveRecord errors' do
-      allow(described_class.main).to receive(:postgresql_minimum_supported_version?).and_raise(ActiveRecord::ActiveRecordError)
+      allow(reflect).to receive(:postgresql_minimum_supported_version?).and_raise(ActiveRecord::ActiveRecordError)
 
       expect { subject }.not_to raise_error
     end
 
     it 'ignores Postgres errors' do
-      allow(described_class.main).to receive(:postgresql_minimum_supported_version?).and_raise(PG::Error)
+      allow(reflect).to receive(:postgresql_minimum_supported_version?).and_raise(PG::Error)
 
       expect { subject }.not_to raise_error
     end
@@ -139,19 +195,77 @@ RSpec.describe Gitlab::Database do
     it { expect(described_class.nulls_first_order('column', 'DESC')).to eq 'column DESC NULLS FIRST'}
   end
 
-  describe '.db_config_name' do
-    it 'returns the db_config name for the connection' do
-      connection = ActiveRecord::Base.connection
+  describe '.db_config_for_connection' do
+    context 'when the regular connection is used' do
+      it 'returns db_config' do
+        connection = ActiveRecord::Base.retrieve_connection
 
-      expect(described_class.db_config_name(connection)).to be_a(String)
-      expect(described_class.db_config_name(connection)).to eq(connection.pool.db_config.name)
+        expect(described_class.db_config_for_connection(connection)).to eq(connection.pool.db_config)
+      end
+    end
+
+    context 'when the connection is LoadBalancing::ConnectionProxy' do
+      it 'returns primary_db_config' do
+        lb_config = ::Gitlab::Database::LoadBalancing::Configuration.new(ActiveRecord::Base)
+        lb = ::Gitlab::Database::LoadBalancing::LoadBalancer.new(lb_config)
+        proxy = ::Gitlab::Database::LoadBalancing::ConnectionProxy.new(lb)
+
+        expect(described_class.db_config_for_connection(proxy)).to eq(lb_config.primary_db_config)
+      end
     end
 
     context 'when the pool is a NullPool' do
-      it 'returns unknown' do
+      it 'returns nil' do
         connection = double(:active_record_connection, pool: ActiveRecord::ConnectionAdapters::NullPool.new)
 
-        expect(described_class.db_config_name(connection)).to eq('unknown')
+        expect(described_class.db_config_for_connection(connection)).to be_nil
+      end
+    end
+  end
+
+  describe '.db_config_name' do
+    it 'returns the db_config name for the connection' do
+      model = ActiveRecord::Base
+
+      # This is a ConnectionProxy
+      expect(described_class.db_config_name(model.connection))
+        .to eq('main')
+
+      # This is an actual connection
+      expect(described_class.db_config_name(model.retrieve_connection))
+        .to eq('main')
+    end
+
+    context 'when replicas are configured', :database_replica do
+      it 'returns the name for a replica' do
+        replica = ActiveRecord::Base.load_balancer.host
+
+        expect(described_class.db_config_name(replica)).to eq('main_replica')
+      end
+    end
+  end
+
+  describe '.gitlab_schemas_for_connection' do
+    it 'does raise exception for invalid connection' do
+      expect { described_class.gitlab_schemas_for_connection(:invalid) }.to raise_error /key not found: "unknown"/
+    end
+
+    it 'does return a valid schema depending on a base model used', :request_store do
+      # This is currently required as otherwise the `Ci::Build.connection` == `Project.connection`
+      # ENV due to lib/gitlab/database/load_balancing/setup.rb:93
+      stub_env('GITLAB_USE_MODEL_LOAD_BALANCING', '1')
+      # FF due to lib/gitlab/database/load_balancing/configuration.rb:92
+      stub_feature_flags(force_no_sharing_primary_model: true)
+
+      expect(described_class.gitlab_schemas_for_connection(Project.connection)).to include(:gitlab_main, :gitlab_shared)
+      expect(described_class.gitlab_schemas_for_connection(Ci::Build.connection)).to include(:gitlab_ci, :gitlab_shared)
+    end
+
+    it 'does return gitlab_ci when a ActiveRecord::Base is using CI connection' do
+      with_reestablished_active_record_base do
+        reconfigure_db_connection(model: ActiveRecord::Base, config_model: Ci::Build)
+
+        expect(described_class.gitlab_schemas_for_connection(ActiveRecord::Base.connection)).to include(:gitlab_ci, :gitlab_shared)
       end
     end
   end
@@ -187,6 +301,46 @@ RSpec.describe Gitlab::Database do
       it 'returns MAX_TIMESTAMP_VALUE' do
         expect(subject).to eq(max_timestamp)
       end
+    end
+  end
+
+  describe '.all_uncached' do
+    let(:base_model) do
+      Class.new do
+        def self.uncached
+          @uncached = true
+
+          yield
+        end
+      end
+    end
+
+    let(:model1) { Class.new(base_model) }
+    let(:model2) { Class.new(base_model) }
+
+    before do
+      allow(described_class).to receive(:database_base_models)
+        .and_return({ model1: model1, model2: model2 }.with_indifferent_access)
+    end
+
+    it 'wraps the given block in uncached calls for each primary connection', :aggregate_failures do
+      expect(model1.instance_variable_get(:@uncached)).to be_nil
+      expect(model2.instance_variable_get(:@uncached)).to be_nil
+
+      expect(Gitlab::Database::LoadBalancing::Session.current).to receive(:use_primary).and_yield
+
+      expect(model2).to receive(:uncached).and_call_original
+      expect(model1).to receive(:uncached).and_call_original
+
+      yielded_to_block = false
+      described_class.all_uncached do
+        expect(model1.instance_variable_get(:@uncached)).to be(true)
+        expect(model2.instance_variable_get(:@uncached)).to be(true)
+
+        yielded_to_block = true
+      end
+
+      expect(yielded_to_block).to be(true)
     end
   end
 
@@ -243,7 +397,7 @@ RSpec.describe Gitlab::Database do
         expect(event).not_to be_nil
         expect(event.duration).to be > 0.0
         expect(event.payload).to a_hash_including(
-          connection: be_a(ActiveRecord::ConnectionAdapters::AbstractAdapter)
+          connection: be_a(Gitlab::Database::LoadBalancing::ConnectionProxy)
         )
       end
     end
@@ -260,7 +414,7 @@ RSpec.describe Gitlab::Database do
         expect(event).not_to be_nil
         expect(event.duration).to be > 0.0
         expect(event.payload).to a_hash_including(
-          connection: be_a(ActiveRecord::ConnectionAdapters::AbstractAdapter)
+          connection: be_a(Gitlab::Database::LoadBalancing::ConnectionProxy)
         )
       end
     end
@@ -283,7 +437,7 @@ RSpec.describe Gitlab::Database do
           expect(event).not_to be_nil
           expect(event.duration).to be > 0.0
           expect(event.payload).to a_hash_including(
-            connection: be_a(ActiveRecord::ConnectionAdapters::AbstractAdapter)
+            connection: be_a(Gitlab::Database::LoadBalancing::ConnectionProxy)
           )
         end
       end
@@ -304,7 +458,7 @@ RSpec.describe Gitlab::Database do
         expect(event).not_to be_nil
         expect(event.duration).to be > 0.0
         expect(event.payload).to a_hash_including(
-          connection: be_a(ActiveRecord::ConnectionAdapters::AbstractAdapter)
+          connection: be_a(Gitlab::Database::LoadBalancing::ConnectionProxy)
         )
       end
     end

@@ -1,17 +1,17 @@
 <script>
-import { GlIcon } from '@gitlab/ui';
 import { isArray } from 'lodash';
 import { mapActions, mapGetters } from 'vuex';
 import imageDiffMixin from 'ee_else_ce/diffs/mixins/image_diff';
+import DesignNotePin from '~/vue_shared/components/design_management/design_note_pin.vue';
 
-function calcPercent(pos, size, renderedSize) {
-  return (((pos / size) * 100) / ((renderedSize / size) * 100)) * 100;
+function calcPercent(pos, renderedSize) {
+  return (100 * pos) / renderedSize;
 }
 
 export default {
   name: 'ImageDiffOverlay',
   components: {
-    GlIcon,
+    DesignNotePin,
   },
   mixins: [imageDiffMixin],
   props: {
@@ -36,7 +36,7 @@ export default {
     badgeClass: {
       type: String,
       required: false,
-      default: 'badge badge-pill',
+      default: '',
     },
     shouldToggleDiscussion: {
       type: Boolean,
@@ -65,8 +65,8 @@ export default {
     ...mapActions('diffs', ['openDiffFileCommentForm']),
     getImageDimensions() {
       return {
-        width: this.$parent.width,
-        height: this.$parent.height,
+        width: Math.round(this.$parent.width),
+        height: Math.round(this.$parent.height),
       };
     },
     getPositionForObject(meta) {
@@ -87,15 +87,15 @@ export default {
     },
     clickedImage(x, y) {
       const { width, height } = this.getImageDimensions();
-      const xPercent = calcPercent(x, width, this.renderedWidth);
-      const yPercent = calcPercent(y, height, this.renderedHeight);
+      const xPercent = calcPercent(x, this.renderedWidth);
+      const yPercent = calcPercent(y, this.renderedHeight);
 
       this.openDiffFileCommentForm({
         fileHash: this.fileHash,
         width,
         height,
-        x: width * (xPercent / 100),
-        y: height * (yPercent / 100),
+        x: Math.round(width * (xPercent / 100)),
+        y: Math.round(height * (yPercent / 100)),
         xPercent,
         yPercent,
       });
@@ -114,30 +114,28 @@ export default {
     >
       <span class="sr-only"> {{ __('Add image comment') }} </span>
     </button>
-    <button
+
+    <design-note-pin
       v-for="(discussion, index) in allDiscussions"
       :key="discussion.id"
-      :style="getPosition(discussion)"
-      :class="[badgeClass, { 'is-draft': discussion.isDraft }]"
-      :disabled="!shouldToggleDiscussion"
-      class="js-image-badge"
-      type="button"
+      :label="showCommentIcon ? null : toggleText(discussion, index)"
+      :position="getPosition(discussion)"
       :aria-label="__('Show comments')"
+      class="js-image-badge"
+      :class="badgeClass"
+      :is-draft="discussion.isDraft"
+      :is-resolved="discussion.resolved"
+      is-on-image
+      :disabled="!shouldToggleDiscussion"
       @click="clickedToggle(discussion)"
-    >
-      <gl-icon v-if="showCommentIcon" name="image-comment-dark" :size="24" />
-      <template v-else>
-        {{ toggleText(discussion, index) }}
-      </template>
-    </button>
-    <button
+    />
+
+    <design-note-pin
       v-if="canComment && currentCommentForm"
-      :style="{ left: `${currentCommentForm.xPercent}%`, top: `${currentCommentForm.yPercent}%` }"
-      :aria-label="__('Comment form position')"
-      class="btn-transparent comment-indicator position-absolute"
-      type="button"
-    >
-      <gl-icon name="image-comment-dark" :size="24" />
-    </button>
+      :position="{
+        left: `${currentCommentForm.xPercent}%`,
+        top: `${currentCommentForm.yPercent}%`,
+      }"
+    />
   </div>
 </template>

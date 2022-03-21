@@ -4,10 +4,9 @@ group: Package
 info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
 ---
 
-# Container Registry API
+# Container Registry API **(FREE)**
 
-> - [Introduced](https://gitlab.com/gitlab-org/gitlab-foss/-/issues/55978) in GitLab 11.8.
-> - The use of `CI_JOB_TOKEN` scoped to the current project was [introduced](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/49750) in GitLab 13.12.
+> The use of `CI_JOB_TOKEN` scoped to the current project was [introduced](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/49750) in GitLab 13.12.
 
 This is the API documentation of the [GitLab Container Registry](../user/packages/container_registry/index.md).
 
@@ -211,10 +210,11 @@ GET /registry/repositories/:id
 | `id`      | integer/string | yes | The ID of the registry repository accessible by the authenticated user. |
 | `tags`      | boolean | no | If the parameter is included as `true`, the response includes an array of `"tags"`. |
 | `tags_count` | boolean | no | If the parameter is included as `true`, the response includes `"tags_count"`. |
+| `size` | boolean | no | If the parameter is included as `true`, the response includes `"size"`. This is the deduplicated size of all images within the repository. Deduplication eliminates extra copies of identical data. For example, if you upload the same image twice, the Container Registry stores only one copy. This field is only available on GitLab.com for repositories created after `2021-11-04`. |
 
 ```shell
 curl --header "PRIVATE-TOKEN: <your_access_token>" \
-     "https://gitlab.example.com/api/v4/registry/repositories/2?tags=true&tags_count=true"
+     "https://gitlab.example.com/api/v4/registry/repositories/2?tags=true&tags_count=true&size=true"
 ```
 
 Example response:
@@ -235,7 +235,8 @@ Example response:
       "path": "group/project:0.0.1",
       "location": "gitlab.example.com:5000/group/project:0.0.1"
     }
-  ]
+  ],
+  "size": 2818413
 }
 ```
 
@@ -350,7 +351,7 @@ curl --request DELETE --header "PRIVATE-TOKEN: <your_access_token>" \
 ```
 
 This action doesn't delete blobs. To delete them and recycle disk space,
-[run the garbage collection](https://docs.gitlab.com/omnibus/maintenance/README.html#removing-unused-layers-not-referenced-by-manifests).
+[run the garbage collection](https://docs.gitlab.com/omnibus/maintenance/index.html#removing-unused-layers-not-referenced-by-manifests).
 
 ## Delete registry repository tags in bulk
 
@@ -373,7 +374,8 @@ DELETE /projects/:id/registry/repositories/:repository_id/tags
 | `keep_n` | integer | no | The amount of latest tags of given name to keep. |
 | `older_than` | string | no | Tags to delete that are older than the given time, written in human readable form `1h`, `1d`, `1month`. |
 
-This API call performs the following operations:
+This API returns [HTTP response status code 202](https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/202)
+if successful, and performs the following operations:
 
 - It orders all tags by creation date. The creation date is the time of the
   manifest creation, not the time of tag push.
@@ -388,18 +390,14 @@ This API call performs the following operations:
 These operations are executed asynchronously and can take time to get executed.
 You can run this at most once an hour for a given container repository. This
 action doesn't delete blobs. To delete them and recycle disk space,
-[run the garbage collection](https://docs.gitlab.com/omnibus/maintenance/README.html#removing-unused-layers-not-referenced-by-manifests).
+[run the garbage collection](https://docs.gitlab.com/omnibus/maintenance/index.html#removing-unused-layers-not-referenced-by-manifests).
 
 WARNING:
 The number of tags deleted by this API is limited on GitLab.com
 because of the scale of the Container Registry there.
 If your Container Registry has a large number of tags to delete,
 only some of them will be deleted, and you might need to call this API multiple times.
-To schedule tags for automatic deletion, use a [cleanup policy](../user/packages/container_registry/index.md#cleanup-policy) instead.
-
-NOTE:
-In GitLab 12.4 and later, individual tags are deleted.
-For more details, see the [discussion](https://gitlab.com/gitlab-org/gitlab/-/issues/15737).
+To schedule tags for automatic deletion, use a [cleanup policy](../user/packages/container_registry/reduce_container_registry_storage.md#cleanup-policy) instead.
 
 Examples:
 
@@ -431,3 +429,29 @@ Examples:
    curl --request DELETE --data 'name_regex_delete=.*' --data 'older_than=1month' \
         --header "PRIVATE-TOKEN: <your_access_token>" "https://gitlab.example.com/api/v4/projects/5/registry/repositories/2/tags"
    ```
+
+## Instance-wide endpoints
+
+Beside the group- and project-specific GitLab APIs explained above,
+the Container Registry has its own endpoints.
+To query those, follow the Registry's built-in mechanism to obtain and use an
+[authentication token](https://docs.docker.com/registry/spec/auth/token/).
+
+NOTE:
+These are different from project or personal access tokens in the GitLab application.
+
+### Listing all container repositories
+
+```plaintext
+GET /v2/_catalog
+```
+
+To list all container repositories on your GitLab instance, admin credentials are required:
+
+```shell
+$ curl --request GET --user "<admin-username>:<admin-password>" "https://gitlab.example.com/jwt/auth?service=container_registry&scope=registry:catalog:*"
+{"token":" ... "}
+
+$ curl --header "Authorization: Bearer <token_from_above>" https://gitlab.example.com:5050/v2/_catalog
+{"repositories":["user/project1", "group/subgroup/project2", ... ]}
+```

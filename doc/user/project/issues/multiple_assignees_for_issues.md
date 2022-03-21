@@ -6,14 +6,13 @@ info: To determine the technical writer assigned to the Stage/Group associated w
 
 # Multiple Assignees for Issues **(PREMIUM)**
 
-> - Moved to GitLab Premium in 13.9.
+> Moved to GitLab Premium in 13.9.
 
 In large teams, where there is shared ownership of an issue, it can be difficult
 to track who is working on it, who already completed their contributions, who
 didn't even start yet.
 
-In [GitLab Enterprise Edition](https://about.gitlab.com/pricing/),
-you can also select multiple assignees to an issue, making it easier to
+You can also select multiple [assignees](managing_issues.md#assignee) for an issue, making it easier to
 track, and making clearer who is accountable for it.
 
 ![multiple assignees for issues](img/multiple_assignees_for_issues.png)
@@ -40,4 +39,4 @@ to assign the issue to.
 
 ![adding multiple assignees](img/multiple_assignees.gif)
 
-To remove an assignee, deselect them from the same dropdown menu.
+To remove an assignee, clear them from the same dropdown menu.

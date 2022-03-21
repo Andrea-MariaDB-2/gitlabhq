@@ -35,6 +35,7 @@ FactoryBot.define do
       metrics_dashboard_access_level { ProjectFeature::PRIVATE }
       operations_access_level { ProjectFeature::ENABLED }
       container_registry_access_level { ProjectFeature::ENABLED }
+      security_and_compliance_access_level { ProjectFeature::PRIVATE }
 
       # we can't assign the delegated `#ci_cd_settings` attributes directly, as the
       # `#ci_cd_settings` relation needs to be created first
@@ -49,6 +50,8 @@ FactoryBot.define do
       forward_deployment_enabled { nil }
       restrict_user_defined_variables { nil }
       ci_job_token_scope_enabled { nil }
+      runner_token_expiration_interval { nil }
+      runner_token_expiration_interval_human_readable { nil }
     end
 
     after(:build) do |project, evaluator|
@@ -68,7 +71,8 @@ FactoryBot.define do
         metrics_dashboard_access_level: evaluator.metrics_dashboard_access_level,
         operations_access_level: evaluator.operations_access_level,
         analytics_access_level: evaluator.analytics_access_level,
-        container_registry_access_level: evaluator.container_registry_access_level
+        container_registry_access_level: evaluator.container_registry_access_level,
+        security_and_compliance_access_level: evaluator.security_and_compliance_access_level
       }
 
       project.build_project_feature(hash)
@@ -80,7 +84,7 @@ FactoryBot.define do
       # user have access to the project. Our specs don't use said service class,
       # thus we must manually refresh things here.
       unless project.group || project.pending_delete
-        project.add_maintainer(project.owner)
+        project.add_owner(project.first_owner)
       end
 
       project.group&.refresh_members_authorized_projects
@@ -92,6 +96,8 @@ FactoryBot.define do
       project.keep_latest_artifact = evaluator.keep_latest_artifact unless evaluator.keep_latest_artifact.nil?
       project.restrict_user_defined_variables = evaluator.restrict_user_defined_variables unless evaluator.restrict_user_defined_variables.nil?
       project.ci_job_token_scope_enabled = evaluator.ci_job_token_scope_enabled unless evaluator.ci_job_token_scope_enabled.nil?
+      project.runner_token_expiration_interval = evaluator.runner_token_expiration_interval unless evaluator.runner_token_expiration_interval.nil?
+      project.runner_token_expiration_interval_human_readable = evaluator.runner_token_expiration_interval_human_readable unless evaluator.runner_token_expiration_interval_human_readable.nil?
 
       if evaluator.import_status
         import_state = project.import_state || project.build_import_state
@@ -101,6 +107,9 @@ FactoryBot.define do
         import_state.last_error = evaluator.import_last_error
         import_state.save!
       end
+
+      # simulating ::Projects::ProcessSyncEventsWorker because most tests don't run Sidekiq inline
+      project.create_ci_project_mirror!(namespace_id: project.namespace_id) unless project.ci_project_mirror
     end
 
     trait :public do
@@ -147,6 +156,10 @@ FactoryBot.define do
       archived { true }
     end
 
+    trait :hidden do
+      hidden { true }
+    end
+
     trait :last_repository_check_failed do
       last_repository_check_failed { true }
     end
@@ -190,7 +203,7 @@ FactoryBot.define do
       end
 
       after :create do |project, evaluator|
-        raise "Failed to create repository!" unless project.create_repository
+        raise "Failed to create repository!" unless project.repository.exists? || project.create_repository
 
         evaluator.files.each do |filename, content|
           project.repository.create_file(
@@ -348,6 +361,9 @@ FactoryBot.define do
     trait(:container_registry_enabled)  { container_registry_access_level { ProjectFeature::ENABLED } }
     trait(:container_registry_disabled) { container_registry_access_level { ProjectFeature::DISABLED } }
     trait(:container_registry_private)  { container_registry_access_level { ProjectFeature::PRIVATE } }
+    trait(:security_and_compliance_enabled)  { security_and_compliance_access_level { ProjectFeature::ENABLED } }
+    trait(:security_and_compliance_disabled) { security_and_compliance_access_level { ProjectFeature::DISABLED } }
+    trait(:security_and_compliance_private)  { security_and_compliance_access_level { ProjectFeature::PRIVATE } }
 
     trait :auto_devops do
       association :auto_devops, factory: :project_auto_devops
@@ -370,6 +386,10 @@ FactoryBot.define do
 
   trait(:service_desk_enabled) do
     service_desk_enabled { true }
+  end
+
+  trait :with_error_tracking_setting do
+    error_tracking_setting { association :project_error_tracking_setting }
   end
 
   # Project with empty repository

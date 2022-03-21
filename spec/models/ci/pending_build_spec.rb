@@ -34,6 +34,47 @@ RSpec.describe Ci::PendingBuild do
         end
       end
     end
+
+    describe '.for_tags' do
+      subject(:pending_builds) { described_class.for_tags(tag_ids) }
+
+      let_it_be(:pending_build_with_tags) { create(:ci_pending_build, tag_ids: [1, 2]) }
+      let_it_be(:pending_build_without_tags) { create(:ci_pending_build) }
+
+      context 'when tag_ids match pending builds' do
+        let(:tag_ids) { [1, 2] }
+
+        it 'returns matching pending builds' do
+          expect(pending_builds).to contain_exactly(pending_build_with_tags, pending_build_without_tags)
+        end
+      end
+
+      context 'when tag_ids does not match pending builds' do
+        let(:tag_ids) { [non_existing_record_id] }
+
+        it 'returns matching pending builds without tags' do
+          expect(pending_builds).to contain_exactly(pending_build_without_tags)
+        end
+      end
+
+      context 'when tag_ids is not provided' do
+        context 'with a nil value' do
+          let(:tag_ids) { nil }
+
+          it 'returns matching pending builds without tags' do
+            expect(pending_builds).to contain_exactly(pending_build_without_tags)
+          end
+        end
+
+        context 'with an empty array' do
+          let(:tag_ids) { [] }
+
+          it 'returns matching pending builds without tags' do
+            expect(pending_builds).to contain_exactly(pending_build_without_tags)
+          end
+        end
+      end
+    end
   end
 
   describe '.upsert_from_build!' do
@@ -58,7 +99,11 @@ RSpec.describe Ci::PendingBuild do
       end
     end
 
-    context 'when project does not have shared runner' do
+    context 'when project does not have shared runners enabled' do
+      before do
+        project.shared_runners_enabled = false
+      end
+
       it 'sets instance_runners_enabled to false' do
         described_class.upsert_from_build!(build)
 
@@ -69,7 +114,11 @@ RSpec.describe Ci::PendingBuild do
     context 'when project has shared runner' do
       let_it_be(:runner) { create(:ci_runner, :instance) }
 
-      context 'when ci_pending_builds_maintain_shared_runners_data is enabled' do
+      before do
+        project.shared_runners_enabled = true
+      end
+
+      context 'when ci_pending_builds_maintain_denormalized_data is enabled' do
         it 'sets instance_runners_enabled to true' do
           described_class.upsert_from_build!(build)
 
@@ -101,9 +150,9 @@ RSpec.describe Ci::PendingBuild do
         end
       end
 
-      context 'when ci_pending_builds_maintain_shared_runners_data is disabled' do
+      context 'when ci_pending_builds_maintain_denormalized_data is disabled' do
         before do
-          stub_feature_flags(ci_pending_builds_maintain_shared_runners_data: false)
+          stub_feature_flags(ci_pending_builds_maintain_denormalized_data: false)
         end
 
         it 'sets instance_runners_enabled to false' do
@@ -119,7 +168,7 @@ RSpec.describe Ci::PendingBuild do
 
       subject(:ci_pending_build) { described_class.last }
 
-      context 'when ci_pending_builds_maintain_tags_data is enabled' do
+      context 'when ci_pending_builds_maintain_denormalized_data is enabled' do
         it 'sets tag_ids' do
           described_class.upsert_from_build!(build)
 
@@ -127,9 +176,9 @@ RSpec.describe Ci::PendingBuild do
         end
       end
 
-      context 'when ci_pending_builds_maintain_tags_data is disabled' do
+      context 'when ci_pending_builds_maintain_denormalized_data is disabled' do
         before do
-          stub_feature_flags(ci_pending_builds_maintain_tags_data: false)
+          stub_feature_flags(ci_pending_builds_maintain_denormalized_data: false)
         end
 
         it 'does not set tag_ids' do
@@ -139,5 +188,49 @@ RSpec.describe Ci::PendingBuild do
         end
       end
     end
+
+    context 'when a build project is nested in a subgroup' do
+      let(:group) { create(:group, :with_hierarchy, depth: 2, children: 1) }
+      let(:project) { create(:project, namespace: group.descendants.first) }
+      let(:pipeline) { create(:ci_pipeline, project: project) }
+      let(:build) { create(:ci_build, :created, pipeline: pipeline) }
+
+      subject { described_class.last }
+
+      context 'when build can be picked by a group runner' do
+        before do
+          project.group_runners_enabled = true
+        end
+
+        it 'denormalizes namespace traversal ids' do
+          described_class.upsert_from_build!(build)
+
+          expect(subject.namespace_traversal_ids).not_to be_empty
+          expect(subject.namespace_traversal_ids).to eq [group.id, project.namespace.id]
+        end
+      end
+
+      context 'when build can not be picked by a group runner' do
+        before do
+          project.group_runners_enabled = false
+        end
+
+        it 'creates an empty namespace traversal ids array' do
+          described_class.upsert_from_build!(build)
+
+          expect(subject.namespace_traversal_ids).to be_empty
+        end
+      end
+    end
+  end
+
+  it_behaves_like 'cleanup by a loose foreign key' do
+    let!(:parent) { create(:namespace) }
+    let!(:model) { create(:ci_pending_build, namespace: parent) }
+  end
+
+  it_behaves_like 'cleanup by a loose foreign key' do
+    let!(:parent) { create(:project) }
+    let!(:model) { create(:ci_pending_build, project: parent) }
   end
 end

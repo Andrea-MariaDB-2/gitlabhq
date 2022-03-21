@@ -23,7 +23,7 @@ Additionally, sometimes the behavior of a pipeline needs to be more dynamic. The
 to choose to start sub-pipelines (or not) is a powerful ability, especially if the
 YAML is dynamically generated.
 
-![Parent pipeline graph expanded](img/parent_pipeline_graph_expanded_v12_6.png)
+![Parent pipeline graph expanded](img/parent_pipeline_graph_expanded_v14_3.png)
 
 Similarly to [multi-project pipelines](multi_project_pipelines.md), a pipeline can trigger a
 set of concurrently running child pipelines, but within the same project:
@@ -31,10 +31,9 @@ set of concurrently running child pipelines, but within the same project:
 - Child pipelines still execute each of their jobs according to a stage sequence, but
   would be free to continue forward through their stages without waiting for unrelated
   jobs in the parent pipeline to finish.
-- The configuration is split up into smaller child pipeline configurations, which are
+- The configuration is split up into smaller child pipeline configurations. Each child pipeline contains only relevant steps which are
   easier to understand. This reduces the cognitive load to understand the overall configuration.
 - Imports are done at the child pipeline level, reducing the likelihood of collisions.
-- Each pipeline has only relevant steps, making it easier to understand what's going on.
 
 Child pipelines work well with other GitLab CI/CD features:
 
@@ -43,7 +42,7 @@ Child pipelines work well with other GitLab CI/CD features:
 - Since the parent pipeline in `.gitlab-ci.yml` and the child pipeline run as normal
   pipelines, they can have their own behaviors and sequencing in relation to triggers.
 
-See the [`trigger:`](../yaml/index.md#trigger) keyword documentation for full details on how to
+See the [`trigger`](../yaml/index.md#trigger) keyword documentation for full details on how to
 include the child pipeline configuration.
 
 <i class="fa fa-youtube-play youtube" aria-hidden="true"></i>
@@ -61,7 +60,8 @@ microservice_a:
     include: path/to/microservice_a.yml
 ```
 
-You can include multiple files when composing a child pipeline:
+You can include multiple files when defining a child pipeline. The child pipeline's
+configuration is composed of all configuration files merged together:
 
 ```yaml
 microservice_a:
@@ -71,7 +71,7 @@ microservice_a:
       - template: Security/SAST.gitlab-ci.yml
 ```
 
-In [GitLab 13.5](https://gitlab.com/gitlab-org/gitlab/-/issues/205157) and later,
+In [GitLab 13.5 and later](https://gitlab.com/gitlab-org/gitlab/-/issues/205157),
 you can use [`include:file`](../yaml/index.md#includefile) to trigger child pipelines
 with a configuration file in a different project:
 
@@ -80,10 +80,11 @@ microservice_a:
   trigger:
     include:
       - project: 'my-group/my-pipeline-library'
-        file: 'path/to/ci-config.yml'
+        ref: 'main'
+        file: '/path/to/child-pipeline.yml'
 ```
 
-The maximum number of entries that are accepted for `trigger:include:` is three.
+The maximum number of entries that are accepted for `trigger:include` is three.
 
 Similar to [multi-project pipelines](multi_project_pipelines.md#mirror-status-of-a-triggered-pipeline-in-the-trigger-job),
 we can set the parent pipeline to depend on the status of the child pipeline upon completion:
@@ -97,9 +98,9 @@ microservice_a:
     strategy: depend
 ```
 
-## Merge Request child pipelines
+## Merge request child pipelines
 
-To trigger a child pipeline as a [Merge Request Pipeline](merge_request_pipelines.md) we need to:
+To trigger a child pipeline as a [merge request pipeline](merge_request_pipelines.md) we need to:
 
 - Set the trigger job to run on merge requests:
 
@@ -148,7 +149,7 @@ microservice_a:
 > [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/35632) in GitLab 12.9.
 
 Instead of running a child pipeline from a static YAML file, you can define a job that runs
-your own script to generate a YAML file, which is then [used to trigger a child pipeline](../yaml/index.md#trigger-child-pipeline-with-generated-configuration-file).
+your own script to generate a YAML file, which is then used to trigger a child pipeline.
 
 This technique can be very powerful in generating pipelines targeting content that changed or to
 build a matrix of targets and architectures.
@@ -168,7 +169,32 @@ runner for testing, the path separator for the trigger job would be `/`. Other C
 configuration for jobs, like scripts, that use the Windows runner would use `\`.
 
 In GitLab 12.9, the child pipeline could fail to be created in certain cases, causing the parent pipeline to fail.
-This is [resolved in GitLab 12.10](https://gitlab.com/gitlab-org/gitlab/-/issues/209070).
+This is [resolved](https://gitlab.com/gitlab-org/gitlab/-/issues/209070) in GitLab 12.10.
+
+### Dynamic child pipeline example
+
+> [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/35632) in GitLab 12.9.
+
+You can trigger a child pipeline from a [dynamically generated configuration file](../pipelines/parent_child_pipelines.md#dynamic-child-pipelines):
+
+```yaml
+generate-config:
+  stage: build
+  script: generate-ci-config > generated-config.yml
+  artifacts:
+    paths:
+      - generated-config.yml
+
+child-pipeline:
+  stage: test
+  trigger:
+    include:
+      - artifact: generated-config.yml
+        job: generate-config
+```
+
+The `generated-config.yml` is extracted from the artifacts and used as the configuration
+for triggering the child pipeline.
 
 ## Nested child pipelines
 

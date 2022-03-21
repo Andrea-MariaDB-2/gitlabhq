@@ -2,40 +2,25 @@ import { Range } from 'monaco-editor';
 import { useFakeRequestAnimationFrame } from 'helpers/fake_request_animation_frame';
 import setWindowLocation from 'helpers/set_window_location_helper';
 import {
-  ERROR_INSTANCE_REQUIRED_FOR_EXTENSION,
   EDITOR_TYPE_CODE,
   EDITOR_TYPE_DIFF,
+  EXTENSION_BASE_LINE_LINK_ANCHOR_CLASS,
+  EXTENSION_BASE_LINE_NUMBERS_CLASS,
 } from '~/editor/constants';
 import { SourceEditorExtension } from '~/editor/extensions/source_editor_extension_base';
-
-jest.mock('~/helpers/startup_css_helper', () => {
-  return {
-    waitForCSSLoaded: jest.fn().mockImplementation((cb) => {
-      // We have to artificially put the callback's execution
-      // to the end of the current call stack to be able to
-      // test that the callback is called after waitForCSSLoaded.
-      // setTimeout with 0 delay does exactly that.
-      // Otherwise we might end up with false positive results
-      setTimeout(() => {
-        cb.apply();
-      }, 0);
-    }),
-  };
-});
+import EditorInstance from '~/editor/source_editor_instance';
 
 describe('The basis for an Source Editor extension', () => {
   const defaultLine = 3;
-  let ext;
   let event;
 
-  const defaultOptions = { foo: 'bar' };
   const findLine = (num) => {
-    return document.querySelector(`.line-numbers:nth-child(${num})`);
+    return document.querySelector(`.${EXTENSION_BASE_LINE_NUMBERS_CLASS}:nth-child(${num})`);
   };
   const generateLines = () => {
     let res = '';
     for (let line = 1, lines = 5; line <= lines; line += 1) {
-      res += `<div class="line-numbers">${line}</div>`;
+      res += `<div class="${EXTENSION_BASE_LINE_NUMBERS_CLASS}">${line}</div>`;
     }
     return res;
   };
@@ -49,6 +34,9 @@ describe('The basis for an Source Editor extension', () => {
       },
     };
   };
+  const createInstance = (baseInstance = {}) => {
+    return new EditorInstance(baseInstance);
+  };
 
   beforeEach(() => {
     setFixtures(generateLines());
@@ -59,96 +47,51 @@ describe('The basis for an Source Editor extension', () => {
     jest.clearAllMocks();
   });
 
-  describe('constructor', () => {
-    it('resets the layout in waitForCSSLoaded callback', async () => {
-      const instance = {
-        layout: jest.fn(),
-      };
-      ext = new SourceEditorExtension({ instance });
-      expect(instance.layout).not.toHaveBeenCalled();
-
-      // We're waiting for the waitForCSSLoaded mock to kick in
-      await jest.runOnlyPendingTimers();
-
-      expect(instance.layout).toHaveBeenCalled();
-    });
-
-    it.each`
-      description                                                     | instance     | options
-      ${'accepts configuration options and instance'}                 | ${{}}        | ${defaultOptions}
-      ${'leaves instance intact if no options are passed'}            | ${{}}        | ${undefined}
-      ${'does not fail if both instance and the options are omitted'} | ${undefined} | ${undefined}
-      ${'throws if only options are passed'}                          | ${undefined} | ${defaultOptions}
-    `('$description', ({ instance, options } = {}) => {
-      SourceEditorExtension.deferRerender = jest.fn();
-      const originalInstance = { ...instance };
-
-      if (instance) {
-        if (options) {
-          Object.entries(options).forEach((prop) => {
-            expect(instance[prop]).toBeUndefined();
-          });
-          // Both instance and options are passed
-          ext = new SourceEditorExtension({ instance, ...options });
-          Object.entries(options).forEach(([prop, value]) => {
-            expect(ext[prop]).toBeUndefined();
-            expect(instance[prop]).toBe(value);
-          });
-        } else {
-          ext = new SourceEditorExtension({ instance });
-          expect(instance).toEqual(originalInstance);
-        }
-      } else if (options) {
-        // Options are passed without instance
-        expect(() => {
-          ext = new SourceEditorExtension({ ...options });
-        }).toThrow(ERROR_INSTANCE_REQUIRED_FOR_EXTENSION);
-      } else {
-        // Neither options nor instance are passed
-        expect(() => {
-          ext = new SourceEditorExtension();
-        }).not.toThrow();
-      }
-    });
-
+  describe('onUse callback', () => {
     it('initializes the line highlighting', () => {
-      SourceEditorExtension.deferRerender = jest.fn();
+      const instance = createInstance();
       const spy = jest.spyOn(SourceEditorExtension, 'highlightLines');
-      ext = new SourceEditorExtension({ instance: {} });
+
+      instance.use({ definition: SourceEditorExtension });
       expect(spy).toHaveBeenCalled();
     });
 
-    it('sets up the line linking for code instance', () => {
-      SourceEditorExtension.deferRerender = jest.fn();
-      const spy = jest.spyOn(SourceEditorExtension, 'setupLineLinking');
-      const instance = {
-        getEditorType: jest.fn().mockReturnValue(EDITOR_TYPE_CODE),
-        onMouseMove: jest.fn(),
-        onMouseDown: jest.fn(),
-      };
-      ext = new SourceEditorExtension({ instance });
-      expect(spy).toHaveBeenCalledWith(instance);
-    });
+    it.each`
+      description          | instanceType        | shouldBeCalled
+      ${'Sets up'}         | ${EDITOR_TYPE_CODE} | ${true}
+      ${'Does not set up'} | ${EDITOR_TYPE_DIFF} | ${false}
+    `(
+      '$description the line linking for $instanceType instance',
+      ({ instanceType, shouldBeCalled }) => {
+        const instance = createInstance({
+          getEditorType: jest.fn().mockReturnValue(instanceType),
+          onMouseMove: jest.fn(),
+          onMouseDown: jest.fn(),
+        });
+        const spy = jest.spyOn(SourceEditorExtension, 'setupLineLinking');
 
-    it('does not set up the line linking for diff instance', () => {
-      SourceEditorExtension.deferRerender = jest.fn();
-      const spy = jest.spyOn(SourceEditorExtension, 'setupLineLinking');
-      const instance = {
-        getEditorType: jest.fn().mockReturnValue(EDITOR_TYPE_DIFF),
-      };
-      ext = new SourceEditorExtension({ instance });
-      expect(spy).not.toHaveBeenCalled();
-    });
+        instance.use({ definition: SourceEditorExtension });
+        if (shouldBeCalled) {
+          expect(spy).toHaveBeenCalledWith(instance);
+        } else {
+          expect(spy).not.toHaveBeenCalled();
+        }
+      },
+    );
   });
 
   describe('highlightLines', () => {
     const revealSpy = jest.fn();
     const decorationsSpy = jest.fn();
-    const instance = {
+    const instance = createInstance({
       revealLineInCenter: revealSpy,
       deltaDecorations: decorationsSpy,
+    });
+    instance.use({ definition: SourceEditorExtension });
+    const defaultDecorationOptions = {
+      isWholeLine: true,
+      className: 'active-line-text',
     };
-    const defaultDecorationOptions = { isWholeLine: true, className: 'active-line-text' };
 
     useFakeRequestAnimationFrame();
 
@@ -157,18 +100,22 @@ describe('The basis for an Source Editor extension', () => {
     });
 
     it.each`
-      desc                                               | hash         | shouldReveal | expectedRange
-      ${'properly decorates a single line'}              | ${'#L10'}    | ${true}      | ${[10, 1, 10, 1]}
-      ${'properly decorates multiple lines'}             | ${'#L7-42'}  | ${true}      | ${[7, 1, 42, 1]}
-      ${'correctly highlights if lines are reversed'}    | ${'#L42-7'}  | ${true}      | ${[7, 1, 42, 1]}
-      ${'highlights one line if start/end are the same'} | ${'#L7-7'}   | ${true}      | ${[7, 1, 7, 1]}
-      ${'does not highlight if there is no hash'}        | ${''}        | ${false}     | ${null}
-      ${'does not highlight if the hash is undefined'}   | ${undefined} | ${false}     | ${null}
-      ${'does not highlight if hash is incomplete 1'}    | ${'#L'}      | ${false}     | ${null}
-      ${'does not highlight if hash is incomplete 2'}    | ${'#L-'}     | ${false}     | ${null}
-    `('$desc', ({ hash, shouldReveal, expectedRange } = {}) => {
+      desc                                                  | hash         | bounds          | shouldReveal | expectedRange
+      ${'properly decorates a single line'}                 | ${'#L10'}    | ${undefined}    | ${true}      | ${[10, 1, 10, 1]}
+      ${'properly decorates multiple lines'}                | ${'#L7-42'}  | ${undefined}    | ${true}      | ${[7, 1, 42, 1]}
+      ${'correctly highlights if lines are reversed'}       | ${'#L42-7'}  | ${undefined}    | ${true}      | ${[7, 1, 42, 1]}
+      ${'highlights one line if start/end are the same'}    | ${'#L7-7'}   | ${undefined}    | ${true}      | ${[7, 1, 7, 1]}
+      ${'does not highlight if there is no hash'}           | ${''}        | ${undefined}    | ${false}     | ${null}
+      ${'does not highlight if the hash is undefined'}      | ${undefined} | ${undefined}    | ${false}     | ${null}
+      ${'does not highlight if hash is incomplete 1'}       | ${'#L'}      | ${undefined}    | ${false}     | ${null}
+      ${'does not highlight if hash is incomplete 2'}       | ${'#L-'}     | ${undefined}    | ${false}     | ${null}
+      ${'highlights lines if bounds are passed'}            | ${undefined} | ${[17, 42]}     | ${true}      | ${[17, 1, 42, 1]}
+      ${'highlights one line if bounds has a single value'} | ${undefined} | ${[17]}         | ${true}      | ${[17, 1, 17, 1]}
+      ${'does not highlight if bounds is invalid'}          | ${undefined} | ${[Number.NaN]} | ${false}     | ${null}
+      ${'uses bounds if both hash and bounds exist'}        | ${'#L7-42'}  | ${[3, 5]}       | ${true}      | ${[3, 1, 5, 1]}
+    `('$desc', ({ hash, bounds, shouldReveal, expectedRange } = {}) => {
       window.location.hash = hash;
-      SourceEditorExtension.highlightLines(instance);
+      instance.highlightLines(bounds);
       if (!shouldReveal) {
         expect(revealSpy).not.toHaveBeenCalled();
         expect(decorationsSpy).not.toHaveBeenCalled();
@@ -186,12 +133,54 @@ describe('The basis for an Source Editor extension', () => {
       }
     });
 
-    it('stores the line  decorations on the instance', () => {
+    it('stores the line decorations on the instance', () => {
       decorationsSpy.mockReturnValue('foo');
       window.location.hash = '#L10';
       expect(instance.lineDecorations).toBeUndefined();
-      SourceEditorExtension.highlightLines(instance);
+      instance.highlightLines();
       expect(instance.lineDecorations).toBe('foo');
+    });
+
+    it('replaces existing line highlights', () => {
+      const oldLineDecorations = [
+        {
+          range: new Range(1, 1, 20, 1),
+          options: { isWholeLine: true, className: 'active-line-text' },
+        },
+      ];
+      const newLineDecorations = [
+        {
+          range: new Range(7, 1, 10, 1),
+          options: { isWholeLine: true, className: 'active-line-text' },
+        },
+      ];
+      instance.lineDecorations = oldLineDecorations;
+      instance.highlightLines([7, 10]);
+      expect(decorationsSpy).toHaveBeenCalledWith(oldLineDecorations, newLineDecorations);
+    });
+  });
+
+  describe('removeHighlights', () => {
+    const decorationsSpy = jest.fn();
+    const lineDecorations = [
+      {
+        range: new Range(1, 1, 20, 1),
+        options: { isWholeLine: true, className: 'active-line-text' },
+      },
+    ];
+    let instance;
+
+    beforeEach(() => {
+      instance = createInstance({
+        deltaDecorations: decorationsSpy,
+        lineDecorations,
+      });
+      instance.use({ definition: SourceEditorExtension });
+    });
+
+    it('removes all existing decorations', () => {
+      instance.removeHighlights();
+      expect(decorationsSpy).toHaveBeenCalledWith(lineDecorations, []);
     });
   });
 
@@ -217,9 +206,9 @@ describe('The basis for an Source Editor extension', () => {
     });
 
     it.each`
-      desc                                                                                | eventTrigger      | shouldRemove
-      ${'does not remove the line decorations if the event is triggered on a wrong node'} | ${null}           | ${false}
-      ${'removes existing line decorations when clicking a line number'}                  | ${'.link-anchor'} | ${true}
+      desc                                                                                | eventTrigger                                   | shouldRemove
+      ${'does not remove the line decorations if the event is triggered on a wrong node'} | ${null}                                        | ${false}
+      ${'removes existing line decorations when clicking a line number'}                  | ${`.${EXTENSION_BASE_LINE_LINK_ANCHOR_CLASS}`} | ${true}
     `('$desc', ({ eventTrigger, shouldRemove } = {}) => {
       event = generateEventMock({ el: eventTrigger ? document.querySelector(eventTrigger) : null });
       instance.onMouseDown.mockImplementation((fn) => {

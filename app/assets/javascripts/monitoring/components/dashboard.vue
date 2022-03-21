@@ -1,5 +1,13 @@
 <script>
-import { GlButton, GlModalDirective, GlTooltipDirective, GlIcon } from '@gitlab/ui';
+import {
+  GlButton,
+  GlModalDirective,
+  GlTooltipDirective,
+  GlIcon,
+  GlAlert,
+  GlSprintf,
+  GlLink,
+} from '@gitlab/ui';
 import Mousetrap from 'mousetrap';
 import VueDraggable from 'vuedraggable';
 import { mapActions, mapState, mapGetters } from 'vuex';
@@ -8,10 +16,8 @@ import invalidUrl from '~/lib/utils/invalid_url';
 import { ESC_KEY } from '~/lib/utils/keys';
 import { mergeUrlParams, updateHistory } from '~/lib/utils/url_utility';
 import { s__ } from '~/locale';
-import AlertsDeprecationWarning from '~/vue_shared/components/alerts_deprecation_warning.vue';
 import { defaultTimeRange } from '~/vue_shared/constants';
 import TrackEventDirective from '~/vue_shared/directives/track_event';
-import glFeatureFlagMixin from '~/vue_shared/mixins/gl_feature_flags_mixin';
 import { metricStates, keyboardShortcutKeys } from '../constants';
 import {
   timeRangeFromUrl,
@@ -30,7 +36,6 @@ import VariablesSection from './variables_section.vue';
 
 export default {
   components: {
-    AlertsDeprecationWarning,
     VueDraggable,
     DashboardHeader,
     DashboardPanel,
@@ -41,13 +46,15 @@ export default {
     GroupEmptyState,
     VariablesSection,
     LinksSection,
+    GlAlert,
+    GlSprintf,
+    GlLink,
   },
   directives: {
     GlModal: GlModalDirective,
     GlTooltip: GlTooltipDirective,
     TrackEvent: TrackEventDirective,
   },
-  mixins: [glFeatureFlagMixin()],
   props: {
     hasMetrics: {
       type: Boolean,
@@ -147,6 +154,7 @@ export default {
       isRearrangingPanels: false,
       originalDocumentTitle: document.title,
       hoveredPanel: '',
+      isDeprecationNoticeDismissed: false,
     };
   },
   computed: {
@@ -396,11 +404,44 @@ export default {
   },
 };
 </script>
-
 <template>
   <div class="prometheus-graphs" data-qa-selector="prometheus_graphs">
-    <alerts-deprecation-warning v-if="!glFeatures.managedAlertsDeprecation" />
-
+    <div>
+      <gl-alert
+        v-if="!isDeprecationNoticeDismissed"
+        :title="__('Feature deprecation and removal')"
+        class="mb-3"
+        variant="danger"
+        @dismiss="isDeprecationNoticeDismissed = true"
+      >
+        <gl-sprintf
+          :message="
+            s__(
+              'Deprecations|The metrics, logs and tracing features were deprecated in GitLab 14.7 and are %{epicStart} scheduled for removal %{epicEnd} in GitLab 15.0.',
+            )
+          "
+        >
+          <template #epic="{ content }">
+            <gl-link href="https://gitlab.com/groups/gitlab-org/-/epics/7188" target="_blank">{{
+              content
+            }}</gl-link>
+          </template>
+        </gl-sprintf>
+        <gl-sprintf
+          :message="
+            s__(
+              'Deprecations|For information on a possible replacement %{epicStart} learn more about Opstrace %{epicEnd}.',
+            )
+          "
+        >
+          <template #epic="{ content }">
+            <gl-link href="https://gitlab.com/groups/gitlab-org/-/epics/6976" target="_blank">{{
+              content
+            }}</gl-link>
+          </template>
+        </gl-sprintf>
+      </gl-alert>
+    </div>
     <dashboard-header
       v-if="showHeader"
       ref="prometheusGraphsHeader"

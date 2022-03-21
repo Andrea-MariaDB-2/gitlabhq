@@ -149,7 +149,7 @@ RSpec.describe Projects::UpdateService do
 
     describe 'when updating project that has forks' do
       let(:project) { create(:project, :internal) }
-      let(:user) { project.owner }
+      let(:user) { project.first_owner }
       let(:forked_project) { fork_project(project) }
 
       context 'and unlink forks feature flag is off' do
@@ -374,55 +374,9 @@ RSpec.describe Projects::UpdateService do
 
         expect(result).to eq({
           status: :error,
-          message: "Name can contain only letters, digits, emojis, '_', '.', dash, space. It must start with letter, digit, emoji or '_'."
+          message: "Name can contain only letters, digits, emojis, '_', '.', '+', dashes, or spaces. It must start with a letter, digit, emoji, or '_'."
         })
       end
-    end
-
-    shared_examples 'updating pages configuration' do
-      it 'schedules the `PagesUpdateConfigurationWorker` when pages are deployed' do
-        project.mark_pages_as_deployed
-
-        expect(PagesUpdateConfigurationWorker).to receive(:perform_async).with(project.id)
-
-        subject
-      end
-
-      it "does not schedule a job when pages aren't deployed" do
-        project.mark_pages_as_not_deployed
-
-        expect(PagesUpdateConfigurationWorker).not_to receive(:perform_async).with(project.id)
-
-        subject
-      end
-    end
-
-    context 'when updating #pages_https_only', :https_pages_enabled do
-      subject(:call_service) do
-        update_project(project, admin, pages_https_only: false)
-      end
-
-      it 'updates the attribute' do
-        expect { call_service }
-          .to change { project.pages_https_only? }
-          .to(false)
-      end
-
-      it_behaves_like 'updating pages configuration'
-    end
-
-    context 'when updating #pages_access_level' do
-      subject(:call_service) do
-        update_project(project, admin, project_feature_attributes: { pages_access_level: ProjectFeature::ENABLED })
-      end
-
-      it 'updates the attribute' do
-        expect { call_service }
-          .to change { project.project_feature.pages_access_level }
-          .to(ProjectFeature::ENABLED)
-      end
-
-      it_behaves_like 'updating pages configuration'
     end
 
     context 'when updating #emails_disabled' do
@@ -438,6 +392,66 @@ RSpec.describe Projects::UpdateService do
 
         expect { update_project(project, maintainer, emails_disabled: true) }
           .not_to change { project.emails_disabled }
+      end
+    end
+
+    context 'when updating runners settings' do
+      let(:settings) do
+        { instance_runners_enabled: true, namespace_traversal_ids: [123] }
+      end
+
+      let!(:pending_build) do
+        create(:ci_pending_build, project: project, **settings)
+      end
+
+      context 'when project has shared runners enabled' do
+        let(:project) { create(:project, shared_runners_enabled: true) }
+
+        it 'updates builds queue when shared runners get disabled' do
+          expect { update_project(project, admin, shared_runners_enabled: false) }
+            .to change { pending_build.reload.instance_runners_enabled }.to(false)
+
+          expect(pending_build.reload.instance_runners_enabled).to be false
+        end
+      end
+
+      context 'when project has shared runners disabled' do
+        let(:project) { create(:project, shared_runners_enabled: false) }
+
+        it 'updates builds queue when shared runners get enabled' do
+          expect { update_project(project, admin, shared_runners_enabled: true) }
+            .to not_change { pending_build.reload.instance_runners_enabled }
+
+          expect(pending_build.reload.instance_runners_enabled).to be true
+        end
+      end
+
+      context 'when project has group runners enabled' do
+        let(:project) { create(:project, group_runners_enabled: true) }
+
+        before do
+          project.ci_cd_settings.update!(group_runners_enabled: true)
+        end
+
+        it 'updates builds queue when group runners get disabled' do
+          update_project(project, admin, group_runners_enabled: false)
+
+          expect(pending_build.reload.namespace_traversal_ids).to be_empty
+        end
+      end
+
+      context 'when project has group runners disabled' do
+        let(:project) { create(:project, :in_subgroup, group_runners_enabled: false) }
+
+        before do
+          project.reload.ci_cd_settings.update!(group_runners_enabled: false)
+        end
+
+        it 'updates builds queue when group runners get enabled' do
+          update_project(project, admin, group_runners_enabled: true)
+
+          expect(pending_build.reload.namespace_traversal_ids).to include(project.namespace.id)
+        end
       end
     end
 

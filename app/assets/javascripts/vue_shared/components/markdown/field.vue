@@ -1,15 +1,13 @@
 <script>
-/* eslint-disable vue/no-v-html */
 import { GlIcon } from '@gitlab/ui';
 import $ from 'jquery';
 import '~/behaviors/markdown/render_gfm';
-import { unescape } from 'lodash';
+import { debounce, unescape } from 'lodash';
 import createFlash from '~/flash';
 import GLForm from '~/gl_form';
 import axios from '~/lib/utils/axios_utils';
 import { stripHtml } from '~/lib/utils/text_utility';
 import { __, sprintf } from '~/locale';
-import GfmAutocomplete from '~/vue_shared/components/gfm_autocomplete/gfm_autocomplete.vue';
 import Suggestions from '~/vue_shared/components/markdown/suggestions.vue';
 import glFeatureFlagsMixin from '~/vue_shared/mixins/gl_feature_flags_mixin';
 import MarkdownHeader from './header.vue';
@@ -21,7 +19,6 @@ function cleanUpLine(content) {
 
 export default {
   components: {
-    GfmAutocomplete,
     MarkdownHeader,
     MarkdownToolbar,
     GlIcon,
@@ -50,6 +47,11 @@ export default {
       type: String,
       required: false,
       default: '',
+    },
+    enablePreview: {
+      type: Boolean,
+      required: false,
+      default: true,
     },
     addSpacingClasses: {
       type: Boolean,
@@ -111,11 +113,12 @@ export default {
     return {
       markdownPreview: '',
       referencedCommands: '',
-      referencedUsers: '',
+      referencedUsers: [],
       hasSuggestion: false,
       markdownPreviewLoading: false,
       previewMarkdown: false,
       suggestions: this.note.suggestions || [],
+      debouncedFetchMarkdownLoading: false,
     };
   },
   computed: {
@@ -189,21 +192,50 @@ export default {
         });
       }
     },
+
+    textareaValue: {
+      immediate: true,
+      handler(textareaValue, oldVal) {
+        const all = /@all([^\w._-]|$)/;
+        const hasAll = all.test(textareaValue);
+        const hadAll = all.test(oldVal);
+
+        const justAddedAll = !hadAll && hasAll;
+        const justRemovedAll = hadAll && !hasAll;
+
+        if (justAddedAll) {
+          this.debouncedFetchMarkdownLoading = false;
+          this.debouncedFetchMarkdown();
+        } else if (justRemovedAll) {
+          this.debouncedFetchMarkdownLoading = true;
+          this.referencedUsers = [];
+        }
+      },
+    },
+    enablePreview: {
+      immediate: true,
+      handler(newVal) {
+        if (!newVal) {
+          this.showWriteTab();
+        }
+      },
+    },
   },
   mounted() {
     // GLForm class handles all the toolbar buttons
     return new GLForm(
       $(this.$refs['gl-form']),
       {
-        emojis: this.enableAutocomplete && !this.glFeatures.tributeAutocomplete,
-        members: this.enableAutocomplete && !this.glFeatures.tributeAutocomplete,
-        issues: this.enableAutocomplete && !this.glFeatures.tributeAutocomplete,
-        mergeRequests: this.enableAutocomplete && !this.glFeatures.tributeAutocomplete,
-        epics: this.enableAutocomplete && !this.glFeatures.tributeAutocomplete,
-        milestones: this.enableAutocomplete && !this.glFeatures.tributeAutocomplete,
-        labels: this.enableAutocomplete && !this.glFeatures.tributeAutocomplete,
-        snippets: this.enableAutocomplete && !this.glFeatures.tributeAutocomplete,
+        emojis: this.enableAutocomplete,
+        members: this.enableAutocomplete,
+        issues: this.enableAutocomplete,
+        mergeRequests: this.enableAutocomplete,
+        epics: this.enableAutocomplete,
+        milestones: this.enableAutocomplete,
+        labels: this.enableAutocomplete,
+        snippets: this.enableAutocomplete,
         vulnerabilities: this.enableAutocomplete,
+        contacts: this.enableAutocomplete && this.glFeatures.contactsAutocomplete,
       },
       true,
     );
@@ -223,9 +255,9 @@ export default {
       if (this.textareaValue) {
         this.markdownPreviewLoading = true;
         this.markdownPreview = __('Loading…');
-        axios
-          .post(this.markdownPreviewPath, { text: this.textareaValue })
-          .then((response) => this.renderMarkdown(response.data))
+
+        this.fetchMarkdown()
+          .then((data) => this.renderMarkdown(data))
           .catch(() =>
             createFlash({
               message: __('Error loading markdown preview'),
@@ -240,22 +272,38 @@ export default {
       this.previewMarkdown = false;
     },
 
+    fetchMarkdown() {
+      return axios.post(this.markdownPreviewPath, { text: this.textareaValue }).then(({ data }) => {
+        const { references } = data;
+        if (references) {
+          this.referencedCommands = references.commands;
+          this.referencedUsers = references.users;
+          this.hasSuggestion = references.suggestions?.length > 0;
+          this.suggestions = references.suggestions;
+        }
+
+        return data;
+      });
+    },
+
+    debouncedFetchMarkdown: debounce(function debouncedFetchMarkdown() {
+      return this.fetchMarkdown().then(() => {
+        if (this.debouncedFetchMarkdownLoading) {
+          this.referencedUsers = [];
+          this.debouncedFetchMarkdownLoading = false;
+        }
+      });
+    }, 400),
+
     renderMarkdown(data = {}) {
       this.markdownPreviewLoading = false;
       this.markdownPreview = data.body || __('Nothing to preview.');
-
-      if (data.references) {
-        this.referencedCommands = data.references.commands;
-        this.referencedUsers = data.references.users;
-        this.hasSuggestion = data.references.suggestions && data.references.suggestions.length;
-        this.suggestions = data.references.suggestions;
-      }
 
       this.$nextTick()
         .then(() => $(this.$refs['markdown-preview']).renderGFM())
         .catch(() =>
           createFlash({
-            message: __('Error rendering markdown preview'),
+            message: __('Error rendering Markdown preview'),
           }),
         );
     },
@@ -274,6 +322,7 @@ export default {
       :preview-markdown="previewMarkdown"
       :line-content="lineContent"
       :can-suggest="canSuggest"
+      :enable-preview="enablePreview"
       :show-suggest-popover="showSuggestPopover"
       :suggestion-start-index="suggestionsStartIndex"
       data-testid="markdownHeader"
@@ -283,10 +332,7 @@ export default {
     />
     <div v-show="!previewMarkdown" class="md-write-holder">
       <div class="zen-backdrop">
-        <gfm-autocomplete v-if="glFeatures.tributeAutocomplete">
-          <slot name="textarea"></slot>
-        </gfm-autocomplete>
-        <slot v-else name="textarea"></slot>
+        <slot name="textarea"></slot>
         <a
           class="zen-control zen-control-leave js-zen-leave gl-text-gray-500"
           href="#"
@@ -324,15 +370,17 @@ export default {
         v-show="previewMarkdown"
         ref="markdown-preview"
         class="js-vue-md-preview md md-preview-holder"
-        v-html="markdownPreview"
+        v-html="markdownPreview /* eslint-disable-line vue/no-v-html */"
       ></div>
     </template>
-    <template v-if="previewMarkdown && !markdownPreviewLoading">
-      <div v-if="referencedCommands" class="referenced-commands" v-html="referencedCommands"></div>
-      <div v-if="shouldShowReferencedUsers" class="referenced-users">
-        <gl-icon name="warning-solid" />
-        <span v-html="addMultipleToDiscussionWarning"></span>
-      </div>
-    </template>
+    <div
+      v-if="referencedCommands && previewMarkdown && !markdownPreviewLoading"
+      class="referenced-commands"
+      v-html="referencedCommands /* eslint-disable-line vue/no-v-html */"
+    ></div>
+    <div v-if="shouldShowReferencedUsers" class="referenced-users">
+      <gl-icon name="warning-solid" />
+      <span v-html="addMultipleToDiscussionWarning /* eslint-disable-line vue/no-v-html */"></span>
+    </div>
   </div>
 </template>

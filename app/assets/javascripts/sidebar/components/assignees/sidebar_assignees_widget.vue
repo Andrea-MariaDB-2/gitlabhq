@@ -1,10 +1,8 @@
 <script>
 import { GlDropdownItem } from '@gitlab/ui';
-import { cloneDeep } from 'lodash';
 import Vue from 'vue';
 import createFlash from '~/flash';
-import { getIdFromGraphQLId } from '~/graphql_shared/utils';
-import { IssuableType } from '~/issue_show/constants';
+import { IssuableType } from '~/issues/constants';
 import { __, n__ } from '~/locale';
 import SidebarAssigneesRealtime from '~/sidebar/components/assignees/assignees_realtime.vue';
 import IssuableAssignees from '~/sidebar/components/assignees/issuable_assignees.vue';
@@ -97,9 +95,15 @@ export default {
         return data.workspace?.issuable;
       },
       result({ data }) {
+        if (!data) {
+          return;
+        }
         const issuable = data.workspace?.issuable;
         if (issuable) {
-          this.selected = cloneDeep(issuable.assignees.nodes);
+          this.selected = issuable.assignees.nodes.map((node) => ({
+            ...node,
+            canMerge: node.mergeRequestInteraction?.canMerge || false,
+          }));
         }
       },
       error() {
@@ -110,7 +114,7 @@ export default {
   computed: {
     shouldEnableRealtime() {
       // Note: Realtime is only available on issues right now, future support for MR wil be built later.
-      return this.glFeatures.realTimeIssueSidebar && this.issuableType === IssuableType.Issue;
+      return this.issuableType === IssuableType.Issue;
     },
     queryVariables() {
       return {
@@ -139,6 +143,7 @@ export default {
         username: gon?.current_username,
         name: gon?.current_user_fullname,
         avatarUrl: gon?.current_user_avatar_url,
+        canMerge: this.issuable?.userPermissions?.canMerge || false,
       };
     },
     signedIn() {
@@ -173,7 +178,7 @@ export default {
         })
         .then(({ data }) => {
           this.$emit('assignees-updated', {
-            id: getIdFromGraphQLId(data.issuableSetAssignees.issuable.id),
+            id: data.issuableSetAssignees.issuable.id,
             assignees: data.issuableSetAssignees.issuable.assignees.nodes,
           });
           return data;
@@ -204,8 +209,8 @@ export default {
     expandWidget() {
       this.$refs.toggle.expand();
     },
-    focusSearch() {
-      this.$refs.userSelect.focusSearch();
+    showDropdown() {
+      this.$refs.userSelect.showDropdown();
     },
     showError() {
       createFlash({ message: __('An error occurred while fetching participants.') });
@@ -234,11 +239,11 @@ export default {
       :initial-loading="isAssigneesLoading"
       :title="assigneeText"
       :is-dirty="isDirty"
-      @open="focusSearch"
+      @open="showDropdown"
       @close="saveAssignees"
     >
       <template #collapsed>
-        <slot name="collapsed" :users="assignees" :on-click="expandWidget"></slot>
+        <slot name="collapsed" :users="assignees"></slot>
         <issuable-assignees
           :users="assignees"
           :issuable-type="issuableType"
@@ -254,12 +259,13 @@ export default {
           :text="$options.i18n.assignees"
           :header-text="$options.i18n.assignTo"
           :iid="iid"
+          :issuable-id="issuableId"
           :full-path="fullPath"
           :allow-multiple-assignees="allowMultipleAssignees"
           :current-user="currentUser"
           :issuable-type="issuableType"
           :is-editing="edit"
-          class="gl-w-full dropdown-menu-user"
+          class="gl-w-full dropdown-menu-user gl-mt-n3"
           @toggle="collapseWidget"
           @error="showError"
           @input="setDirtyState"

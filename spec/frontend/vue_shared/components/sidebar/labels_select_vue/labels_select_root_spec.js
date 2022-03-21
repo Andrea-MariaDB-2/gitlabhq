@@ -1,4 +1,5 @@
-import { shallowMount, createLocalVue } from '@vue/test-utils';
+import { shallowMount } from '@vue/test-utils';
+import Vue, { nextTick } from 'vue';
 import Vuex from 'vuex';
 
 import { isInViewport } from '~/lib/utils/common_utils';
@@ -18,8 +19,7 @@ jest.mock('~/lib/utils/common_utils', () => ({
   isInViewport: jest.fn().mockReturnValue(true),
 }));
 
-const localVue = createLocalVue();
-localVue.use(Vuex);
+Vue.use(Vuex);
 
 describe('LabelsSelectRoot', () => {
   let wrapper;
@@ -27,7 +27,6 @@ describe('LabelsSelectRoot', () => {
 
   const createComponent = (config = mockConfig, slots = {}) => {
     wrapper = shallowMount(LabelsSelectRoot, {
-      localVue,
       slots,
       store,
       propsData: config,
@@ -140,27 +139,26 @@ describe('LabelsSelectRoot', () => {
       ${'embedded'}   | ${'is-embedded'}
     `(
       'renders component root element with CSS class `$cssClass` when `state.variant` is "$variant"',
-      ({ variant, cssClass }) => {
+      async ({ variant, cssClass }) => {
         createComponent({
           ...mockConfig,
           variant,
         });
 
-        return wrapper.vm.$nextTick(() => {
-          expect(wrapper.classes()).toContain(cssClass);
-        });
+        await nextTick();
+        expect(wrapper.classes()).toContain(cssClass);
       },
     );
 
     it('renders `dropdown-value-collapsed` component when `allowLabelCreate` prop is `true`', async () => {
       createComponent();
-      await wrapper.vm.$nextTick;
+      await nextTick;
       expect(wrapper.find(DropdownValueCollapsed).exists()).toBe(true);
     });
 
     it('renders `dropdown-title` component', async () => {
       createComponent();
-      await wrapper.vm.$nextTick;
+      await nextTick;
       expect(wrapper.find(DropdownTitle).exists()).toBe(true);
     });
 
@@ -168,7 +166,7 @@ describe('LabelsSelectRoot', () => {
       createComponent(mockConfig, {
         default: 'None',
       });
-      await wrapper.vm.$nextTick;
+      await nextTick;
 
       const valueComp = wrapper.find(DropdownValue);
 
@@ -179,14 +177,14 @@ describe('LabelsSelectRoot', () => {
     it('renders `dropdown-button` component when `showDropdownButton` prop is `true`', async () => {
       createComponent();
       wrapper.vm.$store.dispatch('toggleDropdownButton');
-      await wrapper.vm.$nextTick;
+      await nextTick;
       expect(wrapper.find(DropdownButton).exists()).toBe(true);
     });
 
     it('renders `dropdown-contents` component when `showDropdownButton` & `showDropdownContents` prop is `true`', async () => {
       createComponent();
       wrapper.vm.$store.dispatch('toggleDropdownContents');
-      await wrapper.vm.$nextTick;
+      await nextTick;
       expect(wrapper.find(DropdownContents).exists()).toBe(true);
     });
 
@@ -199,22 +197,20 @@ describe('LabelsSelectRoot', () => {
             wrapper.vm.$store.dispatch('toggleDropdownContents');
           });
 
-          it('set direction when out of viewport', () => {
+          it('set direction when out of viewport', async () => {
             isInViewport.mockImplementation(() => false);
             wrapper.vm.setContentIsOnViewport(wrapper.vm.$store.state);
 
-            return wrapper.vm.$nextTick().then(() => {
-              expect(wrapper.find(DropdownContents).props('renderOnTop')).toBe(true);
-            });
+            await nextTick();
+            expect(wrapper.find(DropdownContents).props('renderOnTop')).toBe(true);
           });
 
-          it('does not set direction when inside of viewport', () => {
+          it('does not set direction when inside of viewport', async () => {
             isInViewport.mockImplementation(() => true);
             wrapper.vm.setContentIsOnViewport(wrapper.vm.$store.state);
 
-            return wrapper.vm.$nextTick().then(() => {
-              expect(wrapper.find(DropdownContents).props('renderOnTop')).toBe(false);
-            });
+            await nextTick();
+            expect(wrapper.find(DropdownContents).props('renderOnTop')).toBe(false);
           });
         },
       );

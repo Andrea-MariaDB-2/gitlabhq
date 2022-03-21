@@ -1,6 +1,7 @@
 <script>
-/* eslint-disable vue/no-v-html */
+import { GlSafeHtmlDirective } from '@gitlab/ui';
 import { glEmojiTag } from '~/emoji';
+import { mergeUrlParams } from '~/lib/utils/url_utility';
 
 import { s__ } from '~/locale';
 import AddRequest from './add_request.vue';
@@ -12,6 +13,9 @@ export default {
     AddRequest,
     DetailedMetric,
     RequestSelector,
+  },
+  directives: {
+    SafeHtml: GlSafeHtmlDirective,
   },
   props: {
     store: {
@@ -120,6 +124,9 @@ export default {
       const fileName = this.requests[0].truncatedUrl;
       return `${fileName}_perf_bar_${Date.now()}.json`;
     },
+    memoryReportPath() {
+      return mergeUrlParams({ performance_bar: 'memory' }, window.location.href);
+    },
   },
   mounted() {
     this.currentRequest = this.requestId;
@@ -127,8 +134,16 @@ export default {
   methods: {
     changeCurrentRequest(newRequestId) {
       this.currentRequest = newRequestId;
+      this.$emit('change-request', newRequestId);
+    },
+    flamegraphPath(mode) {
+      return mergeUrlParams(
+        { performance_bar: 'flamegraph', stackprof_mode: mode },
+        window.location.href,
+      );
     },
   },
+  safeHtmlConfig: { ADD_TAGS: ['gl-emoji'] },
 };
 </script>
 <template>
@@ -144,7 +159,7 @@ export default {
           class="current-host"
           :class="{ canary: currentRequest.details.host.canary }"
         >
-          <span v-html="birdEmoji"></span>
+          <span v-safe-html:[$options.safeHtmlConfig]="birdEmoji"></span>
           {{ currentRequest.details.host.hostname }}
         </span>
       </div>
@@ -169,6 +184,29 @@ export default {
       <div v-if="currentRequest.details" id="peek-download" class="view">
         <a class="gl-text-blue-200" :download="downloadName" :href="downloadPath">{{
           s__('PerformanceBar|Download')
+        }}</a>
+      </div>
+      <div
+        v-if="currentRequest.details && env === 'development'"
+        id="peek-memory-report"
+        class="view"
+      >
+        <a class="gl-text-blue-200" :href="memoryReportPath">{{
+          s__('PerformanceBar|Memory report')
+        }}</a>
+      </div>
+      <div v-if="currentRequest.details" id="peek-flamegraph" class="view">
+        <span class="gl-text-white-200">{{ s__('PerformanceBar|Flamegraph with mode:') }}</span>
+        <a class="gl-text-blue-200" :href="flamegraphPath('wall')">{{
+          s__('PerformanceBar|wall')
+        }}</a>
+        /
+        <a class="gl-text-blue-200" :href="flamegraphPath('cpu')">{{
+          s__('PerformanceBar|cpu')
+        }}</a>
+        /
+        <a class="gl-text-blue-200" :href="flamegraphPath('object')">{{
+          s__('PerformanceBar|object')
         }}</a>
       </div>
       <a v-if="statsUrl" class="gl-text-blue-200 view" :href="statsUrl">{{

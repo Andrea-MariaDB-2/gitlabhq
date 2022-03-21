@@ -19,15 +19,15 @@ exports[`PackageTitle renders with tags 1`] = `
         <div
           class="gl-display-flex gl-flex-direction-column"
         >
-          <h1
-            class="gl-font-size-h1 gl-mt-3 gl-mb-2"
+          <h2
+            class="gl-font-size-h1 gl-mt-3 gl-mb-0"
             data-testid="title"
           >
             @gitlab-org/package-15
-          </h1>
+          </h2>
            
           <div
-            class="gl-display-flex gl-align-items-center gl-text-gray-500 gl-mt-1"
+            class="gl-display-flex gl-align-items-center gl-text-gray-500 gl-mt-3"
           >
             <gl-icon-stub
               class="gl-mr-3"
@@ -117,15 +117,15 @@ exports[`PackageTitle renders without tags 1`] = `
         <div
           class="gl-display-flex gl-flex-direction-column"
         >
-          <h1
-            class="gl-font-size-h1 gl-mt-3 gl-mb-2"
+          <h2
+            class="gl-font-size-h1 gl-mt-3 gl-mb-0"
             data-testid="title"
           >
             @gitlab-org/package-15
-          </h1>
+          </h2>
            
           <div
-            class="gl-display-flex gl-align-items-center gl-text-gray-500 gl-mt-1"
+            class="gl-display-flex gl-align-items-center gl-text-gray-500 gl-mt-3"
           >
             <gl-icon-stub
               class="gl-mr-3"
@@ -175,15 +175,6 @@ exports[`PackageTitle renders without tags 1`] = `
             size="s"
             text="800.00 KiB"
             texttooltip=""
-          />
-        </div>
-        <div
-          class="gl-display-flex gl-align-items-center gl-mr-5"
-        >
-          <package-tags-stub
-            hidelabel="true"
-            tagdisplaylimit="2"
-            tags="[object Object],[object Object],[object Object]"
           />
         </div>
       </div>

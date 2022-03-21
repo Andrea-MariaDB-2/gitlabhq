@@ -6,12 +6,16 @@ info: To determine the technical writer assigned to the Stage/Group associated w
 
 # Go proxy for GitLab **(FREE)**
 
-> - [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/27376) in GitLab Premium 13.1.
+> - [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/27376) in GitLab 13.1.
 > - It's deployed behind a feature flag, disabled by default.
 > - It's disabled for GitLab.com.
-> - It's not recommended for production use.
 > - To use it in GitLab self-managed instances, ask a GitLab administrator to [enable it](#enable-the-go-proxy).
-> - [Moved](https://gitlab.com/gitlab-org/gitlab/-/issues/221259) to GitLab Free in 13.3.
+> - [Moved](https://gitlab.com/gitlab-org/gitlab/-/issues/221259) from GitLab Premium to GitLab Free in 13.3.
+
+WARNING:
+The Go package registry for GitLab is under development and isn't ready for production use due to
+limited functionality. This [epic](https://gitlab.com/groups/gitlab-org/-/epics/3043) details the remaining
+work and timelines to make it production ready.
 
 With the Go proxy for GitLab, every project in GitLab can be fetched with the
 [Go proxy protocol](https://proxy.golang.org/).
@@ -140,8 +144,8 @@ If you're unfamiliar with managing dependencies in Go, or Go in general, review
 the following documentation:
 
 - [Dependency Management in Go](../../../development/go_guide/dependencies.md)
-- [Go Modules Reference](https://golang.org/ref/mod)
-- [Documentation (`golang.org`)](https://golang.org/doc/)
+- [Go Modules Reference](https://go.dev/ref/mod)
+- [Documentation (`golang.org`)](https://go.dev/doc/)
 - [Learn (`go.dev/learn`)](https://go.dev/learn/)
 
 ### Set environment variables

@@ -2,6 +2,7 @@
 
 module Ci
   class JobArtifact < Ci::ApplicationRecord
+    include IgnorableColumns
     include AfterCommitQueue
     include ObjectStorage::BackgroundMove
     include UpdateProjectStatistics
@@ -10,6 +11,7 @@ module Ci
     include Artifactable
     include FileStoreMounter
     include EachBatch
+    include Gitlab::Utils::StrongMemoize
 
     TEST_REPORT_FILE_TYPES = %w[junit].freeze
     COVERAGE_REPORT_FILE_TYPES = %w[cobertura].freeze
@@ -119,7 +121,13 @@ module Ci
     belongs_to :project
     belongs_to :job, class_name: "Ci::Build", foreign_key: :job_id
 
+    # We will start using this column once we complete https://gitlab.com/gitlab-org/gitlab/-/issues/285597
+    ignore_column :original_filename, remove_with: '14.7', remove_after: '2022-11-22'
+
     mount_file_store_uploader JobArtifactUploader
+
+    skip_callback :save, :after, :store_file!, if: :store_after_commit?
+    after_commit :store_file_after_commit!, on: [:create, :update], if: :store_after_commit?
 
     validates :file_format, presence: true, unless: :trace?, on: :create
     validate :validate_file_format!, unless: :trace?, on: :create
@@ -129,6 +137,7 @@ module Ci
 
     scope :not_expired, -> { where('expire_at IS NULL OR expire_at > ?', Time.current) }
     scope :for_sha, ->(sha, project_id) { joins(job: :pipeline).where(ci_pipelines: { sha: sha, project_id: project_id }) }
+    scope :for_job_ids, ->(job_ids) { where(job_id: job_ids) }
     scope :for_job_name, ->(name) { joins(:job).where(ci_builds: { name: name }) }
 
     scope :with_job, -> { joins(:job).includes(:job) }
@@ -172,9 +181,7 @@ module Ci
     end
 
     scope :erasable, -> do
-      types = self.file_types.reject { |file_type| NON_ERASABLE_FILE_TYPES.include?(file_type) }.values
-
-      where(file_type: types)
+      where(file_type: self.erasable_file_types)
     end
 
     scope :downloadable, -> { where(file_type: DOWNLOADABLE_TYPES) }
@@ -182,7 +189,6 @@ module Ci
     scope :order_expired_desc, -> { order(expire_at: :desc) }
     scope :with_destroy_preloads, -> { includes(project: [:route, :statistics]) }
 
-    scope :scoped_project, -> { where('ci_job_artifacts.project_id = projects.id') }
     scope :for_project, ->(project) { where(project_id: project) }
     scope :created_in_time_range, ->(from: nil, to: nil) { where(created_at: from..to) }
 
@@ -232,6 +238,17 @@ module Ci
       hashed_path: 2
     }
 
+    # `locked` will be populated from the source of truth on Ci::Pipeline
+    # in order to clean up expired job artifacts in a performant way.
+    # The values should be the same as `Ci::Pipeline.lockeds` with the
+    # additional value of `unknown` to indicate rows that have not
+    # yet been populated from the parent Ci::Pipeline
+    enum locked: {
+      unlocked: 0,
+      artifacts_locked: 1,
+      unknown: 2
+    }, _prefix: :artifact
+
     def validate_file_format!
       unless TYPE_AND_FORMAT_PAIRS[self.file_type&.to_sym] == self.file_format&.to_sym
         errors.add(:base, _('Invalid file format with specified file type'))
@@ -242,6 +259,10 @@ module Ci
       return unless file_types.include?(file_type)
 
       [file_type]
+    end
+
+    def self.erasable_file_types
+      self.file_types.keys - NON_ERASABLE_FILE_TYPES
     end
 
     def self.total_size
@@ -325,7 +346,20 @@ module Ci
       }
     end
 
+    def store_after_commit?
+      strong_memoize(:store_after_commit) do
+        trace? && JobArtifactUploader.direct_upload_enabled?
+      end
+    end
+
     private
+
+    def store_file_after_commit!
+      return unless previous_changes.key?(:file)
+
+      store_file!
+      update_file_store
+    end
 
     def set_size
       self.size = file.size

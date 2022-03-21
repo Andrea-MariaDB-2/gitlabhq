@@ -33,7 +33,7 @@ class GlEmoji extends HTMLElement {
           this.dataset.unicodeVersion = unicodeVersion;
 
           emojiUnicode = emojiInfo.e;
-          this.innerHTML = emojiInfo.e;
+          this.textContent = emojiInfo.e;
 
           this.title = emojiInfo.d;
         }
@@ -64,10 +64,12 @@ class GlEmoji extends HTMLElement {
           this.classList.add('emoji-icon');
           this.classList.add(fallbackSpriteClass);
         } else if (hasImageFallback) {
-          this.innerHTML = emojiImageTag(name, fallbackSrc);
+          this.innerHTML = '';
+          this.appendChild(emojiImageTag(name, fallbackSrc));
         } else {
           const src = emojiFallbackImageSrc(name);
-          this.innerHTML = emojiImageTag(name, src);
+          this.innerHTML = '';
+          this.appendChild(emojiImageTag(name, src));
         }
       }
     });

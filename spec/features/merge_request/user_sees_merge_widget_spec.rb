@@ -17,6 +17,9 @@ RSpec.describe 'Merge request > User sees merge widget', :js do
     project.add_maintainer(user)
     project_only_mwps.add_maintainer(user)
     sign_in(user)
+
+    stub_feature_flags(refactor_mr_widgets_extensions: false)
+    stub_feature_flags(refactor_mr_widgets_extensions_user: false)
   end
 
   context 'new merge request', :sidekiq_might_not_need_inline do
@@ -45,18 +48,12 @@ RSpec.describe 'Merge request > User sees merge widget', :js do
     let!(:environment) { create(:environment, project: project) }
     let(:sha)          { project.commit(merge_request.source_branch).sha }
     let(:pipeline)     { create(:ci_pipeline, status: 'success', sha: sha, project: project, ref: merge_request.source_branch) }
-    let(:build)        { create(:ci_build, :success, pipeline: pipeline) }
-
-    let!(:deployment) do
-      create(:deployment, :succeed,
-                          environment: environment,
-                          ref: merge_request.source_branch,
-                          deployable: build,
-                          sha: sha)
-    end
+    let!(:build)       { create(:ci_build, :with_deployment, :success, environment: environment.name, pipeline: pipeline) }
+    let!(:deployment)  { build.deployment }
 
     before do
       merge_request.update!(head_pipeline: pipeline)
+      deployment.update!(status: :success)
       visit project_merge_request_path(project, merge_request)
     end
 
@@ -102,18 +99,16 @@ RSpec.describe 'Merge request > User sees merge widget', :js do
 
   context 'view merge request with external CI service' do
     before do
-      create(:service, project: project,
-                       active: true,
-                       type: 'DroneCiService',
-                       category: 'ci')
+      create(:drone_ci_integration, project: project)
 
       visit project_merge_request_path(project, merge_request)
     end
 
-    it 'has danger button while waiting for external CI status' do
+    it 'has merge button with confirm variant while waiting for external CI status' do
       # Wait for the `ci_status` and `merge_check` requests
       wait_for_requests
-      expect(page).to have_selector('.accept-merge-request.btn-danger')
+
+      expect(page).to have_selector('.accept-merge-request.btn-confirm')
     end
   end
 
@@ -131,10 +126,27 @@ RSpec.describe 'Merge request > User sees merge widget', :js do
       visit project_merge_request_path(project, merge_request)
     end
 
-    it 'has danger button when not succeeded' do
+    it 'has merge button that shows modal when pipeline does not succeeded' do
       # Wait for the `ci_status` and `merge_check` requests
       wait_for_requests
-      expect(page).to have_selector('.accept-merge-request.btn-danger')
+
+      click_button 'Merge...'
+
+      expect(page).to have_selector('[data-testid="merge-failed-pipeline-confirmation-dialog"]', visible: true)
+    end
+
+    it 'allows me to merge with a failed pipeline' do
+      modal_selector = '[data-testid="merge-failed-pipeline-confirmation-dialog"]'
+
+      wait_for_requests
+
+      click_button 'Merge...'
+
+      page.within(modal_selector) do
+        click_button 'Merge unverified changes'
+      end
+
+      expect(find('.media-body h4')).to have_content('Merging!')
     end
   end
 
@@ -432,7 +444,7 @@ RSpec.describe 'Merge request > User sees merge widget', :js do
 
     it 'user cannot remove source branch', :sidekiq_might_not_need_inline do
       expect(page).not_to have_field('remove-source-branch-input')
-      expect(page).to have_content('The source branch will be deleted')
+      expect(page).to have_content('Deletes the source branch')
     end
   end
 

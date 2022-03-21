@@ -4,17 +4,25 @@ module Gitlab
   module SidekiqMiddleware
     module DuplicateJobs
       module Strategies
-        module DeduplicatesWhenScheduling
+        class DeduplicatesWhenScheduling < Base
+          extend ::Gitlab::Utils::Override
+          include ::Gitlab::Utils::StrongMemoize
+
+          override :initialize
           def initialize(duplicate_job)
             @duplicate_job = duplicate_job
           end
 
+          override :schedule
           def schedule(job)
             if deduplicatable_job? && check! && duplicate_job.duplicate?
               job['duplicate-of'] = duplicate_job.existing_jid
 
               if duplicate_job.idempotent?
-                Gitlab::SidekiqLogging::DeduplicationLogger.instance.log(
+                duplicate_job.update_latest_wal_location!
+                duplicate_job.set_deduplicated_flag!(expiry)
+
+                Gitlab::SidekiqLogging::DeduplicationLogger.instance.deduplicated_log(
                   job, "dropped #{strategy_name}", duplicate_job.options)
                 return false
               end
@@ -23,7 +31,16 @@ module Gitlab
             yield
           end
 
+          override :perform
+          def perform(job)
+            update_job_wal_location!(job)
+          end
+
           private
+
+          def update_job_wal_location!(job)
+            job['dedup_wal_locations'] = duplicate_job.latest_wal_locations if duplicate_job.latest_wal_locations.present?
+          end
 
           def deduplicatable_job?
             !duplicate_job.scheduled? || duplicate_job.options[:including_scheduled]
@@ -34,11 +51,16 @@ module Gitlab
           end
 
           def expiry
-            return DuplicateJob::DUPLICATE_KEY_TTL unless duplicate_job.scheduled?
+            strong_memoize(:expiry) do
+              next duplicate_job.duplicate_key_ttl unless duplicate_job.scheduled?
 
-            time_diff = duplicate_job.scheduled_at.to_i - Time.now.to_i
+              time_diff = [
+                duplicate_job.scheduled_at.to_i - Time.now.to_i,
+                0
+              ].max
 
-            time_diff > 0 ? time_diff : DuplicateJob::DUPLICATE_KEY_TTL
+              time_diff + duplicate_job.duplicate_key_ttl
+            end
           end
         end
       end

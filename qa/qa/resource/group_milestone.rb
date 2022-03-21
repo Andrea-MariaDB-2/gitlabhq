@@ -3,21 +3,39 @@
 module QA
   module Resource
     class GroupMilestone < Base
-      attr_writer :start_date, :due_date
-
-      attribute :id
-      attribute :title
-      attribute :description
+      attributes :id,
+                 :iid,
+                 :title,
+                 :description,
+                 :start_date,
+                 :due_date,
+                 :updated_at,
+                 :created_at
 
       attribute :group do
         Group.fabricate_via_api! do |resource|
-          resource.name = 'group-with-milestone'
+          resource.name = "group-with-milestone-#{SecureRandom.hex(4)}"
         end
       end
 
       def initialize
         @title = "group-milestone-#{SecureRandom.hex(4)}"
         @description = "My awesome group milestone."
+      end
+
+      def fabricate!
+        group.visit!
+
+        Page::Group::Menu.perform(&:go_to_milestones)
+        Page::Group::Milestone::Index.perform(&:click_new_milestone_link)
+
+        Page::Group::Milestone::New.perform do |new_milestone|
+          new_milestone.set_title(@title)
+          new_milestone.set_description(@description)
+          new_milestone.set_start_date(@start_date) if @start_date
+          new_milestone.set_due_date(@due_date) if @due_date
+          new_milestone.click_create_milestone_button
+        end
       end
 
       def api_get_path
@@ -38,19 +56,21 @@ module QA
         end
       end
 
-      def fabricate!
-        group.visit!
+      protected
 
-        Page::Group::Menu.perform(&:go_to_milestones)
-        Page::Group::Milestone::Index.perform(&:click_new_milestone_link)
+      # Return subset of fields for comparing milestones
+      #
+      # @return [Hash]
+      def comparable
+        reload! unless api_response
 
-        Page::Group::Milestone::New.perform do |new_milestone|
-          new_milestone.set_title(@title)
-          new_milestone.set_description(@description)
-          new_milestone.set_start_date(@start_date) if @start_date
-          new_milestone.set_due_date(@due_date) if @due_date
-          new_milestone.click_create_milestone_button
-        end
+        api_response.slice(
+          :title,
+          :description,
+          :state,
+          :due_date,
+          :start_date
+        )
       end
     end
   end

@@ -41,9 +41,9 @@
         echo "Adopting Helm v2 manifests from $release"
         # some resource kinds must be listed explicitly https://github.com/kubernetes/kubernetes/issues/42885
         for name in $(kubectl -n "$KUBE_NAMESPACE" get all,ingress,daemonset -o name -l chart="$chart"); do
-          kubectl annotate --overwrite "$name" meta.helm.sh/release-name="$release"
-          kubectl annotate --overwrite "$name" meta.helm.sh/release-namespace="$KUBE_NAMESPACE"
-          kubectl label --overwrite "$name" app.kubernetes.io/managed-by=Helm
+          kubectl annotate -n "$KUBE_NAMESPACE" --overwrite "$name" meta.helm.sh/release-name="$release"
+          kubectl annotate -n "$KUBE_NAMESPACE" --overwrite "$name" meta.helm.sh/release-namespace="$KUBE_NAMESPACE"
+          kubectl label -n "$KUBE_NAMESPACE" --overwrite "$name" app.kubernetes.io/managed-by=Helm
         done
       done
     # migrate each release
@@ -72,7 +72,7 @@
   rules:
     - if: '$MIGRATE_HELM_2TO3 != "true"'
       when: never
-    - if: '$CI_KUBERNETES_ACTIVE == null || $CI_KUBERNETES_ACTIVE == ""'
+    - if: '($CI_KUBERNETES_ACTIVE == null || $CI_KUBERNETES_ACTIVE == "") && ($KUBECONFIG == null || $KUBECONFIG == "")'
       when: never
     - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
       when: never
@@ -89,7 +89,7 @@ review:helm-2to3:cleanup:
   rules:
     - if: '$MIGRATE_HELM_2TO3 != "true" && $CLEANUP_HELM_2TO3 == null'
       when: never
-    - if: '$CI_KUBERNETES_ACTIVE == null || $CI_KUBERNETES_ACTIVE == ""'
+    - if: '($CI_KUBERNETES_ACTIVE == null || $CI_KUBERNETES_ACTIVE == "") && ($KUBECONFIG == null || $KUBECONFIG == "")'
       when: never
     - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
       when: never
@@ -104,7 +104,7 @@ review:helm-2to3:cleanup:
   rules:
     - if: '$MIGRATE_HELM_2TO3 != "true"'
       when: never
-    - if: '$CI_KUBERNETES_ACTIVE == null || $CI_KUBERNETES_ACTIVE == ""'
+    - if: '($CI_KUBERNETES_ACTIVE == null || $CI_KUBERNETES_ACTIVE == "") && ($KUBECONFIG == null || $KUBECONFIG == "")'
       when: never
     - if: '$CI_COMMIT_BRANCH != $CI_DEFAULT_BRANCH'
       when: never
@@ -119,7 +119,7 @@ staging:helm-2to3:cleanup:
   rules:
     - if: '$MIGRATE_HELM_2TO3 != "true" && $CLEANUP_HELM_2TO3 == null'
       when: never
-    - if: '$CI_KUBERNETES_ACTIVE == null || $CI_KUBERNETES_ACTIVE == ""'
+    - if: '($CI_KUBERNETES_ACTIVE == null || $CI_KUBERNETES_ACTIVE == "") && ($KUBECONFIG == null || $KUBECONFIG == "")'
       when: never
     - if: '$CI_COMMIT_BRANCH != $CI_DEFAULT_BRANCH'
       when: never
@@ -132,7 +132,7 @@ staging:helm-2to3:cleanup:
   rules:
     - if: '$MIGRATE_HELM_2TO3 != "true"'
       when: never
-    - if: '$CI_KUBERNETES_ACTIVE == null || $CI_KUBERNETES_ACTIVE == ""'
+    - if: '($CI_KUBERNETES_ACTIVE == null || $CI_KUBERNETES_ACTIVE == "") && ($KUBECONFIG == null || $KUBECONFIG == "")'
       when: never
     - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
       when: manual
@@ -145,7 +145,7 @@ production:helm-2to3:cleanup:
   rules:
     - if: '$MIGRATE_HELM_2TO3 != "true" && $CLEANUP_HELM_2TO3 == null'
       when: never
-    - if: '$CI_KUBERNETES_ACTIVE == null || $CI_KUBERNETES_ACTIVE == ""'
+    - if: '($CI_KUBERNETES_ACTIVE == null || $CI_KUBERNETES_ACTIVE == "") && ($KUBECONFIG == null || $KUBECONFIG == "")'
       when: never
     - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
       when: manual

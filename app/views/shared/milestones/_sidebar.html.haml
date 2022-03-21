@@ -79,7 +79,7 @@
           %span= milestone.issues_visible_to_user(current_user).count
         .title.hide-collapsed
           = s_('MilestoneSidebar|Issues')
-          %span.badge.badge-muted.badge-pill.gl-badge.sm= milestone.issues_visible_to_user(current_user).count
+          = gl_badge_tag milestone.issues_visible_to_user(current_user).count, variant: :muted, size: :sm
           - if show_new_issue_link?(project)
             = link_to new_project_issue_path(project, issue: { milestone_id: milestone.id }), class: "float-right", title: s_('MilestoneSidebar|New Issue') do
               = s_('MilestoneSidebar|New issue')
@@ -111,7 +111,7 @@
           %span= milestone.merge_requests.count
         .title.hide-collapsed
           = s_('MilestoneSidebar|Merge requests')
-          %span.badge.badge-muted.badge-pill.gl-badge.sm= milestone.merge_requests.count
+          = gl_badge_tag milestone.merge_requests.count, variant: :muted, size: :sm
         .value.hide-collapsed.bold
           - if !project || can?(current_user, :read_merge_request, project)
             %span.milestone-stat
@@ -161,11 +161,11 @@
     - milestone_ref = milestone.try(:to_reference, full: true)
     - if milestone_ref.present?
       .block.reference
-        .sidebar-collapsed-icon.dont-change-state
+        .sidebar-collapsed-icon.js-dont-change-state
           = clipboard_button(text: milestone_ref, title: s_('MilestoneSidebar|Copy reference'), placement: "left", boundary: 'viewport')
         .cross-project-reference.hide-collapsed
-          %span
+          %span.gl-display-inline-block.gl-text-truncate
             = s_('MilestoneSidebar|Reference:')
             %span{ title: milestone_ref }
               = milestone_ref
-          = clipboard_button(text: milestone_ref, title: s_('MilestoneSidebar|Copy reference'), placement: "left", boundary: 'viewport')
+          = clipboard_button(text: milestone_ref, title: s_('MilestoneSidebar|Copy reference'), placement: "left", boundary: 'viewport', class: 'btn-clipboard btn-transparent gl-float-right gl-bg-gray-10')

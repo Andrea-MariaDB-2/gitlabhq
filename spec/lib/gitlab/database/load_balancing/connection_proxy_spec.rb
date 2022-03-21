@@ -3,7 +3,9 @@
 require 'spec_helper'
 
 RSpec.describe Gitlab::Database::LoadBalancing::ConnectionProxy do
-  let(:proxy) { described_class.new }
+  let(:config) { Gitlab::Database::LoadBalancing::Configuration.new(ActiveRecord::Base) }
+  let(:load_balancer) { Gitlab::Database::LoadBalancing::LoadBalancer.new(config) }
+  let(:proxy) { described_class.new(load_balancer) }
 
   describe '#select' do
     it 'performs a read' do
@@ -35,9 +37,15 @@ RSpec.describe Gitlab::Database::LoadBalancing::ConnectionProxy do
     describe 'using a SELECT FOR UPDATE query' do
       it 'runs the query on the primary and sticks to it' do
         arel = double(:arel, locked: true)
+        session = Gitlab::Database::LoadBalancing::Session.new
+
+        allow(Gitlab::Database::LoadBalancing::Session).to receive(:current)
+          .and_return(session)
+
+        expect(session).to receive(:write!)
 
         expect(proxy).to receive(:write_using_load_balancer)
-          .with(:select_all, arel, 'foo', [], sticky: true)
+          .with(:select_all, arel, 'foo', [])
 
         proxy.select_all(arel, 'foo')
       end
@@ -58,8 +66,13 @@ RSpec.describe Gitlab::Database::LoadBalancing::ConnectionProxy do
   Gitlab::Database::LoadBalancing::ConnectionProxy::STICKY_WRITES.each do |name|
     describe "#{name}" do
       it 'runs the query on the primary and sticks to it' do
-        expect(proxy).to receive(:write_using_load_balancer)
-          .with(name, 'foo', sticky: true)
+        session = Gitlab::Database::LoadBalancing::Session.new
+
+        allow(Gitlab::Database::LoadBalancing::Session).to receive(:current)
+          .and_return(session)
+
+        expect(session).to receive(:write!)
+        expect(proxy).to receive(:write_using_load_balancer).with(name, 'foo')
 
         proxy.send(name, 'foo')
       end
@@ -69,7 +82,7 @@ RSpec.describe Gitlab::Database::LoadBalancing::ConnectionProxy do
   describe '.insert_all!' do
     before do
       ActiveRecord::Schema.define do
-        create_table :connection_proxy_bulk_insert, force: true do |t|
+        create_table :_test_connection_proxy_bulk_insert, force: true do |t|
           t.string :name, null: true
         end
       end
@@ -77,13 +90,13 @@ RSpec.describe Gitlab::Database::LoadBalancing::ConnectionProxy do
 
     after do
       ActiveRecord::Schema.define do
-        drop_table :connection_proxy_bulk_insert, force: true
+        drop_table :_test_connection_proxy_bulk_insert, force: true
       end
     end
 
     let(:model_class) do
       Class.new(ApplicationRecord) do
-        self.table_name = "connection_proxy_bulk_insert"
+        self.table_name = "_test_connection_proxy_bulk_insert"
       end
     end
 
@@ -108,7 +121,7 @@ RSpec.describe Gitlab::Database::LoadBalancing::ConnectionProxy do
   # We have an extra test for #transaction here to make sure that nested queries
   # are also sent to a primary.
   describe '#transaction' do
-    let(:session) { double(:session) }
+    let(:session) { Gitlab::Database::LoadBalancing::Session.new }
 
     before do
       allow(Gitlab::Database::LoadBalancing::Session).to receive(:current)
@@ -127,9 +140,9 @@ RSpec.describe Gitlab::Database::LoadBalancing::ConnectionProxy do
 
       context 'with a read query' do
         it 'runs the transaction and any nested queries on the replica' do
-          expect(proxy.load_balancer).to receive(:read)
+          expect(load_balancer).to receive(:read)
             .twice.and_yield(replica)
-          expect(proxy.load_balancer).not_to receive(:read_write)
+          expect(load_balancer).not_to receive(:read_write)
           expect(session).not_to receive(:write!)
 
           proxy.transaction { proxy.select('true') }
@@ -138,8 +151,8 @@ RSpec.describe Gitlab::Database::LoadBalancing::ConnectionProxy do
 
       context 'with a write query' do
         it 'raises an exception' do
-          allow(proxy.load_balancer).to receive(:read).and_yield(replica)
-          allow(proxy.load_balancer).to receive(:read_write).and_yield(replica)
+          allow(load_balancer).to receive(:read).and_yield(replica)
+          allow(load_balancer).to receive(:read_write).and_yield(replica)
 
           expect do
             proxy.transaction { proxy.insert('something') }
@@ -162,9 +175,9 @@ RSpec.describe Gitlab::Database::LoadBalancing::ConnectionProxy do
 
       context 'with a read query' do
         it 'runs the transaction and any nested queries on the primary and stick to it' do
-          expect(proxy.load_balancer).to receive(:read_write)
+          expect(load_balancer).to receive(:read_write)
             .twice.and_yield(primary)
-          expect(proxy.load_balancer).not_to receive(:read)
+          expect(load_balancer).not_to receive(:read)
           expect(session).to receive(:write!)
 
           proxy.transaction { proxy.select('true') }
@@ -173,9 +186,9 @@ RSpec.describe Gitlab::Database::LoadBalancing::ConnectionProxy do
 
       context 'with a write query' do
         it 'runs the transaction and any nested queries on the primary and stick to it' do
-          expect(proxy.load_balancer).to receive(:read_write)
+          expect(load_balancer).to receive(:read_write)
             .twice.and_yield(primary)
-          expect(proxy.load_balancer).not_to receive(:read)
+          expect(load_balancer).not_to receive(:read)
           expect(session).to receive(:write!).twice
 
           proxy.transaction { proxy.insert('something') }
@@ -192,8 +205,8 @@ RSpec.describe Gitlab::Database::LoadBalancing::ConnectionProxy do
       proxy.foo('foo')
     end
 
-    it 'properly forwards trailing hash arguments' do
-      allow(proxy.load_balancer).to receive(:read_write)
+    it 'properly forwards keyword arguments' do
+      allow(load_balancer).to receive(:read_write)
 
       expect(proxy).to receive(:write_using_load_balancer).and_call_original
 
@@ -217,8 +230,8 @@ RSpec.describe Gitlab::Database::LoadBalancing::ConnectionProxy do
         proxy.foo('foo')
       end
 
-      it 'properly forwards trailing hash arguments' do
-        allow(proxy.load_balancer).to receive(:read)
+      it 'properly forwards keyword arguments' do
+        allow(load_balancer).to receive(:read)
 
         expect(proxy).to receive(:read_using_load_balancer).and_call_original
 
@@ -243,7 +256,7 @@ RSpec.describe Gitlab::Database::LoadBalancing::ConnectionProxy do
         allow(session).to receive(:use_replicas_for_read_queries?).and_return(false)
 
         expect(connection).to receive(:foo).with('foo')
-        expect(proxy.load_balancer).to receive(:read).and_yield(connection)
+        expect(load_balancer).to receive(:read).and_yield(connection)
 
         proxy.read_using_load_balancer(:foo, 'foo')
       end
@@ -255,7 +268,7 @@ RSpec.describe Gitlab::Database::LoadBalancing::ConnectionProxy do
         allow(session).to receive(:use_replicas_for_read_queries?).and_return(true)
 
         expect(connection).to receive(:foo).with('foo')
-        expect(proxy.load_balancer).to receive(:read).and_yield(connection)
+        expect(load_balancer).to receive(:read).and_yield(connection)
 
         proxy.read_using_load_balancer(:foo, 'foo')
       end
@@ -267,7 +280,7 @@ RSpec.describe Gitlab::Database::LoadBalancing::ConnectionProxy do
         allow(session).to receive(:use_replicas_for_read_queries?).and_return(true)
 
         expect(connection).to receive(:foo).with('foo')
-        expect(proxy.load_balancer).to receive(:read).and_yield(connection)
+        expect(load_balancer).to receive(:read).and_yield(connection)
 
         proxy.read_using_load_balancer(:foo, 'foo')
       end
@@ -280,7 +293,7 @@ RSpec.describe Gitlab::Database::LoadBalancing::ConnectionProxy do
 
         expect(connection).to receive(:foo).with('foo')
 
-        expect(proxy.load_balancer).to receive(:read_write)
+        expect(load_balancer).to receive(:read_write)
           .and_yield(connection)
 
         proxy.read_using_load_balancer(:foo, 'foo')
@@ -297,20 +310,12 @@ RSpec.describe Gitlab::Database::LoadBalancing::ConnectionProxy do
         .and_return(session)
     end
 
-    it 'uses but does not stick to the primary when sticking is disabled' do
-      expect(proxy.load_balancer).to receive(:read_write).and_yield(connection)
+    it 'uses but does not stick to the primary' do
+      expect(load_balancer).to receive(:read_write).and_yield(connection)
       expect(connection).to receive(:foo).with('foo')
       expect(session).not_to receive(:write!)
 
       proxy.write_using_load_balancer(:foo, 'foo')
-    end
-
-    it 'sticks to the primary when sticking is enabled' do
-      expect(proxy.load_balancer).to receive(:read_write).and_yield(connection)
-      expect(connection).to receive(:foo).with('foo')
-      expect(session).to receive(:write!)
-
-      proxy.write_using_load_balancer(:foo, 'foo', sticky: true)
     end
   end
 end

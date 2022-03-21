@@ -5,6 +5,42 @@ RSpec.describe QA::Resource::Base do
 
   let(:resource) { spy('resource') }
   let(:location) { 'http://location' }
+  let(:log_regex) { %r{==> Built a MyResource with username 'qa' via #{method} in [\d.\-e]+ seconds+} }
+
+  before do
+    allow(QA::Tools::TestResourceDataProcessor).to receive(:collect)
+    allow(QA::Tools::TestResourceDataProcessor).to receive(:write_to_file)
+  end
+
+  shared_context 'with simple resource' do
+    subject do
+      Class.new(QA::Resource::Base) do
+        def self.name
+          'MyResource'
+        end
+
+        attribute :test do
+          'block'
+        end
+
+        attribute :username do
+          'qa'
+        end
+
+        attribute :no_block
+
+        def fabricate!(*args)
+          'any'
+        end
+
+        def self.current_url
+          'http://stub'
+        end
+      end
+    end
+
+    let(:resource) { subject.new }
+  end
 
   shared_context 'with fabrication context' do
     subject do
@@ -55,21 +91,29 @@ RSpec.describe QA::Resource::Base do
   end
 
   describe '.fabricate_via_api!' do
-    include_context 'with fabrication context'
+    context 'when fabricating' do
+      include_context 'with fabrication context'
 
-    it_behaves_like 'fabrication method', :fabricate_via_api!
+      it_behaves_like 'fabrication method', :fabricate_via_api!
 
-    it 'instantiates the resource, calls resource method returns the resource' do
-      expect(resource).to receive(:fabricate_via_api!).and_return(location)
+      it 'instantiates the resource, calls resource method returns the resource' do
+        expect(resource).to receive(:fabricate_via_api!).and_return(location)
 
-      result = subject.fabricate_via_api!(resource: resource, parents: [])
+        result = subject.fabricate_via_api!(resource: resource, parents: [])
 
-      expect(result).to eq(resource)
+        expect(result).to eq(resource)
+      end
     end
 
     context "with debug log level" do
+      include_context 'with simple resource'
+
+      let(:method) { 'api' }
+
       before do
         allow(QA::Runtime::Logger).to receive(:debug)
+        allow(resource).to receive(:api_support?).and_return(true)
+        allow(resource).to receive(:fabricate_via_api!)
       end
 
       it 'logs the resource and build method' do
@@ -78,32 +122,39 @@ RSpec.describe QA::Resource::Base do
         subject.fabricate_via_api!('something', resource: resource, parents: [])
 
         expect(QA::Runtime::Logger).to have_received(:debug) do |&msg|
-          expect(msg.call).to match_regex(/==> Built a MyResource via api in [\d.\-e]+ seconds+/)
+          expect(msg.call).to match_regex(log_regex)
         end
       end
     end
   end
 
   describe '.fabricate_via_browser_ui!' do
-    include_context 'with fabrication context'
+    context 'when fabricating' do
+      include_context 'with fabrication context'
 
-    it_behaves_like 'fabrication method', :fabricate_via_browser_ui!, :fabricate!
+      it_behaves_like 'fabrication method', :fabricate_via_browser_ui!, :fabricate!
 
-    it 'instantiates the resource and calls resource method' do
-      subject.fabricate_via_browser_ui!('something', resource: resource, parents: [])
+      it 'instantiates the resource and calls resource method' do
+        subject.fabricate_via_browser_ui!('something', resource: resource, parents: [])
 
-      expect(resource).to have_received(:fabricate!).with('something')
-    end
+        expect(resource).to have_received(:fabricate!).with('something')
+      end
 
-    it 'returns fabrication resource' do
-      result = subject.fabricate_via_browser_ui!('something', resource: resource, parents: [])
+      it 'returns fabrication resource' do
+        result = subject.fabricate_via_browser_ui!('something', resource: resource, parents: [])
 
-      expect(result).to eq(resource)
+        expect(result).to eq(resource)
+      end
     end
 
     context "with debug log level" do
+      include_context 'with simple resource'
+
+      let(:method) { 'browser_ui' }
+
       before do
         allow(QA::Runtime::Logger).to receive(:debug)
+        # allow(resource).to receive(:fabricate!)
       end
 
       it 'logs the resource and build method' do
@@ -112,32 +163,10 @@ RSpec.describe QA::Resource::Base do
         subject.fabricate_via_browser_ui!('something', resource: resource, parents: [])
 
         expect(QA::Runtime::Logger).to have_received(:debug) do |&msg|
-          expect(msg.call).to match_regex(/==> Built a MyResource via browser_ui in [\d.\-e]+ seconds+/)
+          expect(msg.call).to match_regex(log_regex)
         end
       end
     end
-  end
-
-  shared_context 'with simple resource' do
-    subject do
-      Class.new(QA::Resource::Base) do
-        attribute :test do
-          'block'
-        end
-
-        attribute :no_block
-
-        def fabricate!
-          'any'
-        end
-
-        def self.current_url
-          'http://stub'
-        end
-      end
-    end
-
-    let(:resource) { subject.new }
   end
 
   describe '.attribute' do
@@ -272,15 +301,28 @@ RSpec.describe QA::Resource::Base do
   describe '#visit!' do
     include_context 'with simple resource'
 
+    let(:wait_for_requests_class) { QA::Support::WaitForRequests }
+
     before do
       allow(resource).to receive(:visit)
     end
 
     it 'calls #visit with the underlying #web_url' do
       allow(resource).to receive(:current_url).and_return(subject.current_url)
+      expect(wait_for_requests_class).to receive(:wait_for_requests).with({ skip_resp_code_check: false }).twice
 
       resource.web_url = subject.current_url
       resource.visit!
+
+      expect(resource).to have_received(:visit).with(subject.current_url)
+    end
+
+    it 'calls #visit with the underlying #web_url with skip_resp_code_check specified as true' do
+      allow(resource).to receive(:current_url).and_return(subject.current_url)
+      expect(wait_for_requests_class).to receive(:wait_for_requests).with({ skip_resp_code_check: true }).twice
+
+      resource.web_url = subject.current_url
+      resource.visit!(skip_resp_code_check: true)
 
       expect(resource).to have_received(:visit).with(subject.current_url)
     end

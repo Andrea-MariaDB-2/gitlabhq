@@ -1,10 +1,15 @@
 # frozen_string_literal: true
 
 require 'pathname'
+require 'forwardable'
+
+require_relative 'gitlab_edition'
 
 module Gitlab
-  def self.root
-    Pathname.new(File.expand_path('..', __dir__))
+  class << self
+    extend Forwardable
+
+    def_delegators :GitlabEdition, :root, :extensions, :ee?, :ee, :jh?, :jh
   end
 
   def self.version_info
@@ -44,9 +49,15 @@ module Gitlab
   INSTALLATION_TYPE = File.read(root.join("INSTALLATION_TYPE")).strip.freeze
   HTTP_PROXY_ENV_VARS = %w(http_proxy https_proxy HTTP_PROXY HTTPS_PROXY).freeze
 
+  def self.simulate_com?
+    return false unless Rails.env.development?
+
+    Gitlab::Utils.to_boolean(ENV['GITLAB_SIMULATE_SAAS'])
+  end
+
   def self.com?
     # Check `gl_subdomain?` as well to keep parity with gitlab.com
-    Gitlab.config.gitlab.url == Gitlab::Saas.com_url || gl_subdomain?
+    simulate_com? || Gitlab.config.gitlab.url == Gitlab::Saas.com_url || gl_subdomain?
   end
 
   def self.com
@@ -77,57 +88,12 @@ module Gitlab
     Gitlab::Saas.subdomain_regex === Gitlab.config.gitlab.url
   end
 
-  def self.dev_env_org_or_com?
-    dev_env_or_com? || org?
-  end
-
-  def self.dev_env_or_com?
-    Rails.env.development? || com?
+  def self.org_or_com?
+    org? || com?
   end
 
   def self.dev_or_test_env?
     Rails.env.development? || Rails.env.test?
-  end
-
-  def self.extensions
-    if jh?
-      %w[ee jh]
-    elsif ee?
-      %w[ee]
-    else
-      %w[]
-    end
-  end
-
-  def self.ee?
-    @is_ee ||=
-      # We use this method when the Rails environment is not loaded. This
-      # means that checking the presence of the License class could result in
-      # this method returning `false`, even for an EE installation.
-      #
-      # The `FOSS_ONLY` is always `string` or `nil`
-      # Thus the nil or empty string will result
-      # in using default value: false
-      #
-      # The behavior needs to be synchronised with
-      # config/helpers/is_ee_env.js
-      root.join('ee/app/models/license.rb').exist? &&
-        !%w[true 1].include?(ENV['FOSS_ONLY'].to_s)
-  end
-
-  def self.jh?
-    @is_jh ||=
-      ee? &&
-        root.join('jh').exist? &&
-        !%w[true 1].include?(ENV['EE_ONLY'].to_s)
-  end
-
-  def self.ee
-    yield if ee?
-  end
-
-  def self.jh
-    yield if jh?
   end
 
   def self.http_proxy_env?

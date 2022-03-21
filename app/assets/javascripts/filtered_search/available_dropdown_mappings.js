@@ -1,4 +1,4 @@
-import { sortMilestonesByDueDate } from '~/milestones/milestone_utils';
+import { sortMilestonesByDueDate } from '~/milestones/utils';
 import { mergeUrlParams } from '../lib/utils/url_utility';
 import DropdownAjaxFilter from './dropdown_ajax_filter';
 import DropdownEmoji from './dropdown_emoji';
@@ -76,6 +76,11 @@ export default class AvailableDropdownMappings {
         reference: null,
         gl: DropdownUser,
         element: this.container.querySelector('#js-dropdown-reviewer'),
+      },
+      attention: {
+        reference: null,
+        gl: DropdownUser,
+        element: this.container.getElementById('js-dropdown-attention-requested'),
       },
       'approved-by': {
         reference: null,

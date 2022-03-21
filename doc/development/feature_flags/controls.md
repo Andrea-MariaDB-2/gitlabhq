@@ -12,7 +12,8 @@ info: "See the Technical Writers assigned to Development Guidelines: https://abo
 To be able to turn on/off features behind feature flags in any of the
 GitLab Inc. provided environments such as staging and production, you need to
 have access to the [ChatOps](../chatops_on_gitlabcom.md) bot. The ChatOps bot
-is currently running on the ops instance, which is different from <https://gitlab.com> or <https://dev.gitlab.org>.
+is currently running on the ops instance, which is different from
+[GitLab.com](https://gitlab.com) or [`dev.gitlab.org`](https://dev.gitlab.org).
 
 Follow the ChatOps document to [request access](../chatops_on_gitlabcom.md#requesting-access).
 
@@ -35,12 +36,12 @@ This allows you to separate rolling out a feature from a deploy, making it
 easier to measure the impact of both separately.
 
 The GitLab feature library (using
-[Flipper](https://github.com/jnunemaker/flipper), and covered in the [Feature
-Flags process](https://about.gitlab.com/handbook/product-development-flow/feature-flag-lifecycle/) guide) supports rolling out changes to a percentage of
+[Flipper](https://github.com/jnunemaker/flipper), and covered in the
+[Feature Flags process](https://about.gitlab.com/handbook/product-development-flow/feature-flag-lifecycle/) guide) supports rolling out changes to a percentage of
 time to users. This in turn can be controlled using [GitLab ChatOps](../../ci/chatops/index.md).
 
-For an up to date list of feature flag commands please see [the source
-code](https://gitlab.com/gitlab-com/chatops/blob/master/lib/chatops/commands/feature.rb).
+For an up to date list of feature flag commands please see
+[the source code](https://gitlab.com/gitlab-com/chatops/blob/master/lib/chatops/commands/feature.rb).
 Note that all the examples in that file must be preceded by
 `/chatops run`.
 
@@ -50,15 +51,16 @@ change feature flags or you do not [have access](#access).
 
 ### Enabling a feature for pre-production testing
 
-As a first step in a feature rollout, you should enable the feature on <https://about.staging.gitlab.com>
-and <https://dev.gitlab.org>.
+As a first step in a feature rollout, you should enable the feature on
+[`about.staging.gitlab.com`](https://about.staging.gitlab.com)
+and [`dev.gitlab.org`](https://dev.gitlab.org).
 
 These two environments have different scopes.
 `dev.gitlab.org` is a production CE environment that has internal GitLab Inc.
 traffic and is used for some development and other related work.
 `staging.gitlab.com` has a smaller subset of GitLab.com database and repositories
 and does not have regular traffic. Staging is an EE instance and can give you
-a (very) rough estimate of how your feature will look/behave on GitLab.com.
+a (very) rough estimate of how your feature will look and behave on GitLab.com.
 Both of these instances are connected to Sentry so make sure you check the projects
 there for any exceptions while testing your feature after enabling the feature flag.
 
@@ -67,11 +69,11 @@ Slack channel for the stage the feature is relevant to. For example, use the
 `#s_monitor` channel for features developed by the Monitor stage, Health
 group.
 
-To enable a feature for 25% of all users, run the following in Slack:
+To enable a feature for 25% of the time, run the following in Slack:
 
 ```shell
-/chatops run feature set new_navigation_bar 25 --dev
-/chatops run feature set new_navigation_bar 25 --staging
+/chatops run feature set new_navigation_bar 25 --random --dev
+/chatops run feature set new_navigation_bar 25 --random --staging
 ```
 
 ### Enabling a feature for GitLab.com
@@ -90,14 +92,14 @@ This depends on the feature and what sort of impact it might have.
 
 Guidelines:
 
-1. If the feature meets the requirements for creating a [Change Management](https://about.gitlab.com/handbook/engineering/infrastructure/change-management/#feature-flags-and-the-change-management-process) issue, create a Change Management issue per [criticality guidelines](https://about.gitlab.com/handbook/engineering/infrastructure/change-management/#change-request-workflows).
-1. For simple, low-risk, easily reverted features, proceed and [enable the feature in `#production`](#process).
-1. For features that impact the user experience, consider notifying `#support_gitlab-com` beforehand.
+- Consider notifying `#support_gitlab-com` beforehand. So in case if the feature has any side effects on user experience, they can mitigate and disable the feature flag to reduce some impact.
+- If the feature meets the requirements for creating a [Change Management](https://about.gitlab.com/handbook/engineering/infrastructure/change-management/#feature-flags-and-the-change-management-process) issue, create a Change Management issue per [criticality guidelines](https://about.gitlab.com/handbook/engineering/infrastructure/change-management/#change-request-workflows).
+- For simple, low-risk, easily reverted features, proceed and [enable the feature in `#production`](#process).
 
 #### Process
 
 When enabling a feature flag rollout, the system will automatically block the
-chatops command from succeeding if there are active `"severity::1"` or `~"severity::2"`
+ChatOps command from succeeding if there are active `"severity::1"` or `~"severity::2"`
 incidents or in-progress change issues, for example:
 
 ```shell
@@ -119,7 +121,7 @@ command you make so people can understand the change if they need to.
 To enable a feature for 25% of the time, run the following in Slack:
 
 ```shell
-/chatops run feature set new_navigation_bar 25
+/chatops run feature set new_navigation_bar 25 --random
 ```
 
 This sets a feature flag to `true` based on the following formula:
@@ -227,7 +229,7 @@ Note, that if an actor based feature gate is present, switching the
 `default_enabled` attribute of the YAML definition from `false` to `true`
 will not have any effect. The feature gate must be deleted first.
 
-For example, a feature flag is set via chatops:
+For example, a feature flag is set via ChatOps:
 
 ```shell
 /chatops run feature set --project=gitlab-org/gitlab some_feature true
@@ -265,7 +267,7 @@ To disable a feature flag that has been enabled for a specific project you can r
 
 You cannot selectively disable feature flags for a specific project/group/user without applying a [specific method of implementing](index.md#selectively-disable-by-actor) the feature flags.
 
-If a feature flag is disabled via chatops, that will take precedence over the `default_enabled` value in the YML. In other words, you could have a feature enabled for on-premise installations but not for GitLab.com.
+If a feature flag is disabled via ChatOps, that will take precedence over the `default_enabled` value in the YML. In other words, you could have a feature enabled for on-premise installations but not for GitLab.com.
 
 ### Feature flag change logging
 
@@ -300,6 +302,19 @@ feature flag in the codebase increases the complexity of the application
 and reduces confidence in our testing suite covering all possible combinations.
 Additionally, a feature flag overwritten in some of the environments can result
 in undefined and untested system behavior.
+
+`development` type feature flags should have a short life-cycle because their purpose
+is for rolling out a persistent change. `development` feature flags that are older
+than 2 milestones are reported to engineering managers. The
+[report tool](https://gitlab.com/gitlab-org/gitlab-feature-flag-alert) runs on a
+monthly basis. For example, see [the report for December 2021](https://gitlab.com/gitlab-org/quality/triage-reports/-/issues/5480).
+
+If a `development` feature flag is still present in the codebase after 6 months we should
+take one of the following actions:
+
+- Enable the feature flag by default and remove it.
+- Convert it to an instance, group, or project setting.
+- Revert the changes if it's still disabled and not needed anymore.
 
 To remove a feature flag, open **one merge request** to make the changes. In the MR:
 

@@ -41,9 +41,10 @@ please list them here.
 <!--
 Please select the appropriate label from the following:
     ~"feature::addition"
-    ~"feature::maintenance"
-    ~"tooling::pipelines"
-    ~"tooling::workflow"
+    ~"type::maintenance"
+    ~"maintenance::refactor"
+    ~"maintenance::pipelines"
+    ~"maintenance::workflow"
 -->
 
-/label ~"feature::maintenance"
+/label ~"type::maintenance"

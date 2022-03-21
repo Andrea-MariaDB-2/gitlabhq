@@ -12,8 +12,52 @@ RSpec.describe IssuesFinder do
     context 'scope: all' do
       let(:scope) { 'all' }
 
-      it 'returns all issues' do
-        expect(issues).to contain_exactly(issue1, issue2, issue3, issue4, issue5)
+      context 'include_hidden and public_only params' do
+        let_it_be(:banned_user) { create(:user, :banned) }
+        let_it_be(:hidden_issue) { create(:issue, project: project1, author: banned_user) }
+        let_it_be(:confidential_issue) { create(:issue, project: project1, confidential: true) }
+
+        context 'when user is an admin', :enable_admin_mode do
+          let(:user) { create(:user, :admin) }
+
+          it 'returns all issues' do
+            expect(issues).to contain_exactly(issue1, issue2, issue3, issue4, issue5, hidden_issue, confidential_issue)
+          end
+        end
+
+        context 'when user is not an admin' do
+          context 'when public_only is true' do
+            let(:params) { { public_only: true } }
+
+            it 'returns public issues' do
+              expect(issues).to contain_exactly(issue1, issue2, issue3, issue4, issue5)
+            end
+          end
+
+          context 'when public_only is false' do
+            let(:params) { { public_only: false } }
+
+            it 'returns public and confidential issues' do
+              expect(issues).to contain_exactly(issue1, issue2, issue3, issue4, issue5, confidential_issue)
+            end
+          end
+
+          context 'when public_only is not set' do
+            it 'returns public and confidential issue' do
+              expect(issues).to contain_exactly(issue1, issue2, issue3, issue4, issue5, confidential_issue)
+            end
+          end
+
+          context 'when ban_user_feature_flag is false' do
+            before do
+              stub_feature_flags(ban_user_feature_flag: false)
+            end
+
+            it 'returns all issues' do
+              expect(issues).to contain_exactly(issue1, issue2, issue3, issue4, issue5, hidden_issue, confidential_issue)
+            end
+          end
+        end
       end
 
       context 'user does not have read permissions' do
@@ -426,146 +470,184 @@ RSpec.describe IssuesFinder do
         end
       end
 
-      shared_examples ':label_name parameter' do
-        context 'filtering by label' do
-          let(:params) { { label_name: label.title } }
+      context 'filtering by label' do
+        let(:params) { { label_name: label.title } }
 
-          it 'returns issues with that label' do
-            expect(issues).to contain_exactly(issue2)
+        it 'returns issues with that label' do
+          expect(issues).to contain_exactly(issue2)
+        end
+
+        context 'using NOT' do
+          let(:params) { { not: { label_name: label.title } } }
+
+          it 'returns issues that do not have that label' do
+            expect(issues).to contain_exactly(issue1, issue3, issue4, issue5)
           end
 
-          context 'using NOT' do
-            let(:params) { { not: { label_name: label.title } } }
+          # IssuableFinder first filters using the outer params (the ones not inside the `not` key.)
+          # Afterwards, it applies the `not` params to that resultset. This means that things inside the `not` param
+          # do not take precedence over the outer params with the same name.
+          context 'shadowing the same outside param' do
+            let(:params) { { label_name: label2.title, not: { label_name: label.title } } }
 
-            it 'returns issues that do not have that label' do
-              expect(issues).to contain_exactly(issue1, issue3, issue4, issue5)
+            it 'does not take precedence over labels outside NOT' do
+              expect(issues).to contain_exactly(issue3)
             end
+          end
 
-            # IssuableFinder first filters using the outer params (the ones not inside the `not` key.)
-            # Afterwards, it applies the `not` params to that resultset. This means that things inside the `not` param
-            # do not take precedence over the outer params with the same name.
-            context 'shadowing the same outside param' do
-              let(:params) { { label_name: label2.title, not: { label_name: label.title } } }
+          context 'further filtering outside params' do
+            let(:params) { { label_name: label2.title, not: { assignee_username: user2.username } } }
 
-              it 'does not take precedence over labels outside NOT' do
-                expect(issues).to contain_exactly(issue3)
-              end
-            end
-
-            context 'further filtering outside params' do
-              let(:params) { { label_name: label2.title, not: { assignee_username: user2.username } } }
-
-              it 'further filters on the returned resultset' do
-                expect(issues).to be_empty
-              end
+            it 'further filters on the returned resultset' do
+              expect(issues).to be_empty
             end
           end
         end
+      end
 
-        context 'filtering by multiple labels' do
-          let(:params) { { label_name: [label.title, label2.title].join(',') } }
-          let(:label2) { create(:label, project: project2) }
+      context 'filtering by multiple labels' do
+        let(:params) { { label_name: [label.title, label2.title].join(',') } }
+        let(:label2) { create(:label, project: project2) }
 
-          before do
-            create(:label_link, label: label2, target: issue2)
-          end
-
-          it 'returns the unique issues with all those labels' do
-            expect(issues).to contain_exactly(issue2)
-          end
-
-          context 'using NOT' do
-            let(:params) { { not: { label_name: [label.title, label2.title].join(',') } } }
-
-            it 'returns issues that do not have any of the labels provided' do
-              expect(issues).to contain_exactly(issue1, issue4, issue5)
-            end
-          end
+        before do
+          create(:label_link, label: label2, target: issue2)
         end
 
-        context 'filtering by a label that includes any or none in the title' do
-          let(:params) { { label_name: [label.title, label2.title].join(',') } }
-          let(:label) { create(:label, title: 'any foo', project: project2) }
-          let(:label2) { create(:label, title: 'bar none', project: project2) }
-
-          before do
-            create(:label_link, label: label2, target: issue2)
-          end
-
-          it 'returns the unique issues with all those labels' do
-            expect(issues).to contain_exactly(issue2)
-          end
-
-          context 'using NOT' do
-            let(:params) { { not: { label_name: [label.title, label2.title].join(',') } } }
-
-            it 'returns issues that do not have ANY ONE of the labels provided' do
-              expect(issues).to contain_exactly(issue1, issue4, issue5)
-            end
-          end
+        it 'returns the unique issues with all those labels' do
+          expect(issues).to contain_exactly(issue2)
         end
 
-        context 'filtering by no label' do
-          let(:params) { { label_name: described_class::Params::FILTER_NONE } }
+        context 'using NOT' do
+          let(:params) { { not: { label_name: [label.title, label2.title].join(',') } } }
 
-          it 'returns issues with no labels' do
+          it 'returns issues that do not have any of the labels provided' do
             expect(issues).to contain_exactly(issue1, issue4, issue5)
           end
         end
+      end
 
-        context 'filtering by any label' do
-          let(:params) { { label_name: described_class::Params::FILTER_ANY } }
+      context 'filtering by a label that includes any or none in the title' do
+        let(:params) { { label_name: [label.title, label2.title].join(',') } }
+        let(:label) { create(:label, title: 'any foo', project: project2) }
+        let(:label2) { create(:label, title: 'bar none', project: project2) }
 
-          it 'returns issues that have one or more label' do
-            create_list(:label_link, 2, label: create(:label, project: project2), target: issue3)
-
-            expect(issues).to contain_exactly(issue2, issue3)
-          end
+        before do
+          create(:label_link, label: label2, target: issue2)
         end
 
-        context 'when the same label exists on project and group levels' do
-          let(:issue1) { create(:issue, project: project1) }
-          let(:issue2) { create(:issue, project: project1) }
+        it 'returns the unique issues with all those labels' do
+          expect(issues).to contain_exactly(issue2)
+        end
 
-          # Skipping validation to reproduce a "real-word" scenario.
-          # We still have legacy labels on PRD that have the same title on the group and project levels, example: `bug`
-          let(:project_label) { build(:label, title: 'somelabel', project: project1).tap { |r| r.save!(validate: false) } }
-          let(:group_label) { create(:group_label, title: 'somelabel', group: project1.group) }
+        context 'using NOT' do
+          let(:params) { { not: { label_name: [label.title, label2.title].join(',') } } }
 
-          let(:params) { { label_name: 'somelabel' } }
-
-          before do
-            create(:label_link, label: group_label, target: issue1)
-            create(:label_link, label: project_label, target: issue2)
-          end
-
-          it 'finds both issue records' do
-            expect(issues).to contain_exactly(issue1, issue2)
+          it 'returns issues that do not have ANY ONE of the labels provided' do
+            expect(issues).to contain_exactly(issue1, issue4, issue5)
           end
         end
       end
 
-      context 'when `optimized_issuable_label_filter` feature flag is off' do
-        before do
-          stub_feature_flags(optimized_issuable_label_filter: false)
-        end
+      context 'filtering by no label' do
+        let(:params) { { label_name: described_class::Params::FILTER_NONE } }
 
-        it_behaves_like ':label_name parameter'
+        it 'returns issues with no labels' do
+          expect(issues).to contain_exactly(issue1, issue4, issue5)
+        end
       end
 
-      context 'when `optimized_issuable_label_filter` feature flag is on' do
+      context 'filtering by any label' do
+        let(:params) { { label_name: described_class::Params::FILTER_ANY } }
+
+        it 'returns issues that have one or more label' do
+          create_list(:label_link, 2, label: create(:label, project: project2), target: issue3)
+
+          expect(issues).to contain_exactly(issue2, issue3)
+        end
+      end
+
+      context 'when the same label exists on project and group levels' do
+        let(:issue1) { create(:issue, project: project1) }
+        let(:issue2) { create(:issue, project: project1) }
+
+        # Skipping validation to reproduce a "real-word" scenario.
+        # We still have legacy labels on PRD that have the same title on the group and project levels, example: `bug`
+        let(:project_label) { build(:label, title: 'somelabel', project: project1).tap { |r| r.save!(validate: false) } }
+        let(:group_label) { create(:group_label, title: 'somelabel', group: project1.group) }
+
+        let(:params) { { label_name: 'somelabel' } }
+
         before do
-          stub_feature_flags(optimized_issuable_label_filter: true)
+          create(:label_link, label: group_label, target: issue1)
+          create(:label_link, label: project_label, target: issue2)
         end
 
-        it_behaves_like ':label_name parameter'
+        it 'finds both issue records' do
+          expect(issues).to contain_exactly(issue1, issue2)
+        end
       end
 
       context 'filtering by issue term' do
-        let(:params) { { search: 'git' } }
+        let(:params) { { search: search_term } }
 
-        it 'returns issues with title and description match for search term' do
-          expect(issues).to contain_exactly(issue1, issue2)
+        let_it_be(:english) { create(:issue, project: project1, title: 'title', description: 'something english') }
+        let_it_be(:japanese) { create(:issue, project: project1, title: '日本語 title', description: 'another english description') }
+
+        context 'with latin search term' do
+          let(:search_term) { 'title english' }
+
+          it 'returns matching issues' do
+            expect(issues).to contain_exactly(english, japanese)
+          end
+        end
+
+        context 'with non-latin search term' do
+          let(:search_term) { '日本語' }
+
+          it 'returns matching issues' do
+            expect(issues).to contain_exactly(japanese)
+          end
+        end
+
+        context 'when full-text search is disabled' do
+          let(:search_term) { 'somet' }
+
+          before do
+            stub_feature_flags(issues_full_text_search: false)
+          end
+
+          it 'allows partial word matches' do
+            expect(issues).to contain_exactly(english)
+          end
+        end
+
+        context 'with anonymous user' do
+          let_it_be(:public_project) { create(:project, :public, group: subgroup) }
+          let_it_be(:issue6) { create(:issue, project: public_project, title: 'tanuki') }
+          let_it_be(:issue7) { create(:issue, project: public_project, title: 'ikunat') }
+
+          let(:search_user) { nil }
+          let(:params) { { search: 'tanuki' } }
+
+          context 'with disable_anonymous_search feature flag enabled' do
+            before do
+              stub_feature_flags(disable_anonymous_search: true)
+            end
+
+            it 'does not perform search' do
+              expect(issues).to contain_exactly(issue6, issue7)
+            end
+          end
+
+          context 'with disable_anonymous_search feature flag disabled' do
+            before do
+              stub_feature_flags(disable_anonymous_search: false)
+            end
+
+            it 'finds one public issue' do
+              expect(issues).to contain_exactly(issue6)
+            end
+          end
         end
       end
 
@@ -855,6 +937,45 @@ RSpec.describe IssuesFinder do
         end
       end
 
+      context 'filtering by crm contact' do
+        let_it_be(:contact1) { create(:contact, group: group) }
+        let_it_be(:contact2) { create(:contact, group: group) }
+
+        let_it_be(:contact1_issue1) { create(:issue, project: project1) }
+        let_it_be(:contact1_issue2) { create(:issue, project: project1) }
+        let_it_be(:contact2_issue1) { create(:issue, project: project1) }
+
+        let(:params) { { crm_contact_id: contact1.id } }
+
+        it 'returns for that contact' do
+          create(:issue_customer_relations_contact, issue: contact1_issue1, contact: contact1)
+          create(:issue_customer_relations_contact, issue: contact1_issue2, contact: contact1)
+          create(:issue_customer_relations_contact, issue: contact2_issue1, contact: contact2)
+
+          expect(issues).to contain_exactly(contact1_issue1, contact1_issue2)
+        end
+      end
+
+      context 'filtering by crm organization' do
+        let_it_be(:organization) { create(:organization, group: group) }
+        let_it_be(:contact1) { create(:contact, group: group, organization: organization) }
+        let_it_be(:contact2) { create(:contact, group: group, organization: organization) }
+
+        let_it_be(:contact1_issue1) { create(:issue, project: project1) }
+        let_it_be(:contact1_issue2) { create(:issue, project: project1) }
+        let_it_be(:contact2_issue1) { create(:issue, project: project1) }
+
+        let(:params) { { crm_organization_id: organization.id } }
+
+        it 'returns for that contact' do
+          create(:issue_customer_relations_contact, issue: contact1_issue1, contact: contact1)
+          create(:issue_customer_relations_contact, issue: contact1_issue2, contact: contact1)
+          create(:issue_customer_relations_contact, issue: contact2_issue1, contact: contact2)
+
+          expect(issues).to contain_exactly(contact1_issue1, contact1_issue2, contact2_issue1)
+        end
+      end
+
       context 'when the user is unauthorized' do
         let(:search_user) { nil }
 
@@ -924,6 +1045,8 @@ RSpec.describe IssuesFinder do
     end
 
     context 'filtering by due date' do
+      let_it_be(:issue_due_today) { create(:issue, project: project1, due_date: Date.current) }
+      let_it_be(:issue_due_tomorrow) { create(:issue, project: project1, due_date: 1.day.from_now) }
       let_it_be(:issue_overdue) { create(:issue, project: project1, due_date: 2.days.ago) }
       let_it_be(:issue_due_soon) { create(:issue, project: project1, due_date: 2.days.from_now) }
 
@@ -938,6 +1061,30 @@ RSpec.describe IssuesFinder do
         end
       end
 
+      context 'with param set to any due date' do
+        let(:params) { base_params.merge(due_date: Issue::AnyDueDate.name) }
+
+        it 'returns issues with any due date' do
+          expect(issues).to contain_exactly(issue_due_today, issue_due_tomorrow, issue_overdue, issue_due_soon)
+        end
+      end
+
+      context 'with param set to due today' do
+        let(:params) { base_params.merge(due_date: Issue::DueToday.name) }
+
+        it 'returns issues due today' do
+          expect(issues).to contain_exactly(issue_due_today)
+        end
+      end
+
+      context 'with param set to due tomorrow' do
+        let(:params) { base_params.merge(due_date: Issue::DueTomorrow.name) }
+
+        it 'returns issues due today' do
+          expect(issues).to contain_exactly(issue_due_tomorrow)
+        end
+      end
+
       context 'with param set to overdue' do
         let(:params) { base_params.merge(due_date: Issue::Overdue.name) }
 
@@ -949,8 +1096,8 @@ RSpec.describe IssuesFinder do
       context 'with param set to next month and previous two weeks' do
         let(:params) { base_params.merge(due_date: Issue::DueNextMonthAndPreviousTwoWeeks.name) }
 
-        it 'returns issues from the previous two weeks and next month' do
-          expect(issues).to contain_exactly(issue_overdue, issue_due_soon)
+        it 'returns issues due in the previous two weeks and next month' do
+          expect(issues).to contain_exactly(issue_due_today, issue_due_tomorrow, issue_overdue, issue_due_soon)
         end
       end
 
@@ -1001,132 +1148,64 @@ RSpec.describe IssuesFinder do
   end
 
   describe '#with_confidentiality_access_check' do
-    let(:guest) { create(:user) }
+    let(:user) { create(:user) }
 
     let_it_be(:authorized_user) { create(:user) }
-    let_it_be(:banned_user) { create(:user, :banned) }
     let_it_be(:project) { create(:project, namespace: authorized_user.namespace) }
     let_it_be(:public_issue) { create(:issue, project: project) }
     let_it_be(:confidential_issue) { create(:issue, project: project, confidential: true) }
-    let_it_be(:hidden_issue) { create(:issue, project: project, author: banned_user) }
 
-    shared_examples 'returns public, does not return hidden or confidential' do
+    shared_examples 'returns public, does not return confidential' do
       it 'returns only public issues' do
         expect(subject).to include(public_issue)
-        expect(subject).not_to include(confidential_issue, hidden_issue)
-      end
-    end
-
-    shared_examples 'returns public and confidential, does not return hidden' do
-      it 'returns only public and confidential issues' do
-        expect(subject).to include(public_issue, confidential_issue)
-        expect(subject).not_to include(hidden_issue)
-      end
-    end
-
-    shared_examples 'returns public and hidden, does not return confidential' do
-      it 'returns only public and hidden issues' do
-        expect(subject).to include(public_issue, hidden_issue)
         expect(subject).not_to include(confidential_issue)
       end
     end
 
-    shared_examples 'returns public, confidential, and hidden' do
-      it 'returns all issues' do
-        expect(subject).to include(public_issue, confidential_issue, hidden_issue)
+    shared_examples 'returns public and confidential' do
+      it 'returns public and confidential issues' do
+        expect(subject).to include(public_issue, confidential_issue)
       end
     end
+
+    subject { described_class.new(user, params).with_confidentiality_access_check }
 
     context 'when no project filter is given' do
       let(:params) { {} }
 
       context 'for an anonymous user' do
-        subject { described_class.new(nil, params).with_confidentiality_access_check }
-
-        it_behaves_like 'returns public, does not return hidden or confidential'
-
-        context 'when feature flag is disabled' do
-          before do
-            stub_feature_flags(ban_user_feature_flag: false)
-          end
-
-          it_behaves_like 'returns public and hidden, does not return confidential'
-        end
+        it_behaves_like 'returns public, does not return confidential'
       end
 
       context 'for a user without project membership' do
-        subject { described_class.new(user, params).with_confidentiality_access_check }
-
-        it_behaves_like 'returns public, does not return hidden or confidential'
-
-        context 'when feature flag is disabled' do
-          before do
-            stub_feature_flags(ban_user_feature_flag: false)
-          end
-
-          it_behaves_like 'returns public and hidden, does not return confidential'
-        end
+        it_behaves_like 'returns public, does not return confidential'
       end
 
       context 'for a guest user' do
-        subject { described_class.new(guest, params).with_confidentiality_access_check }
-
         before do
-          project.add_guest(guest)
+          project.add_guest(user)
         end
 
-        it_behaves_like 'returns public, does not return hidden or confidential'
-
-        context 'when feature flag is disabled' do
-          before do
-            stub_feature_flags(ban_user_feature_flag: false)
-          end
-
-          it_behaves_like 'returns public and hidden, does not return confidential'
-        end
+        it_behaves_like 'returns public, does not return confidential'
       end
 
       context 'for a project member with access to view confidential issues' do
-        subject { described_class.new(authorized_user, params).with_confidentiality_access_check }
-
-        it_behaves_like 'returns public and confidential, does not return hidden'
-
-        context 'when feature flag is disabled' do
-          before do
-            stub_feature_flags(ban_user_feature_flag: false)
-          end
-
-          it_behaves_like 'returns public, confidential, and hidden'
+        before do
+          project.add_reporter(user)
         end
+
+        it_behaves_like 'returns public and confidential'
       end
 
       context 'for an admin' do
-        let(:admin_user) { create(:user, :admin) }
-
-        subject { described_class.new(admin_user, params).with_confidentiality_access_check }
+        let(:user) { create(:user, :admin) }
 
         context 'when admin mode is enabled', :enable_admin_mode do
-          it_behaves_like 'returns public, confidential, and hidden'
-
-          context 'when feature flag is disabled' do
-            before do
-              stub_feature_flags(ban_user_feature_flag: false)
-            end
-
-            it_behaves_like 'returns public, confidential, and hidden'
-          end
+          it_behaves_like 'returns public and confidential'
         end
 
         context 'when admin mode is disabled' do
-          it_behaves_like 'returns public, does not return hidden or confidential'
-
-          context 'when feature flag is disabled' do
-            before do
-              stub_feature_flags(ban_user_feature_flag: false)
-            end
-
-            it_behaves_like 'returns public and hidden, does not return confidential'
-          end
+          it_behaves_like 'returns public, does not return confidential'
         end
       end
     end
@@ -1135,17 +1214,9 @@ RSpec.describe IssuesFinder do
       let(:params) { { project_id: project.id } }
 
       context 'for an anonymous user' do
-        subject { described_class.new(nil, params).with_confidentiality_access_check }
+        let(:user) { nil }
 
-        it_behaves_like 'returns public, does not return hidden or confidential'
-
-        context 'when feature flag is disabled' do
-          before do
-            stub_feature_flags(ban_user_feature_flag: false)
-          end
-
-          it_behaves_like 'returns public and hidden, does not return confidential'
-        end
+        it_behaves_like 'returns public, does not return confidential'
 
         it 'does not filter by confidentiality' do
           expect(Issue).not_to receive(:where).with(a_string_matching('confidential'), anything)
@@ -1154,17 +1225,7 @@ RSpec.describe IssuesFinder do
       end
 
       context 'for a user without project membership' do
-        subject { described_class.new(user, params).with_confidentiality_access_check }
-
-        it_behaves_like 'returns public, does not return hidden or confidential'
-
-        context 'when feature flag is disabled' do
-          before do
-            stub_feature_flags(ban_user_feature_flag: false)
-          end
-
-          it_behaves_like 'returns public and hidden, does not return confidential'
-        end
+        it_behaves_like 'returns public, does not return confidential'
 
         it 'filters by confidentiality' do
           expect(subject.to_sql).to match("issues.confidential")
@@ -1172,21 +1233,11 @@ RSpec.describe IssuesFinder do
       end
 
       context 'for a guest user' do
-        subject { described_class.new(guest, params).with_confidentiality_access_check }
-
         before do
-          project.add_guest(guest)
+          project.add_guest(user)
         end
 
-        it_behaves_like 'returns public, does not return hidden or confidential'
-
-        context 'when feature flag is disabled' do
-          before do
-            stub_feature_flags(ban_user_feature_flag: false)
-          end
-
-          it_behaves_like 'returns public and hidden, does not return confidential'
-        end
+        it_behaves_like 'returns public, does not return confidential'
 
         it 'filters by confidentiality' do
           expect(subject.to_sql).to match("issues.confidential")
@@ -1194,40 +1245,18 @@ RSpec.describe IssuesFinder do
       end
 
       context 'for a project member with access to view confidential issues' do
-        subject { described_class.new(authorized_user, params).with_confidentiality_access_check }
-
-        it_behaves_like 'returns public and confidential, does not return hidden'
-
-        context 'when feature flag is disabled' do
-          before do
-            stub_feature_flags(ban_user_feature_flag: false)
-          end
-
-          it_behaves_like 'returns public, confidential, and hidden'
+        before do
+          project.add_reporter(user)
         end
 
-        it 'does not filter by confidentiality' do
-          expect(Issue).not_to receive(:where).with(a_string_matching('confidential'), anything)
-
-          subject
-        end
+        it_behaves_like 'returns public and confidential'
       end
 
       context 'for an admin' do
-        let(:admin_user) { create(:user, :admin) }
-
-        subject { described_class.new(admin_user, params).with_confidentiality_access_check }
+        let(:user) { create(:user, :admin) }
 
         context 'when admin mode is enabled', :enable_admin_mode do
-          it_behaves_like 'returns public, confidential, and hidden'
-
-          context 'when feature flag is disabled' do
-            before do
-              stub_feature_flags(ban_user_feature_flag: false)
-            end
-
-            it_behaves_like 'returns public, confidential, and hidden'
-          end
+          it_behaves_like 'returns public and confidential'
 
           it 'does not filter by confidentiality' do
             expect(Issue).not_to receive(:where).with(a_string_matching('confidential'), anything)
@@ -1237,19 +1266,7 @@ RSpec.describe IssuesFinder do
         end
 
         context 'when admin mode is disabled' do
-          it_behaves_like 'returns public, does not return hidden or confidential'
-
-          context 'when feature flag is disabled' do
-            before do
-              stub_feature_flags(ban_user_feature_flag: false)
-            end
-
-            it_behaves_like 'returns public and hidden, does not return confidential'
-          end
-
-          it 'filters by confidentiality' do
-            expect(subject.to_sql).to match("issues.confidential")
-          end
+          it_behaves_like 'returns public, does not return confidential'
         end
       end
     end
@@ -1267,7 +1284,15 @@ RSpec.describe IssuesFinder do
     end
 
     context 'when the force_cte param is falsey' do
-      let(:params) { { search: 'foo' } }
+      let(:params) { { search: '日本語' } }
+
+      it 'returns false' do
+        expect(finder.use_cte_for_search?).to be_falsey
+      end
+    end
+
+    context 'when a non-simple sort is given' do
+      let(:params) { { search: '日本語', attempt_project_search_optimizations: true, sort: 'popularity' } }
 
       it 'returns false' do
         expect(finder.use_cte_for_search?).to be_falsey
@@ -1276,7 +1301,7 @@ RSpec.describe IssuesFinder do
 
     context 'when all conditions are met' do
       context "uses group search optimization" do
-        let(:params) { { search: 'foo', attempt_group_search_optimizations: true } }
+        let(:params) { { search: '日本語', attempt_group_search_optimizations: true } }
 
         it 'returns true' do
           expect(finder.use_cte_for_search?).to be_truthy
@@ -1285,7 +1310,25 @@ RSpec.describe IssuesFinder do
       end
 
       context "uses project search optimization" do
-        let(:params) { { search: 'foo', attempt_project_search_optimizations: true } }
+        let(:params) { { search: '日本語', attempt_project_search_optimizations: true } }
+
+        it 'returns true' do
+          expect(finder.use_cte_for_search?).to be_truthy
+          expect(finder.execute.to_sql).to match(/^WITH "issues" AS #{Gitlab::Database::AsWithMaterialized.materialized_if_supported}/)
+        end
+      end
+
+      context 'with simple sort' do
+        let(:params) { { search: '日本語', attempt_project_search_optimizations: true, sort: 'updated_desc' } }
+
+        it 'returns true' do
+          expect(finder.use_cte_for_search?).to be_truthy
+          expect(finder.execute.to_sql).to match(/^WITH "issues" AS #{Gitlab::Database::AsWithMaterialized.materialized_if_supported}/)
+        end
+      end
+
+      context 'with simple sort as a symbol' do
+        let(:params) { { search: '日本語', attempt_project_search_optimizations: true, sort: :updated_desc } }
 
         it 'returns true' do
           expect(finder.use_cte_for_search?).to be_truthy

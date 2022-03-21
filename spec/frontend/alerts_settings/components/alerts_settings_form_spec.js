@@ -1,4 +1,12 @@
-import { GlForm, GlFormSelect, GlFormInput, GlToggle, GlFormTextarea, GlTab } from '@gitlab/ui';
+import {
+  GlForm,
+  GlFormSelect,
+  GlFormInput,
+  GlToggle,
+  GlFormTextarea,
+  GlTab,
+  GlLink,
+} from '@gitlab/ui';
 import { mount } from '@vue/test-utils';
 import { nextTick } from 'vue';
 import { extendedWrapper } from 'helpers/vue_test_utils_helper';
@@ -58,7 +66,6 @@ describe('AlertsSettingsForm', () => {
   afterEach(() => {
     if (wrapper) {
       wrapper.destroy();
-      wrapper = null;
     }
   });
 
@@ -69,7 +76,7 @@ describe('AlertsSettingsForm', () => {
 
   const enableIntegration = (index, value) => {
     findFormFields().at(index).setValue(value);
-    findFormToggle().trigger('click');
+    findFormToggle().vm.$emit('change', true);
   };
 
   describe('with default values', () => {
@@ -100,6 +107,12 @@ describe('AlertsSettingsForm', () => {
       createComponent();
       await selectOptionAtIndex(2);
       expect(findFormFields().at(0).attributes('id')).not.toBe('name-integration');
+    });
+
+    it('verify pricing link url', () => {
+      createComponent({ props: { canAddIntegration: false } });
+      const link = findMultiSupportText().findComponent(GlLink);
+      expect(link.attributes('href')).toMatch(/https:\/\/about.gitlab.(com|cn)\/pricing/);
     });
 
     describe('form tabs', () => {
@@ -306,6 +319,8 @@ describe('AlertsSettingsForm', () => {
       const validPayloadMsg = payload === emptySamplePayload ? 'not valid' : 'valid';
 
       it(`textarea should be ${enabledState} when payload reset ${payloadResetMsg} and payload is ${validPayloadMsg}`, async () => {
+        // setData usage is discouraged. See https://gitlab.com/groups/gitlab-org/-/epics/7330 for details
+        // eslint-disable-next-line no-restricted-syntax
         wrapper.setData({
           currentIntegration: { payloadExample: payload },
           resetPayloadAndMappingConfirmed,
@@ -332,6 +347,8 @@ describe('AlertsSettingsForm', () => {
           : 'was not confirmed';
 
         it(`shows ${caption} button when sample payload ${samplePayloadMsg} and payload reset ${payloadResetMsg}`, async () => {
+          // setData usage is discouraged. See https://gitlab.com/groups/gitlab-org/-/epics/7330 for details
+          // eslint-disable-next-line no-restricted-syntax
           wrapper.setData({
             currentIntegration: {
               payloadExample,
@@ -346,6 +363,8 @@ describe('AlertsSettingsForm', () => {
 
     describe('Parsing payload', () => {
       beforeEach(() => {
+        // setData usage is discouraged. See https://gitlab.com/groups/gitlab-org/-/epics/7330 for details
+        // eslint-disable-next-line no-restricted-syntax
         wrapper.setData({
           resetPayloadAndMappingConfirmed: true,
         });
@@ -443,6 +462,8 @@ describe('AlertsSettingsForm', () => {
     });
 
     it('should be able to submit when form is dirty', async () => {
+      // setData usage is discouraged. See https://gitlab.com/groups/gitlab-org/-/epics/7330 for details
+      // eslint-disable-next-line no-restricted-syntax
       wrapper.setData({
         currentIntegration: { type: typeSet.http, name: 'Existing integration' },
       });
@@ -453,6 +474,8 @@ describe('AlertsSettingsForm', () => {
     });
 
     it('should not be able to submit when form is pristine', async () => {
+      // setData usage is discouraged. See https://gitlab.com/groups/gitlab-org/-/epics/7330 for details
+      // eslint-disable-next-line no-restricted-syntax
       wrapper.setData({
         currentIntegration: { type: typeSet.http, name: 'Existing integration' },
       });

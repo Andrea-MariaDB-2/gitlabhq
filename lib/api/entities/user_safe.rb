@@ -3,7 +3,10 @@
 module API
   module Entities
     class UserSafe < Grape::Entity
-      expose :id, :name, :username
+      expose :id, :username
+      expose :name do |user|
+        user.redacted_name(options[:current_user])
+      end
     end
   end
 end

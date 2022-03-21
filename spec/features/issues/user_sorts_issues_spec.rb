@@ -9,9 +9,9 @@ RSpec.describe "User sorts issues" do
   let_it_be(:user) { create(:user) }
   let_it_be(:group) { create(:group) }
   let_it_be(:project) { create(:project_empty_repo, :public, group: group) }
-  let_it_be(:issue1, reload: true) { create(:issue, title: 'foo', created_at: Time.now, project: project) }
-  let_it_be(:issue2, reload: true) { create(:issue, title: 'bar', created_at: Time.now - 60, project: project) }
-  let_it_be(:issue3, reload: true) { create(:issue, title: 'baz', created_at: Time.now - 120, project: project) }
+  let_it_be(:issue1, reload: true) { create(:issue, title: 'foo', created_at: Time.zone.now, project: project) }
+  let_it_be(:issue2, reload: true) { create(:issue, title: 'bar', created_at: Time.zone.now - 60, project: project) }
+  let_it_be(:issue3, reload: true) { create(:issue, title: 'baz', created_at: Time.zone.now - 120, project: project) }
   let_it_be(:newer_due_milestone) { create(:milestone, project: project, due_date: '2013-12-11') }
   let_it_be(:later_due_milestone) { create(:milestone, project: project, due_date: '2013-12-12') }
 
@@ -75,7 +75,7 @@ RSpec.describe "User sorts issues" do
   end
 
   it 'sorts by most recently updated', :js do
-    issue3.updated_at = Time.now + 100
+    issue3.updated_at = Time.zone.now + 100
     issue3.save!
     visit project_issues_path(project, sort: sort_value_recently_updated)
 
@@ -115,89 +115,6 @@ RSpec.describe "User sorts issues" do
         visit project_issues_path(project, label_names: [label.name], sort: sort_value_due_date_later)
 
         expect(first_issue).to include('foo')
-      end
-    end
-  end
-
-  describe 'filtering by due date', :js do
-    before do
-      issue1.update!(due_date: 1.day.from_now)
-      issue2.update!(due_date: 6.days.from_now)
-    end
-
-    it 'filters by none' do
-      visit project_issues_path(project, due_date: Issue::NoDueDate.name)
-
-      page.within '.issues-list' do
-        expect(page).not_to have_content('foo')
-        expect(page).not_to have_content('bar')
-        expect(page).to have_content('baz')
-      end
-    end
-
-    it 'filters by any' do
-      visit project_issues_path(project, due_date: Issue::AnyDueDate.name)
-
-      page.within '.issues-list' do
-        expect(page).to have_content('foo')
-        expect(page).to have_content('bar')
-        expect(page).to have_content('baz')
-      end
-    end
-
-    it 'filters by due this week' do
-      issue1.update!(due_date: Date.today.beginning_of_week + 2.days)
-      issue2.update!(due_date: Date.today.end_of_week)
-      issue3.update!(due_date: Date.today - 8.days)
-
-      visit project_issues_path(project, due_date: Issue::DueThisWeek.name)
-
-      page.within '.issues-list' do
-        expect(page).to have_content('foo')
-        expect(page).to have_content('bar')
-        expect(page).not_to have_content('baz')
-      end
-    end
-
-    it 'filters by due this month' do
-      issue1.update!(due_date: Date.today.beginning_of_month + 2.days)
-      issue2.update!(due_date: Date.today.end_of_month)
-      issue3.update!(due_date: Date.today - 50.days)
-
-      visit project_issues_path(project, due_date: Issue::DueThisMonth.name)
-
-      page.within '.issues-list' do
-        expect(page).to have_content('foo')
-        expect(page).to have_content('bar')
-        expect(page).not_to have_content('baz')
-      end
-    end
-
-    it 'filters by overdue' do
-      issue1.update!(due_date: Date.today + 2.days)
-      issue2.update!(due_date: Date.today + 20.days)
-      issue3.update!(due_date: Date.yesterday)
-
-      visit project_issues_path(project, due_date: Issue::Overdue.name)
-
-      page.within '.issues-list' do
-        expect(page).not_to have_content('foo')
-        expect(page).not_to have_content('bar')
-        expect(page).to have_content('baz')
-      end
-    end
-
-    it 'filters by due next month and previous two weeks' do
-      issue1.update!(due_date: Date.today - 4.weeks)
-      issue2.update!(due_date: (Date.today + 2.months).beginning_of_month)
-      issue3.update!(due_date: Date.yesterday)
-
-      visit project_issues_path(project, due_date: Issue::DueNextMonthAndPreviousTwoWeeks.name)
-
-      page.within '.issues-list' do
-        expect(page).not_to have_content('foo')
-        expect(page).not_to have_content('bar')
-        expect(page).to have_content('baz')
       end
     end
   end

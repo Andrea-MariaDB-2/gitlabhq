@@ -4,6 +4,7 @@ import { mount, shallowMount } from '@vue/test-utils';
 import axios from 'axios';
 import AxiosMockAdapter from 'axios-mock-adapter';
 import { kebabCase } from 'lodash';
+import { nextTick } from 'vue';
 import createFlash from '~/flash';
 import httpStatus from '~/lib/utils/http_status';
 import * as urlUtility from '~/lib/utils/url_utility';
@@ -39,7 +40,9 @@ describe('ForkForm component', () => {
     },
   ];
 
-  const DEFAULT_PROPS = {
+  const DEFAULT_PROVIDE = {
+    newGroupPath: 'some/groups/path',
+    visibilityHelpPath: 'some/visibility/help/path',
     endpoint: '/some/project-full-path/-/forks/new.json',
     projectFullPath: '/some/project-full-path',
     projectId: '10',
@@ -51,18 +54,14 @@ describe('ForkForm component', () => {
   };
 
   const mockGetRequest = (data = {}, statusCode = httpStatus.OK) => {
-    axiosMock.onGet(DEFAULT_PROPS.endpoint).replyOnce(statusCode, data);
+    axiosMock.onGet(DEFAULT_PROVIDE.endpoint).replyOnce(statusCode, data);
   };
 
-  const createComponentFactory = (mountFn) => (props = {}, data = {}) => {
+  const createComponentFactory = (mountFn) => (provide = {}, data = {}) => {
     wrapper = mountFn(ForkForm, {
       provide: {
-        newGroupPath: 'some/groups/path',
-        visibilityHelpPath: 'some/visibility/help/path',
-      },
-      propsData: {
-        ...DEFAULT_PROPS,
-        ...props,
+        ...DEFAULT_PROVIDE,
+        ...provide,
       },
       data() {
         return {
@@ -110,7 +109,7 @@ describe('ForkForm component', () => {
     mockGetRequest();
     createComponent();
 
-    const { projectFullPath } = DEFAULT_PROPS;
+    const { projectFullPath } = DEFAULT_PROVIDE;
     const cancelButton = wrapper.find('[data-testid="cancel-button"]');
 
     expect(cancelButton.attributes('href')).toBe(projectFullPath);
@@ -129,10 +128,10 @@ describe('ForkForm component', () => {
     mockGetRequest();
     createComponent();
 
-    expect(findForkNameInput().attributes('value')).toBe(DEFAULT_PROPS.projectName);
-    expect(findForkSlugInput().attributes('value')).toBe(DEFAULT_PROPS.projectPath);
+    expect(findForkNameInput().attributes('value')).toBe(DEFAULT_PROVIDE.projectName);
+    expect(findForkSlugInput().attributes('value')).toBe(DEFAULT_PROVIDE.projectPath);
     expect(findForkDescriptionTextarea().attributes('value')).toBe(
-      DEFAULT_PROPS.projectDescription,
+      DEFAULT_PROVIDE.projectDescription,
     );
   });
 
@@ -163,7 +162,7 @@ describe('ForkForm component', () => {
     it('make GET request from endpoint', async () => {
       await axios.waitForAll();
 
-      expect(axiosMock.history.get[0].url).toBe(DEFAULT_PROPS.endpoint);
+      expect(axiosMock.history.get[0].url).toBe(DEFAULT_PROVIDE.endpoint);
     });
 
     it('generate default option', async () => {
@@ -217,7 +216,7 @@ describe('ForkForm component', () => {
     it('changes to kebab case when project name changes', async () => {
       const newInput = `${projectPath}1`;
       findForkNameInput().vm.$emit('input', newInput);
-      await wrapper.vm.$nextTick();
+      await nextTick();
 
       expect(findForkSlugInput().attributes('value')).toBe(kebabCase(newInput));
     });
@@ -225,7 +224,7 @@ describe('ForkForm component', () => {
     it('does not change to kebab case when project slug is changed manually', async () => {
       const newInput = `${projectPath}1`;
       findForkSlugInput().vm.$emit('input', newInput);
-      await wrapper.vm.$nextTick();
+      await nextTick();
 
       expect(findForkSlugInput().attributes('value')).toBe(newInput);
     });
@@ -273,7 +272,7 @@ describe('ForkForm component', () => {
         expect(wrapper.vm.form.fields.visibility.value).toBe('public');
         await findFormSelectOptions().at(1).setSelected();
 
-        await wrapper.vm.$nextTick();
+        await nextTick();
 
         expect(getByRole(wrapper.element, 'radio', { name: /private/i }).checked).toBe(true);
       });
@@ -283,7 +282,7 @@ describe('ForkForm component', () => {
 
         await findFormSelectOptions().at(1).setSelected();
 
-        await wrapper.vm.$nextTick();
+        await nextTick();
 
         const container = getByRole(wrapper.element, 'radiogroup', { name: /visibility/i });
         const visibilityRadios = getAllByRole(container, 'radio');
@@ -419,7 +418,7 @@ describe('ForkForm component', () => {
       const form = wrapper.find(GlForm);
 
       await form.trigger('submit');
-      await wrapper.vm.$nextTick();
+      await nextTick();
     };
 
     describe('with invalid form', () => {
@@ -468,7 +467,7 @@ describe('ForkForm component', () => {
           projectName,
           projectPath,
           projectVisibility,
-        } = DEFAULT_PROPS;
+        } = DEFAULT_PROVIDE;
 
         const url = `/api/${GON_API_VERSION}/projects/${projectId}/fork`;
         const project = {

@@ -1,24 +1,39 @@
 ---
 type: concepts, howto
 stage: Manage
-group: Access
+group: Authentication and Authorization
 info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
 ---
 
 # Personal access tokens **(FREE)**
 
-> - Introduced in GitLab 12.6: [Notifications for expiring tokens](https://gitlab.com/gitlab-org/gitlab/-/issues/3649).
-> - Introduced in GitLab Ultimate 12.6: [Token lifetime limits](https://gitlab.com/gitlab-org/gitlab/-/issues/3649).
-> - Introduced in GitLab 13.3: [Additional notifications for expiring tokens](https://gitlab.com/gitlab-org/gitlab/-/issues/214721).
-> - Introduced in GitLab 14.1: [Prefill token name and scopes](https://gitlab.com/gitlab-org/gitlab/-/issues/334664).
+> - Notifications for expiring tokens [introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/3649) in GitLab 12.6.
+> - Token lifetime limits [introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/3649) in GitLab 12.6.
+> - Additional notifications for expiring tokens [introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/214721) in GitLab 13.3.
+> - Prefill for token name and scopes [introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/334664) in GitLab 14.1.
 
-If you're unable to use [OAuth2](../../api/oauth2.md), you can use a personal access token to authenticate with the [GitLab API](../../api/index.md#personalproject-access-tokens). You can also use a personal access token with Git to authenticate over HTTP.
+Personal access tokens can be an alternative to [OAuth2](../../api/oauth2.md) and used to:
+
+- Authenticate with the [GitLab API](../../api/index.md#personalprojectgroup-access-tokens).
+- Authenticate with Git using HTTP Basic Authentication.
 
 In both cases, you authenticate with a personal access token in place of your password.
 
-Personal access tokens are required when [Two-Factor Authentication (2FA)](account/two_factor_authentication.md) is enabled.
+Personal access tokens are:
 
-For examples of how you can use a personal access token to authenticate with the API, see the [API documentation](../../api/index.md#personalproject-access-tokens).
+- Required when [two-factor authentication (2FA)](account/two_factor_authentication.md) is enabled.
+- Used with a GitLab username to authenticate with GitLab features that require usernames. For example,
+  [GitLab managed Terraform state backend](../infrastructure/iac/terraform_state.md#using-a-gitlab-managed-terraform-state-backend-as-a-remote-data-source)
+  and [Docker container registry](../packages/container_registry/index.md#authenticate-with-the-container-registry),
+- Similar to [project access tokens](../project/settings/project_access_tokens.md) and [group access tokens](../group/settings/group_access_tokens.md), but are attached
+  to a user rather than a project or group.
+
+NOTE:
+Though required, GitLab usernames are ignored when authenticating with a personal access token.
+There is an [issue for tracking](https://gitlab.com/gitlab-org/gitlab/-/issues/212953) to make GitLab
+use the username.
+
+For examples of how you can use a personal access token to authenticate with the API, see the [API documentation](../../api/index.md#personalprojectgroup-access-tokens).
 
 Alternately, GitLab administrators can use the API to create [impersonation tokens](../../api/index.md#impersonation-tokens).
 Use impersonation tokens to automate authentication as a specific user.
@@ -29,7 +44,7 @@ You can create as many personal access tokens as you like.
 
 1. In the top-right corner, select your avatar.
 1. Select **Edit profile**.
-1. In the left sidebar, select **Access Tokens**.
+1. On the left sidebar, select **Access Tokens**.
 1. Enter a name and optional expiry date for the token.
 1. Select the [desired scopes](#personal-access-token-scopes).
 1. Select **Create personal access token**.
@@ -47,13 +62,17 @@ to the URL. For example:
 https://gitlab.example.com/-/profile/personal_access_tokens?name=Example+Access+token&scopes=api,read_user,read_registry
 ```
 
+WARNING:
+Personal access tokens must be treated carefully. Read our [token security considerations](../../security/token_overview.md#security-considerations)
+for guidance on managing personal access tokens (for example, setting a short expiry and using minimal scopes).
+
 ## Revoke a personal access token
 
 At any time, you can revoke a personal access token.
 
 1. In the top-right corner, select your avatar.
 1. Select **Edit profile**.
-1. In the left sidebar, select **Access Tokens**.
+1. On the left sidebar, select **Access Tokens**.
 1. In the **Active personal access tokens** area, next to the key, select **Revoke**.
 
 ## View the last time a token was used
@@ -65,7 +84,7 @@ To view the last time a token was used:
 
 1. In the top-right corner, select your avatar.
 1. Select **Edit profile**.
-1. In the left sidebar, select **Access Tokens**.
+1. On the left sidebar, select **Access Tokens**.
 1. In the **Active personal access tokens** area, next to the key, view the **Last Used** date.
 
 ## Personal access token scopes
@@ -78,7 +97,7 @@ A personal access token can perform actions based on the assigned scopes.
 | `read_user`        | Read-only for endpoints under `/users`. Essentially, access to any of the `GET` requests in the [Users API](../../api/users.md). |
 | `read_api`         | Read-only for the complete API, including all groups and projects, the Container Registry, and the Package Registry. ([Introduced](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/28944) in GitLab 12.10.) |
 | `read_repository`  | Read-only (pull) for the repository through `git clone`. |
-| `write_repository` | Read-write (pull, push) for the repository through `git clone`. Required for accessing Git repositories over HTTP when 2FA is enabled. |
+| `write_repository` | Read-write (pull, push) for the repository through `git clone`. |
 | `read_registry`    | Read-only (pull) for [Container Registry](../packages/container_registry/index.md) images if a project is private and authorization is required. |
 | `write_registry`   | Read-write (push) for [Container Registry](../packages/container_registry/index.md) images if a project is private and authorization is required. ([Introduced](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/28958) in GitLab 12.10.) |
 | `sudo`             | API actions as any user in the system (if the authenticated user is an administrator). |
@@ -92,7 +111,7 @@ Personal access tokens expire on the date you define, at midnight UTC.
 - In GitLab Ultimate, administrators can
   [limit the lifetime of personal access tokens](../admin_area/settings/account_and_limit_settings.md#limit-the-lifetime-of-personal-access-tokens).
 - In GitLab Ultimate, administrators can choose whether or not to
-  [enforce personal access token expiration](../admin_area/settings/account_and_limit_settings.md#allow-expired-personal-access-tokens-to-be-used).
+  [enforce personal access token expiration](../admin_area/settings/account_and_limit_settings.md#allow-expired-personal-access-tokens-to-be-used-deprecated).
 
 ## Create a personal access token programmatically **(FREE SELF)**
 

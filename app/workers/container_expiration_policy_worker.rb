@@ -45,8 +45,6 @@ class ContainerExpirationPolicyWorker # rubocop:disable Scalability/IdempotentWo
   # not perfomed with a delay
   # https://gitlab.com/gitlab-org/gitlab/-/merge_requests/63635#note_603771207
   def use_replica_if_available(&blk)
-    return yield unless ::Gitlab::Database::LoadBalancing.enable?
-
     ::Gitlab::Database::LoadBalancing::Session.current.use_replicas_for_read_queries(&blk)
   end
 
@@ -59,7 +57,7 @@ class ContainerExpirationPolicyWorker # rubocop:disable Scalability/IdempotentWo
   def perform_unthrottled
     with_runnable_policy(preloaded: true) do |policy|
       with_context(project: policy.project,
-                   user: policy.project.owner) do |project:, user:|
+                   user: nil) do |project:, user:|
         ContainerExpirationPolicyService.new(project, user)
                                         .execute(policy)
       end
@@ -101,7 +99,7 @@ class ContainerExpirationPolicyWorker # rubocop:disable Scalability/IdempotentWo
   end
 
   def throttling_enabled?
-    Feature.enabled?(:container_registry_expiration_policies_throttling)
+    Feature.enabled?(:container_registry_expiration_policies_throttling, default_enabled: :yaml)
   end
 
   def lease_timeout

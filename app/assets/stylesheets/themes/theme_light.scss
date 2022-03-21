@@ -6,7 +6,7 @@ body {
       $gray-500,
       $gray-700,
       $gray-500,
-      $gray-500,
+      $gray-900,
       $gray-50,
       $gray-500
     );
@@ -42,6 +42,16 @@ body {
           color: $gray-500;
           border-left: 1px solid $gray-100;
         }
+      }
+    }
+
+    .header-search {
+      background-color: $white !important;
+      box-shadow: inset 0 0 0 1px $border-color !important;
+
+      &:hover {
+        background-color: $white !important;
+        box-shadow: inset 0 0 0 1px $blue-200 !important;
       }
     }
 

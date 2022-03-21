@@ -193,48 +193,11 @@ RSpec.shared_examples 'Debian Distribution' do |factory, container, can_freeze|
     end
   end
 
-  describe '#needs_update?' do
-    subject { distribution.needs_update? }
-
-    context 'with new distribution' do
-      let(:distribution) { create(factory, container: distribution_with_suite.container) }
-
-      it { is_expected.to be_truthy }
-    end
-
-    context 'with file' do
-      context 'without valid_time_duration_seconds' do
-        let(:distribution) { create(factory, :with_file, container: distribution_with_suite.container) }
-
-        it { is_expected.to be_falsey }
-      end
-
-      context 'with valid_time_duration_seconds' do
-        let(:distribution) { create(factory, :with_file, container: distribution_with_suite.container, valid_time_duration_seconds: 2.days.to_i) }
-
-        context 'when not yet expired' do
-          it { is_expected.to be_falsey }
-        end
-
-        context 'when expired' do
-          it do
-            distribution
-
-            travel_to(4.days.from_now) do
-              is_expected.to be_truthy
-            end
-          end
-        end
-      end
-    end
-  end
-
   if container == :project
     describe 'project distribution specifics' do
       describe 'relationships' do
         it { is_expected.to have_many(:publications).class_name('Packages::Debian::Publication').inverse_of(:distribution).with_foreign_key(:distribution_id) }
         it { is_expected.to have_many(:packages).class_name('Packages::Package').through(:publications) }
-        it { is_expected.to have_many(:package_files).class_name('Packages::PackageFile').through(:packages) }
       end
     end
   else
@@ -264,6 +227,14 @@ RSpec.shared_examples 'Debian Distribution' do |factory, container, can_freeze|
 
         it 'returns only files from public packages with same codename' do
           expect(subject.to_a).to contain_exactly(*public_package_with_same_codename.package_files)
+        end
+
+        context 'with pending destruction package files' do
+          let_it_be(:package_file_pending_destruction) { create(:package_file, :pending_destruction, package: public_package_with_same_codename) }
+
+          it 'does not return them' do
+            expect(subject.to_a).not_to include(package_file_pending_destruction)
+          end
         end
       end
     end

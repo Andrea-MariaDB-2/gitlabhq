@@ -71,6 +71,13 @@ RSpec.describe Banzai::Filter::ExternalLinkFilter do
 
       expect(doc.to_html).to eq(expected)
     end
+
+    it 'adds rel and target attributes to improperly formatted protocols' do
+      doc = filter %q(<p><a target="_blank" href="http:evil.com">Reverse Tabnabbing</a></p>)
+      expected = %q(<p><a target="_blank" href="http:evil.com" rel="nofollow noreferrer noopener">Reverse Tabnabbing</a></p>)
+
+      expect(doc.to_html).to eq(expected)
+    end
   end
 
   context 'for links with a username' do
@@ -189,6 +196,17 @@ RSpec.describe Banzai::Filter::ExternalLinkFilter do
         expect(doc.to_html).to include('class="has-tooltip"')
         expect(doc.to_html).to include('title="http://example.com/evil%E2%80%AE3pm.exe"')
       end
+    end
+  end
+
+  context 'for links that have `rel=license`' do
+    let(:doc) { filter %q(<a rel="license" href="http://example.com">rel-license</a>) }
+
+    it_behaves_like 'an external link with rel attribute'
+
+    it 'maintains rel license' do
+      expect(doc.at_css('a')).to have_attribute('rel')
+      expect(doc.at_css('a')['rel']).to include 'license'
     end
   end
 end

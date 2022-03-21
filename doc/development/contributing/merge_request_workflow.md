@@ -9,7 +9,7 @@ info: To determine the technical writer assigned to the Stage/Group associated w
 
 We welcome merge requests from everyone, with fixes and improvements
 to GitLab code, tests, and documentation. The issues that are specifically suitable
-for community contributions are listed with the [`Accepting merge requests`](issue_workflow.md#label-for-community-contributors)
+for community contributions have the [`Seeking community contributions`](issue_workflow.md#label-for-community-contributors)
 label, but you are free to contribute to any issue you want.
 
 If an issue is marked for the current milestone at any time, even
@@ -18,8 +18,8 @@ in order to ensure the work is finished before the release date.
 
 If you want to add a new feature that is not labeled, it is best to first create
 an issue (if there isn't one already) and leave a comment asking for it
-to be marked as `Accepting Merge Requests`. Please include screenshots or
-wireframes of the proposed feature if it will also change the UI.
+to be labeled as `Seeking community contributions`. See the [feature proposals](issue_workflow.md#feature-proposals)
+section.
 
 Merge requests should be submitted to the appropriate project at GitLab.com, for example
 [GitLab](https://gitlab.com/gitlab-org/gitlab/-/merge_requests),
@@ -71,6 +71,9 @@ request is as follows:
    1. The MR must include *Before* and *After* screenshots if UI changes are made.
    1. Include any steps or setup required to ensure reviewers can view the changes you've made (for example, include any information about feature flags).
 1. If you're allowed to, set a relevant milestone and [labels](issue_workflow.md).
+   MR labels should generally match the corresponding issue (if there is one).
+   The group label should reflect the group that executed or coached the work,
+   not necessarily the group that owns the feature.
 1. UI changes should use available components from the GitLab Design System,
    [Pajamas](https://design.gitlab.com/).
 1. If the MR changes CSS classes, please include the list of affected pages, which
@@ -78,11 +81,29 @@ request is as follows:
 1. If your MR touches code that executes shell commands, reads or opens files, or
    handles paths to files on disk, make sure it adheres to the
    [shell command guidelines](../shell_commands.md)
-1. If your code needs to handle file storage, see the [uploads documentation](../uploads.md).
+1. If your code needs to handle file storage, see the [uploads documentation](../uploads/index.md).
 1. If your merge request adds one or more migrations, make sure to execute all
    migrations on a fresh database before the MR is reviewed. If the review leads
    to large changes in the MR, execute the migrations again once the review is complete.
 1. Write tests for more complex migrations.
+1. If your merge request adds new validations to existing models, to make sure the
+   data processing is backwards compatible:
+
+   - Ask in the [`#database`](https://gitlab.slack.com/archives/CNZ8E900G) Slack channel
+     for assistance to execute the database query that checks the existing rows to
+     ensure existing rows aren't impacted by the change.
+   - Add the necessary validation with a feature flag to be gradually rolled out
+     following [the rollout steps](https://about.gitlab.com/handbook/product-development-flow/feature-flag-lifecycle/#rollout).
+
+   If this merge request is urgent, the code owners should make the final call on
+   whether reviewing existing rows should be included as an immediate follow-up task
+   to the merge request.
+
+   NOTE:
+   There isn't a way to know anything about our customers' data on their
+   [self-managed instances](../../subscriptions/self_managed/index.md), so keep
+   that in mind for any data implications with your merge request.
+
 1. Merge requests **must** adhere to the [merge request performance guidelines](../merge_request_performance_guidelines.md).
 1. For tests that use Capybara, read
    [how to write reliable, asynchronous integration tests](https://thoughtbot.com/blog/write-reliable-asynchronous-integration-tests-with-capybara).
@@ -223,32 +244,57 @@ the contribution acceptance criteria below:
 
 ## Definition of done
 
-If you contribute to GitLab please know that changes involve more than just
+If you contribute to GitLab, please know that changes involve more than just
 code. We use the following [definition of done](https://www.agilealliance.org/glossary/definition-of-done).
-Your contribution is not *done* until you have made sure it meets all of these
+To reach the definition of done, the merge request must create no regressions and meet all these criteria:
+
+- Verified as working in production on GitLab.com.
+- Verified as working for self-managed instances.
+
+If a regression occurs, we prefer you revert the change. We break the definition of done into two phases: [MR Merge](#mr-merge) and [Production use](#production-use).
+Your contribution is *incomplete* until you have made sure it meets all of these
 requirements.
+
+### MR Merge
 
 1. Clear description explaining the relevancy of the contribution.
 1. Working and clean code that is commented where needed.
 1. [Unit, integration, and system tests](../testing_guide/index.md) that all pass
    on the CI server.
+1. Peer member testing is optional but recommended when the risk of a change is high. This includes when the changes are [far-reaching](https://about.gitlab.com/handbook/engineering/development/#reducing-the-impact-of-far-reaching-work) or are for [components critical for security](../code_review.md#security).
 1. Regressions and bugs are covered with tests that reduce the risk of the issue happening
    again.
+1. Code affected by a feature flag is covered by [automated tests with the feature flag enabled and disabled](../feature_flags/index.md#feature-flags-in-tests), or both
+   states are tested as part of peer member testing or as part of the rollout plan.
 1. [Performance guidelines](../merge_request_performance_guidelines.md) have been followed.
 1. [Secure coding guidelines](https://gitlab.com/gitlab-com/gl-security/security-guidelines) have been followed.
+1. [Application and rate limit guidelines](../merge_request_application_and_rate_limit_guidelines.md) have been followed.
 1. [Documented](../documentation/index.md) in the `/doc` directory.
 1. [Changelog entry added](../changelog.md), if necessary.
-1. Reviewed by relevant reviewers and all concerns are addressed for Availability, Regressions, Security. Documentation reviews should take place as soon as possible, but they should not block a merge request.
-1. Merged by a project maintainer.
+1. Reviewed by relevant reviewers, and all concerns are addressed for Availability, Regressions, and Security. Documentation reviews should take place as soon as possible, but they should not block a merge request.
+1. The [MR acceptance checklist](../code_review.md#acceptance-checklist) has been checked as confirmed in the MR.
 1. Create an issue in the [infrastructure issue tracker](https://gitlab.com/gitlab-com/gl-infra/infrastructure/-/issues) to inform the Infrastructure department when your contribution is changing default settings or introduces a new setting, if relevant.
-1. Confirmed to be working in the [Canary stage](https://about.gitlab.com/handbook/engineering/#canary-testing) with no new [Sentry](https://about.gitlab.com/handbook/engineering/#sentry) errors or on GitLab.com once the contribution is deployed.
-1. Added to the [release post](https://about.gitlab.com/handbook/marketing/blog/release-posts/),
-   if relevant.
-1. Added to [the website](https://gitlab.com/gitlab-com/www-gitlab-com/blob/master/data/features.yml), if relevant.
 1. [Black-box tests/end-to-end tests](../testing_guide/testing_levels.md#black-box-tests-at-the-system-level-aka-end-to-end-tests)
    added if required. Please contact [the quality team](https://about.gitlab.com/handbook/engineering/quality/#teams)
    with any questions.
+1. The change is tested in a review app where possible and if appropriate.
 1. The new feature does not degrade the user experience of the product.
+1. The change is evaluated to [limit the impact of far-reaching work](https://about.gitlab.com/handbook/engineering/development/#reducing-the-impact-of-far-reaching-work).
+1. An agreed-upon [rollout plan](https://about.gitlab.com/handbook/engineering/development/processes/rollout-plans/).  
+1. Merged by a project maintainer.
+
+### Production use
+
+1. Confirmed to be working in staging before implementing the change in production, where possible.
+1. Confirmed to be working in the production with no new [Sentry](https://about.gitlab.com/handbook/engineering/#sentry) errors after the contribution is deployed.
+1. Confirmed that the [rollout plan](https://about.gitlab.com/handbook/engineering/development/processes/rollout-plans) has been completed.
+1. If there is a performance risk in the change, I have analyzed the performance of the system before and after the change.
+1. *If the merge request uses feature flags, per-project or per-group enablement, and a staged rollout:*
+   - Confirmed to be working on GitLab projects.
+   - Confirmed to be working at each stage for all projects added.  
+1. Added to the [release post](https://about.gitlab.com/handbook/marketing/blog/release-posts/),
+   if relevant.
+1. Added to [the website](https://gitlab.com/gitlab-com/www-gitlab-com/blob/master/data/features.yml), if relevant.
 
 Contributions do not require approval from the [Product team](https://about.gitlab.com/handbook/product/product-processes/#gitlab-pms-arent-the-arbiters-of-community-contributions).
 

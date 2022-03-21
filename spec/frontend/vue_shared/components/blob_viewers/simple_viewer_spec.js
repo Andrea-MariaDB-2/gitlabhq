@@ -1,25 +1,21 @@
 import { shallowMount } from '@vue/test-utils';
-import waitForPromises from 'helpers/wait_for_promises';
+import { nextTick } from 'vue';
 import { HIGHLIGHT_CLASS_NAME } from '~/vue_shared/components/blob_viewers/constants';
 import SimpleViewer from '~/vue_shared/components/blob_viewers/simple_viewer.vue';
-import SourceEditor from '~/vue_shared/components/source_editor.vue';
+import LineHighlighter from '~/blob/line_highlighter';
+
+jest.mock('~/blob/line_highlighter');
 
 describe('Blob Simple Viewer component', () => {
   let wrapper;
   const contentMock = `<span id="LC1">First</span>\n<span id="LC2">Second</span>\n<span id="LC3">Third</span>`;
   const blobHash = 'foo-bar';
 
-  function createComponent(
-    content = contentMock,
-    isRawContent = false,
-    isRefactorFlagEnabled = false,
-  ) {
+  function createComponent(content = contentMock, isRawContent = false, glFeatures = {}) {
     wrapper = shallowMount(SimpleViewer, {
       provide: {
         blobHash,
-        glFeatures: {
-          refactorBlobViewer: isRefactorFlagEnabled,
-        },
+        glFeatures,
       },
       propsData: {
         content,
@@ -32,6 +28,20 @@ describe('Blob Simple Viewer component', () => {
 
   afterEach(() => {
     wrapper.destroy();
+  });
+
+  describe('refactorBlobViewer feature flag', () => {
+    it('loads the LineHighlighter if refactorBlobViewer is enabled', () => {
+      createComponent('', false, { refactorBlobViewer: true });
+
+      expect(LineHighlighter).toHaveBeenCalled();
+    });
+
+    it('does not load the LineHighlighter if refactorBlobViewer is disabled', () => {
+      createComponent('', false, { refactorBlobViewer: false });
+
+      expect(LineHighlighter).not.toHaveBeenCalled();
+    });
   });
 
   it('does not fail if content is empty', () => {
@@ -78,7 +88,7 @@ describe('Blob Simple Viewer component', () => {
       expect(linetoBeHighlighted.classes()).toContain(HIGHLIGHT_CLASS_NAME);
     });
 
-    it('switches highlighting when another line is selected', () => {
+    it('switches highlighting when another line is selected', async () => {
       const currentlyHighlighted = wrapper.find('#LC2');
       const hash = '#LC3';
       const linetoBeHighlighted = wrapper.find(hash);
@@ -87,39 +97,10 @@ describe('Blob Simple Viewer component', () => {
 
       wrapper.vm.scrollToLine(hash);
 
-      return wrapper.vm.$nextTick(() => {
-        expect(wrapper.vm.highlightedLine).toBe(linetoBeHighlighted.element);
-        expect(currentlyHighlighted.classes()).not.toContain(HIGHLIGHT_CLASS_NAME);
-        expect(linetoBeHighlighted.classes()).toContain(HIGHLIGHT_CLASS_NAME);
-      });
+      await nextTick();
+      expect(wrapper.vm.highlightedLine).toBe(linetoBeHighlighted.element);
+      expect(currentlyHighlighted.classes()).not.toContain(HIGHLIGHT_CLASS_NAME);
+      expect(linetoBeHighlighted.classes()).toContain(HIGHLIGHT_CLASS_NAME);
     });
-  });
-
-  describe('Vue refactoring to use Source Editor', () => {
-    const findSourceEditor = () => wrapper.find(SourceEditor);
-
-    it.each`
-      doesRender    | condition                                          | isRawContent | isRefactorFlagEnabled
-      ${'Does not'} | ${'rawContent is not specified'}                   | ${false}     | ${true}
-      ${'Does not'} | ${'feature flag is disabled is not specified'}     | ${true}      | ${false}
-      ${'Does not'} | ${'both, the FF and rawContent are not specified'} | ${false}     | ${false}
-      ${'Does'}     | ${'both, the FF and rawContent are specified'}     | ${true}      | ${true}
-    `(
-      '$doesRender render Source Editor component in readonly mode when $condition',
-      async ({ isRawContent, isRefactorFlagEnabled } = {}) => {
-        createComponent('raw content', isRawContent, isRefactorFlagEnabled);
-        await waitForPromises();
-
-        if (isRawContent && isRefactorFlagEnabled) {
-          expect(findSourceEditor().exists()).toBe(true);
-
-          expect(findSourceEditor().props('value')).toBe('raw content');
-          expect(findSourceEditor().props('fileName')).toBe('test.js');
-          expect(findSourceEditor().props('editorOptions')).toEqual({ readOnly: true });
-        } else {
-          expect(findSourceEditor().exists()).toBe(false);
-        }
-      },
-    );
   });
 });

@@ -4,7 +4,8 @@ require 'spec_helper'
 
 RSpec.describe Projects::ImportExport::ExportService do
   describe '#execute' do
-    let!(:user) { create(:user) }
+    let_it_be(:user) { create(:user) }
+
     let(:project) { create(:project) }
     let(:shared) { project.import_export_shared }
     let!(:after_export_strategy) { Gitlab::ImportExport::AfterExportStrategies::DownloadNotificationStrategy.new }
@@ -28,7 +29,14 @@ RSpec.describe Projects::ImportExport::ExportService do
     end
 
     it 'saves the models' do
-      expect(Gitlab::ImportExport::Project::TreeSaver).to receive(:new).and_call_original
+      saver_params = {
+        project: project,
+        current_user: user,
+        shared: shared,
+        params: {},
+        logger: an_instance_of(Gitlab::Export::Logger)
+      }
+      expect(Gitlab::ImportExport::Project::TreeSaver).to receive(:new).with(saver_params).and_call_original
 
       service.execute
     end
@@ -85,9 +93,21 @@ RSpec.describe Projects::ImportExport::ExportService do
       end
 
       it 'saves the project in the file system' do
-        expect(Gitlab::ImportExport::Saver).to receive(:save).with(exportable: project, shared: shared)
+        expect(Gitlab::ImportExport::Saver).to receive(:save).with(exportable: project, shared: shared).and_return(true)
 
         service.execute
+      end
+
+      context 'when the upload fails' do
+        before do
+          expect(Gitlab::ImportExport::Saver).to receive(:save).with(exportable: project, shared: shared).and_return(false)
+        end
+
+        it 'notifies the user of an error' do
+          expect(service).to receive(:notify_error).and_call_original
+
+          expect { service.execute }.to raise_error(Gitlab::ImportExport::Error)
+        end
       end
 
       it 'calls the after export strategy' do
@@ -99,6 +119,7 @@ RSpec.describe Projects::ImportExport::ExportService do
       context 'when after export strategy fails' do
         before do
           allow(after_export_strategy).to receive(:execute).and_return(false)
+          expect(Gitlab::ImportExport::Saver).to receive(:save).with(exportable: project, shared: shared).and_return(true)
         end
 
         after do

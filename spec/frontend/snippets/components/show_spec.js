@@ -1,4 +1,4 @@
-import { GlLoadingIcon } from '@gitlab/ui';
+import { GlLoadingIcon, GlAlert } from '@gitlab/ui';
 import { shallowMount } from '@vue/test-utils';
 import { Blob, BinaryBlob } from 'jest/blob/components/mock_data';
 import EmbedDropdown from '~/snippets/components/embed_dropdown.vue';
@@ -41,19 +41,23 @@ describe('Snippet view app', () => {
       },
     });
   }
+
+  const findLoadingIcon = () => wrapper.findComponent(GlLoadingIcon);
+  const findEmbedDropdown = () => wrapper.findComponent(EmbedDropdown);
+
   afterEach(() => {
     wrapper.destroy();
   });
 
   it('renders loader while the query is in flight', () => {
     createComponent({ loading: true });
-    expect(wrapper.find(GlLoadingIcon).exists()).toBe(true);
+    expect(findLoadingIcon().exists()).toBe(true);
   });
 
-  it('renders all simple components after the query is finished', () => {
+  it('renders all simple components required after the query is finished', () => {
     createComponent();
-    expect(wrapper.find(SnippetHeader).exists()).toBe(true);
-    expect(wrapper.find(SnippetTitle).exists()).toBe(true);
+    expect(wrapper.findComponent(SnippetHeader).exists()).toBe(true);
+    expect(wrapper.findComponent(SnippetTitle).exists()).toBe(true);
   });
 
   it('renders embed dropdown component if visibility allows', () => {
@@ -65,7 +69,7 @@ describe('Snippet view app', () => {
         },
       },
     });
-    expect(wrapper.find(EmbedDropdown).exists()).toBe(true);
+    expect(findEmbedDropdown().exists()).toBe(true);
   });
 
   it('renders correct snippet-blob components', () => {
@@ -98,7 +102,24 @@ describe('Snippet view app', () => {
           },
         },
       });
-      expect(wrapper.find(EmbedDropdown).exists()).toBe(isRendered);
+      expect(findEmbedDropdown().exists()).toBe(isRendered);
+    });
+  });
+
+  describe('hasUnretrievableBlobs alert rendering', () => {
+    it.each`
+      hasUnretrievableBlobs | condition       | isRendered
+      ${false}              | ${'not render'} | ${false}
+      ${true}               | ${'render'}     | ${true}
+    `('does $condition gl-alert by default', ({ hasUnretrievableBlobs, isRendered }) => {
+      createComponent({
+        data: {
+          snippet: {
+            hasUnretrievableBlobs,
+          },
+        },
+      });
+      expect(wrapper.findComponent(GlAlert).exists()).toBe(isRendered);
     });
   });
 
@@ -120,7 +141,7 @@ describe('Snippet view app', () => {
             },
           },
         });
-        expect(wrapper.find(CloneDropdownButton).exists()).toBe(isRendered);
+        expect(wrapper.findComponent(CloneDropdownButton).exists()).toBe(isRendered);
       },
     );
   });

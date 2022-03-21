@@ -2,12 +2,14 @@ import {
   GlLoadingIcon,
   GlPagination,
   GlDeprecatedSkeletonLoading as GlSkeletonLoading,
-  GlTable,
+  GlTableLite,
 } from '@gitlab/ui';
 import * as Sentry from '@sentry/browser';
 import { mount } from '@vue/test-utils';
 import MockAdapter from 'axios-mock-adapter';
+import { nextTick } from 'vue';
 import Clusters from '~/clusters_list/components/clusters.vue';
+import ClustersEmptyState from '~/clusters_list/components/clusters_empty_state.vue';
 import ClusterStore from '~/clusters_list/store';
 import axios from '~/lib/utils/axios_utils';
 import { apiData } from '../mock_data';
@@ -18,26 +20,38 @@ describe('Clusters', () => {
   let wrapper;
 
   const endpoint = 'some/endpoint';
+  const totalClustersNumber = 6;
+  const clustersEmptyStateImage = 'path/to/svg';
+  const emptyStateHelpText = null;
+  const addClusterPath = '/path/to/new/cluster';
 
   const entryData = {
     endpoint,
     imgTagsAwsText: 'AWS Icon',
     imgTagsDefaultText: 'Default Icon',
     imgTagsGcpText: 'GCP Icon',
+    totalClusters: totalClustersNumber,
   };
 
-  const findLoader = () => wrapper.find(GlLoadingIcon);
-  const findPaginatedButtons = () => wrapper.find(GlPagination);
-  const findTable = () => wrapper.find(GlTable);
+  const provideData = {
+    clustersEmptyStateImage,
+    emptyStateHelpText,
+    addClusterPath,
+  };
+
+  const findLoader = () => wrapper.findComponent(GlLoadingIcon);
+  const findPaginatedButtons = () => wrapper.findComponent(GlPagination);
+  const findTable = () => wrapper.findComponent(GlTableLite);
   const findStatuses = () => findTable().findAll('.js-status');
+  const findEmptyState = () => wrapper.findComponent(ClustersEmptyState);
 
   const mockPollingApi = (response, body, header) => {
     mock.onGet(`${endpoint}?page=${header['x-page']}`).reply(response, body, header);
   };
 
-  const mountWrapper = () => {
+  const createWrapper = ({ propsData = {} }) => {
     store = ClusterStore(entryData);
-    wrapper = mount(Clusters, { store });
+    wrapper = mount(Clusters, { propsData, provide: provideData, store, stubs: { GlTableLite } });
     return axios.waitForAll();
   };
 
@@ -57,7 +71,7 @@ describe('Clusters', () => {
     mock = new MockAdapter(axios);
     mockPollingApi(200, apiData, paginationHeader());
 
-    return mountWrapper();
+    return createWrapper({});
   });
 
   afterEach(() => {
@@ -70,7 +84,6 @@ describe('Clusters', () => {
     describe('when data is loading', () => {
       beforeEach(() => {
         wrapper.vm.$store.state.loadingClusters = true;
-        return wrapper.vm.$nextTick();
       });
 
       it('displays a loader instead of the table while loading', () => {
@@ -79,23 +92,29 @@ describe('Clusters', () => {
       });
     });
 
-    it('displays a table component', () => {
-      expect(findTable().exists()).toBe(true);
+    describe('when clusters are present', () => {
+      it('displays a table component', () => {
+        expect(findTable().exists()).toBe(true);
+      });
     });
 
-    it('renders the correct table headers', () => {
-      const tableHeaders = wrapper.vm.fields;
-      const headers = findTable().findAll('th');
-
-      expect(headers.length).toBe(tableHeaders.length);
-
-      tableHeaders.forEach((headerText, i) =>
-        expect(headers.at(i).text()).toEqual(headerText.label),
-      );
+    describe('when there are no clusters', () => {
+      beforeEach(() => {
+        wrapper.vm.$store.state.totalClusters = 0;
+      });
+      it('should render empty state', () => {
+        expect(findEmptyState().exists()).toBe(true);
+      });
     });
 
-    it('should stack on smaller devices', () => {
-      expect(findTable().classes()).toContain('b-table-stacked-md');
+    describe('when is loaded as a child component', () => {
+      beforeEach(() => {
+        createWrapper({ limit: 6 });
+      });
+
+      it("shouldn't render pagination buttons", () => {
+        expect(findPaginatedButtons().exists()).toBe(false);
+      });
     });
   });
 
@@ -158,9 +177,9 @@ describe('Clusters', () => {
     });
 
     describe('nodes finish loading', () => {
-      beforeEach(() => {
+      beforeEach(async () => {
         wrapper.vm.$store.state.loadingNodes = false;
-        return wrapper.vm.$nextTick();
+        await nextTick();
       });
 
       it.each`
@@ -240,7 +259,7 @@ describe('Clusters', () => {
 
     beforeEach(() => {
       mockPollingApi(200, apiData, paginationHeader(totalFirstPage, perPage, 1));
-      return mountWrapper();
+      return createWrapper({});
     });
 
     it('should load to page 1 with header values', () => {
@@ -254,6 +273,8 @@ describe('Clusters', () => {
     describe('when updating currentPage', () => {
       beforeEach(() => {
         mockPollingApi(200, apiData, paginationHeader(totalSecondPage, perPage, 2));
+        // setData usage is discouraged. See https://gitlab.com/groups/gitlab-org/-/epics/7330 for details
+        // eslint-disable-next-line no-restricted-syntax
         wrapper.setData({ currentPage: 2 });
         return axios.waitForAll();
       });

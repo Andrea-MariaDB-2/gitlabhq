@@ -15,7 +15,7 @@ module Groups
         return false
       end
 
-      return false unless valid_visibility_level_change?(group, params[:visibility_level])
+      return false unless valid_visibility_level_change?(group, group.visibility_attribute_value(params))
 
       return false unless valid_share_with_group_lock_change?
 
@@ -77,7 +77,7 @@ module Groups
     end
 
     def after_update
-      if group.previous_changes.include?(:visibility_level) && group.private?
+      if group.previous_changes.include?(group.visibility_level_field) && group.private?
         # don't enqueue immediately to prevent todos removal in case of a mistake
         TodosDestroyer::GroupPrivateWorker.perform_in(Todo::WAIT_FOR_DELETE, group.id)
       end
@@ -107,6 +107,7 @@ module Groups
 
     def handle_changes
       handle_settings_update
+      handle_crm_settings_update unless params[:crm_enabled].nil?
     end
 
     def handle_settings_update
@@ -114,6 +115,15 @@ module Groups
       allowed_settings_params.each { |param| params.delete(param) }
 
       ::NamespaceSettings::UpdateService.new(current_user, group, settings_params).execute
+    end
+
+    def handle_crm_settings_update
+      crm_enabled = params.delete(:crm_enabled)
+      return if group.crm_enabled? == crm_enabled
+
+      crm_settings = group.crm_settings || group.build_crm_settings
+      crm_settings.enabled = crm_enabled
+      crm_settings.save
     end
 
     def allowed_settings_params

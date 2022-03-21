@@ -19,6 +19,8 @@ module Gitlab
           end
 
           def parse!
+            set_report_version
+
             return report_data unless valid?
 
             raise SecurityReportParserError, "Invalid report format" unless report_data.is_a?(Hash)
@@ -26,15 +28,13 @@ module Gitlab
             create_scanner
             create_scan
             create_analyzer
-            set_report_version
 
             create_findings
 
             report_data
           rescue JSON::ParserError
             raise SecurityReportParserError, 'JSON parsing failed'
-          rescue StandardError => e
-            Gitlab::ErrorTracking.track_and_raise_for_dev_exception(e)
+          rescue StandardError
             raise SecurityReportParserError, "#{report.type} security report parsing failed"
           end
 
@@ -43,15 +43,31 @@ module Gitlab
           attr_reader :json_data, :report, :validate
 
           def valid?
-            return true if !validate || schema_validator.valid?
+            if Feature.enabled?(:show_report_validation_warnings, default_enabled: :yaml)
+              # We want validation to happen regardless of VALIDATE_SCHEMA CI variable
+              schema_validation_passed = schema_validator.valid?
 
-            schema_validator.errors.each { |error| report.add_error('Schema', error) }
+              if validate
+                schema_validator.errors.each { |error| report.add_error('Schema', error) } unless schema_validation_passed
 
-            false
+                schema_validation_passed
+              else
+                # We treat all schema validation errors as warnings
+                schema_validator.errors.each { |error| report.add_warning('Schema', error) }
+
+                true
+              end
+            else
+              return true if !validate || schema_validator.valid?
+
+              schema_validator.errors.each { |error| report.add_error('Schema', error) }
+
+              false
+            end
           end
 
           def schema_validator
-            @schema_validator ||= ::Gitlab::Ci::Parsers::Security::Validators::SchemaValidator.new(report.type, report_data)
+            @schema_validator ||= ::Gitlab::Ci::Parsers::Security::Validators::SchemaValidator.new(report.type, report_data, report.version)
           end
 
           def report_data
@@ -89,6 +105,7 @@ module Gitlab
             flags = create_flags(data['flags'])
             links = create_links(data['links'])
             location = create_location(data['location'] || {})
+            evidence = create_evidence(data['evidence'])
             signatures = create_signatures(tracking_data(data))
 
             if @vulnerability_finding_signatures_enabled && !signatures.empty?
@@ -107,6 +124,7 @@ module Gitlab
                 name: finding_name(data, identifiers, location),
                 compare_key: data['cve'] || '',
                 location: location,
+                evidence: evidence,
                 severity: parse_severity_level(data['severity']),
                 confidence: parse_confidence_level(data['confidence']),
                 scanner: create_scanner(data['scanner']),
@@ -115,7 +133,7 @@ module Gitlab
                 flags: flags,
                 links: links,
                 remediations: remediations,
-                raw_metadata: data.to_json,
+                original_data: data,
                 metadata_version: report_version,
                 details: data['details'] || {},
                 signatures: signatures,
@@ -241,6 +259,12 @@ module Gitlab
 
           def create_location(location_data)
             raise NotImplementedError
+          end
+
+          def create_evidence(evidence_data)
+            return unless evidence_data.is_a?(Hash)
+
+            ::Gitlab::Ci::Reports::Security::Evidence.new(data: evidence_data)
           end
 
           def finding_name(data, identifiers, location)

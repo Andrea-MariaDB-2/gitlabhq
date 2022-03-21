@@ -7,13 +7,16 @@ info: To determine the technical writer assigned to the Stage/Group associated w
 # Dependencies API **(ULTIMATE)**
 
 WARNING:
-This API is in an alpha stage and considered unstable.
+This API is in an [Alpha](../policy/alpha-beta-support.md#alpha-features) stage and considered unstable.
 The response payload may be subject to change or breakage
 across GitLab releases.
 
+> - Introduced in GitLab 12.1.
+> - Pagination introduced in 14.4.
+
 Every call to this endpoint requires authentication. To perform this call, user should be authorized to read repository.
 To see vulnerabilities in response, user should be authorized to read
-[Project Security Dashboard](../user/application_security/security_dashboard/index.md#project-security-dashboard).
+[Project Security Dashboard](../user/application_security/security_dashboard/index.md).
 
 ## List project dependencies
 
@@ -31,7 +34,7 @@ GET /projects/:id/dependencies?package_manager=yarn,bundler
 | Attribute     | Type           | Required | Description                                                                                                                                                                 |
 | ------------- | -------------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `id`          | integer/string | yes      | The ID or [URL-encoded path of the project](index.md#namespaced-path-encoding).                                                            |
-| `package_manager` | string array   | no       | Returns dependencies belonging to specified package manager. Valid values: `bundler`, `composer`, `conan`, `maven`, `npm`, `pip` or `yarn`.                                   |
+| `package_manager` | string array   | no       | Returns dependencies belonging to specified package manager. Valid values: `bundler`, `composer`, `conan`, `go`, `gradle`, `maven`, `npm`, `nuget`, `pip`, `pipenv`, `yarn`, `sbt`, or `setuptools`. |
 
 ```shell
 curl --header "PRIVATE-TOKEN: <your_access_token>" "https://gitlab.example.com/api/v4/projects/4/dependencies"
@@ -60,3 +63,10 @@ Example response:
     }
 ]
 ```
+
+## Dependencies pagination
+
+By default, `GET` requests return 20 results at a time because the API results
+are paginated.
+
+Read more on [pagination](index.md#pagination).

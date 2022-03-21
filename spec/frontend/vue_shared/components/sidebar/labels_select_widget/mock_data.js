@@ -34,22 +34,18 @@ export const mockLabels = [
 ];
 
 export const mockConfig = {
-  allowLabelEdit: true,
-  allowLabelCreate: true,
-  allowScopedLabels: true,
+  iid: '1',
+  fullPath: 'test',
   allowMultiselect: true,
   labelsListTitle: 'Assign labels',
   labelsCreateTitle: 'Create label',
   variant: 'sidebar',
-  dropdownOnly: false,
-  selectedLabels: [mockRegularLabel, mockScopedLabel],
   labelsSelectInProgress: false,
-  labelsFetchPath: '/gitlab-org/my-project/-/labels.json',
-  labelsManagePath: '/gitlab-org/my-project/-/labels',
   labelsFilterBasePath: '/gitlab-org/my-project/issues',
   labelsFilterParam: 'label_name',
   footerCreateLabelTitle: 'create',
   footerManageLabelTitle: 'manage',
+  attrWorkspacePath: 'test',
 };
 
 export const mockSuggestedColors = {
@@ -84,6 +80,7 @@ export const createLabelSuccessfulResponse = {
         color: '#dc143c',
         description: null,
         title: 'ewrwrwer',
+        textColor: '#000000',
         __typename: 'Label',
       },
       errors: [],
@@ -92,24 +89,68 @@ export const createLabelSuccessfulResponse = {
   },
 };
 
-export const labelsQueryResponse = {
+export const workspaceLabelsQueryResponse = {
   data: {
     workspace: {
+      id: 'gid://gitlab/Project/126',
       labels: {
         nodes: [
           {
+            __typename: 'Label',
             color: '#330066',
             description: null,
             id: 'gid://gitlab/ProjectLabel/1',
             title: 'Label1',
+            textColor: '#000000',
           },
           {
+            __typename: 'Label',
             color: '#2f7b2e',
             description: null,
             id: 'gid://gitlab/ProjectLabel/2',
             title: 'Label2',
+            textColor: '#000000',
           },
         ],
+      },
+    },
+  },
+};
+
+export const issuableLabelsQueryResponse = {
+  data: {
+    workspace: {
+      id: 'workspace-1',
+      issuable: {
+        __typename: 'Issue',
+        id: '1',
+        labels: {
+          nodes: [
+            {
+              __typename: 'Label',
+              color: '#330066',
+              description: null,
+              id: 'gid://gitlab/ProjectLabel/1',
+              title: 'Label1',
+              textColor: '#000000',
+            },
+          ],
+        },
+      },
+    },
+  },
+};
+
+export const updateLabelsMutationResponse = {
+  data: {
+    updateIssuableLabels: {
+      errors: [],
+      issuable: {
+        __typename: 'Issue',
+        id: '1',
+        labels: {
+          nodes: [],
+        },
       },
     },
   },

@@ -1,10 +1,17 @@
 ---
 stage: Protect
 group: Container Security
-info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#designated-technical-writers
+info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
 ---
 
 # Container Network Security **(FREE)**
+
+> [Deprecated](https://gitlab.com/groups/gitlab-org/-/epics/7476) in GitLab 14.8, and planned for [removal](https://gitlab.com/groups/gitlab-org/-/epics/7477) in GitLab 15.0.
+
+WARNING:
+Container Network Security is in its end-of-life process. It's [deprecated](https://gitlab.com/groups/gitlab-org/-/epics/7476)
+for use in GitLab 14.8, and planned for [removal](https://gitlab.com/groups/gitlab-org/-/epics/7477)
+in GitLab 15.0.
 
 Container Network Security in GitLab provides basic firewall functionality by leveraging Cilium
 NetworkPolicies to filter traffic going in and out of the cluster as well as traffic between pods

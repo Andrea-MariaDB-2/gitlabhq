@@ -48,8 +48,9 @@ RSpec.describe FeatureFlags::CreateService do
         {
           name: 'feature_flag',
           description: 'description',
-          scopes_attributes: [{ environment_scope: '*', active: true },
-                              { environment_scope: 'production', active: false }]
+          version: 'new_version_flag',
+          strategies_attributes: [{ name: 'default', scopes_attributes: [{ environment_scope: '*' }], parameters: {} },
+                                  { name: 'default', parameters: {}, scopes_attributes: [{ environment_scope: 'production' }] }]
         }
       end
 
@@ -61,22 +62,31 @@ RSpec.describe FeatureFlags::CreateService do
         expect { subject }.to change { Operations::FeatureFlag.count }.by(1)
       end
 
-      it 'syncs the feature flag to Jira' do
-        expect(::JiraConnect::SyncFeatureFlagsWorker).to receive(:perform_async).with(Integer, Integer)
+      context 'when Jira Connect subscription does not exist' do
+        it 'does not sync the feature flag to Jira' do
+          expect(::JiraConnect::SyncFeatureFlagsWorker).not_to receive(:perform_async)
 
-        subject
+          subject
+        end
+      end
+
+      context 'when Jira Connect subscription exists' do
+        before do
+          create(:jira_connect_subscription, namespace: project.namespace)
+        end
+
+        it 'syncs the feature flag to Jira' do
+          expect(::JiraConnect::SyncFeatureFlagsWorker).to receive(:perform_async).with(Integer, Integer)
+
+          subject
+        end
       end
 
       it 'creates audit event' do
-        expected_message = 'Created feature flag feature_flag '\
-                           'with description "description". '\
-                           'Created rule * and set it as active '\
-                           'with strategies [{"name"=&gt;"default", "parameters"=&gt;{}}]. '\
-                           'Created rule production and set it as inactive '\
-                           'with strategies [{"name"=&gt;"default", "parameters"=&gt;{}}].'
-
         expect { subject }.to change { AuditEvent.count }.by(1)
-        expect(AuditEvent.last.details[:custom_message]).to eq(expected_message)
+        expect(AuditEvent.last.details[:custom_message]).to start_with('Created feature flag feature_flag with description "description".')
+        expect(AuditEvent.last.details[:custom_message]).to include('Created strategy "default" with scopes "*".')
+        expect(AuditEvent.last.details[:custom_message]).to include('Created strategy "default" with scopes "production".')
       end
 
       context 'when user is reporter' do

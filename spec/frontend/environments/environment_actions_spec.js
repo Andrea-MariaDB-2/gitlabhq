@@ -1,9 +1,20 @@
 import { GlDropdown, GlDropdownItem, GlLoadingIcon, GlIcon } from '@gitlab/ui';
 import { shallowMount, mount } from '@vue/test-utils';
+import Vue, { nextTick } from 'vue';
+import VueApollo from 'vue-apollo';
 import { TEST_HOST } from 'helpers/test_constants';
 import { createMockDirective, getBinding } from 'helpers/vue_mock_directive';
 import EnvironmentActions from '~/environments/components/environment_actions.vue';
 import eventHub from '~/environments/event_hub';
+import actionMutation from '~/environments/graphql/mutations/action.mutation.graphql';
+import { confirmAction } from '~/lib/utils/confirm_via_gl_modal/confirm_via_gl_modal';
+import createMockApollo from 'helpers/mock_apollo_helper';
+
+jest.mock('~/lib/utils/confirm_via_gl_modal/confirm_via_gl_modal', () => {
+  return {
+    confirmAction: jest.fn(),
+  };
+});
 
 const scheduledJobAction = {
   name: 'scheduled action',
@@ -25,12 +36,13 @@ describe('EnvironmentActions Component', () => {
   const findEnvironmentActionsButton = () =>
     wrapper.find('[data-testid="environment-actions-button"]');
 
-  function createComponent(props, { mountFn = shallowMount } = {}) {
+  function createComponent(props, { mountFn = shallowMount, options = {} } = {}) {
     wrapper = mountFn(EnvironmentActions, {
       propsData: { actions: [], ...props },
       directives: {
         GlTooltip: createMockDirective(),
       },
+      ...options,
     });
   }
 
@@ -45,7 +57,7 @@ describe('EnvironmentActions Component', () => {
 
   afterEach(() => {
     wrapper.destroy();
-    wrapper = null;
+    confirmAction.mockReset();
   });
 
   it('should render a dropdown button with 2 icons', () => {
@@ -100,10 +112,10 @@ describe('EnvironmentActions Component', () => {
     let emitSpy;
 
     const clickAndConfirm = async ({ confirm = true } = {}) => {
-      jest.spyOn(window, 'confirm').mockImplementation(() => confirm);
+      confirmAction.mockResolvedValueOnce(confirm);
 
       findDropdownItem(scheduledJobAction).vm.$emit('click');
-      await wrapper.vm.$nextTick();
+      await nextTick();
     };
 
     beforeEach(() => {
@@ -119,7 +131,7 @@ describe('EnvironmentActions Component', () => {
       });
 
       it('emits postAction event', () => {
-        expect(window.confirm).toHaveBeenCalled();
+        expect(confirmAction).toHaveBeenCalled();
         expect(emitSpy).toHaveBeenCalledWith({ endpoint: scheduledJobAction.playPath });
       });
 
@@ -129,13 +141,13 @@ describe('EnvironmentActions Component', () => {
     });
 
     describe('when postAction event is denied', () => {
-      beforeEach(() => {
+      beforeEach(async () => {
         createComponentWithScheduledJobs({ mountFn: mount });
         clickAndConfirm({ confirm: false });
       });
 
       it('does not emit postAction event if confirmation is cancelled', () => {
-        expect(window.confirm).toHaveBeenCalled();
+        expect(confirmAction).toHaveBeenCalled();
         expect(emitSpy).not.toHaveBeenCalled();
       });
     });
@@ -148,6 +160,34 @@ describe('EnvironmentActions Component', () => {
     it('displays 00:00:00 for expired jobs in the dropdown', () => {
       createComponentWithScheduledJobs();
       expect(findDropdownItem(expiredJobAction).text()).toContain('00:00:00');
+    });
+  });
+
+  describe('graphql', () => {
+    Vue.use(VueApollo);
+
+    const action = {
+      name: 'bar',
+      play_path: 'https://gitlab.com/play',
+    };
+
+    let mockApollo;
+
+    beforeEach(() => {
+      mockApollo = createMockApollo();
+      createComponent(
+        { actions: [action], graphql: true },
+        { options: { apolloProvider: mockApollo } },
+      );
+    });
+
+    it('should trigger a graphql mutation on click', () => {
+      jest.spyOn(mockApollo.defaultClient, 'mutate');
+      findDropdownItem(action).vm.$emit('click');
+      expect(mockApollo.defaultClient.mutate).toHaveBeenCalledWith({
+        mutation: actionMutation,
+        variables: { action },
+      });
     });
   });
 });

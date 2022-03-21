@@ -3,7 +3,8 @@
 require('spec_helper')
 
 RSpec.describe ProfilesController, :request_store do
-  let(:user) { create(:user) }
+  let(:password) { 'longsecret987!' }
+  let(:user) { create(:user, password: password) }
 
   describe 'POST update' do
     it 'does not update password' do
@@ -23,7 +24,7 @@ RSpec.describe ProfilesController, :request_store do
       sign_in(user)
 
       put :update,
-          params: { user: { email: "john@gmail.com", name: "John" } }
+          params: { user: { email: "john@gmail.com", name: "John", validation_password: password } }
 
       user.reload
 
@@ -124,6 +125,8 @@ RSpec.describe ProfilesController, :request_store do
   end
 
   describe 'GET audit_log' do
+    let(:auth_event) { create(:authentication_event, user: user) }
+
     it 'tracks search event', :snowplow do
       sign_in(user)
 
@@ -135,6 +138,14 @@ RSpec.describe ProfilesController, :request_store do
         user: user
       )
     end
+
+    it 'loads page correctly' do
+      sign_in(user)
+
+      get :audit_log
+
+      expect(response).to have_gitlab_http_status(:success)
+    end
   end
 
   describe 'PUT update_username' do
@@ -142,9 +153,12 @@ RSpec.describe ProfilesController, :request_store do
     let(:gitlab_shell) { Gitlab::Shell.new }
     let(:new_username) { generate(:username) }
 
-    it 'allows username change' do
+    before do
       sign_in(user)
+      allow(::Gitlab::ApplicationRateLimiter).to receive(:throttled?).and_return(false)
+    end
 
+    it 'allows username change' do
       put :update_username,
         params: { user: { username: new_username } }
 
@@ -155,8 +169,6 @@ RSpec.describe ProfilesController, :request_store do
     end
 
     it 'updates a username using JSON request' do
-      sign_in(user)
-
       put :update_username,
           params: {
             user: { username: new_username }
@@ -168,8 +180,6 @@ RSpec.describe ProfilesController, :request_store do
     end
 
     it 'renders an error message when the username was not updated' do
-      sign_in(user)
-
       put :update_username,
           params: {
             user: { username: 'invalid username.git' }
@@ -181,8 +191,6 @@ RSpec.describe ProfilesController, :request_store do
     end
 
     it 'raises a correct error when the username is missing' do
-      sign_in(user)
-
       expect { put :update_username, params: { user: { gandalf: 'you shall not pass' } } }
         .to raise_error(ActionController::ParameterMissing)
     end
@@ -190,8 +198,6 @@ RSpec.describe ProfilesController, :request_store do
     context 'with legacy storage' do
       it 'moves dependent projects to new namespace' do
         project = create(:project_empty_repo, :legacy_storage, namespace: namespace)
-
-        sign_in(user)
 
         put :update_username,
           params: { user: { username: new_username } }
@@ -209,8 +215,6 @@ RSpec.describe ProfilesController, :request_store do
 
         before_disk_path = project.disk_path
 
-        sign_in(user)
-
         put :update_username,
           params: { user: { username: new_username } }
 
@@ -219,6 +223,19 @@ RSpec.describe ProfilesController, :request_store do
         expect(response).to have_gitlab_http_status(:found)
         expect(gitlab_shell.repository_exists?(project.repository_storage, "#{project.disk_path}.git")).to be_truthy
         expect(before_disk_path).to eq(project.disk_path)
+      end
+    end
+
+    context 'when the rate limit is reached' do
+      it 'does not update the username and returns status 429 Too Many Requests' do
+        expect(::Gitlab::ApplicationRateLimiter).to receive(:throttled?).with(:profile_update_username, scope: user).and_return(true)
+
+        expect do
+          put :update_username,
+            params: { user: { username: new_username } }
+        end.not_to change { user.reload.username }
+
+        expect(response).to have_gitlab_http_status(:too_many_requests)
       end
     end
   end

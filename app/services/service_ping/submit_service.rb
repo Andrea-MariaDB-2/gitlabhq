@@ -2,32 +2,39 @@
 
 module ServicePing
   class SubmitService
-    PRODUCTION_URL = 'https://version.gitlab.com/usage_data'
-    STAGING_URL = 'https://gitlab-services-version-gitlab-com-staging.gs-staging.gitlab.org/usage_data'
-
-    METRICS = %w[leader_issues instance_issues percentage_issues leader_notes instance_notes
-                 percentage_notes leader_milestones instance_milestones percentage_milestones
-                 leader_boards instance_boards percentage_boards leader_merge_requests
-                 instance_merge_requests percentage_merge_requests leader_ci_pipelines
-                 instance_ci_pipelines percentage_ci_pipelines leader_environments instance_environments
-                 percentage_environments leader_deployments instance_deployments percentage_deployments
-                 leader_projects_prometheus_active instance_projects_prometheus_active
-                 percentage_projects_prometheus_active leader_service_desk_issues instance_service_desk_issues
-                 percentage_service_desk_issues].freeze
+    PRODUCTION_BASE_URL = 'https://version.gitlab.com'
+    STAGING_BASE_URL = 'https://gitlab-services-version-gitlab-com-staging.gs-staging.gitlab.org'
+    USAGE_DATA_PATH = 'usage_data'
+    ERROR_PATH = 'usage_ping_errors'
 
     SubmissionError = Class.new(StandardError)
+
+    def initialize(skip_db_write: false)
+      @skip_db_write = skip_db_write
+    end
 
     def execute
       return unless ServicePing::ServicePingSettings.product_intelligence_enabled?
 
+      start = Time.current
       begin
         usage_data = BuildPayloadService.new.execute
-        raw_usage_data, response = submit_usage_data_payload(usage_data)
-      rescue StandardError
+        response = submit_usage_data_payload(usage_data)
+      rescue StandardError => e
         return unless Gitlab::CurrentSettings.usage_ping_enabled?
 
-        usage_data = Gitlab::UsageData.data(force_refresh: true)
-        raw_usage_data, response = submit_usage_data_payload(usage_data)
+        error_payload = {
+          time: Time.current,
+          uuid: Gitlab::UsageData.add_metric('UuidMetric'),
+          hostname: Gitlab::UsageData.add_metric('HostnameMetric'),
+          version: Gitlab::UsageData.alt_usage_data { Gitlab::VERSION },
+          message: e.message,
+          elapsed: (Time.current - start).round(1)
+        }
+        submit_payload({ error: error_payload }, url: error_url)
+
+        usage_data = Gitlab::Usage::ServicePingReport.for(output: :all_metrics_values)
+        response = submit_usage_data_payload(usage_data)
       end
 
       version_usage_data_id = response.dig('conv_index', 'usage_data_id') || response.dig('dev_ops_score', 'usage_data_id')
@@ -36,17 +43,27 @@ module ServicePing
         raise SubmissionError, "Invalid usage_data_id in response: #{version_usage_data_id}"
       end
 
-      raw_usage_data.update_version_metadata!(usage_data_id: version_usage_data_id)
+      unless @skip_db_write
+        raw_usage_data = save_raw_usage_data(usage_data)
+        raw_usage_data.update_version_metadata!(usage_data_id: version_usage_data_id)
+        DevopsReportService.new(response).execute
+      end
+    end
 
-      store_metrics(response)
+    def url
+      URI.join(base_url, USAGE_DATA_PATH)
+    end
+
+    def error_url
+      URI.join(base_url, ERROR_PATH)
     end
 
     private
 
-    def submit_payload(usage_data)
+    def submit_payload(payload, url: self.url)
       Gitlab::HTTP.post(
         url,
-        body: usage_data.to_json,
+        body: payload.to_json,
         allow_local_requests: true,
         headers: { 'Content-type' => 'application/json' }
       )
@@ -55,13 +72,11 @@ module ServicePing
     def submit_usage_data_payload(usage_data)
       raise SubmissionError, 'Usage data is blank' if usage_data.blank?
 
-      raw_usage_data = save_raw_usage_data(usage_data)
-
       response = submit_payload(usage_data)
 
       raise SubmissionError, "Unsuccessful response code: #{response.code}" unless response.success?
 
-      [raw_usage_data, response]
+      response
     end
 
     def save_raw_usage_data(usage_data)
@@ -70,23 +85,9 @@ module ServicePing
       end
     end
 
-    def store_metrics(response)
-      metrics = response['conv_index'] || response['dev_ops_score'] # leaving dev_ops_score here, as the response data comes from the gitlab-version-com
-
-      return unless metrics.present?
-
-      DevOpsReport::Metric.create!(
-        metrics.slice(*METRICS)
-      )
-    end
-
     # See https://gitlab.com/gitlab-org/gitlab/-/issues/233615 for details
-    def url
-      if Rails.env.production?
-        PRODUCTION_URL
-      else
-        STAGING_URL
-      end
+    def base_url
+      Rails.env.production? ? PRODUCTION_BASE_URL : STAGING_BASE_URL
     end
   end
 end

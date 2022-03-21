@@ -10,9 +10,9 @@ module Database
     idempotent!
 
     def perform
-      Gitlab::Database::Partitioning::DetachedPartitionDropper.new.perform
+      Gitlab::Database::Partitioning.drop_detached_partitions
     ensure
-      Gitlab::Database::Partitioning::PartitionMonitoring.new.report_metrics
+      Gitlab::Database::Partitioning.report_metrics
     end
   end
 end

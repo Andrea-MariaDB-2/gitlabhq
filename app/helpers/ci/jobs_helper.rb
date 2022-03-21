@@ -7,15 +7,23 @@ module Ci
         "endpoint" => project_job_path(@project, @build, format: :json),
         "project_path" => @project.full_path,
         "artifact_help_url" => help_page_path('user/gitlab_com/index.html', anchor: 'gitlab-cicd'),
-        "deployment_help_url" => help_page_path('user/project/clusters/index.html', anchor: 'troubleshooting'),
+        "deployment_help_url" => help_page_path('user/project/clusters/deploy_to_cluster.html', anchor: 'troubleshooting'),
         "runner_settings_url" => project_runners_path(@build.project, anchor: 'js-runners-settings'),
         "page_path" => project_job_path(@project, @build),
         "build_status" => @build.status,
         "build_stage" => @build.stage,
         "log_state" => '',
         "build_options" => javascript_build_options,
-        "retry_outdated_job_docs_url" => help_page_path('ci/pipelines/settings', anchor: 'retry-outdated-jobs'),
-        "code_quality_help_url" => help_page_path('user/project/merge_requests/code_quality', anchor: 'troubleshooting')
+        "retry_outdated_job_docs_url" => help_page_path('ci/pipelines/settings', anchor: 'retry-outdated-jobs')
+      }
+    end
+
+    def bridge_data(build, project)
+      {
+        "build_id" => build.id,
+        "empty-state-illustration-path" => image_path('illustrations/job-trigger-md.svg'),
+        "pipeline_iid" => build.pipeline.iid,
+        "project_full_path" => project.full_path
       }
     end
 

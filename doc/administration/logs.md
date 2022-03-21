@@ -1,6 +1,6 @@
 ---
 stage: Monitor
-group: Monitor
+group: Respond
 info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
 ---
 
@@ -20,6 +20,54 @@ including adjusting log retention, log forwarding,
 switching logs from JSON to plain text logging, and more.
 - [How to parse and analyze JSON logs](troubleshooting/log_parsing.md).
 
+## Log Levels
+
+Each log message has an assigned log level that indicates its importance and verbosity.
+Each logger has an assigned minimum log level.
+A logger emits a log message only if its log level is equal to or above the minimum log level.
+
+The following log levels are supported:
+
+| Level | Name      |
+|:------|:----------|
+| 0     | `DEBUG`   |
+| 1     | `INFO`    |
+| 2     | `WARN`    |
+| 3     | `ERROR`   |
+| 4     | `FATAL`   |
+| 5     | `UNKNOWN` |
+
+GitLab loggers emit all log messages because they are set to `DEBUG` by default.
+
+### Override default log level
+
+You can override the minimum log level for GitLab loggers using the `GITLAB_LOG_LEVEL` environment variable.
+Valid values are either a value of `0` to `5`, or the name of the log level.
+
+Example:
+
+```shell
+GITLAB_LOG_LEVEL=info
+```
+
+For some services, other log levels are in place that are not affected by this setting.
+Some of these services have their own environment variables to override the log level. For example:
+
+| Service              | Log level | Environment variable |
+|:---------------------|:----------|:---------------------|
+| GitLab API           | `INFO`    |                      |
+| GitLab Cleanup       | `INFO`    | `DEBUG`              |
+| GitLab Doctor        | `INFO`    | `VERBOSE`            |
+| GitLab Export        | `INFO`    | `EXPORT_DEBUG`       |
+| GitLab Geo           | `INFO`    |                      |
+| GitLab Import        | `INFO`    | `IMPORT_DEBUG`       |
+| GitLab QA Runtime    | `ERROR`   | `QA_DEBUG`           |
+| Google APIs          | `INFO`    |                      |
+| Rack Timeout         | `ERROR`   |                      |
+| Sidekiq (server)     | `INFO`    |                      |
+| Snowplow Tracker     | `FATAL`   |                      |
+| gRPC Client (Gitaly) | `WARN`    | `GRPC_LOG_LEVEL`     |
+
 ## Log Rotation
 
 The logs for a given service may be managed and rotated by:
@@ -36,25 +84,26 @@ are written to a file called `current`. The `logrotate` service built into GitLa
 [manages all logs](https://docs.gitlab.com/omnibus/settings/logs.html#logrotate)
 except those captured by `runit`.
 
-| Log type                                        | Managed by logrotate   | Managed by svlogd/runit |
-|-------------------------------------------------|------------------------|-------------------------|
-| [Alertmanager Logs](#alertmanager-logs)         | **{dotted-circle}** No | **{check-circle}** Yes  |
-| [Crond Logs](#crond-logs)                       | **{dotted-circle}** No | **{check-circle}** Yes  |
-| [Gitaly](#gitaly-logs)                          | **{check-circle}** Yes | **{check-circle}** Yes  |
-| [GitLab Exporter for Omnibus](#gitlab-exporter) | **{dotted-circle}** No | **{check-circle}** Yes  |
-| [GitLab Pages Logs](#pages-logs)                | **{check-circle}** Yes | **{check-circle}** Yes  |
-| GitLab Rails                                    | **{check-circle}** Yes | **{dotted-circle}** No  |
-| [GitLab Shell Logs](#gitlab-shelllog)           | **{check-circle}** Yes | **{dotted-circle}** No  |
-| [Grafana Logs](#grafana-logs)                   | **{dotted-circle}** No | **{check-circle}** Yes  |
-| [LogRotate Logs](#logrotate-logs)               | **{dotted-circle}** No | **{check-circle}** Yes  |
-| [Mailroom](#mail_room_jsonlog-default)          | **{check-circle}** Yes | **{check-circle}** Yes  |
-| [NGINX](#nginx-logs)                            | **{check-circle}** Yes | **{check-circle}** Yes  |
-| [PostgreSQL Logs](#postgresql-logs)             | **{dotted-circle}** No | **{check-circle}** Yes  |
-| [Prometheus Logs](#prometheus-logs)             | **{dotted-circle}** No | **{check-circle}** Yes  |
-| [Puma](#puma-logs)                              | **{check-circle}** Yes | **{check-circle}** Yes  |
-| [Redis Logs](#redis-logs)                       | **{dotted-circle}** No | **{check-circle}** Yes  |
-| [Registry Logs](#registry-logs)                 | **{dotted-circle}** No | **{check-circle}** Yes  |
-| [Workhorse Logs](#workhorse-logs)               | **{check-circle}** Yes | **{check-circle}** Yes  |
+| Log type                                        | Managed by logrotate    | Managed by svlogd/runit |
+|:------------------------------------------------|:------------------------|:------------------------|
+| [Alertmanager Logs](#alertmanager-logs)         | **{dotted-circle}** No  | **{check-circle}** Yes  |
+| [Crond Logs](#crond-logs)                       | **{dotted-circle}** No  | **{check-circle}** Yes  |
+| [Gitaly](#gitaly-logs)                          | **{check-circle}** Yes  | **{check-circle}** Yes  |
+| [GitLab Exporter for Omnibus](#gitlab-exporter) | **{dotted-circle}** No  | **{check-circle}** Yes  |
+| [GitLab Pages Logs](#pages-logs)                | **{check-circle}** Yes  | **{check-circle}** Yes  |
+| GitLab Rails                                    | **{check-circle}** Yes  | **{dotted-circle}** No  |
+| [GitLab Shell Logs](#gitlab-shelllog)           | **{check-circle}** Yes  | **{dotted-circle}** No  |
+| [Grafana Logs](#grafana-logs)                   | **{dotted-circle}** No  | **{check-circle}** Yes  |
+| [LogRotate Logs](#logrotate-logs)               | **{dotted-circle}** No  | **{check-circle}** Yes  |
+| [Mailroom](#mail_room_jsonlog-default)          | **{check-circle}** Yes  | **{check-circle}** Yes  |
+| [NGINX](#nginx-logs)                            | **{check-circle}** Yes  | **{check-circle}** Yes  |
+| [PostgreSQL Logs](#postgresql-logs)             | **{dotted-circle}** No  | **{check-circle}** Yes  |
+| [Praefect Logs](#praefect-logs)                 | **{dotted-circle}** Yes | **{check-circle}** Yes  |
+| [Prometheus Logs](#prometheus-logs)             | **{dotted-circle}** No  | **{check-circle}** Yes  |
+| [Puma](#puma-logs)                              | **{check-circle}** Yes  | **{check-circle}** Yes  |
+| [Redis Logs](#redis-logs)                       | **{dotted-circle}** No  | **{check-circle}** Yes  |
+| [Registry Logs](#registry-logs)                 | **{dotted-circle}** No  | **{check-circle}** Yes  |
+| [Workhorse Logs](#workhorse-logs)               | **{check-circle}** Yes  | **{check-circle}** Yes  |
 
 ## `production_json.log`
 
@@ -62,9 +111,6 @@ Depending on your installation method, this file is located at:
 
 - Omnibus GitLab: `/var/log/gitlab/gitlab-rails/production_json.log`
 - Installations from source: `/home/git/gitlab/log/production_json.log`
-
-When GitLab is running in an environment other than production,
-the corresponding log file is shown here.
 
 It contains a structured log for Rails controller requests received from
 GitLab, thanks to [Lograge](https://github.com/roidrage/lograge/).
@@ -216,9 +262,6 @@ Depending on your installation method, this file is located at:
 - Omnibus GitLab: `/var/log/gitlab/gitlab-rails/production.log`
 - Installations from source: `/home/git/gitlab/log/production.log`
 
-When GitLab is running in an environment other than production,
-the corresponding log file is shown here.
-
 It contains information about all performed requests. You can see the
 URL and type of request, IP address, and what parts of code were
 involved to service this particular request. Also, you can see all SQL
@@ -249,8 +292,6 @@ In this example, the server processed an HTTP request with URL
 The request was processed by `Projects::TreeController`.
 
 ## `api_json.log`
-
-> Introduced in GitLab 10.0.
 
 Depending on your installation method, this file is located at:
 
@@ -301,7 +342,7 @@ Depending on your installation method, this file is located at:
 - Installations from source: `/home/git/gitlab/log/application.log`
 
 It helps you discover events happening in your instance such as user creation
-and project removal. For example:
+and project deletion. For example:
 
 ```plaintext
 October 06, 2014 11:56: User "Administrator" (admin@example.com) was created
@@ -371,8 +412,6 @@ like this example:
 ```
 
 ## `kubernetes.log`
-
-> Introduced in GitLab 11.6.
 
 Depending on your installation method, this file is located at:
 
@@ -556,10 +595,9 @@ access to Git repositories.
 
 ### For GitLab versions 12.10 and up
 
-For GitLab version 12.10 and later, there are two `gitlab-shell.log` files.
 Information containing `git-{upload-pack,receive-pack}` requests is at
 `/var/log/gitlab/gitlab-shell/gitlab-shell.log`. Information about hooks to
-GitLab Shell from Gitaly is at `/var/log/gitlab/gitaly/gitlab-shell.log`.
+GitLab Shell from Gitaly is at `/var/log/gitlab/gitaly/current`.
 
 Example log entries for `/var/log/gitlab/gitlab-shell/gitlab-shell.log`:
 
@@ -585,7 +623,7 @@ Example log entries for `/var/log/gitlab/gitlab-shell/gitlab-shell.log`:
 }
 ```
 
-Example log entries for `/var/log/gitlab/gitaly/gitlab-shell.log`:
+Example log entries for `/var/log/gitlab/gitaly/current`:
 
 ```json
 {
@@ -668,6 +706,12 @@ This file is at `/var/log/gitlab/gitaly/gitaly_ruby_json.log` and is
 produced by [`gitaly-ruby`](gitaly/reference.md#gitaly-ruby). It contains an
 access log of gRPC calls made by Gitaly to `gitaly-ruby`.
 
+### `gitaly_hooks.log`
+
+This file is at `/var/log/gitlab/gitaly/gitaly_hooks.log` and is
+produced by `gitaly-hooks` command. It also contains records about
+failures received during processing of the responses from GitLab API.
+
 ## Puma Logs
 
 ### `puma_stdout.log`
@@ -695,8 +739,6 @@ It logs information whenever a [repository check is run](repository_checks.md)
 on a project.
 
 ## `importer.log`
-
-> Introduced in GitLab 11.3.
 
 Depending on your installation method, this file is located at:
 
@@ -752,7 +794,6 @@ Depending on your installation method, this file is located at:
 
 This log records:
 
-- Information whenever [Rack Attack](../security/rack_attack.md) registers an abusive request.
 - Requests over the [Rate Limit](../user/admin_area/settings/rate_limits_on_raw_endpoints.md) on raw endpoints.
 - [Protected paths](../user/admin_area/settings/protected_paths.md) abusive requests.
 - In GitLab versions [12.3](https://gitlab.com/gitlab-org/gitlab/-/issues/29239) and later,
@@ -831,7 +872,7 @@ are generated in a location based on your installation method:
 
 > [Introduced](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/15442) in GitLab 12.3.
 
-Contains details of GitLab [Database Load Balancing](database_load_balancing.md).
+Contains details of GitLab [Database Load Balancing](postgresql/database_load_balancing.md).
 Depending on your installation method, this file is located at:
 
 - Omnibus GitLab: `/var/log/gitlab/gitlab-rails/database_load_balancing.log`
@@ -916,8 +957,6 @@ For example:
 
 ## `geo.log` **(PREMIUM SELF)**
 
-> Introduced in 9.5.
-
 Geo stores structured log messages in a `geo.log` file. For Omnibus GitLab
 installations, this file is at `/var/log/gitlab/gitlab-rails/geo.log`.
 
@@ -934,8 +973,6 @@ For example:
 This message shows that Geo detected that a repository update was needed for project `1`.
 
 ## `update_mirror_service_json.log`
-
-> [Introduced](https://gitlab.com/gitlab-org/gitlab/-/commit/7f637e2af7006dc2b1b2649d9affc0b86cfb33c4) in GitLab 11.12.
 
 Depending on your installation method, this file is located at:
 
@@ -1012,7 +1049,10 @@ For example:
 
 ## Mattermost Logs
 
-For Omnibus GitLab installations, Mattermost logs are in `/var/log/gitlab/mattermost/mattermost.log`.
+For Omnibus GitLab installations, Mattermost logs are in these locations:
+
+- `/var/log/gitlab/mattermost/mattermost.log`
+- `/var/log/gitlab/mattermost/current`
 
 ## Workhorse Logs
 
@@ -1058,10 +1098,24 @@ For Omnibus GitLab installations, GitLab Monitor logs are in `/var/log/gitlab/gi
 
 For Omnibus GitLab installations, GitLab Exporter logs are in `/var/log/gitlab/gitlab-exporter/`.
 
-## GitLab Kubernetes Agent Server
+## GitLab agent server
 
-For Omnibus GitLab installations, GitLab Kubernetes Agent Server logs are
+For Omnibus GitLab installations, GitLab agent server logs are
 in `/var/log/gitlab/gitlab-kas/`.
+
+## Praefect Logs
+
+For Omnibus GitLab installations, Praefect logs are in `/var/log/gitlab/praefect/`.
+
+GitLab also tracks [Prometheus metrics for Praefect](gitaly/#monitor-gitaly-cluster).
+
+## Backup log
+
+> [Introduced](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/63832) in GitLab 14.1.
+
+For Omnibus installations, the backup log is located at `/var/log/gitlab/gitlab-rails/backup_json.log`.
+
+This log is populated when a [GitLab backup is created](../raketasks/backup_restore.md). You can use this log to understand how the backup process performed.
 
 ## Performance bar stats
 
@@ -1076,7 +1130,7 @@ Performance bar statistics (currently only duration of SQL queries) are recorded
 in that file. For example:
 
 ```json
-{"severity":"INFO","time":"2020-12-04T09:29:44.592Z","correlation_id":"33680b1490ccd35981b03639c406a697","filename":"app/models/ci/pipeline.rb","method_path":"app/models/ci/pipeline.rb:each_with_object","request_id":"rYHomD0VJS4","duration_ms":26.889,"count":2,"type": "sql"}
+{"severity":"INFO","time":"2020-12-04T09:29:44.592Z","correlation_id":"33680b1490ccd35981b03639c406a697","filename":"app/models/ci/pipeline.rb","method_path":"app/models/ci/pipeline.rb:each_with_object","request_id":"rYHomD0VJS4","duration_ms":26.889,"count":2,"query_type": "active-record"}
 ```
 
 These statistics are logged on .com only, disabled on self-deployments.

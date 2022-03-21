@@ -2,8 +2,10 @@
 class Admin::InstanceReviewController < Admin::ApplicationController
   feature_category :devops_reports
 
+  urgency :low
+
   def index
-    redirect_to("#{::Gitlab::SubscriptionPortal::SUBSCRIPTIONS_URL}/instance_review?#{instance_review_params}")
+    redirect_to("#{Gitlab::SubscriptionPortal.subscriptions_instance_review_url}?#{instance_review_params}")
   end
 
   def instance_review_params
@@ -16,7 +18,7 @@ class Admin::InstanceReviewController < Admin::ApplicationController
     }
 
     if Gitlab::CurrentSettings.usage_ping_enabled?
-      data = ::Gitlab::UsageData.data
+      data = Gitlab::Usage::ServicePingReport.for(output: :all_metrics_values, cached: true)
       counts = data[:counts]
 
       result[:instance_review].merge!(

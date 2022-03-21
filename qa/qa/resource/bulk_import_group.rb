@@ -3,18 +3,21 @@
 module QA
   module Resource
     class BulkImportGroup < Group
-      attributes :source_group_path,
+      attributes :source_group,
+                 :destination_group,
                  :import_id
-
-      attribute :destination_group_path do
-        source_group_path
-      end
 
       attribute :access_token do
         api_client.personal_access_token
       end
 
-      alias_method :path, :source_group_path
+      # In most cases we will want to set path the same as source group
+      # but it can be set to a custom name as well when imported via API
+      attribute :destination_group_path do
+        source_group.path
+      end
+      # Can't define path as attribue since @path is set in base class initializer
+      alias_method :path, :destination_group_path
 
       delegate :gitlab_address, to: 'QA::Runtime::Scenario'
 
@@ -51,14 +54,17 @@ module QA
           entities: [
             {
               source_type: 'group_entity',
-              source_full_path: source_group_path,
+              source_full_path: source_group.full_path,
               destination_name: destination_group_path,
-              destination_namespace: sandbox.path
+              destination_namespace: sandbox.full_path
             }
           ]
         }
       end
 
+      # Get import status
+      #
+      # @return [String]
       def import_status
         response = get(Runtime::API::Request.new(api_client, "/bulk_imports/#{import_id}").url)
 
@@ -67,6 +73,15 @@ module QA
         end
 
         parse_body(response)[:status]
+      end
+
+      # Get import details
+      #
+      # @return [Array]
+      def import_details
+        response = get(Runtime::API::Request.new(api_client, "/bulk_imports/#{import_id}/entities").url)
+
+        parse_body(response)
       end
 
       private

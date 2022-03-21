@@ -1,10 +1,16 @@
 import Vue from 'vue';
-import IssueBoardFilteredSearch from '~/boards/components/issue_board_filtered_search.vue';
+import IssueBoardFilteredSearch from 'ee_else_ce/boards/components/issue_board_filtered_search.vue';
 import store from '~/boards/stores';
 import { convertObjectPropsToCamelCase } from '~/lib/utils/common_utils';
 import { queryToObject } from '~/lib/utils/url_utility';
 
-export default (apolloProvider) => {
+export default (
+  apolloProvider,
+  isSignedIn,
+  releasesFetchPath,
+  epicFeatureAvailable,
+  iterationFeatureAvailable,
+) => {
   const el = document.getElementById('js-issue-board-filtered-search');
   const rawFilterParams = queryToObject(window.location.search, { gatherArrays: true });
 
@@ -18,8 +24,13 @@ export default (apolloProvider) => {
 
   return new Vue({
     el,
+    name: 'BoardFilteredSearchRoot',
     provide: {
       initialFilterParams,
+      isSignedIn,
+      releasesFetchPath,
+      epicFeatureAvailable,
+      iterationFeatureAvailable,
     },
     store, // TODO: https://gitlab.com/gitlab-org/gitlab/-/issues/324094
     apolloProvider,

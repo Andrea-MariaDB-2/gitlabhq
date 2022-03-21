@@ -1,3 +1,3 @@
-import initWikis from '~/pages/shared/wikis';
+import Wikis from '~/pages/shared/wikis/wikis';
 
-initWikis();
+export default new Wikis();

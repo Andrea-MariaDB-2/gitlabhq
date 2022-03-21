@@ -31,7 +31,7 @@ GET /projects/:id/merge_requests/:merge_request_iid/status_checks
         "id": 2,
         "name": "Rule 1",
         "external_url": "https://gitlab.com/test-endpoint",
-        "status": "approved"
+        "status": "pass"
     },
     {
         "id": 1,
@@ -44,7 +44,19 @@ GET /projects/:id/merge_requests/:merge_request_iid/status_checks
 
 ## Set status of an external status check
 
+> - Introduced in GitLab 14.9, `passed` status to pass external status checks. Introduced [with a flag](../administration/feature_flags.md) named `status_checks_add_status_field`. Disabled by default.
+> - Introduced in GitLab 14.9, `failed` status to fail external status checks. Introduced [with a flag](../administration/feature_flags.md) named `status_checks_add_status_field`. Disabled by default.
+> - `pass` status to pass checks is [deprecated](https://gitlab.com/gitlab-org/gitlab/-/issues/339039) in GitLab 14.9. Replaced with `passed`.
+
+FLAG:
+On self-managed GitLab, by default setting `passed` instead of `pass` is unavailable. Also, setting `failed` is unavailable by default. To support
+setting `passed` and `failed` instead of only `pass`, ask an administrator to [enable the feature flag](../administration/feature_flags.md) named
+`status_checks_add_status_field`. On GitLab.com, this feature is not available.
+
 For a single merge request, use the API to inform GitLab that a merge request has passed a check by an external service.
+To set the status of an external check, the personal access token used must belong to a user with at least the Developer role on the target project of the merge request.
+
+Execute this API call as any user with rights to approve the merge request itself.
 
 ```plaintext
 POST /projects/:id/merge_requests/:merge_request_iid/status_check_responses
@@ -52,17 +64,19 @@ POST /projects/:id/merge_requests/:merge_request_iid/status_check_responses
 
 **Parameters:**
 
-| Attribute                 | Type     | Required | Description                           |
-| -------------------------- | ------- | -------- | ------------------------------------- |
-| `id`                       | integer | yes      | ID of a project                       |
-| `merge_request_iid`        | integer | yes      | IID of a merge request                |
-| `sha`                      | string  | yes      | SHA at `HEAD` of the source branch    |
-| `external_status_check_id` | integer | yes      | ID of an external status check        |
+| Attribute                  | Type    | Required | Description                                                                  |
+| -------------------------- | ------- | -------- | ---------------------------------------------------------------------------- |
+| `id`                       | integer | yes      | ID of a project                                                              |
+| `merge_request_iid`        | integer | yes      | IID of a merge request                                                       |
+| `sha`                      | string  | yes      | SHA at `HEAD` of the source branch                                           |
+| `external_status_check_id` | integer | yes      | ID of an external status check                                               |
+| `status`                   | string  | no       | Set to `passed` to pass the check or `failed` to fail it (GitLab 14.9 and later with feature flag `status_checks_add_status_field` enabled) |
+| `status`                   | string  | no       | Set to `pass` to pass the check (GitLab 14.0 to GitLab 14.8, and GitLab 14.9 and later with feature flag `status_checks_add_status_field` disabled) |
 
 NOTE:
 `sha` must be the SHA at the `HEAD` of the merge request's source branch.
 
-## Get project external status checks **(ULTIMATE)**
+## Get project external status checks
 
 You can request information about a project's external status checks using the following endpoint:
 
@@ -97,7 +111,7 @@ GET /projects/:id/external_status_checks
 ]
 ```
 
-## Create external status check **(ULTIMATE)**
+## Create external status check
 
 You can create a new external status check for a project using the following endpoint:
 
@@ -116,7 +130,7 @@ defined external service. This includes confidential merge requests.
 | `external_url`         | string           | yes      | URL of status check resource                   |
 | `protected_branch_ids` | `array<Integer>` | no       | IDs of protected branches to scope the rule by |
 
-## Delete external status check **(ULTIMATE)**
+## Delete external status check
 
 You can delete an external status check for a project using the following endpoint:
 
@@ -129,7 +143,7 @@ DELETE /projects/:id/external_status_checks/:check_id
 | `rule_id`              | integer        | yes      | ID of an status check |
 | `id`                   | integer        | yes      | ID of a project       |
 
-## Update external status check **(ULTIMATE)**
+## Update external status check
 
 You can update an existing external status check for a project using the following endpoint:
 
@@ -145,6 +159,6 @@ PUT /projects/:id/external_status_checks/:check_id
 | `external_url`         | string           | no       | URL of external status check resource          |
 | `protected_branch_ids` | `array<Integer>` | no       | IDs of protected branches to scope the rule by |
 
-## Related links
+## Related topics
 
 - [External status checks](../user/project/merge_requests/status_checks.md).

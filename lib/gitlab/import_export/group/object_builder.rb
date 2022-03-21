@@ -9,30 +9,15 @@ module Gitlab
       #   `Group::ObjectBuilder.build(Label, label_attributes)`
       #    finds or initializes a label with the given attributes.
       class ObjectBuilder < Base::ObjectBuilder
-        def self.build(*args)
-          ::Group.transaction do
-            super
-          end
-        end
-
         def initialize(klass, attributes)
           super
 
           @group = @attributes['group']
-
-          update_description
         end
 
         private
 
         attr_reader :group
-
-        # Convert description empty string to nil
-        # due to existing object being saved with description: nil
-        # Which makes object lookup to fail since nil != ''
-        def update_description
-          attributes['description'] = nil if attributes['description'] == ''
-        end
 
         def where_clauses
           [

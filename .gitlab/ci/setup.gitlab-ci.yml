@@ -41,13 +41,21 @@ gitlab_git_test:
   script:
     - spec/support/prepare-gitlab-git-test-for-commit --check-for-changes
 
-no_ee_check:
+no-ee-check:
   extends:
     - .minimal-job
-    - .setup:rules:no_ee_check
+    - .setup:rules:no-ee-check
   stage: test
   script:
-    - scripts/no-ee-check
+    - scripts/no-dir-check ee
+
+no-jh-check:
+  extends:
+    - .minimal-job
+    - .setup:rules:no-jh-check
+  stage: test
+  script:
+    - scripts/no-dir-check jh
 
 verify-tests-yml:
   extends:
@@ -60,6 +68,24 @@ verify-tests-yml:
     - install_tff_gem
     - scripts/verify-tff-mapping
 
+generate-frontend-fixtures-mapping:
+  extends:
+    - .setup:rules:generate-frontend-fixtures-mapping
+    - .use-pg12
+    - .rails-cache
+  needs: ["setup-test-env"]
+  stage: prepare
+  before_script:
+    - !reference [.default-before_script, before_script]
+    - source ./scripts/rspec_helpers.sh
+    - run_timed_command "scripts/gitaly-test-spawn"
+  script:
+    - generate_frontend_fixtures_mapping
+  artifacts:
+    expire_in: 7d
+    paths:
+      - ${FRONTEND_FIXTURES_MAPPING_PATH}
+
 .detect-test-base:
   image: ${GITLAB_DEPENDENCY_PROXY}ruby:2.7
   needs: []
@@ -70,12 +96,21 @@ verify-tests-yml:
     - install_gitlab_gem
     - install_tff_gem
     - retrieve_tests_mapping
-    - 'if [ -n "$CI_MERGE_REQUEST_IID" ]; then tooling/bin/find_tests ${MATCHED_TESTS_FILE}; fi'
-    - 'if [ -n "$CI_MERGE_REQUEST_IID" ]; then echo "test files affected: $(cat $MATCHED_TESTS_FILE)"; fi'
+    - retrieve_frontend_fixtures_mapping
+    - |
+      if [ -n "$CI_MERGE_REQUEST_IID" ]; then
+        tooling/bin/find_changes ${CHANGES_FILE};
+        tooling/bin/find_tests ${CHANGES_FILE} ${MATCHED_TESTS_FILE};
+        tooling/bin/find_changes ${CHANGES_FILE} ${MATCHED_TESTS_FILE} ${FRONTEND_FIXTURES_MAPPING_PATH};
+        echo "Changed files: $(cat $CHANGES_FILE)";
+        echo "Related rspec tests: $(cat $MATCHED_TESTS_FILE)";
+      fi
   artifacts:
     expire_in: 7d
     paths:
+      - ${CHANGES_FILE}
       - ${MATCHED_TESTS_FILE}
+      - ${FRONTEND_FIXTURES_MAPPING_PATH}
 
 detect-tests:
   extends:
@@ -83,6 +118,7 @@ detect-tests:
     - .rails:rules:detect-tests
   variables:
     RSPEC_TESTS_MAPPING_ENABLED: "true"
+    CHANGES_FILE: tmp/changed_files.txt
     MATCHED_TESTS_FILE: tmp/matching_tests.txt
 
 detect-tests as-if-foss:
@@ -91,6 +127,44 @@ detect-tests as-if-foss:
     - .rails:rules:detect-tests
     - .as-if-foss
   variables:
+    CHANGES_FILE: tmp/changed_foss_files.txt
     MATCHED_TESTS_FILE: tmp/matching_foss_tests.txt
   before_script:
     - '[ "$FOSS_ONLY" = "1" ] && rm -rf ee/ qa/spec/ee/ qa/qa/specs/features/ee/ qa/qa/ee/ qa/qa/ee.rb'
+
+detect-previous-failed-tests:
+  extends:
+    - .detect-test-base
+    - .rails:rules:detect-previous-failed-tests
+  variables:
+    PREVIOUS_FAILED_TESTS_DIR: tmp/previous_failed_tests/
+    RSPEC_PG_REGEX: /rspec .+ pg12( .+)?/
+    RSPEC_EE_PG_REGEX: /rspec-ee .+ pg12( .+)?/
+  script:
+    - source ./scripts/utils.sh
+    - source ./scripts/rspec_helpers.sh
+    - retrieve_previous_failed_tests ${PREVIOUS_FAILED_TESTS_DIR} "${RSPEC_PG_REGEX}" "${RSPEC_EE_PG_REGEX}"
+  artifacts:
+    expire_in: 7d
+    paths:
+      - ${PREVIOUS_FAILED_TESTS_DIR}
+
+add-jh-folder:
+  extends: .setup:rules:add-jh-folder
+  image: ${GITLAB_DEPENDENCY_PROXY}ruby:2.7
+  stage: prepare
+  before_script:
+    - source ./scripts/utils.sh
+    - install_gitlab_gem
+  script:
+    - JH_BRANCH=$(./scripts/setup/find-jh-branch.rb)
+    - 'echo "JH_BRANCH: ${JH_BRANCH}"'
+    - curl --location -o "jh-folder.tar.gz" "https://gitlab.com/gitlab-org/gitlab-jh-mirrors/gitlab/-/archive/${JH_BRANCH}/gitlab-${JH_BRANCH}.tar.gz?path=jh"
+    - tar -xf "jh-folder.tar.gz"
+    - mv "gitlab-${JH_BRANCH}-jh/jh/" ./
+    - cp Gemfile.lock jh/
+    - ls -l jh/
+  artifacts:
+    expire_in: 2d
+    paths:
+      - jh/

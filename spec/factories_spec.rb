@@ -22,6 +22,8 @@ RSpec.describe 'factories' do
       [:debian_project_component_file, :object_storage],
       [:debian_project_distribution, :object_storage],
       [:debian_file_metadatum, :unknown],
+      [:issue_customer_relations_contact, :for_contact],
+      [:issue_customer_relations_contact, :for_issue],
       [:package_file, :object_storage],
       [:pages_domain, :without_certificate],
       [:pages_domain, :without_key],
@@ -71,9 +73,12 @@ RSpec.describe 'factories' do
     fork_network_member
     group_member
     import_state
+    issue_customer_relations_contact
+    member_task
     milestone_release
     namespace
     project_broken_repo
+    project_namespace
     project_repository
     prometheus_alert
     prometheus_alert_event

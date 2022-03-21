@@ -33,7 +33,7 @@ RSpec.describe Profiles::EmailsController do
         subject
 
         expect(response).to have_gitlab_http_status(:redirect)
-        expect(flash[:alert]).to eq(_('This action has been performed too many times. Try again later.'))
+        expect(flash[:alert]).to eq(_('This endpoint has been requested too many times. Try again later.'))
       end
     end
   end
@@ -49,7 +49,7 @@ RSpec.describe Profiles::EmailsController do
     end
 
     context 'when email address is invalid' do
-      let(:email) { 'invalid.@example.com' }
+      let(:email) { 'invalid@@example.com' }
 
       it 'does not send an email confirmation' do
         expect { subject }.not_to change { ActionMailer::Base.deliveries.size }

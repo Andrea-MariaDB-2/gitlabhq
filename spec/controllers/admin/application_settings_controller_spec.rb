@@ -62,6 +62,7 @@ RSpec.describe Admin::ApplicationSettingsController, :do_not_mock_admin_mode_set
   describe 'GET #usage_data' do
     before do
       stub_usage_data_connections
+      stub_database_flavor_check
       sign_in(admin)
     end
 
@@ -79,6 +80,18 @@ RSpec.describe Admin::ApplicationSettingsController, :do_not_mock_admin_mode_set
       expect(body["version"]).to eq(Gitlab::VERSION)
       expect(body).to include('counts')
       expect(response).to have_gitlab_http_status(:ok)
+    end
+
+    describe 'usage data counter' do
+      let(:counter) { Gitlab::UsageDataCounters::ServiceUsageDataCounter }
+
+      it 'incremented when json generated' do
+        expect { get :usage_data, format: :json }.to change { counter.read(:download_payload_click) }.by(1)
+      end
+
+      it 'not incremented when html format requested' do
+        expect { get :usage_data }.not_to change { counter.read(:download_payload_click) }
+      end
     end
   end
 
@@ -275,6 +288,46 @@ RSpec.describe Admin::ApplicationSettingsController, :do_not_mock_admin_mode_set
           put :update, params: { application_setting: settings_params }
 
           expect(application_setting.reload.eks_secret_access_key).to eq 'dummy secret key'
+        end
+      end
+    end
+
+    describe 'user_email_lookup_limit aliasing' do
+      let(:application_setting) { ApplicationSetting.current }
+      let(:user_email_lookup_limit) { 8675 }
+      let(:search_rate_limit) { 309 }
+
+      context 'when search_rate_limit is specified' do
+        let(:settings_params) do
+          {
+            user_email_lookup_limit: user_email_lookup_limit,
+            search_rate_limit: search_rate_limit
+          }
+        end
+
+        it 'updates search_rate_limit with correct value' do
+          expect(application_setting.search_rate_limit).not_to eq user_email_lookup_limit
+          expect(application_setting.search_rate_limit).not_to eq search_rate_limit
+
+          put :update, params: { application_setting: settings_params }
+
+          expect(application_setting.reload.search_rate_limit).to eq search_rate_limit
+        end
+      end
+
+      context 'when search_rate_limit is not specified' do
+        let(:settings_params) do
+          {
+            user_email_lookup_limit: search_rate_limit
+          }
+        end
+
+        it 'applies user_email_lookup_limit value to search_rate_limit' do
+          expect(application_setting.search_rate_limit).not_to eq search_rate_limit
+
+          put :update, params: { application_setting: settings_params }
+
+          expect(application_setting.reload.search_rate_limit).to eq search_rate_limit
         end
       end
     end

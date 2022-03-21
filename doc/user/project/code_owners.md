@@ -1,15 +1,12 @@
 ---
 stage: Create
 group: Source Code
-info: "To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments"
-type: reference
+info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
 ---
 
 # Code Owners **(PREMIUM)**
 
-> - [Introduced](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/6916) in GitLab 11.3.
-> - Code Owners for merge request approvals was [introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/4418) in GitLab Premium 11.9.
-> - Moved to GitLab Premium in 13.9.
+> Moved to GitLab Premium in 13.9.
 
 Code Owners define who owns specific files or directories in a repository.
 
@@ -84,6 +81,10 @@ so that their members also become eligible Code Owners.
 If you do not invite **Subgroup Y** to **Project A**, but make them Code Owners, their approval
 of the merge request becomes optional.
 
+Inviting **Subgroup Y** to a parent group of **Project A**
+[is not supported](https://gitlab.com/gitlab-org/gitlab/-/issues/288851). To set **Subgroup Y** as
+Code Owners, add this group directly to the project itself.
+
 ### Add a group as a Code Owner
 
 To set a group as a Code Owner:
@@ -123,7 +124,7 @@ Only one CODEOWNERS pattern can match per file path.
 
 ### Organize Code Owners by putting them into sections
 
-> - [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/12137) in GitLab Premium 13.2 behind a feature flag, enabled by default.
+> - [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/12137) in GitLab 13.2 behind a feature flag, enabled by default.
 > - [Feature flag removed](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/42389) in GitLab 13.4.
 
 You can organize Code Owners by putting them into named sections.
@@ -169,12 +170,16 @@ entries under **Database**. The entries defined under the sections **Documentati
 
 ### Make a Code Owners section optional
 
-> - [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/232995) in GitLab Premium 13.8 behind a feature flag, enabled by default.
-> - [Feature flag removed](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/53227) in GitLab 13.9.
+> [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/232995) in GitLab 13.8.
 
-You can make a section optional, so that approval from the Code Owners in that section is optional.
+You can designate optional sections in your Code Owners file. Prepend the
+section name with the caret `^` character to treat the entire section as optional.
+Optional sections enable you to designate responsible parties for various parts
+of your codebase, but not require approval from them. This approach provides
+a more relaxed policy for parts of your project that are frequently updated,
+but don't require stringent reviews.
 
-Put a caret `^` character before the Code Owners section name. For example:
+In this example, the `[Go]` section is optional:
 
 ```plaintext
 [Documentation]
@@ -196,8 +201,12 @@ If a section is duplicated in the file, and one of them is marked as optional an
 Optional sections in the `CODEOWNERS` file are treated as optional only
 when changes are submitted by using merge requests. If a change is submitted directly
 to the protected branch, approval from Code Owners is still required, even if the
-section is marked as optional. [An issue exists](https://gitlab.com/gitlab-org/gitlab/-/issues/297638)
-to allow direct pushes to the protected branch for sections marked as optional.
+section is marked as optional.
+
+### Allowed to Push
+
+The Code Owner approval and protected branch features do not apply to users who
+are **Allowed to push**.
 
 ## Example `CODEOWNERS` file
 
@@ -267,3 +276,26 @@ model/db   @database
 [DOCUMENTATION]
 README.md  @docs
 ```
+
+## Troubleshooting
+
+### Approvals shown as optional
+
+A Code Owner approval rule is optional if any of these conditions are true:
+
+- The user or group are not a member of the project or parent group.
+- [Code Owner approval on a protected branch](protected_branches.md#require-code-owner-approval-on-a-protected-branch) has not been set up.
+- The section is [marked as optional](#make-a-code-owners-section-optional).
+
+### Approvals do not show
+
+Code Owner approval rules only update when the merge request is created.
+If you update the `CODEOWNERS` file, close the merge request and create a new one.
+
+### User not shown as possible approver
+
+A user might not show as an approver on the Code Owner merge request approval rules.
+
+This result occurs when a rule prevents the specific user from approving the merge request.
+Check the project
+[merge request approval setting](merge_requests/approvals/settings.md#edit-merge-request-approval-settings).

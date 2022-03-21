@@ -6,6 +6,7 @@ class Projects::TreeController < Projects::ApplicationController
   include CreatesCommit
   include ActionView::Helpers::SanitizeHelper
   include RedirectsForMissingPathOnTree
+  include SourcegraphDecorator
 
   around_action :allow_gitaly_ref_name_caching, only: [:show]
 
@@ -15,7 +16,16 @@ class Projects::TreeController < Projects::ApplicationController
   before_action :authorize_download_code!
   before_action :authorize_edit_tree!, only: [:create_dir]
 
+  before_action do
+    push_frontend_feature_flag(:lazy_load_commits, @project, default_enabled: :yaml)
+    push_frontend_feature_flag(:new_dir_modal, @project, default_enabled: :yaml)
+    push_frontend_feature_flag(:refactor_blob_viewer, @project, default_enabled: :yaml)
+    push_frontend_feature_flag(:highlight_js, @project, default_enabled: :yaml)
+    push_licensed_feature(:file_locks) if @project.licensed_feature_available?(:file_locks)
+  end
+
   feature_category :source_code_management
+  urgency :low, [:show]
 
   def show
     return render_404 unless @commit
@@ -53,3 +63,5 @@ class Projects::TreeController < Projects::ApplicationController
     }
   end
 end
+
+Projects::TreeController.prepend_mod

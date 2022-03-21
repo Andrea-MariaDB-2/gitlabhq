@@ -1,6 +1,7 @@
 /* eslint-disable no-param-reassign */
 
 import $ from 'jquery';
+import mockProjects from 'test_fixtures_static/projects.json';
 import initDeprecatedJQueryDropdown from '~/deprecated_jquery_dropdown';
 import '~/lib/utils/common_utils';
 import { visitUrl } from '~/lib/utils/url_utility';
@@ -66,7 +67,7 @@ describe('deprecatedJQueryDropdown', () => {
     loadFixtures('static/deprecated_jquery_dropdown.html');
     test.dropdownContainerElement = $('.dropdown.inline');
     test.$dropdownMenuElement = $('.dropdown-menu', test.dropdownContainerElement);
-    test.projectsData = getJSONFixture('static/projects.json');
+    test.projectsData = JSON.parse(JSON.stringify(mockProjects));
   });
 
   afterEach(() => {
@@ -323,7 +324,7 @@ describe('deprecatedJQueryDropdown', () => {
         const li = dropdown.renderItem(item, null, 3);
         const link = li.querySelector('a');
 
-        expect(link).toHaveAttr('data-track-event', 'click_text');
+        expect(link).toHaveAttr('data-track-action', 'click_text');
         expect(link).toHaveAttr('data-track-label', 'some_value_for_label');
         expect(link).toHaveAttr('data-track-value', '3');
         expect(link).toHaveAttr('data-track-property', 'suggestion-category');

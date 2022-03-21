@@ -39,6 +39,73 @@ RSpec.describe Gitlab::UrlBlocker, :stub_invalid_dns_only do
       end
     end
 
+    context 'when URI is for a local object storage' do
+      let(:import_url) { "#{host}/external-diffs/merge_request_diffs/mr-1/diff-1" }
+      let(:enabled_object_storage_setting) do
+        {
+          'object_store' =>
+          {
+            'enabled' => true,
+            'connection' => {
+              'endpoint' => host
+            }
+          }
+        }
+      end
+
+      before do
+        allow(Settings).to receive(:external_diffs).and_return(enabled_object_storage_setting)
+      end
+
+      context 'when allow_object_storage is true' do
+        subject { described_class.validate!(import_url, allow_object_storage: true) }
+
+        context 'with a local domain name' do
+          let(:host) { 'http://review-minio-svc.svc:9000' }
+
+          before do
+            stub_dns(host, ip_address: '127.0.0.1')
+          end
+
+          it_behaves_like 'validates URI and hostname' do
+            let(:expected_uri) { 'http://127.0.0.1:9000/external-diffs/merge_request_diffs/mr-1/diff-1' }
+            let(:expected_hostname) { 'review-minio-svc.svc' }
+          end
+        end
+
+        context 'with an IP address' do
+          let(:host) { 'http://127.0.0.1:9000' }
+
+          it_behaves_like 'validates URI and hostname' do
+            let(:expected_uri) { 'http://127.0.0.1:9000/external-diffs/merge_request_diffs/mr-1/diff-1' }
+            let(:expected_hostname) { nil }
+          end
+        end
+      end
+
+      context 'when allow_object_storage is false' do
+        context 'with a local domain name' do
+          let(:host) { 'http://review-minio-svc.svc:9000' }
+
+          before do
+            stub_dns(host, ip_address: '127.0.0.1')
+          end
+
+          it 'raises an error' do
+            expect { subject }.to raise_error(described_class::BlockedUrlError)
+          end
+        end
+
+        context 'with an IP address' do
+          let(:host) { 'http://127.0.0.1:9000' }
+
+          it 'raises an error' do
+            expect { subject }.to raise_error(described_class::BlockedUrlError)
+          end
+        end
+      end
+    end
+
     context 'when the URL hostname is a domain' do
       context 'when domain can be resolved' do
         let(:import_url) { 'https://example.org' }
@@ -279,6 +346,8 @@ RSpec.describe Gitlab::UrlBlocker, :stub_invalid_dns_only do
     end
 
     context 'when allow_local_network is' do
+      let(:shared_address_space_ips) { ['100.64.0.0', '100.64.127.127', '100.64.255.255'] }
+
       let(:local_ips) do
         [
           '192.168.1.2',
@@ -292,7 +361,23 @@ RSpec.describe Gitlab::UrlBlocker, :stub_invalid_dns_only do
           '[::ffff:ac10:20]',
           '[feef::1]',
           '[fee2::]',
-          '[fc00:bf8b:e62c:abcd:abcd:aaaa:aaaa:aaaa]'
+          '[fc00:bf8b:e62c:abcd:abcd:aaaa:aaaa:aaaa]',
+          *shared_address_space_ips
+        ]
+      end
+
+      let(:limited_broadcast_address_variants) do
+        [
+          '255.255.255.255', # "normal"  dotted decimal
+          '0377.0377.0377.0377', # Octal
+          '0377.00000000377.00377.0000377', # Still octal
+          '0xff.0xff.0xff.0xff', # hex
+          '0xffffffff', # still hex
+          '0xBaaaaaaaaaaaaaaaaffffffff', # padded hex
+          '255.255.255.255:65535', # with a port
+          '4294967295', # as an integer / dword
+          '[::ffff:ffff:ffff]', # short IPv6
+          '[0000:0000:0000:0000:0000:ffff:ffff:ffff]' # long IPv6
         ]
       end
 
@@ -333,6 +418,12 @@ RSpec.describe Gitlab::UrlBlocker, :stub_invalid_dns_only do
           expect(described_class).not_to be_blocked_url('http://[::ffff:a9fe:a864]', **url_blocker_attributes)
           expect(described_class).not_to be_blocked_url('http://[fe80::c800:eff:fe74:8]', **url_blocker_attributes)
         end
+
+        it 'allows limited broadcast address 255.255.255.255 and variants' do
+          limited_broadcast_address_variants.each do |variant|
+            expect(described_class).not_to be_blocked_url("https://#{variant}", **url_blocker_attributes), "Expected #{variant} to be allowed"
+          end
+        end
       end
 
       context 'true (default)' do
@@ -365,6 +456,17 @@ RSpec.describe Gitlab::UrlBlocker, :stub_invalid_dns_only do
           expect(described_class).to be_blocked_url('http://[fe80::c800:eff:fe74:8]', allow_local_network: false)
         end
 
+        it 'blocks limited broadcast address 255.255.255.255 and variants' do
+          # Raise BlockedUrlError for invalid URLs.
+          # The padded hex version, for example, is a valid URL on Mac but
+          # not on Ubuntu.
+          stub_env('RSPEC_ALLOW_INVALID_URLS', 'false')
+
+          limited_broadcast_address_variants.each do |variant|
+            expect(described_class).to be_blocked_url("https://#{variant}", allow_local_network: false), "Expected #{variant} to be blocked"
+          end
+        end
+
         context 'when local domain/IP is allowed' do
           let(:url_blocker_attributes) do
             {
@@ -385,23 +487,13 @@ RSpec.describe Gitlab::UrlBlocker, :stub_invalid_dns_only do
                 '127.0.0.1',
                 '127.0.0.2',
                 '192.168.1.1',
-                '192.168.1.2',
-                '0:0:0:0:0:ffff:192.168.1.2',
-                '::ffff:c0a8:102',
-                '10.0.0.2',
-                '0:0:0:0:0:ffff:10.0.0.2',
-                '::ffff:a00:2',
-                '172.16.0.2',
-                '0:0:0:0:0:ffff:172.16.0.2',
-                '::ffff:ac10:20',
-                'feef::1',
-                'fee2::',
-                'fc00:bf8b:e62c:abcd:abcd:aaaa:aaaa:aaaa',
+                *local_ips,
                 '0:0:0:0:0:ffff:169.254.169.254',
                 '::ffff:a9fe:a9fe',
                 '::ffff:169.254.168.100',
                 '::ffff:a9fe:a864',
                 'fe80::c800:eff:fe74:8',
+                '255.255.255.255',
 
                 # garbage IPs
                 '45645632345',
@@ -422,6 +514,10 @@ RSpec.describe Gitlab::UrlBlocker, :stub_invalid_dns_only do
               stub_domain_resolv('example.com', '192.168.1.3') do
                 expect(described_class).to be_blocked_url(url, **attrs)
               end
+            end
+
+            it 'allows the limited broadcast address 255.255.255.255' do
+              expect(described_class).not_to be_blocked_url('http://255.255.255.255', **url_blocker_attributes)
             end
           end
 
@@ -531,24 +627,6 @@ RSpec.describe Gitlab::UrlBlocker, :stub_invalid_dns_only do
           end
         end
       end
-
-      def stub_domain_resolv(domain, ip, port = 80, &block)
-        address = instance_double(Addrinfo,
-          ip_address: ip,
-          ipv4_private?: true,
-          ipv6_linklocal?: false,
-          ipv4_loopback?: false,
-          ipv6_loopback?: false,
-          ipv4?: false,
-          ip_port: port
-        )
-        allow(Addrinfo).to receive(:getaddrinfo).with(domain, port, any_args).and_return([address])
-        allow(address).to receive(:ipv6_v4mapped?).and_return(false)
-
-        yield
-
-        allow(Addrinfo).to receive(:getaddrinfo).and_call_original
-      end
     end
 
     context 'when enforce_user is' do
@@ -610,6 +688,44 @@ RSpec.describe Gitlab::UrlBlocker, :stub_invalid_dns_only do
       stub_env('RSPEC_ALLOW_INVALID_URLS', 'false')
 
       expect(described_class).to be_blocked_url('http://foobar.x')
+    end
+
+    context 'when gitlab is running on a non-default port' do
+      let(:gitlab_port) { 3000 }
+
+      before do
+        stub_config(gitlab: { protocol: 'http', host: 'gitlab.local', port: gitlab_port })
+      end
+
+      it 'returns true for url targeting the wrong port' do
+        stub_domain_resolv('gitlab.local', '127.0.0.1') do
+          expect(described_class).to be_blocked_url("http://gitlab.local/foo")
+        end
+      end
+
+      it 'does not block url on gitlab port' do
+        stub_domain_resolv('gitlab.local', '127.0.0.1') do
+          expect(described_class).not_to be_blocked_url("http://gitlab.local:#{gitlab_port}/foo")
+        end
+      end
+    end
+
+    def stub_domain_resolv(domain, ip, port = 80, &block)
+      address = instance_double(Addrinfo,
+        ip_address: ip,
+        ipv4_private?: true,
+        ipv6_linklocal?: false,
+        ipv4_loopback?: false,
+        ipv6_loopback?: false,
+        ipv4?: false,
+        ip_port: port
+      )
+      allow(Addrinfo).to receive(:getaddrinfo).with(domain, port, any_args).and_return([address])
+      allow(address).to receive(:ipv6_v4mapped?).and_return(false)
+
+      yield
+
+      allow(Addrinfo).to receive(:getaddrinfo).and_call_original
     end
   end
 

@@ -10,7 +10,7 @@ RSpec.describe API::Invitations do
   let(:email) { 'email1@example.com' }
   let(:email2) { 'email2@example.com' }
 
-  let_it_be(:project) do
+  let_it_be(:project, reload: true) do
     create(:project, :public, creator_id: maintainer.id, namespace: maintainer.namespace) do |project|
       project.add_developer(developer)
       project.add_maintainer(maintainer)
@@ -152,17 +152,31 @@ RSpec.describe API::Invitations do
         end
       end
 
-      context 'with areas_of_focus', :snowplow do
-        it 'tracks the areas_of_focus from params' do
-          post invitations_url(source, maintainer),
-               params: { email: email, access_level: Member::DEVELOPER, areas_of_focus: 'Other' }
+      context 'with tasks_to_be_done and tasks_project_id in the params' do
+        let(:project_id) { source_type == 'project' ? source.id : create(:project, namespace: source).id }
 
-          expect_snowplow_event(
-            category: 'Members::InviteService',
-            action: 'area_of_focus',
-            label: 'Other',
-            property: source.members.last.id.to_s
-          )
+        context 'when there is 1 invitation' do
+          it 'creates a member_task with the tasks_to_be_done and the project' do
+            post invitations_url(source, maintainer),
+                 params: { email: email, access_level: Member::DEVELOPER, tasks_to_be_done: %w(code ci), tasks_project_id: project_id }
+
+            member = source.members.find_by(invite_email: email)
+            expect(member.tasks_to_be_done).to match_array([:code, :ci])
+            expect(member.member_task.project_id).to eq(project_id)
+          end
+        end
+
+        context 'when there are multiple invitations' do
+          it 'creates a member_task with the tasks_to_be_done and the project' do
+            post invitations_url(source, maintainer),
+                 params: { email: [email, email2].join(','), access_level: Member::DEVELOPER, tasks_to_be_done: %w(code ci), tasks_project_id: project_id }
+
+            members = source.members.where(invite_email: [email, email2])
+            members.each do |member|
+              expect(member.tasks_to_be_done).to match_array([:code, :ci])
+              expect(member.member_task.project_id).to eq(project_id)
+            end
+          end
         end
       end
 
@@ -191,6 +205,25 @@ RSpec.describe API::Invitations do
             property: 'net_new_user',
             user: maintainer
           )
+        end
+      end
+
+      context 'when adding project bot' do
+        let_it_be(:project_bot) { create(:user, :project_bot) }
+
+        before do
+          unrelated_project = create(:project)
+          unrelated_project.add_maintainer(project_bot)
+        end
+
+        it 'returns error' do
+          expect do
+            post invitations_url(source, maintainer),
+                 params: { email: project_bot.email, access_level: Member::DEVELOPER }
+
+            expect(json_response['status']).to eq 'error'
+            expect(json_response['message'][project_bot.email]).to include('User project bots cannot be added to other groups / projects')
+          end.not_to change { source.members.count }
         end
       end
 
@@ -245,11 +278,89 @@ RSpec.describe API::Invitations do
     it_behaves_like 'POST /:source_type/:id/invitations', 'project' do
       let(:source) { project }
     end
+
+    it 'records queries', :request_store, :use_sql_query_cache do
+      post invitations_url(project, maintainer), params: { email: email, access_level: Member::DEVELOPER }
+
+      control = ActiveRecord::QueryRecorder.new(skip_cached: false) do
+        post invitations_url(project, maintainer), params: { email: email2, access_level: Member::DEVELOPER }
+      end
+
+      emails = 'email3@example.com,email4@example.com,email5@example.com,email6@example.com,email7@example.com'
+
+      unresolved_n_plus_ones = 44 # old 48 with 12 per new email, currently there are 11 queries added per email
+
+      expect do
+        post invitations_url(project, maintainer), params: { email: emails, access_level: Member::DEVELOPER }
+      end.not_to exceed_all_query_limit(control.count).with_threshold(unresolved_n_plus_ones)
+    end
+
+    it 'records queries with secondary emails', :request_store, :use_sql_query_cache do
+      create(:email, email: email, user: create(:user))
+
+      post invitations_url(project, maintainer), params: { email: email, access_level: Member::DEVELOPER }
+
+      create(:email, email: email2, user: create(:user))
+
+      control = ActiveRecord::QueryRecorder.new(skip_cached: false) do
+        post invitations_url(project, maintainer), params: { email: email2, access_level: Member::DEVELOPER }
+      end
+
+      create(:email, email: 'email4@example.com', user: create(:user))
+      create(:email, email: 'email6@example.com', user: create(:user))
+
+      emails = 'email3@example.com,email4@example.com,email5@example.com,email6@example.com,email7@example.com'
+
+      unresolved_n_plus_ones = 67 # currently there are 11 queries added per email
+
+      expect do
+        post invitations_url(project, maintainer), params: { email: emails, access_level: Member::DEVELOPER }
+      end.not_to exceed_all_query_limit(control.count).with_threshold(unresolved_n_plus_ones)
+    end
   end
 
   describe 'POST /groups/:id/invitations' do
     it_behaves_like 'POST /:source_type/:id/invitations', 'group' do
       let(:source) { group }
+    end
+
+    it 'records queries', :request_store, :use_sql_query_cache do
+      post invitations_url(group, maintainer), params: { email: email, access_level: Member::DEVELOPER }
+
+      control = ActiveRecord::QueryRecorder.new(skip_cached: false) do
+        post invitations_url(group, maintainer), params: { email: email2, access_level: Member::DEVELOPER }
+      end
+
+      emails = 'email3@example.com,email4@example.com,email5@example.com,email6@example.com,email7@example.com'
+
+      unresolved_n_plus_ones = 36 # old 40 with 10 per new email, currently there are 9 queries added per email
+
+      expect do
+        post invitations_url(group, maintainer), params: { email: emails, access_level: Member::DEVELOPER }
+      end.not_to exceed_all_query_limit(control.count).with_threshold(unresolved_n_plus_ones)
+    end
+
+    it 'records queries with secondary emails', :request_store, :use_sql_query_cache do
+      create(:email, email: email, user: create(:user))
+
+      post invitations_url(group, maintainer), params: { email: email, access_level: Member::DEVELOPER }
+
+      create(:email, email: email2, user: create(:user))
+
+      control = ActiveRecord::QueryRecorder.new(skip_cached: false) do
+        post invitations_url(group, maintainer), params: { email: email2, access_level: Member::DEVELOPER }
+      end
+
+      create(:email, email: 'email4@example.com', user: create(:user))
+      create(:email, email: 'email6@example.com', user: create(:user))
+
+      emails = 'email3@example.com,email4@example.com,email5@example.com,email6@example.com,email7@example.com'
+
+      unresolved_n_plus_ones = 62 # currently there are 9 queries added per email
+
+      expect do
+        post invitations_url(group, maintainer), params: { email: emails, access_level: Member::DEVELOPER }
+      end.not_to exceed_all_query_limit(control.count).with_threshold(unresolved_n_plus_ones)
     end
   end
 
@@ -259,38 +370,31 @@ RSpec.describe API::Invitations do
         let(:route) { get invitations_url(source, stranger) }
       end
 
-      %i[maintainer developer access_requester stranger].each do |type|
+      context "when authenticated as a maintainer" do
+        it 'returns 200' do
+          get invitations_url(source, maintainer)
+
+          expect(response).to have_gitlab_http_status(:ok)
+          expect(response).to include_pagination_headers
+          expect(json_response).to be_an Array
+          expect(json_response.size).to eq(0)
+        end
+      end
+
+      %i[developer access_requester stranger].each do |type|
         context "when authenticated as a #{type}" do
-          it 'returns 200' do
+          it 'returns 403' do
             user = public_send(type)
 
             get invitations_url(source, user)
 
-            expect(response).to have_gitlab_http_status(:ok)
-            expect(response).to include_pagination_headers
-            expect(json_response).to be_an Array
-            expect(json_response.size).to eq(0)
+            expect(response).to have_gitlab_http_status(:forbidden)
           end
         end
       end
 
-      it 'avoids N+1 queries' do
-        # Establish baseline
-        get invitations_url(source, maintainer)
-
-        control = ActiveRecord::QueryRecorder.new do
-          get invitations_url(source, maintainer)
-        end
-
-        invite_member_by_email(source, source_type, email, maintainer)
-
-        expect do
-          get invitations_url(source, maintainer)
-        end.not_to exceed_query_limit(control)
-      end
-
       it 'does not find confirmed members' do
-        get invitations_url(source, developer)
+        get invitations_url(source, maintainer)
 
         expect(response).to have_gitlab_http_status(:ok)
         expect(response).to include_pagination_headers
@@ -300,10 +404,10 @@ RSpec.describe API::Invitations do
       end
 
       it 'finds all members with no query string specified' do
-        invite_member_by_email(source, source_type, email, developer)
-        invite_member_by_email(source, source_type, email2, developer)
+        invite_member_by_email(source, source_type, email, maintainer)
+        invite_member_by_email(source, source_type, email2, maintainer)
 
-        get invitations_url(source, developer), params: { query: '' }
+        get invitations_url(source, maintainer), params: { query: '' }
 
         expect(response).to have_gitlab_http_status(:ok)
         expect(response).to include_pagination_headers
@@ -314,17 +418,17 @@ RSpec.describe API::Invitations do
       end
 
       it 'finds the invitation by invite_email with query string' do
-        invite_member_by_email(source, source_type, email, developer)
-        invite_member_by_email(source, source_type, email2, developer)
+        invite_member_by_email(source, source_type, email, maintainer)
+        invite_member_by_email(source, source_type, email2, maintainer)
 
-        get invitations_url(source, developer), params: { query: email }
+        get invitations_url(source, maintainer), params: { query: email }
 
         expect(response).to have_gitlab_http_status(:ok)
         expect(response).to include_pagination_headers
         expect(json_response).to be_an Array
         expect(json_response.count).to eq(1)
         expect(json_response.first['invite_email']).to eq(email)
-        expect(json_response.first['created_by_name']).to eq(developer.name)
+        expect(json_response.first['created_by_name']).to eq(maintainer.name)
         expect(json_response.first['user_name']).to eq(nil)
       end
     end

@@ -1,33 +1,21 @@
-export const loadViewer = (type) => {
-  switch (type) {
-    case 'empty':
-      return () => import(/* webpackChunkName: 'blob_empty_viewer' */ './empty_viewer.vue');
-    case 'text':
-      return () => import(/* webpackChunkName: 'blob_text_viewer' */ './text_viewer.vue');
-    case 'download':
-      return () => import(/* webpackChunkName: 'blob_download_viewer' */ './download_viewer.vue');
-    case 'image':
-      return () => import(/* webpackChunkName: 'blob_image_viewer' */ './image_viewer.vue');
-    default:
-      return null;
-  }
+const viewers = {
+  csv: () => import('./csv_viewer.vue'),
+  download: () => import('./download_viewer.vue'),
+  image: () => import('./image_viewer.vue'),
+  video: () => import('./video_viewer.vue'),
+  empty: () => import('./empty_viewer.vue'),
+  text: () => import('~/vue_shared/components/source_viewer/source_viewer.vue'),
+  pdf: () => import('./pdf_viewer.vue'),
+  lfs: () => import('./lfs_viewer.vue'),
+  audio: () => import('./audio_viewer.vue'),
 };
 
-export const viewerProps = (type, blob) => {
-  return {
-    text: {
-      content: blob.rawTextBlob,
-      fileName: blob.name,
-      readOnly: true,
-    },
-    download: {
-      fileName: blob.name,
-      filePath: blob.rawPath,
-      fileSize: blob.rawSize,
-    },
-    image: {
-      url: blob.rawPath,
-      alt: blob.name,
-    },
-  }[type];
+export const loadViewer = (type, isUsingLfs) => {
+  let viewer = viewers[type];
+
+  if (!viewer && isUsingLfs) {
+    viewer = viewers.lfs;
+  }
+
+  return viewer;
 };

@@ -29,19 +29,6 @@ RSpec.describe 'projects/edit' do
   end
 
   context 'merge suggestions settings' do
-    it 'displays all possible variables' do
-      render
-
-      expect(rendered).to have_content('%{branch_name}')
-      expect(rendered).to have_content('%{files_count}')
-      expect(rendered).to have_content('%{file_paths}')
-      expect(rendered).to have_content('%{project_name}')
-      expect(rendered).to have_content('%{project_path}')
-      expect(rendered).to have_content('%{user_full_name}')
-      expect(rendered).to have_content('%{username}')
-      expect(rendered).to have_content('%{suggestions_count}')
-    end
-
     it 'displays a placeholder if none is set' do
       render
 
@@ -54,6 +41,46 @@ RSpec.describe 'projects/edit' do
       render
 
       expect(rendered).to have_field('project[suggestion_commit_message]', with: 'refactor: changed %{file_paths}')
+    end
+  end
+
+  context 'merge commit template' do
+    it 'displays default template if none is set' do
+      render
+
+      expect(rendered).to have_field('project[merge_commit_template_or_default]', with: <<~MSG.rstrip)
+        Merge branch '%{source_branch}' into '%{target_branch}'
+
+        %{title}
+
+        %{issues}
+
+        See merge request %{reference}
+      MSG
+    end
+
+    it 'displays the user entered value' do
+      project.update!(merge_commit_template: '%{title}')
+
+      render
+
+      expect(rendered).to have_field('project[merge_commit_template_or_default]', with: '%{title}')
+    end
+  end
+
+  context 'squash template' do
+    it 'displays default template if none is set' do
+      render
+
+      expect(rendered).to have_field('project[squash_commit_template_or_default]', with: '%{title}')
+    end
+
+    it 'displays the user entered value' do
+      project.update!(squash_commit_template: '%{first_multiline_commit}')
+
+      render
+
+      expect(rendered).to have_field('project[squash_commit_template_or_default]', with: '%{first_multiline_commit}')
     end
   end
 
@@ -110,6 +137,28 @@ RSpec.describe 'projects/edit' do
         expect(rendered).to have_content('Remove fork relationship')
         expect(rendered).to have_link(source_project.full_name, href: project_path(source_project))
       end
+    end
+  end
+
+  describe 'prompt user about registration features' do
+    context 'when service ping is enabled' do
+      before do
+        stub_application_setting(usage_ping_enabled: true)
+      end
+
+      it_behaves_like 'does not render registration features prompt', :project_disabled_repository_size_limit
+    end
+
+    context 'with no license and service ping disabled' do
+      before do
+        stub_application_setting(usage_ping_enabled: false)
+
+        if Gitlab.ee?
+          allow(License).to receive(:current).and_return(nil)
+        end
+      end
+
+      it_behaves_like 'renders registration features prompt', :project_disabled_repository_size_limit
     end
   end
 end

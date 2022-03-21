@@ -67,6 +67,49 @@ RSpec.describe Projects::CommitsController do
         end
       end
 
+      context "with an invalid limit" do
+        let(:id) { "master/README.md" }
+
+        it "uses the default limit" do
+          expect_any_instance_of(Repository).to receive(:commits).with(
+            "master",
+            path: "README.md",
+            limit: described_class::COMMITS_DEFAULT_LIMIT,
+            offset: 0
+          ).and_call_original
+
+          get(:show,
+              params: {
+                namespace_id: project.namespace,
+                project_id: project,
+                id: id,
+                limit: "foo"
+            })
+
+          expect(response).to be_successful
+        end
+
+        context 'when limit is a hash' do
+          it 'uses the default limit' do
+            expect_any_instance_of(Repository).to receive(:commits).with(
+              "master",
+              path: "README.md",
+              limit: described_class::COMMITS_DEFAULT_LIMIT,
+              offset: 0
+            ).and_call_original
+
+            get(:show, params: {
+              namespace_id: project.namespace,
+              project_id: project,
+              id: id,
+              limit: { 'broken' => 'value' }
+            })
+
+            expect(response).to be_successful
+          end
+        end
+      end
+
       context "when the ref name ends in .atom" do
         context "when the ref does not exist with the suffix" do
           before do
@@ -108,6 +151,20 @@ RSpec.describe Projects::CommitsController do
             expect(response.media_type).to eq('text/html')
           end
         end
+
+        context 'when the ref does not exist' do
+          before do
+            get(:show, params: {
+              namespace_id: project.namespace,
+              project_id: project,
+              id: 'unknown.atom'
+            })
+          end
+
+          it 'returns 404 page' do
+            expect(response).to be_not_found
+          end
+        end
       end
     end
 
@@ -136,29 +193,6 @@ RSpec.describe Projects::CommitsController do
         let(:id) { 'some branch' }
 
         it { is_expected.to respond_with(:not_found) }
-      end
-    end
-  end
-
-  context 'token authentication' do
-    context 'public project' do
-      it_behaves_like 'authenticates sessionless user', :show, :atom, { public: true, ignore_incrementing: true } do
-        before do
-          public_project = create(:project, :repository, :public)
-
-          default_params.merge!(namespace_id: public_project.namespace, project_id: public_project, id: "master.atom")
-        end
-      end
-    end
-
-    context 'private project' do
-      it_behaves_like 'authenticates sessionless user', :show, :atom, { public: false, ignore_incrementing: true } do
-        before do
-          private_project = create(:project, :repository, :private)
-          private_project.add_maintainer(user)
-
-          default_params.merge!(namespace_id: private_project.namespace, project_id: private_project, id: "master.atom")
-        end
       end
     end
   end

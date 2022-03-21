@@ -4,7 +4,7 @@ require 'spec_helper'
 
 RSpec.describe Git::ProcessRefChangesService do
   let(:project) { create(:project, :repository) }
-  let(:user) { project.owner }
+  let(:user) { project.first_owner }
   let(:params) { { changes: git_changes } }
 
   subject { described_class.new(project, user, params) }
@@ -34,7 +34,7 @@ RSpec.describe Git::ProcessRefChangesService do
     it "calls #{push_service_class}" do
       expect(push_service_class)
         .to receive(:new)
-        .with(project, project.owner, hash_including(execute_project_hooks: true, create_push_event: true))
+        .with(project, project.first_owner, hash_including(execute_project_hooks: true, create_push_event: true))
         .exactly(changes.count).times
         .and_return(service)
 
@@ -58,7 +58,7 @@ RSpec.describe Git::ProcessRefChangesService do
       it "calls #{push_service_class} with execute_project_hooks set to false" do
         expect(push_service_class)
           .to receive(:new)
-          .with(project, project.owner, hash_including(execute_project_hooks: false))
+          .with(project, project.first_owner, hash_including(execute_project_hooks: false))
           .exactly(changes.count).times
           .and_return(service)
 
@@ -86,7 +86,7 @@ RSpec.describe Git::ProcessRefChangesService do
       it "calls #{push_service_class} with create_push_event set to false" do
         expect(push_service_class)
           .to receive(:new)
-          .with(project, project.owner, hash_including(create_push_event: false))
+          .with(project, project.first_owner, hash_including(create_push_event: false))
           .exactly(changes.count).times
           .and_return(service)
 
@@ -159,6 +159,50 @@ RSpec.describe Git::ProcessRefChangesService do
         it 'does not create a pipeline' do
           expect { subject.execute }.not_to change { Ci::Pipeline.count }
         end
+      end
+    end
+
+    describe "housekeeping", :clean_gitlab_redis_cache, :clean_gitlab_redis_queues, :clean_gitlab_redis_shared_state do
+      let(:housekeeping) { Repositories::HousekeepingService.new(project) }
+
+      before do
+        allow(Repositories::HousekeepingService).to receive(:new).and_return(housekeeping)
+
+        allow(push_service_class)
+          .to receive(:new)
+          .with(project, project.first_owner, hash_including(execute_project_hooks: true, create_push_event: true))
+          .exactly(changes.count).times
+          .and_return(service)
+      end
+
+      it 'does not perform housekeeping when not needed' do
+        expect(housekeeping).not_to receive(:execute)
+
+        subject.execute
+      end
+
+      context 'when housekeeping is needed' do
+        before do
+          allow(housekeeping).to receive(:needed?).and_return(true)
+        end
+
+        it 'performs housekeeping' do
+          expect(housekeeping).to receive(:execute)
+
+          subject.execute
+        end
+
+        it 'does not raise an exception' do
+          allow(housekeeping).to receive(:try_obtain_lease).and_return(false)
+
+          subject.execute
+        end
+      end
+
+      it 'increments the push counter' do
+        expect(housekeeping).to receive(:increment!)
+
+        subject.execute
       end
     end
   end

@@ -1,4 +1,5 @@
 import { mount } from '@vue/test-utils';
+import { nextTick } from 'vue';
 import CollapsibleSection from '~/jobs/components/log/collapsible_section.vue';
 import { collapsibleSectionClosed, collapsibleSectionOpened } from './mock_data';
 
@@ -6,7 +7,7 @@ describe('Job Log Collapsible Section', () => {
   let wrapper;
   let origGon;
 
-  const traceEndpoint = 'jobs/335';
+  const jobLogEndpoint = 'jobs/335';
 
   const findCollapsibleLine = () => wrapper.find('.collapsible-line');
   const findCollapsibleLineSvg = () => wrapper.find('.collapsible-line svg');
@@ -35,7 +36,7 @@ describe('Job Log Collapsible Section', () => {
     beforeEach(() => {
       createComponent({
         section: collapsibleSectionClosed,
-        traceEndpoint,
+        jobLogEndpoint,
       });
     });
 
@@ -52,7 +53,7 @@ describe('Job Log Collapsible Section', () => {
     beforeEach(() => {
       createComponent({
         section: collapsibleSectionOpened,
-        traceEndpoint,
+        jobLogEndpoint,
       });
     });
 
@@ -69,16 +70,15 @@ describe('Job Log Collapsible Section', () => {
     });
   });
 
-  it('emits onClickCollapsibleLine on click', () => {
+  it('emits onClickCollapsibleLine on click', async () => {
     createComponent({
       section: collapsibleSectionOpened,
-      traceEndpoint,
+      jobLogEndpoint,
     });
 
     findCollapsibleLine().trigger('click');
 
-    return wrapper.vm.$nextTick().then(() => {
-      expect(wrapper.emitted('onClickCollapsibleLine').length).toBe(1);
-    });
+    await nextTick();
+    expect(wrapper.emitted('onClickCollapsibleLine').length).toBe(1);
   });
 });

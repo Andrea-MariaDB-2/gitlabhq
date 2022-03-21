@@ -5,9 +5,9 @@ description: Number of distinct users who have generated a manage event by month
 product_section: dev
 product_stage: manage
 product_group: group::manage
-product_category: 
+product_category:
 value_type: number
-status: data_available
+status: active
 time_frame: 28d
 data_source: database
 distribution:
@@ -19,3 +19,4 @@ tier:
 - ultimate
 performance_indicator_type:
 - umau
+milestone: "<13.9"

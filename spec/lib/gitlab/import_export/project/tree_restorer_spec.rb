@@ -3,7 +3,7 @@
 require 'spec_helper'
 
 def match_mr1_note(content_regex)
-  MergeRequest.find_by(title: 'MR1').notes.select { |n| n.note.match(/#{content_regex}/)}.first
+  MergeRequest.find_by(title: 'MR1').notes.find { |n| n.note.match(/#{content_regex}/) }
 end
 
 RSpec.describe Gitlab::ImportExport::Project::TreeRestorer do
@@ -23,7 +23,7 @@ RSpec.describe Gitlab::ImportExport::Project::TreeRestorer do
         ]
 
         RSpec::Mocks.with_temporary_scope do
-          @project = create(:project, :builds_enabled, :issues_disabled, name: 'project', path: 'project')
+          @project = create(:project, :repository, :builds_enabled, :issues_disabled, name: 'project', path: 'project')
           @shared = @project.import_export_shared
 
           stub_all_feature_flags
@@ -36,7 +36,6 @@ RSpec.describe Gitlab::ImportExport::Project::TreeRestorer do
           allow_any_instance_of(Gitlab::Git::Repository).to receive(:branch_exists?).and_return(false)
 
           expect(@shared).not_to receive(:error)
-          expect_any_instance_of(Gitlab::Git::Repository).to receive(:create_branch).with('feature', 'DCBA')
           allow_any_instance_of(Gitlab::Git::Repository).to receive(:create_branch)
 
           project_tree_restorer = described_class.new(user: @user, shared: @shared, project: @project)
@@ -76,7 +75,7 @@ RSpec.describe Gitlab::ImportExport::Project::TreeRestorer do
           context 'for an Issue' do
             it 'does not import note_html' do
               note_content = 'Quo reprehenderit aliquam qui dicta impedit cupiditate eligendi'
-              issue_note = Issue.find_by(description: 'Aliquam enim illo et possimus.').notes.select { |n| n.note.match(/#{note_content}/)}.first
+              issue_note = Issue.find_by(description: 'Aliquam enim illo et possimus.').notes.find { |n| n.note.match(/#{note_content}/) }
 
               expect(issue_note.note_html).to match(/#{note_content}/)
             end
@@ -376,7 +375,7 @@ RSpec.describe Gitlab::ImportExport::Project::TreeRestorer do
             expect(pipeline_schedule.ref).to eq('master')
             expect(pipeline_schedule.cron).to eq('0 4 * * 0')
             expect(pipeline_schedule.cron_timezone).to eq('UTC')
-            expect(pipeline_schedule.active).to eq(true)
+            expect(pipeline_schedule.active).to eq(false)
           end
         end
 
@@ -445,8 +444,8 @@ RSpec.describe Gitlab::ImportExport::Project::TreeRestorer do
             expect(@project.merge_requests.size).to eq(9)
           end
 
-          it 'only restores valid triggers' do
-            expect(@project.triggers.size).to eq(1)
+          it 'does not restore triggers' do
+            expect(@project.triggers.size).to eq(0)
           end
 
           it 'has the correct number of pipelines and statuses' do
@@ -553,7 +552,7 @@ RSpec.describe Gitlab::ImportExport::Project::TreeRestorer do
 
         it 'issue system note metadata restored successfully' do
           note_content = 'created merge request !1 to address this issue'
-          note = project.issues.first.notes.select { |n| n.note.match(/#{note_content}/)}.first
+          note = project.issues.first.notes.find { |n| n.note.match(/#{note_content}/)}
 
           expect(note.noteable_type).to eq('Issue')
           expect(note.system).to eq(true)
@@ -675,6 +674,7 @@ RSpec.describe Gitlab::ImportExport::Project::TreeRestorer do
           # Project needs to be in a group for visibility level comparison
           # to happen
           group = create(:group)
+          group.add_maintainer(user)
           project.group = group
 
           project.create_import_data(data: { override_params: { visibility_level: Gitlab::VisibilityLevel::INTERNAL.to_s } })
@@ -716,13 +716,19 @@ RSpec.describe Gitlab::ImportExport::Project::TreeRestorer do
       end
 
       context 'with a project that has a group' do
+        let(:group) do
+          create(:group, visibility_level: Gitlab::VisibilityLevel::PRIVATE).tap do |g|
+            g.add_maintainer(user)
+          end
+        end
+
         let!(:project) do
           create(:project,
                  :builds_disabled,
                  :issues_disabled,
                  name: 'project',
                  path: 'project',
-                 group: create(:group, visibility_level: Gitlab::VisibilityLevel::PRIVATE))
+                 group: group)
         end
 
         before do
@@ -751,13 +757,14 @@ RSpec.describe Gitlab::ImportExport::Project::TreeRestorer do
       end
 
       context 'with existing group models' do
+        let(:group) { create(:group).tap { |g| g.add_maintainer(user) } }
         let!(:project) do
           create(:project,
                  :builds_disabled,
                  :issues_disabled,
                  name: 'project',
                  path: 'project',
-                 group: create(:group))
+                 group: group)
         end
 
         before do
@@ -786,13 +793,14 @@ RSpec.describe Gitlab::ImportExport::Project::TreeRestorer do
       end
 
       context 'with clashing milestones on IID' do
+        let(:group) { create(:group).tap { |g| g.add_maintainer(user) } }
         let!(:project) do
           create(:project,
                  :builds_disabled,
                  :issues_disabled,
                  name: 'project',
                  path: 'project',
-                 group: create(:group))
+                 group: group)
         end
 
         before do
@@ -871,8 +879,8 @@ RSpec.describe Gitlab::ImportExport::Project::TreeRestorer do
       context 'with group visibility' do
         before do
           group = create(:group, visibility_level: group_visibility)
-
-          project.update(group: group)
+          group.add_users([user], GroupMember::MAINTAINER)
+          project.update!(group: group)
         end
 
         context 'private group visibility' do
@@ -1050,13 +1058,35 @@ RSpec.describe Gitlab::ImportExport::Project::TreeRestorer do
     end
   end
 
-  context 'enable ndjson import' do
-    it_behaves_like 'project tree restorer work properly', :legacy_reader, true
+  context 'when import_relation_object_persistence feature flag is enabled' do
+    before do
+      stub_feature_flags(import_relation_object_persistence: true)
+    end
 
-    it_behaves_like 'project tree restorer work properly', :ndjson_reader, true
+    context 'enable ndjson import' do
+      it_behaves_like 'project tree restorer work properly', :legacy_reader, true
+
+      it_behaves_like 'project tree restorer work properly', :ndjson_reader, true
+    end
+
+    context 'disable ndjson import' do
+      it_behaves_like 'project tree restorer work properly', :legacy_reader, false
+    end
   end
 
-  context 'disable ndjson import' do
-    it_behaves_like 'project tree restorer work properly', :legacy_reader, false
+  context 'when import_relation_object_persistence feature flag is disabled' do
+    before do
+      stub_feature_flags(import_relation_object_persistence: false)
+    end
+
+    context 'enable ndjson import' do
+      it_behaves_like 'project tree restorer work properly', :legacy_reader, true
+
+      it_behaves_like 'project tree restorer work properly', :ndjson_reader, true
+    end
+
+    context 'disable ndjson import' do
+      it_behaves_like 'project tree restorer work properly', :legacy_reader, false
+    end
   end
 end

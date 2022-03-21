@@ -26,26 +26,30 @@ project, group, or instance level:
       Copy this value, as you need it in a later step.
 1. *For project-level or group-level integrations:* In GitLab, go to your project or group.
 1. *For instance-level integrations:*
-   1. Sign in to GitLab as a user with the [Administrator role](../user/permissions.md).
+   1. Sign in to GitLab as a user with administrator access.
    1. On the top bar, select **Menu > Admin**.
-1. In the left sidebar, select **Settings > Integrations**.
+1. On the left sidebar, select **Settings > Integrations**.
 1. Scroll to **Add an integration**, and select **Datadog**.
 1. Select **Active** to enable the integration.
 1. Specify the [**Datadog site**](https://docs.datadoghq.com/getting_started/site/) to send data to.
-1. (Optional) To override the API URL used to send data directly, provide an **API URL**.
-   Used only in advanced scenarios.
 1. Provide your Datadog **API key**.
-1. (Optional) If you use more than one GitLab instance, provide a unique **Service** name
+<!-- 1. Optional. Select **Enable logs collection** to enable logs collection for the output of jobs. ([Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/346339) in GitLab 14.8.) -->
+<!-- TODO: uncomment the archive_trace_events field once :datadog_integration_logs_collection is rolled out. Rollout issue: https://gitlab.com/gitlab-org/gitlab/-/issues/346339 -->
+1. Optional. To override the API URL used to send data directly, provide an **API URL**.
+   Used only in advanced scenarios.
+1. Optional. If you use more than one GitLab instance, provide a unique **Service** name
    to differentiate between your GitLab instances.
-1. (Optional) If you use groups of GitLab instances (such as staging and production
+1. Optional. If you use groups of GitLab instances (such as staging and production
    environments), provide an **Env** name. This value is attached to each span
    the integration generates.
-1. (Optional) Select **Test settings** to test your integration.
+1. Optional. To define any custom tags for all spans at which the integration is being configured,
+   enter one tag per line in **Tags**. Each line must be in the format `key:value`. ([Introduced](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/79665) in GitLab 14.8.)
+1. Optional. Select **Test settings** to test your integration.
 1. Select **Save changes**.
 
 When the integration sends data, you can view it in the [CI Visibility](https://app.datadoghq.com/ci)
 section of your Datadog account.
 
-## Related links
+## Related topics
 
 - [Datadog's CI Visibility](https://docs.datadoghq.com/continuous_integration/) documentation.

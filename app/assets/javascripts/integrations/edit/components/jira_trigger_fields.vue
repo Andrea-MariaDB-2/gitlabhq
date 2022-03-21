@@ -10,7 +10,6 @@ import {
 import { mapGetters } from 'vuex';
 import { helpPagePath } from '~/helpers/help_page_helper';
 import { s__ } from '~/locale';
-import eventHub from '../event_hub';
 
 const commentDetailOptions = [
   {
@@ -63,6 +62,11 @@ export default {
     GlLink,
     GlSprintf,
   },
+  inject: {
+    hasSections: {
+      default: false,
+    },
+  },
   props: {
     initialTriggerCommit: {
       type: Boolean,
@@ -91,10 +95,14 @@ export default {
       required: false,
       default: '',
     },
+    isValidated: {
+      type: Boolean,
+      required: false,
+      default: false,
+    },
   },
   data() {
     return {
-      validated: false,
       triggerCommit: this.initialTriggerCommit,
       triggerMergeRequest: this.initialTriggerMergeRequest,
       enableComments: this.initialEnableComments,
@@ -114,19 +122,10 @@ export default {
       return this.triggerCommit || this.triggerMergeRequest;
     },
     validIssueTransitionId() {
-      return !this.validated || Boolean(this.jiraIssueTransitionId);
+      return !this.isValidated || Boolean(this.jiraIssueTransitionId);
     },
-  },
-  created() {
-    eventHub.$on('validateForm', this.validateForm);
-  },
-  beforeDestroy() {
-    eventHub.$off('validateForm', this.validateForm);
   },
   methods: {
-    validateForm() {
-      this.validated = true;
-    },
     showCustomIssueTransitions(currentOption) {
       return (
         this.jiraIssueTransitionAutomatic === ISSUE_TRANSITION_CUSTOM &&
@@ -140,12 +139,14 @@ export default {
 <template>
   <div>
     <gl-form-group
-      :label="__('Trigger')"
+      :label="hasSections ? null : __('Trigger')"
       label-for="service[trigger]"
       :description="
-        s__(
-          'Integrations|When you mention a Jira issue in a commit or merge request, GitLab creates a remote link and comment (if enabled).',
-        )
+        hasSections
+          ? null
+          : s__(
+              'JiraService|When a Jira issue is mentioned in a commit or merge request, a remote link and comment (if enabled) will be created.',
+            )
       "
     >
       <input name="service[commit_events]" type="hidden" :value="triggerCommit || false" />

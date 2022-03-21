@@ -40,7 +40,7 @@ module Gitlab
       private
 
       def prohibited_branch_checks
-        return unless Feature.enabled?(:prohibit_hexadecimal_branch_names, project, default_enabled: true)
+        return if deletion?
 
         if branch_name =~ /\A\h{40}\z/
           raise GitAccess::ForbiddenError, ERROR_MESSAGES[:prohibited_hex_branch_name]

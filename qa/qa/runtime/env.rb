@@ -9,6 +9,7 @@ module QA
       extend self
 
       attr_writer :personal_access_token, :admin_personal_access_token
+      attr_accessor :dry_run
 
       ENV_VARIABLES = Gitlab::QA::Runtime::Env::ENV_VARIABLES
 
@@ -64,6 +65,10 @@ module QA
         ENV['QA_LOG_PATH'] || $stdout
       end
 
+      def colorized_logs?
+        enabled?(ENV['COLORIZED_LOGS'], default: false)
+      end
+
       # set to 'false' to have the browser run visibly instead of headless
       def webdriver_headless?
         if ENV.key?('CHROME_HEADLESS')
@@ -80,16 +85,31 @@ module QA
         enabled?(ENV['CHROME_REUSE_PROFILE'], default: false)
       end
 
+      # Disable /dev/shm use in CI. See https://gitlab.com/gitlab-org/gitlab/issues/4252
+      def disable_dev_shm?
+        running_in_ci? || enabled?(ENV['CHROME_DISABLE_DEV_SHM'], default: false)
+      end
+
       def accept_insecure_certs?
         enabled?(ENV['ACCEPT_INSECURE_CERTS'])
       end
 
-      def running_in_ci?
-        ENV['CI'] || ENV['CI_SERVER']
+      def running_on_dot_com?
+        uri = URI.parse(Runtime::Scenario.gitlab_address)
+        uri.host.include?('.com')
       end
 
-      def cluster_api_url
-        ENV['CLUSTER_API_URL']
+      def running_on_dev?
+        uri = URI.parse(Runtime::Scenario.gitlab_address)
+        uri.port != 80 && uri.port != 443
+      end
+
+      def running_on_dev_or_dot_com?
+        running_on_dev? || running_on_dot_com?
+      end
+
+      def running_in_ci?
+        ENV['CI'] || ENV['CI_SERVER']
       end
 
       def qa_cookies
@@ -151,6 +171,12 @@ module QA
 
       def remote_mobile_device_name
         ENV['QA_REMOTE_MOBILE_DEVICE_NAME']
+      end
+
+      def mobile_layout?
+        return false if ENV['QA_REMOTE_MOBILE_DEVICE_NAME'].blank?
+
+        !(ENV['QA_REMOTE_MOBILE_DEVICE_NAME'].downcase.include?('ipad') || ENV['QA_REMOTE_MOBILE_DEVICE_NAME'].downcase.include?('tablet'))
       end
 
       def user_username
@@ -269,12 +295,20 @@ module QA
         ENV['JIRA_HOSTNAME']
       end
 
+      # this is set by the integrations job
+      # which will allow bidirectional communication
+      # between the app and the specs container
+      # should the specs container spin up a server
+      def qa_hostname
+        ENV['QA_HOSTNAME']
+      end
+
       def cache_namespace_name?
         enabled?(ENV['CACHE_NAMESPACE_NAME'], default: true)
       end
 
       def knapsack?
-        !!(ENV['KNAPSACK_GENERATE_REPORT'] || ENV['KNAPSACK_REPORT_PATH'] || ENV['KNAPSACK_TEST_FILE_PATTERN'])
+        ENV['CI_NODE_TOTAL'].to_i > 1 && ENV['NO_KNAPSACK'] != "true"
       end
 
       def ldap_username
@@ -370,6 +404,14 @@ module QA
         ENV.fetch('GITLAB_QA_LOOP_RUNNER_MINUTES', 1).to_i
       end
 
+      def reusable_project_path
+        ENV.fetch('QA_REUSABLE_PROJECT_PATH', 'reusable_project')
+      end
+
+      def reusable_group_path
+        ENV.fetch('QA_REUSABLE_GROUP_PATH', 'reusable_group')
+      end
+
       def mailhog_hostname
         ENV['MAILHOG_HOSTNAME']
       end
@@ -392,7 +434,7 @@ module QA
       end
 
       def gitlab_agentk_version
-        ENV.fetch('GITLAB_AGENTK_VERSION', 'v13.7.0')
+        ENV.fetch('GITLAB_AGENTK_VERSION', 'v14.5.0')
       end
 
       def transient_trials
@@ -401,6 +443,26 @@ module QA
 
       def gitlab_tls_certificate
         ENV['GITLAB_TLS_CERTIFICATE']
+      end
+
+      def export_metrics?
+        running_in_ci? && enabled?(ENV['QA_EXPORT_TEST_METRICS'], default: true)
+      end
+
+      def ee_activation_code
+        ENV['QA_EE_ACTIVATION_CODE']
+      end
+
+      def quarantine_disabled?
+        enabled?(ENV['DISABLE_QUARANTINE'], default: false)
+      end
+
+      def validate_resource_reuse?
+        enabled?(ENV['QA_VALIDATE_RESOURCE_REUSE'], default: false)
+      end
+
+      def skip_smoke_reliable?
+        enabled?(ENV['QA_SKIP_SMOKE_RELIABLE'], default: false)
       end
 
       private

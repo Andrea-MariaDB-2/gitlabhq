@@ -20,13 +20,14 @@
 #     sort: string
 #     my_reaction_emoji: string
 #     public_only: boolean
+#     include_hidden: boolean
 #     due_date: date or '0', '', 'overdue', 'week', or 'month'
 #     created_after: datetime
 #     created_before: datetime
 #     updated_after: datetime
 #     updated_before: datetime
 #     confidential: boolean
-#     issue_types: array of strings (one of WorkItem::Type.base_types)
+#     issue_types: array of strings (one of WorkItems::Type.base_types)
 #
 class IssuesFinder < IssuableFinder
   CONFIDENTIAL_ACCESS_LEVEL = Gitlab::Access::REPORTER
@@ -47,8 +48,6 @@ class IssuesFinder < IssuableFinder
 
   # rubocop: disable CodeReuse/ActiveRecord
   def with_confidentiality_access_check
-    return Issue.all if params.user_can_see_all_issues?
-
     # Only admins can see hidden issues, so for non-admins, we filter out any hidden issues
     issues = Issue.without_hidden
 
@@ -76,7 +75,9 @@ class IssuesFinder < IssuableFinder
   private
 
   def init_collection
-    if params.public_only?
+    if params.include_hidden?
+      Issue.all
+    elsif params.public_only?
       Issue.public_only
     else
       with_confidentiality_access_check
@@ -90,6 +91,12 @@ class IssuesFinder < IssuableFinder
     by_issue_types(issues)
   end
 
+  # Negates all params found in `negatable_params`
+  def filter_negated_items(items)
+    issues = super
+    by_negated_issue_types(issues)
+  end
+
   def by_confidential(items)
     return items if params[:confidential].nil?
 
@@ -101,8 +108,14 @@ class IssuesFinder < IssuableFinder
 
     if params.filter_by_no_due_date?
       items.without_due_date
+    elsif params.filter_by_any_due_date?
+      items.with_due_date
     elsif params.filter_by_overdue?
       items.due_before(Date.today)
+    elsif params.filter_by_due_today?
+      items.due_today
+    elsif params.filter_by_due_tomorrow?
+      items.due_tomorrow
     elsif params.filter_by_due_this_week?
       items.due_between(Date.today.beginning_of_week, Date.today.end_of_week)
     elsif params.filter_by_due_this_month?
@@ -117,9 +130,16 @@ class IssuesFinder < IssuableFinder
   def by_issue_types(items)
     issue_type_params = Array(params[:issue_types]).map(&:to_s)
     return items if issue_type_params.blank?
-    return Issue.none unless (WorkItem::Type.base_types.keys & issue_type_params).sort == issue_type_params.sort
+    return Issue.none unless (WorkItems::Type.base_types.keys & issue_type_params).sort == issue_type_params.sort
 
     items.with_issue_type(params[:issue_types])
+  end
+
+  def by_negated_issue_types(items)
+    issue_type_params = Array(not_params[:issue_types]).map(&:to_s) & WorkItems::Type.base_types.keys
+    return items if issue_type_params.blank?
+
+    items.without_issue_type(issue_type_params)
   end
 end
 

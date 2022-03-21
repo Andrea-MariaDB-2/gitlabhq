@@ -25,19 +25,26 @@ The following aspects of a project are imported:
 - Pull request "merged by" information (GitLab.com & 13.7+)
 - Regular issue and pull request comments
 - [Git Large File Storage (LFS) Objects](../../../topics/git/lfs/index.md)
+- Pull request comments replies in discussions ([GitLab.com & 14.5+](https://gitlab.com/gitlab-org/gitlab/-/issues/336596))
+- Diff Notes suggestions ([GitLab.com & 14.7+](https://gitlab.com/gitlab-org/gitlab/-/issues/340624))
 
 References to pull requests and issues are preserved (GitLab.com & 8.7+), and
 each imported repository maintains visibility level unless that [visibility
-level is restricted](../../../public_access/public_access.md#restrict-use-of-public-or-internal-projects),
+level is restricted](../../public_access.md#restrict-use-of-public-or-internal-projects),
 in which case it defaults to the default project visibility.
 
-The namespace is a user or group in GitLab, such as `gitlab.com/janedoe` or `gitlab.com/customer-success`. You can do some bulk actions to move projects to different namespaces in the rails console.
+The namespace is a user or group in GitLab, such as `gitlab.com/janedoe` or
+`gitlab.com/customer-success`. You can do some bulk actions to move projects to
+different namespaces in the rails console.
 
-This process does not migrate or import any types of groups or organizations from GitHub to GitLab.
+This process does not migrate or import any types of groups or organizations
+from GitHub to GitLab.
 
 ## Use cases
 
-The steps you take depend on whether you are importing from GitHub.com or GitHub Enterprise, as well as whether you are importing to GitLab.com or self-managed GitLab instance.
+The steps you take depend on whether you are importing from GitHub.com or
+GitHub Enterprise. The steps also depend on whether you are importing to GitLab.com or
+self-managed GitLab instance.
 
 - If you're importing to GitLab.com, you can alternatively import GitHub repositories
   using a [personal access token](#use-a-github-token). We do not recommend
@@ -46,30 +53,36 @@ The steps you take depend on whether you are importing from GitHub.com or GitHub
 - If you're importing to a self-managed GitLab instance, you can alternatively use the
   [GitHub Rake task](../../../administration/raketasks/github_import.md) to import
   projects without the constraints of a [Sidekiq](../../../development/sidekiq_style_guide.md) worker.
-- If you're importing from GitHub Enterprise to your self-managed GitLab instance, you must first enable
-  [GitHub integration](../../../integration/github.md).
+- If you're importing from GitHub Enterprise to your self-managed GitLab instance:
+  - You must first enable [GitHub integration](../../../integration/github.md).
   - To import projects from GitHub Enterprise to GitLab.com, use the [Import API](../../../api/import.md).
-- If you're importing from GitHub.com to your self-managed GitLab instance, you do not need to set up GitHub integration. You can use the [Import API](../../../api/import.md).
+  - If GitLab is behind a HTTP/HTTPS proxy you must populate the [allowlist for local requests](../../../security/webhooks.md#allowlist-for-local-requests)
+    with `github.com` and `api.github.com` to solve the hostname. For more information, read the issue
+    [Importing a GitHub project requires DNS resolution even when behind a proxy](https://gitlab.com/gitlab-org/gitlab/-/issues/37941)
+- If you're importing from GitHub.com to your self-managed GitLab instance,
+  setting up GitHub integration is not required. You can use the [Import API](../../../api/import.md).
 
 ## How it works
 
-When issues and pull requests are being imported, the importer attempts to find their GitHub authors and
-assignees in the database of the GitLab instance (note that pull requests are called "merge requests" in GitLab).
+When issues and pull requests are being imported, the importer attempts to find
+their GitHub authors and assignees in the database of the GitLab instance (note
+that pull requests are called "merge requests" in GitLab).
 
 For this association to succeed, each GitHub author and assignee in the repository
 must meet one of the following conditions prior to the import:
 
 - Have previously logged in to a GitLab account using the GitHub icon.
-- Have a GitHub account with a [public-facing email address](https://docs.github.com/en/github/setting-up-and-managing-your-github-user-account/managing-email-preferences/setting-your-commit-email-address)
+- Have a GitHub account with a [public-facing email address](https://docs.github.com/en/account-and-profile/setting-up-and-managing-your-github-user-account/managing-email-preferences/setting-your-commit-email-address)
   that matches their GitLab account's email address.
 
   NOTE:
-  GitLab content imports that use GitHub accounts require that the GitHub public-facing
-  email address is populated so that all comments and contributions are properly mapped
-  to the same user in GitLab. GitHub Enterprise (on premise) does not require this field
-  to be populated to use the product, so you may need to add it on existing GitHub Enterprise
-  accounts for imported content to be properly mapped to the user in the new system.
-  Refer to GitHub documentation for instructions on how to add that address.
+  GitLab content imports that use GitHub accounts require that the GitHub
+  public-facing email address is populated so that all comments and
+  contributions are properly mapped to the same user in GitLab. GitHub
+  Enterprise (on premise) does not require this field to be populated to use the
+  product, so you may have to add it on existing accounts for the imported
+  content to be properly mapped to the user in the new system. Refer to GitHub
+  documentation for instructions on how to add this email address.
 
 If a user referenced in the project is not found in the GitLab database, the project creator (typically the user
 that initiated the import process) is set as the author/assignee, but a note on the issue mentioning the original
@@ -132,7 +145,7 @@ If you are not using the GitHub integration, you can still perform an authorizat
 1. Copy the token hash.
 1. Go back to GitLab and provide the token to the GitHub importer.
 1. Hit the **List Your GitHub Repositories** button and wait while GitLab reads your repositories' information.
-   Once done, you'll be taken to the importer page to select the repositories to import.
+   Once done, you are taken to the importer page to select the repositories to import.
 
 To use a newer personal access token in imports after previously performing these steps, sign out of
 your GitLab account and sign in again, or revoke the older personal access token in GitHub.
@@ -152,24 +165,23 @@ your GitHub repositories are listed.
 
 ![GitHub importer page](img/import_projects_from_github_importer_v12_3.png)
 
-## Mirroring and pipeline status sharing
+## Mirror a repository and share pipeline status **(PREMIUM)**
 
-Depending on your GitLab tier, [repository mirroring](../repository/repository_mirroring.md) can be set up to keep
+Depending on your GitLab tier, [repository mirroring](../repository/mirror/index.md) can be set up to keep
 your imported repository in sync with its GitHub copy.
 
-Additionally, you can configure GitLab to send pipeline status updates back GitHub with the
-[GitHub Project Integration](../integrations/github.md). **(PREMIUM)**
+Additionally, you can configure GitLab to send pipeline status updates back to GitHub with the
+[GitHub Project Integration](../integrations/github.md).
 
 If you import your project using [CI/CD for external repository](../../../ci/ci_cd_for_external_repos/index.md), then both
-of the above are automatically configured. **(PREMIUM)**
+of the above are automatically configured.
 
 NOTE:
 Mirroring does not sync any new or updated pull requests from your GitHub project.
 
 ## Improve the speed of imports on self-managed instances
 
-NOTE:
-Administrator access to the GitLab server is required.
+Administrator access on the GitLab server is required for this process.
 
 For large projects it may take a while to import all data. To reduce the time necessary, you can increase the number of
 Sidekiq workers that process the following queues:
@@ -183,19 +195,19 @@ servers. For 4 servers with 8 cores this means you can import up to 32 objects (
 
 Reducing the time spent in cloning a repository can be done by increasing network throughput, CPU capacity, and disk
 performance (by using high performance SSDs, for example) of the disks that store the Git repositories (for your GitLab instance).
-Increasing the number of Sidekiq workers will *not* reduce the time spent cloning repositories.
+Increasing the number of Sidekiq workers does *not* reduce the time spent cloning repositories.
 
 ## Alternative way to import notes and diff notes
 
 When GitHub Importer runs on extremely large projects not all notes & diff notes can be imported due to GitHub API `issues_comments` & `pull_requests_comments` endpoints limitation.
 Not all pages can be fetched due to the following error coming from GitHub API: `In order to keep the API fast for everyone, pagination is limited for this resource. Check the rel=last link relation in the Link response header to see how far back you can traverse.`.
 
-Because of that, alternative approach for importing notes & diff notes is available that is behind a feature flag.
+An alternative approach for importing notes and diff notes is available behind a feature flag.
 
-Instead of using `issues_comments` & `pull_requests_comments`, use individual resources `issue_comments` & `pull_request_comments` instead in order to pull notes from 1 object at a time.
-This allows us to carry over any missing comments, however it increases the number of network requests required to perform the import, which means its execution is going to be much longer.
+Instead of using `issues_comments` and `pull_requests_comments`, use individual resources `issue_comments` and `pull_request_comments` instead to pull notes from one object at a time.
+This allows us to carry over any missing comments, however it increases the number of network requests required to perform the import, which means its execution takes a longer time.
 
-In order to use alternative way of importing notes `github_importer_single_endpoint_notes_import` feature flag needs to be enabled on the group project is being imported into.
+To use the alternative way of importing notes, the `github_importer_single_endpoint_notes_import` feature flag must be enabled on the group project is being imported into.
 
 Start a [Rails console](../../../administration/operations/rails_console.md#starting-a-rails-console-session).
 
@@ -232,3 +244,8 @@ To disable the feature, run this command:
 # Disable
 Feature.disable(:github_importer_lower_per_page_limit, group)
 ```
+
+## Automate group and project import **(PREMIUM)**
+
+For information on automating user, group, and project import API calls, see
+[Automate group and project import](index.md#automate-group-and-project-import).

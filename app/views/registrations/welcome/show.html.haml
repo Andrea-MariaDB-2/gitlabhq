@@ -2,6 +2,11 @@
 - page_title _('Your profile')
 - add_page_specific_style 'page_bundles/signup'
 - gitlab_experience_text = _('To personalize your GitLab experience, we\'d like to know a bit more about you')
+- content_for :page_specific_javascripts do
+  = render "layouts/google_tag_manager_head"
+  = render "layouts/one_trust"
+  = render "layouts/bizible"
+= render "layouts/google_tag_manager_body"
 
 .row.gl-flex-grow-1
   .d-flex.gl-flex-direction-column.gl-align-items-center.gl-w-full.gl-px-5.gl-pb-5
@@ -18,15 +23,16 @@
         .row
           .form-group.col-sm-12
             = f.label :role, _('Role'), class: 'label-bold'
-            = f.select :role, ::User.roles.keys.map { |role| [role.titleize, role] }, {}, class: 'form-control js-user-role-dropdown', autofocus: true
+            = f.select :role, ::User.roles.keys.map { |role| [role.titleize, role] }, { include_blank: _('Select a role') }, class: 'form-control js-user-role-dropdown', autofocus: true, required: true, data: { qa_selector: 'role_dropdown' }
         - if Feature.enabled?(:user_other_role_details)
           .row
             .form-group.col-sm-12.js-other-role-group.hidden
               = f.label :other_role, _('What is your job title? (optional)'), class: 'form-check-label gl-mb-3'
               = f.text_field :other_role, class: 'form-control'
-        = render_if_exists "registrations/welcome/setup_for_company", f: f
-        = render 'devise/shared/email_opted_in', f: f
         = render_if_exists "registrations/welcome/jobs_to_be_done", f: f
+        = render_if_exists "registrations/welcome/setup_for_company", f: f
+        = render_if_exists "registrations/welcome/joining_project"
+        = render 'devise/shared/email_opted_in', f: f
         .row
           .form-group.col-sm-12.gl-mb-0
             - if partial_exists? "registrations/welcome/button"

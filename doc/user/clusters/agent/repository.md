@@ -1,175 +1,63 @@
 ---
 stage: Configure
 group: Configure
-info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#designated-technical-writers
+info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
 ---
 
-# Kubernetes Agent configuration repository **(PREMIUM)**
+# Working with the agent for Kubernetes **(FREE)**
 
-> - [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/259669) in [GitLab Premium](https://about.gitlab.com/pricing/) 13.7.
-> - [Introduced](https://gitlab.com/groups/gitlab-org/-/epics/3834) in GitLab 13.11, the Kubernetes Agent became available on GitLab.com.
+> - [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/259669) in GitLab 13.7.
+> - [Introduced](https://gitlab.com/groups/gitlab-org/-/epics/3834) in GitLab 13.11, the GitLab agent became available on GitLab.com.
+> - [Introduced](https://gitlab.com/groups/gitlab-org/-/epics/5784) the `ci_access` attribute in GitLab 14.3.
+> - [Moved](https://gitlab.com/groups/gitlab-org/-/epics/6290) from GitLab Premium to GitLab Free in 14.5.
 > - [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/332227) in GitLab 14.0, the `resource_inclusions` and `resource_exclusions` attributes were removed and `reconcile_timeout`, `dry_run_strategy`, `prune`, `prune_timeout`, `prune_propagation_policy`, and `inventory_policy` attributes were added.
 
-WARNING:
-This feature might not be available to you. Check the **version history** note above for details.
+## View your agents
 
-The [GitLab Kubernetes Agent integration](index.md) supports hosting your configuration for
-multiple GitLab Kubernetes Agents in a single repository. These agents can be running
-in the same cluster or in multiple clusters, and potentially with more than one Agent per cluster.
+> [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/340882) in GitLab 14.8, the installed `agentk` version is displayed on the **Agent** tab.
 
-The Agent bootstraps with the GitLab installation URL and an authentication token,
-and you provide the rest of the configuration in your repository, following
-Infrastructure as Code (IaaC) best practices.
+Prerequisite:
 
-A minimal repository layout looks like this, with `my_agent_1` as the name
-of your Agent:
+- You must have at least the Developer role.
 
-```plaintext
-|- .gitlab
-    |- agents
-       |- my_agent_1
-          |- config.yaml
-```
+To view the list of agents:
 
-## Synchronize manifest projects
+1. On the top bar, select **Menu > Projects** and find the project that contains your agent configuration file.
+1. On the left sidebar, select **Infrastructure > Kubernetes clusters**.
+1. Select **Agent** tab to view clusters connected to GitLab through the agent.
 
-Your `config.yaml` file contains a `gitops` section, which contains a `manifest_projects`
-section. Each `id` in the `manifest_projects` section is the path to a Git repository
-with Kubernetes resource definitions in YAML or JSON format. The Agent monitors
-each project you declare, and when the project changes, GitLab deploys the changes
-using the Agent.
+On this page, you can view:
 
-To use multiple YAML files, specify a `paths` attribute in the `gitops.manifest_projects` section.
+- All the registered agents for the current project.
+- The connection status.
+- The version of `agentk` installed on your cluster.
+- The path to each agent configuration file.
 
-```yaml
-gitops:
-  # Manifest projects are watched by the agent. Whenever a project changes,
-  # GitLab deploys the changes using the agent.
-  manifest_projects:
-    # No authentication mechanisms are currently supported.
-    # The `id` is a path to a Git repository with Kubernetes resource definitions
-    # in YAML or JSON format.
-  - id: gitlab-org/cluster-integration/gitlab-agent
-    # Namespace to use if not set explicitly in object manifest.
-    # Also used for inventory ConfigMap objects.
-    default_namespace: my-ns
-    # Paths inside of the repository to scan for manifest files.
-    # Directories with names starting with a dot are ignored.
-    paths:
-      # Read all .yaml files from team1/app1 directory.
-      # See https://github.com/bmatcuk/doublestar#about and
-      # https://pkg.go.dev/github.com/bmatcuk/doublestar/v2#Match for globbing rules.
-    - glob: '/team1/app1/*.yaml'
-      # Read all .yaml files from team2/apps and all subdirectories
-    - glob: '/team2/apps/**/*.yaml'
-      # If 'paths' is not specified or is an empty list, the configuration below is used
-    - glob: '/**/*.{yaml,yml,json}'
-    # Reconcile timeout defines whether the applier should wait
-    # until all applied resources have been reconciled, and if so,
-    # how long to wait.
-    reconcile_timeout: 3600s # 1 hour by default
-    # Dry run strategy defines whether changes should actually be performed,
-    # or if it is just talk and no action.
-    # https://github.com/kubernetes-sigs/cli-utils/blob/d6968048dcd80b1c7b55d9e4f31fc25f71c9b490/pkg/common/common.go#L68-L89
-    # Can be: none, client, server
-    dry_run_strategy: none # 'none' by default
-    # Prune defines whether pruning of previously applied
-    # objects should happen after apply.
-    prune: true # enabled by default
-    # Prune timeout defines whether we should wait for all resources
-    # to be fully deleted after pruning, and if so, how long we should
-    # wait.
-    prune_timeout: 3600s # 1 hour by default
-    # Prune propagation policy defines the deletion propagation policy
-    # that should be used for pruning.
-    # https://github.com/kubernetes/apimachinery/blob/44113beed5d39f1b261a12ec398a356e02358307/pkg/apis/meta/v1/types.go#L456-L470
-    # Can be: orphan, background, foreground
-    prune_propagation_policy: foreground # 'foreground' by default
-    # Inventory policy defines if an inventory object can take over
-    # objects that belong to another inventory object or don't
-    # belong to any inventory object.
-    # This is done by determining if the apply/prune operation
-    # can go through for a resource based on the comparison
-    # the inventory-id value in the package and the owning-inventory
-    # annotation (config.k8s.io/owning-inventory) in the live object.
-    # https://github.com/kubernetes-sigs/cli-utils/blob/d6968048dcd80b1c7b55d9e4f31fc25f71c9b490/pkg/inventory/policy.go#L12-L66
-    # Can be: must_match, adopt_if_no_inventory, adopt_all
-    inventory_policy: must_match # 'must_match' by default
-```
+## View an agent's activity information
 
-### Using multiple manifest projects
+> [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/277323) in GitLab 14.6.
 
-Storing Kubernetes manifests in more than one repository can be handy, for example:
+The activity logs help you to identify problems and get the information
+you need for troubleshooting. You can see events from a week before the
+current date. To view an agent's activity:
 
-- You may store manifests for different applications in separate repositories.
-- Different teams can work on manifests of independent projects in separate repositories.
+1. On the top bar, select **Menu > Projects** and find the project that contains your agent configuration file.
+1. On the left sidebar, select **Infrastructure > Kubernetes clusters**.
+1. Select the agent you want to see activity for.
 
-To use multiple repositories as the source of Kubernetes manifests, specify them in the list of
-`manifest_projects` in your `config.yaml`:
+The activity list includes:
 
-```yaml
-gitops:
-  manifest_projects:
-  - id: group1/project1
-  - id: group2/project2
-```
+- Agent registration events: When a new token is **created**.
+- Connection events: When an agent is successfully **connected** to a cluster.
 
-Note that repositories are synchronized **concurrently** and **independently** from each other,
-which means that, ideally, there should **not** be any dependencies shared by these repositories.
-Storing a logical group of manifests in a single repository may work better than distributing it across several
-repositories.
+The connection status is logged when you connect an agent for
+the first time or after more than an hour of inactivity.
 
-You cannot use a single repository as a source for multiple concurrent synchronization
-operations. If such functionality is needed, you may use multiple agents reading
-manifests from the same repository.
+View and provide feedback about the UI in [this epic](https://gitlab.com/groups/gitlab-org/-/epics/4739).
 
-Ensure not to specify "overlapping" globs to avoid synchronizing the same files more than once.
-This is detected by the GitLab Kubernetes Agent and leads to an error.
+## Debug the agent
 
-INCORRECT - both globs match `*.yaml` files in the root directory:
-
-```yaml
-gitops:
-  manifest_projects:
-  - id: project1    
-    paths:
-    - glob: '/**/*.yaml'
-    - glob: '/*.yaml'
-```
-
-CORRECT - single globs matches all `*.yaml` files recursively:
-
-```yaml
-gitops:
-  manifest_projects:
-  - id: project1    
-    paths:
-    - glob: '/**/*.yaml'
-```
-
-## Surface network security alerts from cluster to GitLab
-
-The GitLab Agent provides an [integration with Cilium](index.md#kubernetes-network-security-alerts).
-To integrate, add a top-level `cilium` section to your `config.yml` file. Currently, the
-only configuration option is the Hubble relay address:
-
-```yaml
-cilium:
-  hubble_relay_address: "<hubble-relay-host>:<hubble-relay-port>"
-```
-
-If your Cilium integration was performed through [GitLab Managed Apps](../applications.md#install-cilium-using-gitlab-cicd) or the
-[cluster management template](../../project/clusters/protect/container_network_security/quick_start_guide.md#use-the-cluster-management-template-to-install-cilium),
-you can use `hubble-relay.gitlab-managed-apps.svc.cluster.local:80` as the address:
-
-```yaml
-cilium:
-  hubble_relay_address: "hubble-relay.gitlab-managed-apps.svc.cluster.local:80"
-```
-
-## Debugging
-
-To debug the cluster-side component (`agentk`) of the GitLab Kubernetes Agent, set the log
+To debug the cluster-side component (`agentk`) of the agent, set the log
 level according to the available options:
 
 - `off`
@@ -185,4 +73,142 @@ section in the configuration file, for example:
 observability:
   logging:
     level: debug
+```
+
+## Reset the agent token
+
+> [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/327152) in GitLab 14.9.
+
+To reset the agent token without downtime:
+
+1. Create a new token:
+   1. On the top bar, select **Menu > Projects** and find your project.
+   1. On the left sidebar, select **Infrastructure > Kubernetes clusters**.
+   1. Select the agent you want to create a token for.
+   1. On the **Tokens** tab, select **Create token**.
+   1. Enter token's name and description (optional) and select **Create token**.
+1. Securely store the generated token.
+1. Use the token to [install the agent in your cluster](install/index.md#install-the-agent-in-the-cluster) and to [update the agent](install/index.md#update-the-agent-version) to another version.
+1. Delete the token you're no longer using.
+
+## Remove an agent
+
+You can remove an agent by using the [GitLab UI](#remove-an-agent-through-the-gitlab-ui) or the
+[GraphQL API](#remove-an-agent-with-the-gitlab-graphql-api). The agent and any associated tokens
+are removed from GitLab, but no changes are made in your Kubernetes cluster. You must
+clean up those resources manually.
+
+### Remove an agent through the GitLab UI
+
+> [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/323055) in GitLab 14.7.
+
+To remove an agent from the UI:
+
+1. On the top bar, select **Menu > Projects** and find the project that contains the agent configuration file.
+1. From the left sidebar, select **Infrastructure > Kubernetes clusters**.
+1. In the table, in the row for your agent, in the **Options** column, select the vertical ellipsis (**{ellipsis_v}**).
+1. Select **Delete agent**.
+
+### Remove an agent with the GitLab GraphQL API
+
+1. Get the `<cluster-agent-token-id>` from a query in the interactive GraphQL explorer.
+   - For GitLab.com, go to <https://gitlab.com/-/graphql-explorer> to open GraphQL Explorer.
+   - For self-managed GitLab, go to `https://gitlab.example.com/-/graphql-explorer`, replacing `gitlab.example.com` with your instance's URL.
+
+   ```graphql
+   query{
+     project(fullPath: "<full-path-to-agent-configuration-project>") {
+       clusterAgent(name: "<agent-name>") {
+         id
+         tokens {
+           edges {
+             node {
+               id
+             }
+           }
+         }
+       }
+     }
+   }
+   ```
+
+1. Remove an agent record with GraphQL by deleting the `clusterAgentToken`.
+
+   ```graphql
+   mutation deleteAgent {
+     clusterAgentDelete(input: { id: "<cluster-agent-id>" } ) {
+       errors
+     }
+   }
+
+   mutation deleteToken {
+     clusterAgentTokenDelete(input: { id: "<cluster-agent-token-id>" }) {
+       errors
+     }
+   }
+   ```
+
+1. Verify whether the removal occurred successfully. If the output in the Pod logs includes `unauthenticated`, it means that the agent was successfully removed:
+
+   ```json
+   {
+       "level": "warn",
+       "time": "2021-04-29T23:44:07.598Z",
+       "msg": "GetConfiguration.Recv failed",
+       "error": "rpc error: code = Unauthenticated desc = unauthenticated"
+   }
+   ```
+
+1. Delete the agent in your cluster:
+
+   ```shell
+   kubectl delete -n gitlab-kubernetes-agent -f ./resources.yml
+   ```
+
+## Surface network security alerts from cluster to GitLab **(ULTIMATE)**
+
+> [Deprecated](https://gitlab.com/groups/gitlab-org/-/epics/7476) in GitLab 14.8, and planned for [removal](https://gitlab.com/groups/gitlab-org/-/epics/7477) in GitLab 15.0.
+
+WARNING:
+Cilium integration is in its end-of-life process. It's [deprecated](https://gitlab.com/groups/gitlab-org/-/epics/7476)
+for use in GitLab 14.8, and planned for [removal](https://gitlab.com/groups/gitlab-org/-/epics/7477)
+in GitLab 15.0.
+
+The agent for Kubernetes also provides an integration with Cilium. This integration provides a simple way to
+generate network policy-related alerts and to surface those alerts in GitLab.
+
+Several components work in concert for the agent to generate the alerts:
+
+- A working Kubernetes cluster.
+- Cilium integration through either of these options:
+  - Installation through [cluster management template](../../project/clusters/protect/container_network_security/quick_start_guide.md#use-the-cluster-management-template-to-install-cilium).
+  - Enablement of [hubble-relay](https://docs.cilium.io/en/v1.8/concepts/overview/#hubble) on an
+    existing installation.
+- One or more network policies through any of these options:
+  - Use the [Container Network Policy editor](../../application_security/policies/index.md#container-network-policy-editor) to create and manage policies.
+  - Use an [AutoDevOps](../../application_security/policies/index.md#container-network-policy) configuration.
+  - Add the required labels and annotations to existing network policies.
+- A configuration repository with [Cilium configured in `config.yaml`](repository.md#surface-network-security-alerts-from-cluster-to-gitlab)
+
+The setup process follows the same [agent's installation steps](install/index.md),
+with the following differences:
+
+- When you define a configuration repository, you must do so with [Cilium settings](repository.md#surface-network-security-alerts-from-cluster-to-gitlab).
+- You do not need to specify the `gitops` configuration section.
+
+To integrate, add a top-level `cilium` section to your `config.yml` file. Currently, the
+only configuration option is the Hubble relay address:
+
+```yaml
+cilium:
+  hubble_relay_address: "<hubble-relay-host>:<hubble-relay-port>"
+```
+
+If your Cilium integration was performed through [GitLab Managed Apps](../applications.md#install-cilium-using-gitlab-cicd) or the
+[cluster management template](../../project/clusters/protect/container_network_security/quick_start_guide.md#use-the-cluster-management-template-to-install-cilium),
+you can use `hubble-relay.gitlab-managed-apps.svc.cluster.local:80` as the address:
+
+```yaml
+cilium:
+  hubble_relay_address: "hubble-relay.gitlab-managed-apps.svc.cluster.local:80"
 ```

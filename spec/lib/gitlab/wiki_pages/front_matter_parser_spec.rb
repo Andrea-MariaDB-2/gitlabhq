@@ -3,11 +3,10 @@
 require 'spec_helper'
 
 RSpec.describe Gitlab::WikiPages::FrontMatterParser do
-  subject(:parser) { described_class.new(raw_content, gate) }
+  subject(:parser) { described_class.new(raw_content) }
 
   let(:content) { 'This is the content' }
   let(:end_divider) { '---' }
-  let(:gate) { stub_feature_flag_gate('Gate') }
 
   let(:with_front_matter) do
     <<~MD
@@ -62,32 +61,6 @@ RSpec.describe Gitlab::WikiPages::FrontMatterParser do
       it { is_expected.to have_attributes(reason: :no_match) }
     end
 
-    context 'the feature flag is disabled' do
-      let(:raw_content) { with_front_matter }
-
-      before do
-        stub_feature_flags(Gitlab::WikiPages::FrontMatterParser::FEATURE_FLAG => false)
-      end
-
-      it { is_expected.to have_attributes(front_matter: be_empty, content: raw_content) }
-    end
-
-    context 'the feature flag is enabled for the gated object' do
-      let(:raw_content) { with_front_matter }
-
-      before do
-        stub_feature_flags(Gitlab::WikiPages::FrontMatterParser::FEATURE_FLAG => gate)
-      end
-
-      it do
-        is_expected.to have_attributes(
-          front_matter: have_correct_front_matter,
-          content: content + "\n",
-          reason: be_nil
-        )
-      end
-    end
-
     context 'the end divider is ...' do
       let(:end_divider) { '...' }
       let(:raw_content) { with_front_matter }
@@ -118,7 +91,7 @@ RSpec.describe Gitlab::WikiPages::FrontMatterParser do
         MD
       end
 
-      it { is_expected.to have_attributes(reason: :not_mapping) }
+      it { is_expected.to have_attributes(reason: :no_match) }
     end
 
     context 'there is a string in the YAML block' do

@@ -71,16 +71,12 @@ RSpec.describe 'User creates branch and merge request on issue page', :js do
           perform_enqueued_jobs do
             select_dropdown_option('create-mr')
 
-            expect(page).to have_content('Draft: Resolve "Cherry-Coloured Funk"')
-            expect(current_path).to eq(project_merge_request_path(project, MergeRequest.first))
-
-            wait_for_requests
+            expect(page).to have_content('New merge request')
+            expect(page).to have_content("From #{issue.to_branch_name} into #{project.default_branch}")
+            expect(page).to have_content("Closes ##{issue.iid}")
+            expect(page).to have_field("Title", with: "Draft: Resolve \"Cherry-Coloured Funk\"")
+            expect(page).to have_current_path(project_new_merge_request_path(project, merge_request: { source_branch: issue.to_branch_name, target_branch: project.default_branch, issue_iid: issue.iid }))
           end
-
-          visit project_issue_path(project, issue)
-
-          expect(page).to have_content("created merge request !1 to address this issue")
-          expect(page).to have_content('mentioned in merge request !1')
         end
 
         it 'creates a branch' do
@@ -89,7 +85,7 @@ RSpec.describe 'User creates branch and merge request on issue page', :js do
           wait_for_requests
 
           expect(page).to have_selector('.dropdown-toggle-text ', text: '1-cherry-coloured-funk')
-          expect(current_path).to eq project_tree_path(project, '1-cherry-coloured-funk')
+          expect(page).to have_current_path project_tree_path(project, '1-cherry-coloured-funk'), ignore_query: true
         end
       end
 
@@ -100,17 +96,12 @@ RSpec.describe 'User creates branch and merge request on issue page', :js do
           perform_enqueued_jobs do
             select_dropdown_option('create-mr', branch_name)
 
-            expect(page).to have_content('Draft: Resolve "Cherry-Coloured Funk"')
-            expect(page).to have_content('Request to merge custom-branch-name into')
-            expect(current_path).to eq(project_merge_request_path(project, MergeRequest.first))
-
-            wait_for_requests
+            expect(page).to have_content('New merge request')
+            expect(page).to have_content("From #{branch_name} into #{project.default_branch}")
+            expect(page).to have_content("Closes ##{issue.iid}")
+            expect(page).to have_field("Title", with: "Draft: Resolve \"Cherry-Coloured Funk\"")
+            expect(page).to have_current_path(project_new_merge_request_path(project, merge_request: { source_branch: branch_name, target_branch: project.default_branch, issue_iid: issue.iid }))
           end
-
-          visit project_issue_path(project, issue)
-
-          expect(page).to have_content("created merge request !1 to address this issue")
-          expect(page).to have_content('mentioned in merge request !1')
         end
 
         it 'creates a branch' do
@@ -119,7 +110,7 @@ RSpec.describe 'User creates branch and merge request on issue page', :js do
           wait_for_requests
 
           expect(page).to have_selector('.dropdown-toggle-text ', text: branch_name)
-          expect(current_path).to eq project_tree_path(project, branch_name)
+          expect(page).to have_current_path project_tree_path(project, branch_name), ignore_query: true
         end
       end
     end
@@ -217,7 +208,7 @@ RSpec.describe 'User creates branch and merge request on issue page', :js do
 
       # Javascript debounces AJAX calls.
       # So we have to wait until AJAX requests are started.
-      # Details are in app/assets/javascripts/create_merge_request_dropdown.js
+      # Details are in app/assets/javascripts/issues/create_merge_request_dropdown.js
       # this.refDebounce = _.debounce(...)
       sleep 0.5
 

@@ -17,8 +17,8 @@ RSpec.describe UserGroupNotificationSettingsFinder do
 
       it 'will be a default Global notification setting', :aggregate_failures do
         expect(subject.count).to eq(3)
-        expect(attributes(&:notification_email)).to eq([nil])
-        expect(attributes(&:level)).to eq(['global'])
+        expect(attributes(&:notification_email)).to match_array([nil])
+        expect(attributes(&:level)).to match_array(['global'])
       end
     end
 
@@ -38,11 +38,11 @@ RSpec.describe UserGroupNotificationSettingsFinder do
         end
 
         it 'has the same level set' do
-          expect(attributes(&:level)).to eq(['participating'])
+          expect(attributes(&:level)).to match_array(['participating'])
         end
 
         it 'has the same email set' do
-          expect(attributes(&:notification_email)).to eq(['ancestor@example.com'])
+          expect(attributes(&:notification_email)).to match_array(['ancestor@example.com'])
         end
 
         it 'only returns the two queried groups' do
@@ -66,8 +66,8 @@ RSpec.describe UserGroupNotificationSettingsFinder do
 
         it 'has the same email and level set', :aggregate_failures do
           expect(subject.count).to eq(1)
-          expect(attributes(&:level)).to eq(['global'])
-          expect(attributes(&:notification_email)).to eq(['ancestor@example.com'])
+          expect(attributes(&:level)).to match_array(['global'])
+          expect(attributes(&:notification_email)).to match_array(['ancestor@example.com'])
         end
       end
 
@@ -82,8 +82,8 @@ RSpec.describe UserGroupNotificationSettingsFinder do
 
         it 'returns a default Global notification setting' do
           expect(subject.count).to eq(1)
-          expect(attributes(&:level)).to eq(['global'])
-          expect(attributes(&:notification_email)).to eq([nil])
+          expect(attributes(&:level)).to match_array(['global'])
+          expect(attributes(&:notification_email)).to match_array([nil])
         end
       end
 
@@ -103,8 +103,8 @@ RSpec.describe UserGroupNotificationSettingsFinder do
 
         it 'still inherits the notification settings' do
           expect(subject.count).to eq(1)
-          expect(attributes(&:level)).to eq(['participating'])
-          expect(attributes(&:notification_email)).to eq([ancestor_email.email])
+          expect(attributes(&:level)).to match_array(['participating'])
+          expect(attributes(&:notification_email)).to match_array([ancestor_email.email])
         end
       end
 

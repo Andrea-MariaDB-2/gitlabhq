@@ -167,7 +167,7 @@ end
 
 RSpec.shared_examples 'rejects PyPI access with unknown project id' do
   context 'with an unknown project' do
-    let(:project) { OpenStruct.new(id: 1234567890) }
+    let(:project) { double('access', id: 1234567890) }
 
     it_behaves_like 'unknown PyPI scope id'
   end
@@ -175,7 +175,7 @@ end
 
 RSpec.shared_examples 'rejects PyPI access with unknown group id' do
   context 'with an unknown project' do
-    let(:group) { OpenStruct.new(id: 1234567890) }
+    let(:group) { double('access', id: 1234567890) }
 
     it_behaves_like 'unknown PyPI scope id'
   end
@@ -346,7 +346,8 @@ RSpec.shared_examples 'a pypi user namespace endpoint' do
   end
 
   with_them do
-    let_it_be_with_reload(:group) { create(:namespace) }
+    # only groups are supported, so this "group" is actually the wrong namespace type
+    let_it_be_with_reload(:group) { create(:user_namespace) }
     let(:headers) { user_role == :anonymous ? {} : basic_auth_header(user.username, personal_access_token.token) }
 
     before do

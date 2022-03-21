@@ -2,7 +2,6 @@
 stage: Enablement
 group: Distribution
 info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
-type: reference
 ---
 
 # GitLab Rails Console Cheat Sheet **(FREE SELF)**
@@ -26,7 +25,7 @@ As GitLab changes, changes to the code are inevitable,
 and so some scripts may not work as they once used to. These are not kept
 up-to-date as these scripts/commands were added as they were found/needed. As
 mentioned above, we recommend running these scripts under the supervision of a
-Support Engineer, who can also verify that they will continue to work as they
+Support Engineer, who can also verify that they continue to work as they
 should and, if needed, update the script for the latest version of GitLab.
 
 ## Find specific methods for an object
@@ -37,8 +36,6 @@ Array.methods.grep(/sing/)
 ```
 
 ## Find method source
-
-Works for [non-instrumented methods](../../development/instrumentation.md#checking-instrumented-methods):
 
 ```ruby
 instance_of_object.method(:foo).source_location
@@ -81,6 +78,43 @@ Notify.test_email(e, "Test email for #{n}", 'Test email').deliver_now
 Notify.test_email(u.email, "Test email for #{u.name}", 'Test email').deliver_now
 ```
 
+## Limiting output
+
+Adding a semicolon(`;`) and a follow-up statement at the end of a statement prevents the default implicit return output. This is useful if you are already explicitly printing details and potentially have a lot of return output:
+
+```ruby
+puts ActiveRecord::Base.descendants; :ok 
+Project.select(&:pages_deployed?).each {|p| puts p.pages_url }; true
+```
+
+## Get or store the result of last operation
+
+Underscore(`_`) represents the implicit return of the previous statement. You can use this to quickly assign a variable from the output of the previous command:
+
+```ruby
+Project.last
+# => #<Project id:2537 root/discard>>
+project = _
+# => #<Project id:2537 root/discard>>
+project.id
+# => 2537
+```
+
+## Open object in irb
+
+Sometimes it is easier to navigate through a method if you are within the context of the object. You can shim into the namespace of `Object` to let you open `irb` within the context of any object:
+
+```ruby
+Object.define_method(:irb) { binding.irb }
+
+project = Project.last
+# => #<Project id:2537 root/discard>>
+project.irb
+# Notice new context
+irb(#<Project>)> web_url
+# => "https://gitlab-example/root/discard"
+```
+
 ## Query the database using an ActiveRecord Model
 
 ```ruby
@@ -99,14 +133,15 @@ Rails.cache.instance_variable_get(:@data).keys
 ## Profile a page
 
 ```ruby
+url = '<url/of/the/page>'
+
 # Before 11.6.0
 logger = Logger.new($stdout)
-admin_token = User.find_by_username('ADMIN_USERNAME').personal_access_tokens.first.token
-app.get("URL/?private_token=#{admin_token}")
+admin_token = User.find_by_username('<admin-username>').personal_access_tokens.first.token
+app.get("#{url}/?private_token=#{admin_token}")
 
 # From 11.6.0
-admin = User.find_by_username('ADMIN_USERNAME')
-url = "/url/goes/here"
+admin = User.find_by_username('<admin-username>')
 Gitlab::Profiler.with_user(admin) { app.get(url) }
 ```
 
@@ -114,8 +149,8 @@ Gitlab::Profiler.with_user(admin) { app.get(url) }
 
 ```ruby
 logger = Logger.new($stdout)
-admin = User.find_by_username('ADMIN_USERNAME')
-Gitlab::Profiler.profile('URL', logger: logger, user: admin)
+admin = User.find_by_username('<admin-username>')
+Gitlab::Profiler.profile('<url/of/the/page>', logger: logger, user: admin)
 ```
 
 ## Time an operation
@@ -187,7 +222,7 @@ Project.update_all(visibility_level: 0)
 
 ```ruby
 #
-# This section will list all the projects which are pending deletion
+# This section lists all the projects which are pending deletion
 #
 projects = Project.where(pending_delete: true)
 projects.each do |p|
@@ -197,7 +232,7 @@ projects.each do |p|
 end
 
 #
-# Assign a user (the root user will do)
+# Assign a user (the root user does)
 #
 user = User.find_by_username('root')
 
@@ -243,7 +278,7 @@ project.update!(repository_read_only: true)
 ### Transfer project from one namespace to another
 
 ```ruby
- p= Project.find_by_full_path('<project_path>')
+p = Project.find_by_full_path('<project_path>')
 
  # To set the owner of the project
  current_user= p.creator
@@ -257,7 +292,7 @@ namespace = Namespace.find_by_full_path("<new_namespace>")
 ### For Removing webhooks that is getting timeout due to large webhook logs
 
 ```ruby
-# ID will be the webhook_id
+# ID is the webhook_id
 hook=WebHook.find(ID)
 
 WebHooks::DestroyService.new(current_user).execute(hook)
@@ -399,7 +434,7 @@ projects = Project.find_by_sql("SELECT * FROM projects WHERE name LIKE '%ject'")
 ### Recreate
 
 WARNING:
-This is a destructive operation, the Wiki will be empty.
+This is a destructive operation, the Wiki becomes empty.
 
 A Projects Wiki can be recreated by this command:
 
@@ -416,12 +451,14 @@ p.create_wiki  ### creates the wiki project on the filesystem
 ### In case of issue boards not loading properly and it's getting time out. We need to call the Issue Rebalancing service to fix this
 
 ```ruby
-p=Project.find_by_full_path('PROJECT PATH')
+p = Project.find_by_full_path('<username-or-group>/<project-name>')
 
-IssueRebalancingService.new(p.issues.take).execute
+Issues::RelativePositionRebalancingService.new(p.root_namespace.all_projects).execute
 ```
 
-## Imports / Exports
+## Imports and exports
+
+### Import a project
 
 ```ruby
 # Find the project and get the error
@@ -464,25 +501,31 @@ Clear the cache:
 sudo gitlab-rake cache:clear
 ```
 
-### Export a repository
+### Export a project
 
 It's typically recommended to export a project through [the web interface](../../user/project/settings/import_export.md#export-a-project-and-its-data) or through [the API](../../api/project_import_export.md). In situations where this is not working as expected, it may be preferable to export a project directly via the Rails console:
 
 ```ruby
-user = User.find_by_username('USERNAME')
-project = Project.find_by_full_path('PROJECT_PATH')
+user = User.find_by_username('<username>')
+# Sufficient permissions needed
+# Read https://docs.gitlab.com/ee/user/permissions.html#project-members-permissions
+
+project = Project.find_by_full_path('<username-or-group>/<project-name')
 Projects::ImportExport::ExportService.new(project, user).execute
 ```
 
-If the project you wish to export is available at `https://gitlab.example.com/baltig/pipeline-templates`, the value to use for `PROJECT_PATH` would be `baltig/pipeline-templates`.
-
-If this all runs successfully, you will see output like the following before being returned to the Rails console prompt:
+If this all runs successfully, you see an output like the following before being returned to the Rails console prompt:
 
 ```ruby
 => nil
 ```
 
-The exported project will be located within a `.tar.gz` file in `/var/opt/gitlab/gitlab-rails/uploads/-/system/import_export_upload/export_file/`.
+The exported project is located within a `.tar.gz` file in `/var/opt/gitlab/gitlab-rails/uploads/-/system/import_export_upload/export_file/`.
+
+If this fails, [enable verbose logging](navigating_gitlab_via_rails_console.md#looking-up-database-persisted-objects),
+repeat the above procedure after,
+and report the output to
+[GitLab Support](https://about.gitlab.com/support/).
 
 ## Repository
 
@@ -490,34 +533,36 @@ The exported project will be located within a `.tar.gz` file in `/var/opt/gitlab
 
 If it seems that a commit has gone "missing", search the sequence of pushes to a repository.
 [This StackOverflow article](https://stackoverflow.com/questions/13468027/the-mystery-of-the-missing-commit-across-merges)
-describes how you can end up in this state without a force push.
+describes how you can end up in this state without a force push. Another cause can be a misconfigured [server hook](../server_hooks.md) that changes a HEAD ref via a `git reset` operation.
 
-If you look at the output from the sample code below for the target branch, you will
-see a discontinuity in the from/to commits as you step through the output. Each new
-push should be "from" the "to" SHA of the previous push. When this discontinuity happens,
-you will see two pushes with the same "from" SHA:
+If you look at the output from the sample code below for the target branch, you
+see a discontinuity in the from/to commits as you step through the output. The `commit_from` of each new push should equal the `commit_to` of the previous push. A break in that sequence indicates one or more commits have been "lost" from the repository history.
 
-```ruby
-p = Project.find_with_namespace('u/p')
-p.events.pushed_action.last(100).each do |e|
-  printf "%-20.20s %8s...%8s (%s)\n", e.data[:ref], e.data[:before], e.data[:after], e.author.try(:username)
-end
-```
-
-GitLab 9.5 and above:
+The following example checks the last 100 pushes and prints the `commit_from` and `commit_to` entries:
 
 ```ruby
 p = Project.find_by_full_path('u/p')
 p.events.pushed_action.last(100).each do |e|
-  printf "%-20.20s %8s...%8s (%s)\n", e.push_event_payload[:ref], e.push_event_payload[:commit_from], e.push_event_payload[:commit_to], e.author.try(:username)
+  printf "%-20.20s %8s...%8s (%s)
+", e.push_event_payload[:ref], e.push_event_payload[:commit_from], e.push_event_payload[:commit_to], e.author.try(:username)
 end
+```
+
+Example output showing break in sequence at line 4:
+
+```plaintext
+master               f21b07713251e04575908149bdc8ac1f105aabc3...6bc56c1f46244792222f6c85b11606933af171de (root)
+master               6bc56c1f46244792222f6c85b11606933af171de...132da6064f5d3453d445fd7cb452b148705bdc1b (root)
+master               132da6064f5d3453d445fd7cb452b148705bdc1b...a62e1e693150a2e46ace0ce696cd4a52856dfa65 (root)
+master               58b07b719a4b0039fec810efa52f479ba1b84756...f05321a5b5728bd8a89b7bf530aa44043c951dce (root)
+master               f05321a5b5728bd8a89b7bf530aa44043c951dce...7d02e575fd790e76a3284ee435368279a5eb3773 (root)
 ```
 
 ## Mirrors
 
 ### Find mirrors with "bad decrypt" errors
 
-This content has been converted to a Rake task, see the [Doctor Rake tasks docs](../raketasks/doctor.md).
+This content has been converted to a Rake task, see [verify database values can be decrypted using the current secrets](../raketasks/check.md#verify-database-values-can-be-decrypted-using-the-current-secrets).
 
 ### Transfer mirror users and tokens to a single service account
 
@@ -558,7 +603,7 @@ end
 
 ```ruby
 u = User.new(username: 'test_user', email: 'test@example.com', name: 'Test User', password: 'password', password_confirmation: 'password')
-u.skip_confirmation! # Use it only if you wish user to be automatically confirmed. If skipped, user will recieve confirmation e-mail
+u.skip_confirmation! # Use it only if you wish user to be automatically confirmed. If skipped, user receives confirmation e-mail
 u.save!
 ```
 
@@ -586,7 +631,7 @@ User.active.count
 User.billable.count
 
 # The historical max on the instance as of the past year
-::HistoricalData.max_historical_user_count
+::HistoricalData.max_historical_user_count(from: 1.year.ago.beginning_of_day, to: Time.current.end_of_day)
 ```
 
 Using cURL and jq (up to a max 100, see the [pagination docs](../../api/index.md#pagination)):
@@ -596,18 +641,29 @@ curl --silent --header "Private-Token: ********************" \
      "https://gitlab.example.com/api/v4/users?per_page=100&active" | jq --compact-output '.[] | [.id,.name,.username]'
 ```
 
+### Update Daily Billable & Historical users
+
+```ruby
+# Forces recount of historical (max) users
+::HistoricalDataWorker.new.perform
+
+# Forces recount of daily billable users
+identifier = Analytics::UsageTrends::Measurement.identifiers[:billable_users]
+::Analytics::UsageTrends::CounterJobWorker.new.perform(identifier, User.minimum(:id), User.maximum(:id), Time.zone.now)
+```
+
 ### Block or Delete Users that have no projects or groups
 
 ```ruby
 users = User.where('id NOT IN (select distinct(user_id) from project_authorizations)')
 
-# How many users will be removed?
+# How many users are removed?
 users.count
 
 # If that count looks sane:
 
 # You can either block the users:
-users.each { |user| user.block! }
+users.each { |user|  user.blocked? ? nil  : user.block! }
 
 # Or you can delete them:
   # need 'current user' (your user) for auditing purposes
@@ -715,6 +771,38 @@ group.require_two_factor_authentication=false
 group.save
 ```
 
+### Check and toggle a feature for all projects in a group
+
+```ruby
+projects = Group.find_by_name('_group_name').projects
+projects.each do |p|
+  state = p.<feature-name>?
+
+  if state
+    puts "#{p.name} has <feature-name> already enabled. Skipping..."
+  else
+    puts "#{p.name} didn't have <feature-name> enabled. Enabling..."
+    p.project_feature.update!(builds_access_level: ProjectFeature::PRIVATE)
+  end
+end
+```
+
+To find features that can be toggled, run `pp p.project_feature`.
+Available permission levels are listed in
+[concerns/featurable.rb](https://gitlab.com/gitlab-org/gitlab/blob/master/app/models/concerns/featurable.rb).
+
+## Authentication
+
+### Re-enable standard web sign-in form
+
+Re-enable the standard username and password-based sign-in form if it was disabled as a [Sign-in restriction](../../user/admin_area/settings/sign_in_restrictions.md#password-authentication-enabled).
+
+You can use this method when a configured external authentication provider (through SSO or an LDAP configuration) is facing an outage and direct sign-in access to GitLab is required.
+
+```ruby
+Gitlab::CurrentSettings.update!(password_authentication_enabled_for_web: true)
+```
+
 ## SCIM
 
 ### Fixing bad SCIM identities
@@ -759,7 +847,7 @@ end
 emails = [email1, email2]
 
 emails.each do |e|
-  delete_bad_scim(e,'GROUPPATH')
+  delete_bad_scim(e,'<group-path>')
 end
 ```
 
@@ -787,33 +875,33 @@ conflicting_permanent_redirects = RedirectRoute.matching_path_and_descendants(pa
 conflicting_permanent_redirects.destroy_all
 ```
 
-## Merge Requests
+## Merge requests
 
 ### Close a merge request properly (if merged but still marked as open)
 
 ```ruby
-p = Project.find_by_full_path('<full/path/to/project>')
-m = p.merge_requests.find_by(iid: <iid>)
 u = User.find_by_username('<username>')
-MergeRequests::PostMergeService.new(p, u).execute(m)
+p = Project.find_by_full_path('<namespace/project>')
+m = p.merge_requests.find_by(iid: <iid>)
+MergeRequests::PostMergeService.new(project: p, current_user: u).execute(m)
 ```
 
 ### Delete a merge request
 
 ```ruby
 u = User.find_by_username('<username>')
-p = Project.find_by_full_path('<group>/<project>')
-m = p.merge_requests.find_by(iid: <IID>)
-Issuable::DestroyService.new(m.project, u).execute(m)
+p = Project.find_by_full_path('<namespace/project>')
+m = p.merge_requests.find_by(iid: <iid>)
+Issuable::DestroyService.new(project: m.project, current_user: u).execute(m)
 ```
 
 ### Rebase manually
 
 ```ruby
-p = Project.find_by_full_path('<project_path>')
-m = project.merge_requests.find_by(iid: )
 u = User.find_by_username('<username>')
-MergeRequests::RebaseService.new(m.target_project, u).execute(m)
+p = Project.find_by_full_path('<namespace/project>')
+m = p.merge_requests.find_by(iid: <iid>)
+MergeRequests::RebaseService.new(project: m.target_project, current_user: u).execute(m)
 ```
 
 ## CI
@@ -875,6 +963,14 @@ end
 
 ```ruby
 Gitlab::CurrentSettings.current_application_settings.runners_registration_token
+```
+
+### Seed runners registration token
+
+```ruby
+appSetting = Gitlab::CurrentSettings.current_application_settings
+appSetting.set_runners_registration_token('<new-runners-registration-token>')
+appSetting.save!
 ```
 
 ### Run pipeline schedules manually
@@ -942,6 +1038,22 @@ license.save
 License.current # check to make sure it applied
 ```
 
+This is needed for example in a known edge-case with
+[expired license and multiple LDAP servers](../auth/ldap/ldap-troubleshooting.md#expired-license-causes-errors-with-multiple-ldap-servers).
+
+### Remove licenses
+
+To clean up the [License History table](../../user/admin_area/license_file.md#view-license-details-and-history):
+
+```ruby
+TYPE = :trial?
+# or :expired?
+
+License.select(&TYPE).each(&:destroy!)
+
+# or even License.all.each(&:destroy!)
+```
+
 ## Registry
 
 ### Registry Disk Space Usage by Project
@@ -999,8 +1111,8 @@ This content has been moved to the [Troubleshooting Sidekiq docs](sidekiq.md).
 ### Get information about LFS objects and associated project
 
 ```ruby
-o=LfsObject.find_by(oid: "<oid>")
-p=Project.find(LfsObjectsProject.find_by_lfs_object_id(o.id).project_id)
+o = LfsObject.find_by(oid: "<oid>")
+p = Project.find(LfsObjectsProject.find_by_lfs_object_id(o.id).project_id)
 ```
 
 You can then delete these records from the database with:
@@ -1017,7 +1129,7 @@ area on disk. It remains to be seen exactly how or whether the deletion is usefu
 
 ### Bad Decrypt Script (for encrypted variables)
 
-This content has been converted to a Rake task, see the [Doctor Rake tasks docs](../raketasks/doctor.md).
+This content has been converted to a Rake task, see [verify database values can be decrypted using the current secrets](../raketasks/check.md#verify-database-values-can-be-decrypted-using-the-current-secrets).
 
 As an example of repairing, if `ProjectImportData Bad count:` is detected and the decision is made to delete the
 encrypted credentials to allow manual reentry:
@@ -1050,7 +1162,7 @@ encrypted credentials to allow manual reentry:
 If `User OTP Secret Bad count:` is detected. For each user listed disable/enable
 two-factor authentication.
 
-The following script will search in some of the tables for encrypted tokens that are
+The following script searches in some of the tables for encrypted tokens that are
 causing decryption errors, and update or reset as needed:
 
 ```shell
@@ -1060,7 +1172,7 @@ gitlab-rails runner /tmp/encrypted-tokens.rb
 
 ### Decrypt Script for encrypted tokens
 
-This content has been converted to a Rake task, see the [Doctor Rake tasks docs](../raketasks/doctor.md).
+This content has been converted to a Rake task, see [verify database values can be decrypted using the current secrets](../raketasks/check.md#verify-database-values-can-be-decrypted-using-the-current-secrets).
 
 ## Geo
 
@@ -1112,7 +1224,7 @@ Geo::ProjectRegistry.sync_failed('repository')
 
 ### Resync repositories
 
-#### Queue up all repositories for resync. Sidekiq will handle each sync
+#### Queue up all repositories for resync. Sidekiq handles each sync
 
 ```ruby
 Geo::ProjectRegistry.update_all(resync_repository: true, resync_wiki: true)
@@ -1159,10 +1271,10 @@ registry.replicator.send(:download)
 
 #### Verify package files on the secondary manually
 
-This will iterate over all package files on the secondary, looking at the
+This iterates over all package files on the secondary, looking at the
 `verification_checksum` stored in the database (which came from the primary)
 and then calculate this value on the secondary to check if they match. This
-won't change anything in the UI:
+does not change anything in the UI:
 
 ```ruby
 # Run on secondary
@@ -1214,20 +1326,33 @@ registry = Geo::SnippetRepositoryRegistry.find(registry_id)
 registry.replicator.send(:sync_repository)
 ```
 
+## Gitaly
+
+### Find available and used space
+
+A Gitaly storage resource can be polled through Rails to determine the available and used space.
+
+```ruby
+Gitlab::GitalyClient::ServerService.new("default").storage_disk_statistics
+```
+
 ## Generate Service Ping
+
+The [Service Ping Guide](../../development/service_ping/index.md) in our developer documentation
+has more information about Service Ping.
 
 ### Generate or get the cached Service Ping
 
 ```ruby
-Gitlab::UsageData.to_json
+Gitlab::Usage::ServicePingReport.for(output: :all_metrics_values, cached: true)
 ```
 
 ### Generate a fresh new Service Ping
 
-This will also refresh the cached Service Ping displayed in the admin area
+This also refreshes the cached Service Ping displayed in the Admin Area
 
 ```ruby
-Gitlab::UsageData.to_json(force_refresh: true)
+Gitlab::Usage::ServicePingReport.for(output: :all_metrics_values)
 ```
 
 ### Generate and print
@@ -1236,6 +1361,12 @@ Generates Service Ping data in JSON format.
 
 ```shell
 rake gitlab:usage_data:generate
+```
+
+Generates Service Ping data in YAML format:
+
+```shell
+rake gitlab:usage_data:dump_sql_in_yaml
 ```
 
 ### Generate and send Service Ping
@@ -1258,7 +1389,7 @@ cluster = Clusters::Cluster.find_by(name: 'cluster_name')
 Delete cluster without associated resources:
 
 ```ruby
-# Find an admin user
+# Find users with the administrator access
 user = User.find_by(username: 'admin_user')
 
 # Find the cluster with the ID
@@ -1278,7 +1409,7 @@ Open the rails console (`gitlab rails c`) and run the following command to see a
 ApplicationSetting.last.attributes
 ```
 
-Among other attributes, in the output you will notice that all the settings available in the [Elasticsearch Integration page](../../integration/elasticsearch.md), like: `elasticsearch_indexing`, `elasticsearch_url`, `elasticsearch_replicas`, `elasticsearch_pause_indexing`, and so on.
+Among other attributes, the output contains all the settings available in the [Elasticsearch Integration page](../../integration/elasticsearch.md), such as `elasticsearch_indexing`, `elasticsearch_url`, `elasticsearch_replicas`, and `elasticsearch_pause_indexing`.
 
 #### Setting attributes
 
@@ -1302,4 +1433,19 @@ Gitlab::CurrentSettings.elasticsearch_url
 #or
 
 Gitlab::CurrentSettings.elasticsearch_indexing
+```
+
+#### Changing the Elasticsearch password
+
+```ruby
+es_url = Gitlab::CurrentSettings.current_application_settings
+
+# Confirm the current ElasticSearch URL
+es_url.elasticsearch_url
+
+# Set the ElasticSearch URL
+es_url.elasticsearch_url = "http://<username>:<password>@your.es.host:<port>"
+
+# Save the change
+es_url.save!
 ```

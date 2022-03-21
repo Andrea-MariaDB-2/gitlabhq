@@ -25,12 +25,23 @@ export default {
     },
     title: {
       type: String,
-      required: true,
+      required: false,
+      default: null,
     },
     icon: {
       type: String,
       required: false,
-      default: 'remove',
+      default: undefined,
+    },
+    buttonText: {
+      type: String,
+      required: false,
+      default: '',
+    },
+    buttonCategory: {
+      type: String,
+      required: false,
+      default: 'secondary',
     },
     isAccessRequest: {
       type: Boolean,
@@ -42,7 +53,7 @@ export default {
       required: false,
       default: false,
     },
-    oncallSchedules: {
+    userDeletionObstacles: {
       type: Object,
       required: false,
       default: () => ({}),
@@ -61,7 +72,7 @@ export default {
         memberPath: this.memberPath.replace(':id', this.memberId),
         memberType: this.memberType,
         message: this.message,
-        oncallSchedules: this.oncallSchedules,
+        userDeletionObstacles: this.userDeletionObstacles,
       };
     },
   },
@@ -79,10 +90,12 @@ export default {
   <gl-button
     v-gl-tooltip
     variant="danger"
+    :category="buttonCategory"
     :title="title"
     :aria-label="title"
     :icon="icon"
     data-qa-selector="delete_member_button"
     @click="showRemoveMemberModal(modalData)"
-  />
+    ><template v-if="buttonText">{{ buttonText }}</template></gl-button
+  >
 </template>

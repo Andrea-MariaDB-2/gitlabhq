@@ -66,9 +66,10 @@ module API
         get "gems/:file_name", requirements: FILE_NAME_REQUIREMENTS do
           authorize!(:read_package, user_project)
 
-          package_file = ::Packages::PackageFile.for_rubygem_with_file_name(
-            user_project, params[:file_name]
-          ).last!
+          package_files = ::Packages::PackageFile
+                            .for_rubygem_with_file_name(user_project, params[:file_name])
+
+          package_file = package_files.installable.last!
 
           track_package_event('pull_package', :rubygems, project: user_project, namespace: user_project.namespace)
 

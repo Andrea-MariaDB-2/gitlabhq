@@ -51,6 +51,23 @@ module Resolvers
              required: false,
              description: 'Merge request state. If provided, all resolved merge requests will have this state.'
 
+    argument :draft, GraphQL::Types::Boolean,
+             required: false,
+             description: 'Limit result to draft merge requests.'
+
+    argument :created_after, Types::TimeType,
+             required: false,
+             description: 'Merge requests created after this timestamp.'
+    argument :created_before, Types::TimeType,
+             required: false,
+             description: 'Merge requests created before this timestamp.'
+    argument :updated_after, Types::TimeType,
+             required: false,
+             description: 'Merge requests updated after this timestamp.'
+    argument :updated_before, Types::TimeType,
+             required: false,
+             description: 'Merge requests updated before this timestamp.'
+
     argument :labels, [GraphQL::Types::String],
              required: false,
              as: :label_name,

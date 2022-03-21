@@ -54,6 +54,10 @@ sudo -u git -H bundle exec rake gitlab:backup:create RAILS_ENV=production
 ### 2. Stop server
 
 ```shell
+# For systems running systemd
+sudo systemctl stop gitlab.target
+
+# For systems running SysV init
 sudo service gitlab stop
 ```
 
@@ -69,7 +73,7 @@ Download Ruby and compile it:
 
 ```shell
 mkdir /tmp/ruby && cd /tmp/ruby
-curl --remote-name --progress-bar "https://cache.ruby-lang.org/pub/ruby/2.7/ruby-2.7.4.tar.gz"
+curl --remote-name --location --progress-bar "https://cache.ruby-lang.org/pub/ruby/2.7/ruby-2.7.4.tar.gz"
 echo '3043099089608859fc8cce7f9fdccaa1f53a462457e3838ec3b25a7d609fbc5b ruby-2.7.4.tar.gz' | sha256sum -c - && tar xzf ruby-2.7.4.tar.gz
 cd ruby-2.7.4
 
@@ -107,12 +111,11 @@ Download and install Go (for Linux, 64-bit):
 # Remove former Go installation folder
 sudo rm -rf /usr/local/go
 
-curl --remote-name --progress-bar "https://dl.google.com/go/go1.15.12.linux-amd64.tar.gz"
-echo 'bbdb935699e0b24d90e2451346da76121b2412d30930eabcd80907c230d098b7  go1.15.12.linux-amd64.tar.gz' | shasum -a256 -c - && \
-  sudo tar -C /usr/local -xzf go1.15.12.linux-amd64.tar.gz
-sudo ln -sf /usr/local/go/bin/{go,godoc,gofmt} /usr/local/bin/
-rm go1.15.12.linux-amd64.tar.gz
-
+curl --remote-name --location --progress-bar "https://go.dev/dl/go1.16.10.linux-amd64.tar.gz"
+echo '414cd18ce1d193769b9e97d2401ad718755ab47816e13b2a1cde203d263b55cf  go1.16.10.linux-amd64.tar.gz' | shasum -a256 -c - && \
+  sudo tar -C /usr/local -xzf go1.16.10.linux-amd64.tar.gz
+sudo ln -sf /usr/local/go/bin/{go,gofmt} /usr/local/bin/
+rm go1.16.10.linux-amd64.tar.gz
 ```
 
 ### 6. Update Git
@@ -230,7 +233,29 @@ ActionMailer::Base.delivery_method = :smtp
 
 See [`smtp_settings.rb.sample`](https://gitlab.com/gitlab-org/gitlab/-/blob/master/config/initializers/smtp_settings.rb.sample#L13) as an example.
 
-#### Init script
+#### Configure systemd units
+
+If using the SysV init script, see [Configure SysV init script](#configure-sysv-init-script).
+
+Check if the systemd units have been updated:
+
+```shell
+cd /home/git/gitlab
+
+git diff origin/PREVIOUS_BRANCH:lib/support/systemd origin/BRANCH:lib/support/systemd
+```
+
+Copy them over:
+
+```shell
+sudo mkdir -p /usr/local/lib/systemd/system
+sudo cp lib/support/systemd/* /usr/local/lib/systemd/system/
+sudo systemctl daemon-reload
+```
+
+#### Configure SysV init script
+
+If using systemd units, see [Configure systemd units](#configure-systemd-units).
 
 There might be new configuration options available for
 [`gitlab.default.example`](https://gitlab.com/gitlab-org/gitlab/-/blob/master/lib/support/init.d/gitlab.default.example).
@@ -250,13 +275,17 @@ cd /home/git/gitlab
 sudo cp lib/support/init.d/gitlab /etc/init.d/gitlab
 ```
 
-For Ubuntu 16.04.1 LTS:
+If you are using the init script on a system running systemd as init, because you have not switched to native systemd units yet, run:
 
 ```shell
 sudo systemctl daemon-reload
 ```
 
 ### 10. Install libraries, migrations, etc
+
+Make sure you have the required
+[PostgreSQL extensions](../install/requirements.md#postgresql-requirements),
+then proceed to install the needed libraries:
 
 ```shell
 cd /home/git/gitlab
@@ -304,15 +333,18 @@ cd /home/git/gitlab
 sudo -u git -H bundle exec rake "gitlab:workhorse:install[/home/git/gitlab-workhorse]" RAILS_ENV=production
 ```
 
+NOTE:
+If you get any errors concerning Rack attack, see the [13.0](#1301) specific
+upgrade instructions.
+
 ### 13. Update Gitaly
 
 #### Compile Gitaly
 
 ```shell
-cd /home/git/gitaly
-sudo -u git -H git fetch --all --tags --prune
-sudo -u git -H git checkout v$(</home/git/gitlab/GITALY_SERVER_VERSION)
-sudo -u git -H make
+# Fetch Gitaly source with Git and compile with Go
+cd /home/git/gitlab
+sudo -u git -H bundle exec rake "gitlab:gitaly:install[/home/git/gitaly,/home/git/repositories]" RAILS_ENV=production
 ```
 
 ### 14. Update GitLab Pages
@@ -335,6 +367,11 @@ sudo -u git -H make
 ### 15. Start application
 
 ```shell
+# For systems running systemd
+sudo systemctl start gitlab.target
+sudo systemctl restart nginx.service
+
+# For systems running SysV init
 sudo service gitlab start
 sudo service nginx restart
 ```
@@ -373,16 +410,29 @@ Example:
 Additional instructions here.
 -->
 
+### 14.5.0
+
+As part of [enabling real-time issue assignees](https://gitlab.com/gitlab-org/gitlab/-/issues/330117), Action Cable is now enabled by default, and requires `config/cable.yml` to be present.
+You can configure this by running:
+
+```shell
+cd /home/git/gitlab
+
+sudo -u git -H cp config/cable.yml.example config/cable.yml
+
+# Change the Redis socket path if you are not using the default Debian / Ubuntu configuration
+sudo -u git -H editor config/cable.yml
+```
+
 ### 13.0.1
 
-As part of [deprecating Rack Attack throttles on Omnibus GitLab](https://gitlab.com/gitlab-org/omnibus-gitlab/-/issues/4750), Rack Attack initializer on GitLab
+As part of [deprecating Rack Attack throttles on Omnibus GitLab](https://gitlab.com/gitlab-org/omnibus-gitlab/-/issues/4750), the Rack Attack initializer on GitLab
 was renamed from [`config/initializers/rack_attack_new.rb` to `config/initializers/rack_attack.rb`](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/33072).
 If this file exists on your installation, consider creating a backup before updating:
 
 ```shell
 cd /home/git/gitlab
-
-cp config/initializers/rack_attack.rb config/initializers/rack_attack_backup.rb
+cp config/initializers/rack_attack.rb ~/config/initializers/rack_attack_backup.rb
 ```
 
 ## Troubleshooting

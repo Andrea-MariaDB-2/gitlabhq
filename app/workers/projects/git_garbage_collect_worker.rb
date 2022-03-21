@@ -7,6 +7,12 @@ module Projects
 
     private
 
+    # Used for getting a project/group out of the resource in order to scope a feature flag
+    # Can be removed within https://gitlab.com/gitlab-org/gitlab/-/issues/353607
+    def container(resource)
+      resource
+    end
+
     override :find_resource
     def find_resource(id)
       Project.find(id)
@@ -16,7 +22,15 @@ module Projects
     def before_gitaly_call(task, resource)
       return unless gc?(task)
 
-      ::Projects::GitDeduplicationService.new(resource).execute
+      # Don't block garbage collection if we can't fetch into an object pool
+      # due to some gRPC error because we don't want to accumulate cruft.
+      # See https://gitlab.com/gitlab-org/gitaly/-/issues/4022.
+      begin
+        ::Projects::GitDeduplicationService.new(resource).execute
+      rescue Gitlab::Git::CommandTimedOut, GRPC::Internal => e
+        Gitlab::ErrorTracking.track_exception(e)
+      end
+
       cleanup_orphan_lfs_file_references(resource)
     end
 

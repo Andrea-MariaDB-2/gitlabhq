@@ -158,6 +158,16 @@ RSpec.describe Gitlab::Ci::Reports::Security::Report do
     end
   end
 
+  describe '#add_warning' do
+    context 'when the message is given' do
+      it 'adds a new warning to report' do
+        expect { report.add_warning('foo', 'bar') }.to change { report.warnings }
+                                                 .from([])
+                                                 .to([{ type: 'foo', message: 'bar' }])
+      end
+    end
+  end
+
   describe 'errored?' do
     subject { report.errored? }
 
@@ -219,6 +229,28 @@ RSpec.describe Gitlab::Ci::Reports::Security::Report do
           expect(scanner_1).to have_received(:<=>).with(scanner_2)
         end
       end
+    end
+  end
+
+  describe '#has_signatures?' do
+    let(:finding) { create(:ci_reports_security_finding, signatures: signatures) }
+
+    subject { report.has_signatures? }
+
+    before do
+      report.add_finding(finding)
+    end
+
+    context 'when the findings of the report does not have signatures' do
+      let(:signatures) { [] }
+
+      it { is_expected.to be_falsey }
+    end
+
+    context 'when the findings of the report have signatures' do
+      let(:signatures) { [instance_double(Gitlab::Ci::Reports::Security::FindingSignature)] }
+
+      it { is_expected.to be_truthy }
     end
   end
 end

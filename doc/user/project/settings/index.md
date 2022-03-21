@@ -1,23 +1,23 @@
 ---
-stage: Create
-group: Source Code
+stage: Manage
+group: Workspace
 info: "To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments"
 type: reference, index, howto
 ---
 
 # Project settings **(FREE)**
 
-NOTE:
-Only project maintainers and administrators have the [permissions](../../permissions.md#project-members-permissions)
-to access project settings.
-
 The **Settings** page in GitLab provides a centralized home for your
 [project](../index.md) configuration options. To access it, go to your project's homepage
-and, in the left navigation menu, clicking **Settings**. To reduce complexity, settings are
-grouped by topic into sections. To display all settings in a section, click **Expand**.
+and, in the left navigation menu, select **Settings**. To reduce complexity, settings are
+grouped by topic into sections. To display all settings in a section, select **Expand**.
 
 In GitLab versions [13.10 and later](https://gitlab.com/groups/gitlab-org/-/epics/4842),
 GitLab displays a search box to help you find the settings you want to view.
+
+NOTE:
+Only users who have the Maintainer role for the project and administrators can
+access project settings.
 
 ## General settings
 
@@ -28,28 +28,50 @@ functionality of a project.
 
 Adjust your project's name, description, avatar, [default branch](../repository/branches/default.md), and topics:
 
-![general project settings](img/general_settings_v13_11.png)
-
 The project description also partially supports [standard Markdown](../../markdown.md#features-extended-from-standard-markdown).
 You can use [emphasis](../../markdown.md#emphasis), [links](../../markdown.md#links), and
 [line-breaks](../../markdown.md#line-breaks) to add more context to the project description.
+
+#### Topics
+
+Use topics to categorize projects and find similar new projects.
+
+To assign topics to a project:
+
+1. On the top bar, select **Menu > Projects** and find your project.
+1. On the left sidebar, select **Settings** > **General**.
+1. Under **Topics**, enter the project topics. Existing popular topics are suggested as you type.
+1. Select **Save changes**.
+
+For GitLab.com, explore popular topics on the [Explore topics page](../working_with_projects.md#explore-topics).
+When you select a topic, you can see relevant projects.
+
+NOTE:
+The assigned topics are visible only to everyone with access to the project,
+but everyone can see which topics exist at all on the GitLab instance.
+Do not include sensitive information in the name of a topic.
+
+If you're an instance administrator, see also
+[Administering topics](../../admin_area/index.md#administering-topics).
 
 #### Compliance frameworks **(PREMIUM)**
 
 > - [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/276221) in GitLab 13.9.
 > - [Feature flag removed](https://gitlab.com/gitlab-org/gitlab/-/issues/287779) in GitLab 13.12.
 
-You can create a framework label to identify that your project has certain compliance requirements
-or needs additional oversight.
+You can create a compliance framework label to identify that your project has certain compliance
+requirements or needs additional oversight. The label can optionally apply
+[compliance pipeline configuration](#compliance-pipeline-configuration).
 
 Group owners can create, edit, and delete compliance frameworks:
 
-1. Go to the group's **Settings** > **General**.
+1. On the top bar, select **Menu > Groups** and find your group.
+1. On the left sidebar, select **Settings** > **General**.
 1. Expand the **Compliance frameworks** section.
 
-Compliance frameworks created can then be assigned to any number of projects using:
+Compliance frameworks created can then be assigned to projects within the group using:
 
-- The project settings page inside the group or subgroups.
+- The GitLab UI, using the project settings page.
 - In [GitLab 14.2](https://gitlab.com/gitlab-org/gitlab/-/issues/333249) and later, using the
   [GraphQL API](../../../api/graphql/reference/index.md#mutationprojectsetcomplianceframework).
 
@@ -64,24 +86,37 @@ read-only view to discourage this behavior.
 > - [Enabled by default](https://gitlab.com/gitlab-org/gitlab/-/issues/300324) in GitLab 13.11.
 > - [Feature flag removed](https://gitlab.com/gitlab-org/gitlab/-/issues/331231) in GitLab 14.2.
 
-Group owners can use the compliance pipeline configuration to define compliance requirements
-such as scans or tests, and enforce them in individual projects.
+Compliance framework pipelines allow group owners to define
+a compliance pipeline in a separate repository that gets
+executed in place of the local project's `gitlab-ci.yml` file. As part of this pipeline, an
+`include` statement can reference the local project's `gitlab-ci.yml` file. This way, the two CI
+files are merged together any time the pipeline runs. Jobs and variables defined in the compliance
+pipeline can't be changed by variables in the local project's `gitlab-ci.yml` file.
 
-The [custom compliance framework](#compliance-frameworks) feature allows group owners to specify the location
-of a compliance pipeline configuration stored and managed in a dedicated project, distinct from a developer's project.
+When used to enforce scan execution, this feature has some overlap with [scan execution policies](../../application_security/policies/scan-execution-policies.md),
+as we have not [unified the user experience for these two features](https://gitlab.com/groups/gitlab-org/-/epics/7312).
+For details on the similarities and differences between these features, see
+[Enforce scan execution](../../application_security/#enforce-scan-execution).
 
-When you set up the compliance pipeline configuration field, use the
-`file@group/project` format. For example, you can configure
-`.compliance-gitlab-ci.yml@compliance-group/compliance-project`.
-This field is inherited by projects where the compliance framework label is applied. The result
-forces the project to run the compliance configurations.
+When you set up the compliance framework, use the **Compliance pipeline configuration** box to link
+the compliance framework to specific CI/CD configuration. Use the
+`path/file.y[a]ml@group-name/project-name` format. For example:
 
-When a project with a custom label executes a pipeline, it begins by evaluating the compliance pipeline configuration.
-The custom pipeline configuration can then execute any included individual project configuration.
+- `.compliance-ci.yml@gitlab-org/gitlab`.
+- `.compliance-ci.yaml@gitlab-org/gitlab`.
 
-The user running the pipeline in the project should at least have Reporter access to the compliance project.
+This configuration is inherited by projects where the compliance framework label is applied. The
+result forces projects with the label to run the compliance CI/CD configuration in addition to
+the project's own CI/CD configuration. When a project with a compliance framework label executes a
+pipeline, it evaluates configuration in the following order:
 
-Example `.compliance-gitlab-ci.yml`
+1. Compliance pipeline configuration.
+1. Project-specific pipeline configuration.
+
+The user running the pipeline in the project must at least have the Reporter role on the compliance
+project.
+
+Example `.compliance-gitlab-ci.yml`:
 
 ```yaml
 # Allows compliance team to control the ordering and interweaving of stages/jobs.
@@ -94,10 +129,10 @@ stages:
   - deploy
   - post-compliance
 
-variables: # Can be overridden by setting a job-specific variable in project's local .gitlab-ci.yml
+variables:  # Can be overridden by setting a job-specific variable in project's local .gitlab-ci.yml
   FOO: sast
 
-sast: # None of these attributes can be overridden by a project's local .gitlab-ci.yml
+sast:  # None of these attributes can be overridden by a project's local .gitlab-ci.yml
   variables:
     FOO: sast
   image: ruby:2.6
@@ -144,10 +179,10 @@ audit trail:
   after_script:
     - "# No after scripts."
 
-include: # Execute individual project's configuration (if project contains .gitlab-ci.yml)
+include:  # Execute individual project's configuration (if project contains .gitlab-ci.yml)
   project: '$CI_PROJECT_PATH'
   file: '$CI_CONFIG_PATH'
-  ref: '$CI_COMMIT_REF_NAME' # Must be defined or MR pipelines always use the use default branch.
+  ref: '$CI_COMMIT_REF_NAME' # Must be defined or MR pipelines always use the use default branch
 ```
 
 ##### Ensure compliance jobs are always run
@@ -179,8 +214,26 @@ cannot change them:
 - Explicitly set the container image file to run the job in. This ensures that your script
   steps execute in the correct environment.
 - Explicitly set any relevant GitLab pre-defined [job keywords](../../../ci/yaml/index.md#job-keywords).
-  This ensures that your job uses the settings you intend and that they are not overriden by
+  This ensures that your job uses the settings you intend and that they are not overridden by
   project-level pipelines.
+
+##### Avoid parent and child pipelines in GitLab 14.7 and earlier
+
+NOTE:
+This advice does not apply to GitLab 14.8 and later because [a fix](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/78878) added
+compatibility for combining compliance pipelines, and parent and child pipelines.
+
+Compliance pipelines start on the run of _every_ pipeline in a relevant project. This means that if a pipeline in the relevant project
+triggers a child pipeline, the compliance pipeline runs first. This can trigger the parent pipeline, instead of the child pipeline.
+
+Therefore, in projects with compliance frameworks, we recommend replacing
+[parent-child pipelines](../../../ci/pipelines/parent_child_pipelines.md) with the following:
+
+- Direct [`include`](../../../ci/yaml/index.md#include) statements that provide the parent pipeline with child pipeline configuration.
+- Child pipelines placed in another project that are run using the [trigger API](../../../ci/triggers/) rather than the parent-child
+  pipeline feature.
+
+This alternative ensures the compliance pipeline does not re-start the parent pipeline.
 
 ### Sharing and permissions
 
@@ -189,36 +242,37 @@ documentation, access permissions, and more. To do so from your project,
 go to **Settings** > **General**, and expand the **Visibility, project features, permissions**
 section.
 
-You can now change the [Project visibility](../../../public_access/public_access.md).
+You can now change the [Project visibility](../../public_access.md).
 If you set **Project Visibility** to public, you can limit access to some features
 to **Only Project Members**. In addition, you can select the option to
 [Allow users to request access](../members/index.md#request-access-to-a-project).
 
 Use the switches to enable or disable the following features:
 
-| Option                            | More access limit options | Description                                                                                                                                                                                    |
-|:----------------------------------|:--------------------------|:-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| **Issues**                        | ✓                         | Activates the GitLab issues tracker                                                                                                                                                            |
-| **Repository**                    | ✓                         | Enables [repository](../repository/) functionality                                                                                                                                             |
-| **Merge Requests**                | ✓                         | Enables [merge request](../merge_requests/) functionality; also see [Merge request settings](#merge-request-settings)                                                                          |
-| **Forks**                         | ✓                         | Enables [forking](../repository/forking_workflow.md) functionality                                                                                                                             |
-| **Pipelines**                     | ✓                         | Enables [CI/CD](../../../ci/index.md) functionality                                                                                                                                           |
-| **Container Registry**            |                           | Activates a [registry](../../packages/container_registry/) for your Docker images                                                                                                              |
-| **Git Large File Storage**        |                           | Enables the use of [large files](../../../topics/git/lfs/index.md#git-large-file-storage-lfs)                                                                                    |
-| **Packages**                      |                           | Supports configuration of a [package registry](../../../administration/packages/index.md#gitlab-package-registry-administration) functionality                                    |
-| **Analytics**                     | ✓                         | Enables [analytics](../../analytics/)                                                                                                                                                          |
-| **Wiki**                          | ✓                         | Enables a separate system for [documentation](../wiki/)                                                                                                                                        |
-| **Snippets**                      | ✓                         | Enables [sharing of code and text](../../snippets.md)                                                                                                                                          |
-| **Pages**                         | ✓                         | Allows you to [publish static websites](../pages/)                                                                                                                                             |
-| **Metrics Dashboard**             | ✓                         | Control access to [metrics dashboard](../integrations/prometheus.md)
-| **Requirements**                  | ✓                         | Control access to [Requirements Management](../requirements/index.md) |
-| **Operations Dashboard**          | ✓                         | Control access to [operations dashboard](../../../operations/index.md)
+| Option                           | More access limit options | Description   |
+|:---------------------------------|:--------------------------|:--------------|
+| **Issues**                       | ✓                         | Activates the GitLab issues tracker. |
+| **Repository**                   | ✓                         | Enables [repository](../repository/) functionality |
+| **Merge requests**               | ✓                         | Enables [merge request](../merge_requests/) functionality; also see [Merge request settings](#merge-request-settings). |
+| **Forks**                        | ✓                         | Enables [forking](../repository/forking_workflow.md) functionality. |
+| **Git Large File Storage (LFS)** |                           | Enables the use of [large files](../../../topics/git/lfs/index.md#git-large-file-storage-lfs). |
+| **Packages**                     |                           | Supports configuration of a [package registry](../../../administration/packages/index.md#gitlab-package-registry-administration) functionality. |
+| **CI/CD**                        | ✓                         | Enables [CI/CD](../../../ci/index.md) functionality. |
+| **Container Registry**           |                           | Activates a [registry](../../packages/container_registry/) for your Docker images. |
+| **Analytics**                    | ✓                         | Enables [analytics](../../analytics/). |
+| **Requirements**                 | ✓                         | Control access to [Requirements Management](../requirements/index.md). |
+| **Security & Compliance**        | ✓                         | Control access to [security features](../../application_security/index.md). |
+| **Wiki**                         | ✓                         | Enables a separate system for [documentation](../wiki/). |
+| **Snippets**                     | ✓                         | Enables [sharing of code and text](../../snippets.md). |
+| **Pages**                        | ✓                         | Allows you to [publish static websites](../pages/). |
+| **Operations**                   | ✓                         | Control access to Operations-related features, including [Operations Dashboard](../../../operations/index.md), [Environments and Deployments](../../../ci/environments/index.md), [Feature Flags](../../../operations/feature_flags.md). |
+| **Metrics Dashboard**            | ✓                         | Control access to [metrics dashboard](../integrations/prometheus.md). |
 
 Some features depend on others:
 
 - If you disable the **Issues** option, GitLab also removes the following
   features:
-  - **issue boards**
+  - **Issue Boards**
   - [**Service Desk**](#service-desk)
 
   NOTE:
@@ -231,8 +285,8 @@ Some features depend on others:
 
 - If you disable **Repository** functionality, GitLab also disables the following
   features for your project:
-  - **Merge Requests**
-  - **Pipelines**
+  - **Merge requests**
+  - **CI/CD**
   - **Container Registry**
   - **Git Large File Storage**
   - **Packages**
@@ -268,6 +322,7 @@ Set up your project's merge request settings:
 - Enable [require an associated issue from Jira](../../../integration/jira/issues.md#require-associated-jira-issue-for-merge-requests-to-be-merged).
 - Enable [`delete source branch after merge` option by default](../merge_requests/getting_started.md#deleting-the-source-branch).
 - Configure [suggested changes commit messages](../merge_requests/reviews/suggestions.md#configure-the-commit-message-for-applied-suggestions).
+- Configure [merge and squash commit message templates](../merge_requests/commit_templates.md).
 - Configure [the default target project](../merge_requests/creating_merge_requests.md#set-the-default-target-project) for merge requests coming from forks.
 
 ### Service Desk
@@ -276,7 +331,7 @@ Enable [Service Desk](../service_desk.md) for your project to offer customer sup
 
 ### Export project
 
-Learn how to [export a project](import_export.md#import-the-project) in GitLab.
+Learn how to [export a project](import_export.md#import-a-project-and-its-data) in GitLab.
 
 ### Advanced settings
 
@@ -309,7 +364,7 @@ available in project listings. Only project owners and administrators have the
 
 To find an archived project:
 
-1. Sign in to GitLab as the project owner or a user with the Administrator role.
+1. Sign in to GitLab as the project owner or a user with administrator access.
 1. If you:
    - Have the project's URL, open the project's page in your browser.
    - Don't have the project's URL:
@@ -353,11 +408,17 @@ NOTE:
 Only project owners and administrators have the [permissions](../../permissions.md#project-members-permissions)
 to transfer a project.
 
-You can transfer an existing project into a [group](../../group/index.md) if:
+You can transfer an existing project into a [group](../../group/index.md).
 
-- You have at least **Maintainer** [role](../../permissions.md#project-members-permissions) in that group.
-- You're at least an **Owner** of the project to be transferred.
+Prerequisites:
+
+- You must have at least the Maintainer role in that group.
+- You must be the Owner of that project.
 - The group to which the project is being transferred to must allow creation of new projects.
+- The project must not contain any [container images](../../packages/container_registry/index.md#limitations).
+  - If you transfer a project to a different root namespace,
+    the project must not contain any
+    [NPM packages](../../packages/npm_registry/index.md#limitations).
 
 To transfer a project:
 
@@ -372,8 +433,8 @@ read what happens with the
 [redirects from the old project to the new one](../repository/index.md#what-happens-when-a-repository-path-changes).
 
 NOTE:
-GitLab administrators can use the administration interface to move any project to any
-namespace if needed.
+GitLab administrators can use the [administration interface](../../admin_area/index.md#administering-projects)
+to move any project to any namespace if needed.
 
 ##### Transferring a GitLab.com project to a different subscription tier
 
@@ -401,17 +462,22 @@ To delete a project:
 
 This action deletes a project including all associated resources (issues, merge requests, and so on).
 
-In [GitLab 13.2](https://gitlab.com/gitlab-org/gitlab/-/issues/220382) and later, on Premium or higher tiers,
-group Owners can [configure](../../group/index.md#enable-delayed-project-removal) projects in a group
-to be deleted after a delayed period.
-When enabled, actual deletion happens after number of days
-specified in [instance settings](../../admin_area/settings/visibility_and_access_controls.md#default-deletion-delay).
-
 WARNING:
-The default behavior of [delayed project deletion](https://gitlab.com/gitlab-org/gitlab/-/issues/32935) in GitLab 12.6 was changed to
-[Immediate deletion](https://gitlab.com/gitlab-org/gitlab/-/issues/220382) in GitLab 13.2.
+The default deletion behavior for projects was changed to [delayed project deletion](https://gitlab.com/gitlab-org/gitlab/-/issues/32935)
+in GitLab 12.6, and then to [immediate deletion](https://gitlab.com/gitlab-org/gitlab/-/issues/220382) in GitLab 13.2.
 
-#### Delete a project immediately **(PREMIUM)**
+#### Delayed project deletion **(PREMIUM)**
+
+Projects in a group (not a personal namespace) can be deleted after a delay period. Multiple settings can affect whether
+delayed project deletion is enabled for a particular project:
+
+- Self-managed instance [settings](../../admin_area/settings/visibility_and_access_controls.md#default-delayed-project-deletion).
+  You can enable delayed project deletion as the default setting for new groups, and configure the number of days for the
+  delay. For GitLab.com, see the [GitLab.com settings](../../gitlab_com/index.md#delayed-project-deletion).
+- Group [settings](../../group/index.md#enable-delayed-project-deletion) to enabled delayed project deletion for all
+  projects in the group.
+
+##### Delete a project immediately
 
 > [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/191367) in GitLab 14.1.
 
@@ -475,7 +541,7 @@ Configure [alert integrations](../../../operations/incident_management/integrati
 
 #### Alert integration
 
-Automatically [create](../../../operations/incident_management/incidents.md#create-incidents-automatically), [notify on](../../../operations/incident_management/paging.md#email-notifications), and [resolve](../../../operations/incident_management/incidents.md#automatically-close-incidents-via-recovery-alerts) incidents based on GitLab alerts.
+Automatically [create](../../../operations/incident_management/incidents.md#create-incidents-automatically), [notify on](../../../operations/incident_management/paging.md#email-notifications-for-alerts), and [resolve](../../../operations/incident_management/incidents.md#automatically-close-incidents-via-recovery-alerts) incidents based on GitLab alerts.
 
 #### PagerDuty integration
 
@@ -489,11 +555,11 @@ Automatically [create](../../../operations/incident_management/incidents.md#crea
 
 Configure Error Tracking to discover and view [Sentry errors within GitLab](../../../operations/error_tracking.md).
 
-### Jaeger tracing **(ULTIMATE)**
+### Jaeger tracing
 
 Add the URL of a Jaeger server to allow your users to [easily access the Jaeger UI from within GitLab](../../../operations/tracing.md).
 
-### Status Page
+### Status Page **(ULTIMATE)**
 
 [Add Storage credentials](../../../operations/incident_management/status_page.md#sync-incidents-to-the-status-page)
 to enable the syncing of public Issues to a [deployed status page](../../../operations/incident_management/status_page.md#create-a-status-page-project).

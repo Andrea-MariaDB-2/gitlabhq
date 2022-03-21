@@ -3,7 +3,13 @@
 require 'spec_helper'
 
 RSpec.describe Gitlab::Database::LoadBalancing::ServiceDiscovery do
-  let(:load_balancer) { Gitlab::Database::LoadBalancing::LoadBalancer.new([]) }
+  let(:load_balancer) do
+    configuration = Gitlab::Database::LoadBalancing::Configuration.new(ActiveRecord::Base)
+    configuration.service_discovery[:record] = 'localhost'
+
+    Gitlab::Database::LoadBalancing::LoadBalancer.new(configuration)
+  end
+
   let(:service) do
     described_class.new(
       load_balancer,
@@ -81,6 +87,7 @@ RSpec.describe Gitlab::Database::LoadBalancing::ServiceDiscovery do
         service.perform_service_discovery
       end
     end
+
     context 'with failures' do
       before do
         allow(Gitlab::ErrorTracking).to receive(:track_exception)
@@ -184,7 +191,10 @@ RSpec.describe Gitlab::Database::LoadBalancing::ServiceDiscovery do
     let(:address_bar) { described_class::Address.new('bar') }
 
     let(:load_balancer) do
-      Gitlab::Database::LoadBalancing::LoadBalancer.new([address_foo])
+      Gitlab::Database::LoadBalancing::LoadBalancer.new(
+        Gitlab::Database::LoadBalancing::Configuration
+          .new(ActiveRecord::Base, [address_foo])
+      )
     end
 
     before do
@@ -307,7 +317,10 @@ RSpec.describe Gitlab::Database::LoadBalancing::ServiceDiscovery do
 
   describe '#addresses_from_load_balancer' do
     let(:load_balancer) do
-      Gitlab::Database::LoadBalancing::LoadBalancer.new(%w[b a])
+      Gitlab::Database::LoadBalancing::LoadBalancer.new(
+        Gitlab::Database::LoadBalancing::Configuration
+          .new(ActiveRecord::Base, %w[b a])
+      )
     end
 
     it 'returns the ordered host names of the load balancer' do

@@ -1,6 +1,5 @@
 <script>
-/* eslint-disable vue/no-v-html */
-import { GlIcon, GlButton, GlTooltipDirective } from '@gitlab/ui';
+import { GlIcon, GlButton, GlTooltipDirective, GlSafeHtmlDirective } from '@gitlab/ui';
 import { groupBy } from 'lodash';
 import EmojiPicker from '~/emoji/components/picker.vue';
 import { __, sprintf } from '~/locale';
@@ -18,6 +17,7 @@ export default {
   },
   directives: {
     GlTooltip: GlTooltipDirective,
+    SafeHtml: GlSafeHtmlDirective,
   },
   mixins: [glFeatureFlagsMixin()],
   props: {
@@ -74,6 +74,9 @@ export default {
     isAuthoredByMe() {
       return this.noteAuthorId === this.currentUserId;
     },
+  },
+  mounted() {
+    this.virtualScrollerItem = this.$el.closest('.vue-recycle-scroller__item-view');
   },
   methods: {
     getAwardClassBindings(awardList) {
@@ -162,8 +165,13 @@ export default {
     },
     setIsMenuOpen(menuOpen) {
       this.isMenuOpen = menuOpen;
+
+      if (this.virtualScrollerItem) {
+        this.virtualScrollerItem.style.zIndex = this.isMenuOpen ? 1 : null;
+      }
     },
   },
+  safeHtmlConfig: { ADD_TAGS: ['gl-emoji'] },
 };
 </script>
 
@@ -180,19 +188,26 @@ export default {
       @click="handleAward(awardList.name)"
     >
       <template #emoji>
-        <span class="award-emoji-block" data-testid="award-html" v-html="awardList.html"></span>
+        <span
+          v-safe-html:[$options.safeHtmlConfig]="awardList.html"
+          class="award-emoji-block"
+          data-testid="award-html"
+        ></span>
       </template>
       <span class="js-counter">{{ awardList.list.length }}</span>
     </gl-button>
     <div v-if="canAwardEmoji" class="award-menu-holder gl-my-2">
       <emoji-picker
         v-if="glFeatures.improvedEmojiPicker"
+        v-gl-tooltip.viewport
+        :title="__('Add reaction')"
         :toggle-class="['add-reaction-button btn-icon gl-relative!', { 'is-active': isMenuOpen }]"
         @click="handleAward"
         @shown="setIsMenuOpen(true)"
         @hidden="setIsMenuOpen(false)"
       >
         <template #button-content>
+          <span class="gl-sr-only">{{ __('Add reaction') }}</span>
           <span class="reaction-control-icon reaction-control-icon-neutral">
             <gl-icon name="slight-smile" />
           </span>

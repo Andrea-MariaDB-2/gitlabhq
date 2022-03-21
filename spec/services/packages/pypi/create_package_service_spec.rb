@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 require 'spec_helper'
 
-RSpec.describe Packages::Pypi::CreatePackageService do
+RSpec.describe Packages::Pypi::CreatePackageService, :aggregate_failures do
   include PackagesManagerApiSpecHelpers
 
   let_it_be(:project) { create(:project) }
@@ -39,6 +39,18 @@ RSpec.describe Packages::Pypi::CreatePackageService do
       end
     end
 
+    context 'without required_python' do
+      before do
+        params.delete(:requires_python)
+      end
+
+      it 'creates the package' do
+        expect { subject }.to change { Packages::Package.pypi.count }.by(1)
+
+        expect(created_package.pypi_metadatum.required_python).to eq ''
+      end
+    end
+
     context 'with an invalid metadata' do
       let(:requires_python) { 'x' * 256 }
 
@@ -71,6 +83,27 @@ RSpec.describe Packages::Pypi::CreatePackageService do
             .to change { Packages::Package.pypi.count }.by(0)
             .and change { Packages::PackageFile.count }.by(0)
             .and raise_error(/File name has already been taken/)
+        end
+
+        context 'with a pending_destruction package' do
+          before do
+            Packages::Package.pypi.last.pending_destruction!
+          end
+
+          it 'creates a new package' do
+            expect { subject }
+              .to change { Packages::Package.pypi.count }.by(1)
+              .and change { Packages::PackageFile.count }.by(1)
+
+            expect(created_package.name).to eq 'foo'
+            expect(created_package.version).to eq '1.0'
+
+            expect(created_package.pypi_metadatum.required_python).to eq '>=2.7'
+            expect(created_package.package_files.size).to eq 1
+            expect(created_package.package_files.first.file_name).to eq 'foo.tgz'
+            expect(created_package.package_files.first.file_sha256).to eq 'abc'
+            expect(created_package.package_files.first.file_md5).to eq 'def'
+          end
         end
       end
 

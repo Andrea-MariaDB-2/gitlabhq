@@ -1,14 +1,23 @@
 # frozen_string_literal: true
 
-# This class is part of the Gitlab::HTTP wrapper. Depending on the value
-# of the global setting allow_local_requests_from_web_hooks_and_services this adapter
-# will allow/block connection to internal IPs and/or urls.
+# This class is part of the Gitlab::HTTP wrapper. It handles local requests and header timeouts
 #
-# This functionality can be overridden by providing the setting the option
-# allow_local_requests = true in the request. For example:
-# Gitlab::HTTP.get('http://www.gitlab.com', allow_local_requests: true)
+# 1. Local requests
+#   Depending on the value of the global setting allow_local_requests_from_web_hooks_and_services,
+#   this adapter will allow/block connection to internal IPs and/or urls.
 #
-# This option will take precedence over the global setting.
+#   This functionality can be overridden by providing the setting the option
+#   allow_local_requests = true in the request. For example:
+#   Gitlab::HTTP.get('http://www.gitlab.com', allow_local_requests: true)
+#
+#   This option will take precedence over the global setting.
+#
+# 2. Header timeouts
+#   When the use_read_total_timeout option is used, that means the receiver
+#   of the HTTP request cannot be trusted. Gitlab::BufferedIo will be used,
+#   to read header data. It is a modified version of Net::BufferedIO that
+#   raises a timeout error if reading header data takes too much time.
+
 module Gitlab
   class HTTPConnectionAdapter < HTTParty::ConnectionAdapter
     extend ::Gitlab::Utils::Override
@@ -17,9 +26,20 @@ module Gitlab
     def connection
       @uri, hostname = validate_url!(uri)
 
-      super.tap do |http|
-        http.hostname_override = hostname if hostname
+      http = super
+      http.hostname_override = hostname if hostname
+
+      if Feature.enabled?(:header_read_timeout_buffered_io, default_enabled: :yaml)
+        gitlab_http = Gitlab::NetHttpAdapter.new(http.address, http.port)
+
+        http.instance_variables.each do |variable|
+          gitlab_http.instance_variable_set(variable, http.instance_variable_get(variable))
+        end
+
+        return gitlab_http
       end
+
+      http
     end
 
     private
@@ -27,6 +47,7 @@ module Gitlab
     def validate_url!(url)
       Gitlab::UrlBlocker.validate!(url, allow_local_network: allow_local_requests?,
                                         allow_localhost: allow_local_requests?,
+                                        allow_object_storage: allow_object_storage?,
                                         dns_rebind_protection: dns_rebind_protection?)
     rescue Gitlab::UrlBlocker::BlockedUrlError => e
       raise Gitlab::HTTP::BlockedUrlError, "URL '#{url}' is blocked: #{e.message}"
@@ -34,6 +55,10 @@ module Gitlab
 
     def allow_local_requests?
       options.fetch(:allow_local_requests, allow_settings_local_requests?)
+    end
+
+    def allow_object_storage?
+      options.fetch(:allow_object_storage, false)
     end
 
     def dns_rebind_protection?

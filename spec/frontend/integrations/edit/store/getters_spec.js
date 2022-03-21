@@ -1,12 +1,12 @@
 import {
   currentKey,
   isInheriting,
-  isDisabled,
+  isProjectLevel,
   propsSource,
 } from '~/integrations/edit/store/getters';
-import * as types from '~/integrations/edit/store/mutation_types';
-import mutations from '~/integrations/edit/store/mutations';
+
 import createState from '~/integrations/edit/store/state';
+import { integrationLevels } from '~/integrations/constants';
 import { mockIntegrationProps } from '../mock_data';
 
 describe('Integration form store getters', () => {
@@ -52,27 +52,16 @@ describe('Integration form store getters', () => {
     });
   });
 
-  describe('isDisabled', () => {
+  describe('isProjectLevel', () => {
     it.each`
-      isSaving | isTesting | isResetting | expected
-      ${false} | ${false}  | ${false}    | ${false}
-      ${true}  | ${false}  | ${false}    | ${true}
-      ${false} | ${true}   | ${false}    | ${true}
-      ${false} | ${false}  | ${true}     | ${true}
-      ${false} | ${true}   | ${true}     | ${true}
-      ${true}  | ${false}  | ${true}     | ${true}
-      ${true}  | ${true}   | ${false}    | ${true}
-      ${true}  | ${true}   | ${true}     | ${true}
-    `(
-      'when isSaving = $isSaving, isTesting = $isTesting, isResetting = $isResetting then isDisabled = $expected',
-      ({ isSaving, isTesting, isResetting, expected }) => {
-        mutations[types.SET_IS_SAVING](state, isSaving);
-        mutations[types.SET_IS_TESTING](state, isTesting);
-        mutations[types.SET_IS_RESETTING](state, isResetting);
-
-        expect(isDisabled(state)).toBe(expected);
-      },
-    );
+      integrationLevel              | expected
+      ${integrationLevels.PROJECT}  | ${true}
+      ${integrationLevels.GROUP}    | ${false}
+      ${integrationLevels.INSTANCE} | ${false}
+    `('when integrationLevel is `$integrationLevel`', ({ integrationLevel, expected }) => {
+      state.customState.integrationLevel = integrationLevel;
+      expect(isProjectLevel(state)).toBe(expected);
+    });
   });
 
   describe('propsSource', () => {

@@ -1,10 +1,10 @@
 ---
 stage: Manage
-group: Access
+group: Authentication and Authorization
 info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
 ---
 
-# Application statistics API
+# Application statistics API **(FREE SELF)**
 
 ## Get current application statistics
 

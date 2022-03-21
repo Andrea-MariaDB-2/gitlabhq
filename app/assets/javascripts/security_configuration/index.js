@@ -14,11 +14,11 @@ export const initSecurityConfiguration = (el) => {
   Vue.use(VueApollo);
 
   const apolloProvider = new VueApollo({
-    defaultClient: createDefaultClient({}, { assumeImmutableResults: true }),
+    defaultClient: createDefaultClient(),
   });
 
   const {
-    projectPath,
+    projectFullPath,
     upgradePath,
     features,
     latestPipelinePath,
@@ -37,7 +37,7 @@ export const initSecurityConfiguration = (el) => {
     el,
     apolloProvider,
     provide: {
-      projectPath,
+      projectFullPath,
       upgradePath,
       autoDevopsHelpPagePath,
       autoDevopsPath,

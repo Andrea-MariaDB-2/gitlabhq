@@ -1,5 +1,8 @@
 - breadcrumb_title _("Learn GitLab")
 - page_title _("Learn GitLab")
 - add_page_specific_style 'page_bundles/learn_gitlab'
+- data = learn_gitlab_data(@project)
 
-#js-learn-gitlab-app{ data: { actions: onboarding_actions_data(@project).to_json, sections: onboarding_sections_data.to_json } }
+= render 'projects/invite_members_modal', project: @project
+
+#js-learn-gitlab-app{ data: data }

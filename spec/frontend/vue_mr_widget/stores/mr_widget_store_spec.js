@@ -15,6 +15,8 @@ describe('MergeRequestStore', () => {
       gitpodEnabled: mockData.gitpod_enabled,
       showGitpodButton: mockData.show_gitpod_button,
       gitpodUrl: mockData.gitpod_url,
+      userPreferencesGitpodPath: mockData.user_preferences_gitpod_path,
+      userProfileEnableGitpodPath: mockData.user_profile_enable_gitpod_path,
     });
   });
 
@@ -129,7 +131,7 @@ describe('MergeRequestStore', () => {
     it('should set the add ci config path', () => {
       store.setPaths({ ...mockData });
 
-      expect(store.mergeRequestAddCiConfigPath).toBe('/group2/project2/new/pipeline');
+      expect(store.mergeRequestAddCiConfigPath).toBe('/root/group2/project2/-/ci/editor');
     });
 
     it('should set humanAccess=Maintainer when user has that role', () => {
@@ -162,7 +164,7 @@ describe('MergeRequestStore', () => {
       expect(store.securityReportsDocsPath).toBe('security-reports-docs-path');
     });
 
-    it.each(['sast_comparison_path', 'secret_scanning_comparison_path'])(
+    it.each(['sast_comparison_path', 'secret_detection_comparison_path'])(
       'should set %s path',
       (property) => {
         // Ensure something is set in the mock data

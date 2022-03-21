@@ -26,7 +26,7 @@ used for the build.
 
 Specify either:
 
-- The CI/CD variable `BUILDPACK_URL` according to [`pack`'s specifications](https://buildpacks.io/docs/app-developer-guide/specific-buildpacks/).
+- The CI/CD variable `BUILDPACK_URL` according to [`pack`'s specifications](https://buildpacks.io/docs/app-developer-guide/specify-buildpacks/).
 - A [`project.toml` project descriptor](https://buildpacks.io/docs/app-developer-guide/using-project-descriptor/) with the buildpacks you would like to include.
 
 ### Custom buildpacks with Herokuish
@@ -58,7 +58,7 @@ If your goal is to use only a single custom buildpack, you should provide the pr
 
 ## Custom `Dockerfile`
 
-> Support for `DOCKERFILE_PATH` was [added in GitLab 13.2](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/35662)
+> Support for `DOCKERFILE_PATH` was [introduced](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/35662) in GitLab 13.2
 
 If your project has a `Dockerfile` in the root of the project repository, Auto DevOps
 builds a Docker image based on the Dockerfile, rather than using buildpacks.
@@ -93,6 +93,32 @@ Avoid passing secrets as Docker build arguments if possible, as they may be
 persisted in your image. See
 [this discussion of best practices with secrets](https://github.com/moby/moby/issues/13490) for details.
 
+## Custom container image
+
+By default, [Auto Deploy](stages.md#auto-deploy) deploys a container image built and pushed to the GitLab registry by [Auto Build](stages.md#auto-build).
+You can override this behavior by defining specific variables:
+
+| Entry | Default | Can be overridden by |
+| ----- | -----   | -----    |
+| Image Path | `$CI_REGISTRY_IMAGE/$CI_COMMIT_REF_SLUG` for branch pipelines. `$CI_REGISTRY_IMAGE` for tag pipelines. | `$CI_APPLICATION_REPOSITORY` |
+| Image Tag | `$CI_COMMIT_SHA` for branch pipelines. `$CI_COMMIT_TAG` for tag pipelines. | `$CI_APPLICATION_TAG` |
+
+These variables also affect Auto Build and Auto Container Scanning. If you don't want to build and push an image to
+`$CI_APPLICATION_REPOSITORY:$CI_APPLICATION_TAG`, consider
+including only `Jobs/Deploy.gitlab-ci.yml`, or [disabling the `build` jobs](#disable-jobs).
+
+If you use Auto Container Scanning and set a value for `$CI_APPLICATION_REPOSITORY`, then you should
+also update `$CS_DEFAULT_BRANCH_IMAGE`. See [Setting the default branch image](../../user/application_security/container_scanning/index.md#setting-the-default-branch-image)
+for more details.
+
+Here is an example setup in your `.gitlab-ci.yml`:
+
+```yaml
+variables:
+  CI_APPLICATION_REPOSITORY: <your-image-repository>
+  CI_APPLICATION_TAG: <the-tag>
+```
+
 ## Extend Auto DevOps with the API
 
 You can extend and manage your Auto DevOps configuration with GitLab APIs:
@@ -105,7 +131,7 @@ You can extend and manage your Auto DevOps configuration with GitLab APIs:
 
 ## Forward CI/CD variables to the build environment
 
-> [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/25514) in GitLab 12.3, but available in versions 11.9 and above.
+> [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/25514) in GitLab 12.3, but available in GitLab 12.0 and later.
 
 CI/CD variables can be forwarded into the build environment using the
 `AUTO_DEVOPS_BUILD_IMAGE_FORWARDED_CI_VARIABLES` CI/CD variable.
@@ -164,6 +190,9 @@ You can override the default values in the `values.yaml` file in the
   `HELM_UPGRADE_VALUES_FILE` [CI/CD variable](#cicd-variables) with
   the path and name.
 
+Some values can not be overridden with the options above. Settings like `replicaCount` should instead be overridden with the `REPLICAS`
+[build and deployment](#build-and-deployment) CI/CD variable. Follow [this issue](https://gitlab.com/gitlab-org/cluster-integration/auto-deploy-image/-/issues/31) for more information.
+
 NOTE:
 For GitLab 12.5 and earlier, use the `HELM_UPGRADE_EXTRA_ARGS` variable
 to override the default chart values by setting `HELM_UPGRADE_EXTRA_ARGS` to `--values <my-values.yaml>`.
@@ -218,7 +247,7 @@ See [Multiple Kubernetes clusters for Auto DevOps](multiple_clusters_auto_devops
 
 For clusters not managed by GitLab, you can customize the namespace in
 `.gitlab-ci.yml` by specifying
-[`environment:kubernetes:namespace`](../../ci/environments/index.md#configure-kubernetes-deployments).
+[`environment:kubernetes:namespace`](../../ci/environments/index.md#configure-kubernetes-deployments-deprecated).
 For example, the following configuration overrides the namespace used for
 `production` deployments:
 
@@ -373,6 +402,8 @@ applications.
 |-----------------------------------------|------------------------------------|
 | `ADDITIONAL_HOSTS`                      | Fully qualified domain names specified as a comma-separated list that are added to the Ingress hosts. |
 | `<ENVIRONMENT>_ADDITIONAL_HOSTS`        | For a specific environment, the fully qualified domain names specified as a comma-separated list that are added to the Ingress hosts. This takes precedence over `ADDITIONAL_HOSTS`. |
+| `AUTO_BUILD_IMAGE_VERSION`              | Customize the image version used for the `build` job. See [list of versions](https://gitlab.com/gitlab-org/cluster-integration/auto-build-image/-/releases). |
+| `AUTO_DEPLOY_IMAGE_VERSION`            | Customize the image version used for Kubernetes deployment jobs. See [list of versions](https://gitlab.com/gitlab-org/cluster-integration/auto-deploy-image/-/releases). |
 | `AUTO_DEVOPS_ATOMIC_RELEASE`            | As of GitLab 13.0, Auto DevOps uses [`--atomic`](https://v2.helm.sh/docs/helm/#options-43) for Helm deployments by default. Set this variable to `false` to disable the use of `--atomic` |
 | `AUTO_DEVOPS_BUILD_IMAGE_CNB_ENABLED`   | Set to `false` to use Herokuish instead of Cloud Native Buildpacks with Auto Build. [More details](stages.md#auto-build-using-cloud-native-buildpacks). |
 | `AUTO_DEVOPS_BUILD_IMAGE_CNB_BUILDER`   | The builder used when building with Cloud Native Buildpacks. The default builder is `heroku/buildpacks:18`. [More details](stages.md#auto-build-using-cloud-native-buildpacks). |
@@ -380,28 +411,35 @@ applications.
 | `AUTO_DEVOPS_BUILD_IMAGE_FORWARDED_CI_VARIABLES` | A [comma-separated list of CI/CD variable names](#forward-cicd-variables-to-the-build-environment) to be forwarded to the build environment (the buildpack builder or `docker build`). |
 | `AUTO_DEVOPS_CHART`                     | Helm Chart used to deploy your apps. Defaults to the one [provided by GitLab](https://gitlab.com/gitlab-org/cluster-integration/auto-deploy-image/-/tree/master/assets/auto-deploy-app). |
 | `AUTO_DEVOPS_CHART_REPOSITORY`          | Helm Chart repository used to search for charts. Defaults to `https://charts.gitlab.io`. |
-| `AUTO_DEVOPS_CHART_REPOSITORY_NAME`     | From GitLab 11.11, used to set the name of the Helm repository. Defaults to `gitlab`. |
-| `AUTO_DEVOPS_CHART_REPOSITORY_USERNAME` | From GitLab 11.11, used to set a username to connect to the Helm repository. Defaults to no credentials. Also set `AUTO_DEVOPS_CHART_REPOSITORY_PASSWORD`. |
-| `AUTO_DEVOPS_CHART_REPOSITORY_PASSWORD` | From GitLab 11.11, used to set a password to connect to the Helm repository. Defaults to no credentials. Also set `AUTO_DEVOPS_CHART_REPOSITORY_USERNAME`. |
+| `AUTO_DEVOPS_CHART_REPOSITORY_NAME`     | Used to set the name of the Helm repository. Defaults to `gitlab`. |
+| `AUTO_DEVOPS_CHART_REPOSITORY_USERNAME` | Used to set a username to connect to the Helm repository. Defaults to no credentials. Also set `AUTO_DEVOPS_CHART_REPOSITORY_PASSWORD`. |
+| `AUTO_DEVOPS_CHART_REPOSITORY_PASSWORD` | Used to set a password to connect to the Helm repository. Defaults to no credentials. Also set `AUTO_DEVOPS_CHART_REPOSITORY_USERNAME`. |
 | `AUTO_DEVOPS_CHART_REPOSITORY_PASS_CREDENTIALS` | From GitLab 14.2, set to a non-empty value to enable forwarding of the Helm repository credentials to the chart server when the chart artifacts are on a different host than repository. |
 | `AUTO_DEVOPS_DEPLOY_DEBUG`              | From GitLab 13.1, if this variable is present, Helm outputs debug logs. |
 | `AUTO_DEVOPS_ALLOW_TO_FORCE_DEPLOY_V<N>` | From [auto-deploy-image](https://gitlab.com/gitlab-org/cluster-integration/auto-deploy-image) v1.0.0, if this variable is present, a new major version of chart is forcibly deployed. For more information, see [Ignore warnings and continue deploying](upgrading_auto_deploy_dependencies.md#ignore-warnings-and-continue-deploying). |
 | `BUILDPACK_URL`                         | Buildpack's full URL. [Must point to a URL supported by Pack or Herokuish](#custom-buildpacks). |
-| `CANARY_ENABLED`                        | From GitLab 11.0, used to define a [deploy policy for canary environments](#deploy-policy-for-canary-environments). |
+| `CANARY_ENABLED`                        | Used to define a [deploy policy for canary environments](#deploy-policy-for-canary-environments). |
+| `BUILDPACK_VOLUMES`                     | Specify one or more [Buildpack volumes to mount](stages.md#mount-volumes-into-the-build-container). Use a pipe `|` as list separator. |
 | `CANARY_PRODUCTION_REPLICAS`            | Number of canary replicas to deploy for [Canary Deployments](../../user/project/canary_deployments.md) in the production environment. Takes precedence over `CANARY_REPLICAS`. Defaults to 1. |
 | `CANARY_REPLICAS`                       | Number of canary replicas to deploy for [Canary Deployments](../../user/project/canary_deployments.md). Defaults to 1. |
+| `CI_APPLICATION_REPOSITORY`             | The repository of container image being built or deployed, `$CI_APPLICATION_REPOSITORY:$CI_APPLICATION_TAG`. For more details, read [Custom container image](#custom-container-image). |
+| `CI_APPLICATION_TAG`                    | The tag of the container image being built or deployed, `$CI_APPLICATION_REPOSITORY:$CI_APPLICATION_TAG`. For more details, read [Custom container image](#custom-container-image). |
+| `DAST_AUTO_DEPLOY_IMAGE_VERSION`        | Customize the image version used for DAST deployments on the default branch. Should usually be the same as `AUTO_DEPLOY_IMAGE_VERSION`. See [list of versions](https://gitlab.com/gitlab-org/cluster-integration/auto-deploy-image/-/releases). |
 | `DOCKERFILE_PATH`                       | From GitLab 13.2, allows overriding the [default Dockerfile path for the build stage](#custom-dockerfile) |
 | `HELM_RELEASE_NAME`                     | From GitLab 12.1, allows the `helm` release name to be overridden. Can be used to assign unique release names when deploying multiple projects to a single namespace. |
 | `HELM_UPGRADE_VALUES_FILE`              | From GitLab 12.6, allows the `helm upgrade` values file to be overridden. Defaults to `.gitlab/auto-deploy-values.yaml`. |
-| `HELM_UPGRADE_EXTRA_ARGS`               | From GitLab 11.11, allows extra options in `helm upgrade` commands when deploying the application. Note that using quotes doesn't prevent word splitting. |
-| `INCREMENTAL_ROLLOUT_MODE`              | From GitLab 11.4, if present, can be used to enable an [incremental rollout](#incremental-rollout-to-production) of your application for the production environment. Set to `manual` for manual deployment jobs or `timed` for automatic rollout deployments with a 5 minute delay each one. |
-| `K8S_SECRET_*`                          | From GitLab 11.7, any variable prefixed with [`K8S_SECRET_`](#application-secret-variables) is made available by Auto DevOps as environment variables to the deployed application. |
-| `KUBE_INGRESS_BASE_DOMAIN`              | From GitLab 11.8, can be used to set a domain per cluster. See [cluster domains](../../user/project/clusters/gitlab_managed_clusters.md#base-domain) for more information. |
+| `HELM_UPGRADE_EXTRA_ARGS`               | Allows extra options in `helm upgrade` commands when deploying the application. Note that using quotes doesn't prevent word splitting. |
+| `INCREMENTAL_ROLLOUT_MODE`              | If present, can be used to enable an [incremental rollout](#incremental-rollout-to-production) of your application for the production environment. Set to `manual` for manual deployment jobs or `timed` for automatic rollout deployments with a 5 minute delay each one. |
+| `K8S_SECRET_*`                          | Any variable prefixed with [`K8S_SECRET_`](#application-secret-variables) is made available by Auto DevOps as environment variables to the deployed application. |
+| `KUBE_CONTEXT`                          | From GitLab 14.5, can be used to select a context to use from `KUBECONFIG`. When `KUBE_CONTEXT` is blank, the default context in `KUBECONFIG` (if any) is used. A context must be selected when used [with the agent for Kubernetes](../../user/clusters/agent/ci_cd_tunnel.md). |
+| `KUBE_INGRESS_BASE_DOMAIN`              | Can be used to set a domain per cluster. See [cluster domains](../../user/project/clusters/gitlab_managed_clusters.md#base-domain) for more information. |
+| `KUBE_NAMESPACE`                        | The namespace used for deployments. When using certificate-based clusters, [this value should not be overwritten directly](../../user/project/clusters/deploy_to_cluster.md#custom-namespace). |
+| `KUBECONFIG`                            | The kubeconfig to use for deployments. User-provided values take priority over GitLab-provided values. |
 | `PRODUCTION_REPLICAS`                   | Number of replicas to deploy in the production environment. Takes precedence over `REPLICAS` and defaults to 1. For zero downtime upgrades, set to 2 or greater. |
-| `REPLICAS`                              | Number of replicas to deploy. Defaults to 1. |
-| `ROLLOUT_RESOURCE_TYPE`                 | From GitLab 11.9, allows specification of the resource type being deployed when using a custom Helm chart. Default value is `deployment`. |
+| `REPLICAS`                              | Number of replicas to deploy. Defaults to 1. Change this variable instead of [modifying](#customize-values-for-helm-chart) `replicaCount`. |
+| `ROLLOUT_RESOURCE_TYPE`                 | Allows specification of the resource type being deployed when using a custom Helm chart. Default value is `deployment`. |
 | `ROLLOUT_STATUS_DISABLED`               | From GitLab 12.0, used to disable rollout status check because it does not support all resource types, for example, `cronjob`. |
-| `STAGING_ENABLED`                       | From GitLab 10.8, used to define a [deploy policy for staging and production environments](#deploy-policy-for-staging-and-production-environments). |
+| `STAGING_ENABLED`                       | Used to define a [deploy policy for staging and production environments](#deploy-policy-for-staging-and-production-environments). |
 
 NOTE:
 After you set up your replica variables using a
@@ -419,8 +457,8 @@ The following table lists CI/CD variables related to the database.
 
 | **CI/CD Variable**                            | **Description**                    |
 |-----------------------------------------|------------------------------------|
-| `DB_INITIALIZE`                         | From GitLab 11.4, used to specify the command to run to initialize the application's PostgreSQL database. Runs inside the application pod. |
-| `DB_MIGRATE`                            | From GitLab 11.4, used to specify the command to run to migrate the application's PostgreSQL database. Runs inside the application pod. |
+| `DB_INITIALIZE`                         | Used to specify the command to run to initialize the application's PostgreSQL database. Runs inside the application pod. |
+| `DB_MIGRATE`                            | Used to specify the command to run to migrate the application's PostgreSQL database. Runs inside the application pod. |
 | `POSTGRES_ENABLED`                      | Whether PostgreSQL is enabled. Defaults to `true`. Set to `false` to disable the automatic deployment of PostgreSQL. |
 | `POSTGRES_USER`                         | The PostgreSQL user. Defaults to `user`. Set it to use a custom username. |
 | `POSTGRES_PASSWORD`                     | The PostgreSQL password. Defaults to `testing-password`. Set it to use a custom password. |
@@ -443,13 +481,13 @@ The following table lists variables used to disable jobs.
 | `brakeman-sast`                        | `SAST_DISABLED`                 |                       | If the variable is present, the job isn't created. |
 | `bundler-audit-dependency_scanning`    | `DEPENDENCY_SCANNING_DISABLED`  |                       | If the variable is present, the job isn't created. |
 | `canary`                               | `CANARY_ENABLED`                |                       | This manual job is created if the variable is present. |
+| `cluster_image_scanning`               | `CLUSTER_IMAGE_SCANNING_DISABLED` |                     | If the variable is present, the job isn't created. |
 | `code_intelligence`                    | `CODE_INTELLIGENCE_DISABLED`    | From GitLab 13.6      | If the variable is present, the job isn't created. |
-| `codequality`                          | `CODE_QUALITY_DISABLED`         | Until GitLab 11.0     | If the variable is present, the job isn't created. |
-| `code_quality`                         | `CODE_QUALITY_DISABLED`         | [From GitLab 11.0](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/5773) | If the variable is present, the job isn't created. |
-| `container_scanning`                   | `CONTAINER_SCANNING_DISABLED`   | From GitLab 11.0      | If the variable is present, the job isn't created. |
-| `dast`                                 | `DAST_DISABLED`                 | From GitLab 11.0      | If the variable is present, the job isn't created. |
+| `code_quality`                         | `CODE_QUALITY_DISABLED`         |                       | If the variable is present, the job isn't created. |
+| `container_scanning`                   | `CONTAINER_SCANNING_DISABLED`   |                       | If the variable is present, the job isn't created. |
+| `dast`                                 | `DAST_DISABLED`                 |                       | If the variable is present, the job isn't created. |
 | `dast_environment_deploy`              | `DAST_DISABLED_FOR_DEFAULT_BRANCH` or `DAST_DISABLED` | [From GitLab 12.4](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/17789) | If either variable is present, the job isn't created. |
-| `dependency_scanning`                  | `DEPENDENCY_SCANNING_DISABLED`  | From GitLab 11.0      | If the variable is present, the job isn't created. |
+| `dependency_scanning`                  | `DEPENDENCY_SCANNING_DISABLED`  |                       | If the variable is present, the job isn't created. |
 | `eslint-sast`                          | `SAST_DISABLED`                 |                       | If the variable is present, the job isn't created. |
 | `flawfinder-sast`                      | `SAST_DISABLED`                 |                       | If the variable is present, the job isn't created. |
 | `gemnasium-dependency_scanning`        | `DEPENDENCY_SCANNING_DISABLED`  |                       | If the variable is present, the job isn't created. |
@@ -457,33 +495,31 @@ The following table lists variables used to disable jobs.
 | `gemnasium-python-dependency_scanning` | `DEPENDENCY_SCANNING_DISABLED`  |                       | If the variable is present, the job isn't created. |
 | `gosec-sast`                           | `SAST_DISABLED`                 |                       | If the variable is present, the job isn't created. |
 | `kubesec-sast`                         | `SAST_DISABLED`                 |                       | If the variable is present, the job isn't created. |
-| `license_management`                   | `LICENSE_MANAGEMENT_DISABLED`   | GitLab 11.0 to 12.7   | If the variable is present, the job isn't created. Job deprecated [from GitLab 12.8](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/22773) |
+| `license_management`                   | `LICENSE_MANAGEMENT_DISABLED`   | GitLab 12.7 and earlier | If the variable is present, the job isn't created. Job deprecated [from GitLab 12.8](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/22773) |
 | `license_scanning`                     | `LICENSE_MANAGEMENT_DISABLED`   | [From GitLab 12.8](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/22773) | If the variable is present, the job isn't created. |
 | `load_performance`                     | `LOAD_PERFORMANCE_DISABLED`     | From GitLab 13.2      | If the variable is present, the job isn't created. |
 | `nodejs-scan-sast`                     | `SAST_DISABLED`                 |                       | If the variable is present, the job isn't created. |
-| `performance`                          | `PERFORMANCE_DISABLED`          | GitLab 11.0 to GitLab 13.12 | Browser performance. If the variable is present, the job isn't created. Replaced by `browser_peformance`. |
+| `performance`                          | `PERFORMANCE_DISABLED`          | GitLab 13.12 and earlier | Browser performance. If the variable is present, the job isn't created. Replaced by `browser_performance`. |
 | `browser_performance`                  | `BROWSER_PERFORMANCE_DISABLED`  | From GitLab 14.0      | Browser performance. If the variable is present, the job isn't created. Replaces `performance`. |
 | `phpcs-security-audit-sast`            | `SAST_DISABLED`                 |                       | If the variable is present, the job isn't created. |
 | `pmd-apex-sast`                        | `SAST_DISABLED`                 |                       | If the variable is present, the job isn't created. |
 | `retire-js-dependency_scanning`        | `DEPENDENCY_SCANNING_DISABLED`  |                       | If the variable is present, the job isn't created. |
-| `review`                               | `REVIEW_DISABLED`               | From GitLab 11.0      | If the variable is present, the job isn't created. |
-| `review:stop`                          | `REVIEW_DISABLED`               | From GitLab 11.0      | Manual job. If the variable is present, the job isn't created. |
-| `sast`                                 | `SAST_DISABLED`                 | From GitLab 11.0      | If the variable is present, the job isn't created. |
-| `sast:container`                       | `CONTAINER_SCANNING_DISABLED`   | From GitLab 11.0      | If the variable is present, the job isn't created. |
+| `review`                               | `REVIEW_DISABLED`               |                       | If the variable is present, the job isn't created. |
+| `review:stop`                          | `REVIEW_DISABLED`               |                       | Manual job. If the variable is present, the job isn't created. |
+| `sast`                                 | `SAST_DISABLED`                 |                       | If the variable is present, the job isn't created. |
+| `sast:container`                       | `CONTAINER_SCANNING_DISABLED`   |                       | If the variable is present, the job isn't created. |
 | `secret_detection`                     | `SECRET_DETECTION_DISABLED`     | From GitLab 13.1      | If the variable is present, the job isn't created. |
 | `secret_detection_default_branch`      | `SECRET_DETECTION_DISABLED`     | [From GitLab 13.2](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/22773) | If the variable is present, the job isn't created. |
 | `security-code-scan-sast`              | `SAST_DISABLED`                 |                       | If the variable is present, the job isn't created. |
-| `secrets-sast`                         | `SAST_DISABLED`                 | From GitLab 11.0      | If the variable is present, the job isn't created. |
+| `secrets-sast`                         | `SAST_DISABLED`                 |                       | If the variable is present, the job isn't created. |
 | `sobelaw-sast`                         | `SAST_DISABLED`                 |                       | If the variable is present, the job isn't created. |
 | `stop_dast_environment`                | `DAST_DISABLED_FOR_DEFAULT_BRANCH` or `DAST_DISABLED` | [From GitLab 12.4](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/17789) | If either variable is present, the job isn't created. |
 | `spotbugs-sast`                        | `SAST_DISABLED`                 |                       | If the variable is present, the job isn't created. |
-| `test`                                 | `TEST_DISABLED`                 | From GitLab 11.0      | If the variable is present, the job isn't created. |
+| `test`                                 | `TEST_DISABLED`                 |                       | If the variable is present, the job isn't created. |
 | `staging`                              | `STAGING_ENABLED`               |                       | The job is created if the variable is present. |
 | `stop_review`                          | `REVIEW_DISABLED`               |                       | If the variable is present, the job isn't created. |
 
 ### Application secret variables
-
-> [Introduced](https://gitlab.com/gitlab-org/gitlab-foss/-/issues/49056) in GitLab 11.7.
 
 Some applications need to define secret variables that are accessible by the deployed
 application. Auto DevOps detects CI/CD variables starting with `K8S_SECRET_`, and makes
@@ -589,8 +625,6 @@ service:
 
 ### Deploy policy for staging and production environments
 
-> [Introduced](https://gitlab.com/gitlab-org/gitlab-ci-yml/-/merge_requests/160) in GitLab 10.8.
-
 NOTE:
 You can also set this inside your [project's settings](requirements.md#auto-devops-deployment-strategy).
 
@@ -606,8 +640,6 @@ you when you're ready to manually deploy to production.
 
 ### Deploy policy for canary environments **(PREMIUM)**
 
-> [Introduced](https://gitlab.com/gitlab-org/gitlab-ci-yml/-/merge_requests/171) in GitLab 11.0.
-
 You can use a [canary environment](../../user/project/canary_deployments.md) before
 deploying any changes to production.
 
@@ -617,8 +649,6 @@ If you define `CANARY_ENABLED` with a non-empty value, then two manual jobs are 
 - `production_manual` - Manually deploys the application to production.
 
 ### Incremental rollout to production **(PREMIUM)**
-
-> [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/5415) in GitLab 10.8.
 
 NOTE:
 You can also set this inside your [project's settings](requirements.md#auto-devops-deployment-strategy).
@@ -669,13 +699,9 @@ With `INCREMENTAL_ROLLOUT_MODE` set to `manual` and with `STAGING_ENABLED`
 ![Rollout and staging enabled](img/rollout_staging_enabled.png)
 
 WARNING:
-Before GitLab 11.4, the presence of the `INCREMENTAL_ROLLOUT_ENABLED` CI/CD variable
-enabled this feature. This configuration is deprecated, and is scheduled to be
-removed in the future.
+This configuration is deprecated, and is scheduled to be removed in the future.
 
 ### Timed incremental rollout to production **(PREMIUM)**
-
-> [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/7545) in GitLab 11.4.
 
 NOTE:
 You can also set this inside your [project's settings](requirements.md#auto-devops-deployment-strategy).
@@ -712,7 +738,7 @@ The banner can be disabled for:
     Feature.enable(:auto_devops_banner_disabled)
     ```
 
-  - Through the REST API with an admin access token:
+  - Through the REST API with an administrator access token:
 
     ```shell
     curl --data "value=true" --header "PRIVATE-TOKEN: <personal_access_token>" "https://gitlab.example.com/api/v4/features/auto_devops_banner_disabled"

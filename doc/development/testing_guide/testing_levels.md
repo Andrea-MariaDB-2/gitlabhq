@@ -31,7 +31,7 @@ records should use stubs/doubles as much as possible.
 
 | Code path | Tests path | Testing engine | Notes |
 | --------- | ---------- | -------------- | ----- |
-| `app/assets/javascripts/` | `spec/javascripts/`, `spec/frontend/` | Karma & Jest | More details in the [Frontend Testing guide](frontend_testing.md) section. |
+| `app/assets/javascripts/` | `spec/frontend/` | Jest | More details in the [Frontend Testing guide](frontend_testing.md) section. |
 | `app/finders/` | `spec/finders/` | RSpec | |
 | `app/graphql/` | `spec/graphql/` | RSpec | |
 | `app/helpers/` | `spec/helpers/` | RSpec | |
@@ -223,17 +223,17 @@ graph RL
 Formal definition: <https://en.wikipedia.org/wiki/Integration_testing>
 
 These kind of tests ensure that individual parts of the application work well
-together, without the overhead of the actual app environment (i.e. the browser).
+together, without the overhead of the actual app environment (such as the browser).
 These tests should assert at the request/response level: status code, headers,
 body.
-They're useful to test permissions, redirections, what view is rendered etc.
+They're useful, for example, to test permissions, redirections, API endpoints, what view is rendered, and so forth.
 
 | Code path | Tests path | Testing engine | Notes |
 | --------- | ---------- | -------------- | ----- |
-| `app/controllers/` | `spec/requests/`, `spec/controllers` | RSpec | Request specs are preferred over legacy controller specs. |
+| `app/controllers/` | `spec/requests/`, `spec/controllers` | RSpec | Request specs are preferred over legacy controller specs. Request specs are encouraged for API endpoints. |
 | `app/mailers/` | `spec/mailers/` | RSpec | |
 | `lib/api/` | `spec/requests/api/` | RSpec | |
-| `app/assets/javascripts/` | `spec/javascripts/`, `spec/frontend/` | Karma & Jest | [More details below](#frontend-integration-tests) |
+| `app/assets/javascripts/` | `spec/frontend/` | Jest | [More details below](#frontend-integration-tests) |
 
 ### Frontend integration tests
 
@@ -321,13 +321,6 @@ controller.instance_variable_set(:@user, user)
 ```
 
 and use methods [deprecated in Rails 5](https://gitlab.com/gitlab-org/gitlab/-/issues/16260).
-
-### About Karma
-
-Karma is both in the Unit tests and the Integration tests category. Karma provides an environment to
-run JavaScript tests, so you can either run unit tests (e.g. test a single
-JavaScript method), or integration tests (e.g. test a component that is composed
-of multiple components).
 
 ## White-box tests at the system level (formerly known as System / Feature tests)
 
@@ -509,9 +502,7 @@ These tests run against the UI and ensure that basic functionality is working.
 
 ### GitLab QA orchestrator
 
-[GitLab QA orchestrator](https://gitlab.com/gitlab-org/gitlab-qa) is a tool that allows to test that all these pieces
-integrate well together by building a Docker image for a given version of GitLab
-Rails and running end-to-end tests (i.e. using Capybara) against it.
+[GitLab QA orchestrator](https://gitlab.com/gitlab-org/gitlab-qa) is a tool that allows you to test that all these pieces integrate well together by building a Docker image for a given version of GitLab Rails and running end-to-end tests (using Capybara) against it.
 
 Learn more in the [GitLab QA orchestrator README](https://gitlab.com/gitlab-org/gitlab-qa/tree/master/README.md).
 
@@ -551,7 +542,7 @@ and the basic idea is that the cost of a test includes:
 There are cases where the behavior you are testing is not worth the time spent
 running the full application, for example, if you are testing styling, animation,
 edge cases or small actions that don't involve the backend,
-you should write an integration test using Jasmine.
+you should write an integration test using [Frontend integration tests](https://gitlab.com/gitlab-org/gitlab/-/blob/master/spec/frontend_integration/README.md).
 
 ---
 

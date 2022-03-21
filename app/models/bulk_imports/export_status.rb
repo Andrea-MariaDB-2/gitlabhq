@@ -30,7 +30,12 @@ module BulkImports
 
     def export_status
       strong_memoize(:export_status) do
-        fetch_export_status.find { |item| item['relation'] == relation }
+        status = fetch_export_status
+
+        # Consider empty response as failed export
+        raise StandardError, 'Empty export status response' unless status&.present?
+
+        status.find { |item| item['relation'] == relation }
       end
     rescue StandardError => e
       { 'status' => Export::FAILED, 'error' => e.message }
@@ -41,7 +46,7 @@ module BulkImports
     end
 
     def status_endpoint
-      "/groups/#{entity.encoded_source_full_path}/export_relations/status"
+      File.join(entity.export_relations_url_path, 'status')
     end
   end
 end

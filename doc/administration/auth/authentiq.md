@@ -1,7 +1,7 @@
 ---
 type: reference
 stage: Manage
-group: Access
+group: Authentication and Authorization
 info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
 ---
 
@@ -27,7 +27,7 @@ Authentiq generates a Client ID and the accompanying Client Secret for you to us
    sudo -u git -H editor /home/git/gitlab/config/gitlab.yml
    ```
 
-1. See [Initial OmniAuth Configuration](../../integration/omniauth.md#initial-omniauth-configuration) for initial settings to enable single sign-on and add Authentiq as an OAuth provider.
+1. See [Configure initial settings](../../integration/omniauth.md#configure-initial-settings) for initial settings to enable single sign-on and add Authentiq as an OAuth provider.
 
 1. Add the provider configuration for Authentiq:
 
@@ -36,12 +36,13 @@ Authentiq generates a Client ID and the accompanying Client Secret for you to us
    ```ruby
    gitlab_rails['omniauth_providers'] = [
      {
-       "name" => "authentiq",
-       "app_id" => "YOUR_CLIENT_ID",
-       "app_secret" => "YOUR_CLIENT_SECRET",
-       "args" => {
-              "scope": 'aq:name email~rs address aq:push'
-        }
+       name: "authentiq",
+       # label: "Provider name", # optional label for login button, defaults to "Authentiq"
+       app_id: "YOUR_CLIENT_ID",
+       app_secret: "YOUR_CLIENT_SECRET",
+       args: {
+         "scope": 'aq:name email~rs address aq:push'
+       }
      }
    ]
    ```
@@ -50,6 +51,7 @@ Authentiq generates a Client ID and the accompanying Client Secret for you to us
 
    ```yaml
    - { name: 'authentiq',
+       # label: 'Provider name', # optional label for login button, defaults to "Authentiq"
        app_id: 'YOUR_CLIENT_ID',
        app_secret: 'YOUR_CLIENT_SECRET',
        args: {

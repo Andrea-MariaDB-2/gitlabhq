@@ -5,6 +5,8 @@ module Gitlab
     module Subscribers
       # Class for tracking the total query duration of a transaction.
       class ActiveRecord < ActiveSupport::Subscriber
+        extend Gitlab::Utils::StrongMemoize
+
         attach_to :active_record
 
         IGNORABLE_SQL = %w{BEGIN COMMIT}.freeze
@@ -47,13 +49,11 @@ module Gitlab
             buckets SQL_DURATION_BUCKET
           end
 
-          if ::Gitlab::Database::LoadBalancing.enable?
-            db_role = ::Gitlab::Database::LoadBalancing.db_role_for_connection(payload[:connection])
-            return if db_role.blank?
+          db_role = ::Gitlab::Database::LoadBalancing.db_role_for_connection(payload[:connection])
+          return if db_role.blank?
 
-            increment_db_role_counters(db_role, payload)
-            observe_db_role_duration(db_role, event)
-          end
+          increment_db_role_counters(db_role, payload)
+          observe_db_role_duration(db_role, event)
         end
 
         def self.db_counter_payload
@@ -64,7 +64,7 @@ module Gitlab
               payload[key] = Gitlab::SafeRequestStore[key].to_i
             end
 
-            if ::Gitlab::SafeRequestStore.active? && ::Gitlab::Database::LoadBalancing.enable?
+            if ::Gitlab::SafeRequestStore.active?
               load_balancing_metric_counter_keys.each do |counter|
                 payload[counter] = ::Gitlab::SafeRequestStore[counter].to_i
               end
@@ -109,7 +109,7 @@ module Gitlab
 
           # Per database metrics
           db_config_name = db_config_name(event.payload)
-          duration_key = compose_metric_key(:duration_s, db_role, db_config_name)
+          duration_key = compose_metric_key(:duration_s, nil, db_config_name)
           ::Gitlab::SafeRequestStore[duration_key] = (::Gitlab::SafeRequestStore[duration_key].presence || 0) + duration
         end
 
@@ -134,11 +134,7 @@ module Gitlab
                              :"gitlab_transaction_db_#{counter}_total"
                            end
 
-          if ENV['GITLAB_MULTIPLE_DATABASE_METRICS']
-            current_transaction&.increment(prometheus_key, 1, { db_config_name: db_config_name })
-          else
-            current_transaction&.increment(prometheus_key, 1)
-          end
+          current_transaction&.increment(prometheus_key, 1, { db_config_name: db_config_name })
 
           Gitlab::SafeRequestStore[log_key] = Gitlab::SafeRequestStore[log_key].to_i + 1
 
@@ -146,7 +142,7 @@ module Gitlab
           # when we are also logging the db_role. Otherwise it will be hard to
           # tell if the log key is referring to a db_role OR a db_config_name.
           if db_role.present? && db_config_name.present?
-            log_key = compose_metric_key(counter, db_role, db_config_name)
+            log_key = compose_metric_key(counter, nil, db_config_name)
             Gitlab::SafeRequestStore[log_key] = Gitlab::SafeRequestStore[log_key].to_i + 1
           end
         end
@@ -154,11 +150,7 @@ module Gitlab
         def observe(histogram, event, &block)
           db_config_name = db_config_name(event.payload)
 
-          if ENV['GITLAB_MULTIPLE_DATABASE_METRICS']
-            current_transaction&.observe(histogram, event.duration / 1000.0, { db_config_name: db_config_name }, &block)
-          else
-            current_transaction&.observe(histogram, event.duration / 1000.0, &block)
-          end
+          current_transaction&.observe(histogram, event.duration / 1000.0, { db_config_name: db_config_name }, &block)
         end
 
         def current_transaction
@@ -174,26 +166,32 @@ module Gitlab
         end
 
         def self.load_balancing_metric_counter_keys
-          load_balancing_metric_keys(DB_LOAD_BALANCING_COUNTERS)
+          strong_memoize(:load_balancing_metric_counter_keys) do
+            load_balancing_metric_keys(DB_LOAD_BALANCING_COUNTERS)
+          end
         end
 
         def self.load_balancing_metric_duration_keys
-          load_balancing_metric_keys(DB_LOAD_BALANCING_DURATIONS)
+          strong_memoize(:load_balancing_metric_duration_keys) do
+            load_balancing_metric_keys(DB_LOAD_BALANCING_DURATIONS)
+          end
         end
 
         def self.load_balancing_metric_keys(metrics)
-          [].tap do |counters|
-            DB_LOAD_BALANCING_ROLES.each do |role|
-              metrics.each do |metric|
-                counters << compose_metric_key(metric, role)
-                next unless ENV['GITLAB_MULTIPLE_DATABASE_METRICS']
+          counters = []
 
-                ::Gitlab::Database.db_config_names.each do |config_name|
-                  counters << compose_metric_key(metric, role, config_name)
-                end
-              end
+          metrics.each do |metric|
+            DB_LOAD_BALANCING_ROLES.each do |role|
+              counters << compose_metric_key(metric, role)
+            end
+
+            ::Gitlab::Database.db_config_names.each do |config_name|
+              counters << compose_metric_key(metric, nil, config_name) # main
+              counters << compose_metric_key(metric, nil, config_name + ::Gitlab::Database::LoadBalancing::LoadBalancer::REPLICA_SUFFIX) # main_replica
             end
           end
+
+          counters
         end
 
         def compose_metric_key(metric, db_role = nil, db_config_name = nil)

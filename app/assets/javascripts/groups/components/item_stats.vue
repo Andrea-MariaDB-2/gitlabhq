@@ -68,7 +68,7 @@ export default {
     />
     <item-stats-value
       v-if="isGroup"
-      :title="__('Members')"
+      :title="__('Direct members')"
       :value="item.memberCount"
       css-class="number-users gl-ml-5"
       icon-name="users"
@@ -83,7 +83,7 @@ export default {
       <gl-badge variant="warning">{{ __('pending deletion') }}</gl-badge>
     </div>
     <div v-if="isProject" class="last-updated">
-      <time-ago-tooltip :time="item.updatedAt" tooltip-placement="bottom" />
+      <time-ago-tooltip :time="item.lastActivityAt" tooltip-placement="bottom" />
     </div>
   </div>
 </template>

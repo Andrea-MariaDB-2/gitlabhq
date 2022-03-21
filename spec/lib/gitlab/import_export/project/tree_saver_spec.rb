@@ -5,6 +5,9 @@ require 'spec_helper'
 RSpec.describe Gitlab::ImportExport::Project::TreeSaver do
   let_it_be(:export_path) { "#{Dir.tmpdir}/project_tree_saver_spec" }
   let_it_be(:exportable_path) { 'project' }
+  let_it_be(:user) { create(:user) }
+  let_it_be(:group) { create(:group) }
+  let_it_be(:project) { setup_project }
 
   shared_examples 'saves project tree successfully' do |ndjson_enabled|
     include ImportExport::CommonUtil
@@ -12,9 +15,6 @@ RSpec.describe Gitlab::ImportExport::Project::TreeSaver do
     subject { get_json(full_path, exportable_path, relation_name, ndjson_enabled) }
 
     describe 'saves project tree attributes' do
-      let_it_be(:user) { create(:user) }
-      let_it_be(:group) { create(:group) }
-      let_it_be(:project) { setup_project }
       let_it_be(:shared) { project.import_export_shared }
 
       let(:relation_name) { :projects }
@@ -36,7 +36,7 @@ RSpec.describe Gitlab::ImportExport::Project::TreeSaver do
 
           project_tree_saver = described_class.new(project: project, current_user: user, shared: shared)
 
-          project_tree_saver.save
+          project_tree_saver.save # rubocop:disable Rails/SaveBang
         end
       end
 
@@ -305,14 +305,14 @@ RSpec.describe Gitlab::ImportExport::Project::TreeSaver do
         end
 
         before do
-          user2.update(public_email: user2.email)
+          user2.update!(public_email: user2.email)
           group.add_developer(user2)
         end
 
         context 'when has no permission' do
           before do
             group.add_developer(user)
-            project_tree_saver.save
+            project_tree_saver.save # rubocop:disable Rails/SaveBang
           end
 
           it 'does not export group members' do
@@ -324,7 +324,7 @@ RSpec.describe Gitlab::ImportExport::Project::TreeSaver do
           before do
             group.add_maintainer(user)
 
-            project_tree_saver.save
+            project_tree_saver.save # rubocop:disable Rails/SaveBang
           end
 
           it 'does not export group members' do
@@ -336,7 +336,7 @@ RSpec.describe Gitlab::ImportExport::Project::TreeSaver do
           before do
             group.add_owner(user)
 
-            project_tree_saver.save
+            project_tree_saver.save # rubocop:disable Rails/SaveBang
           end
 
           it 'exports group members as group owner' do
@@ -348,7 +348,7 @@ RSpec.describe Gitlab::ImportExport::Project::TreeSaver do
           let(:user) { create(:admin) }
 
           before do
-            project_tree_saver.save
+            project_tree_saver.save # rubocop:disable Rails/SaveBang
           end
 
           context 'when admin mode is enabled', :enable_admin_mode do
@@ -376,7 +376,7 @@ RSpec.describe Gitlab::ImportExport::Project::TreeSaver do
         let(:relation_name) { :projects }
 
         before do
-          project_tree_saver.save
+          project_tree_saver.save # rubocop:disable Rails/SaveBang
         end
 
         it { is_expected.to include({ 'description' => params[:description] }) }
@@ -400,6 +400,50 @@ RSpec.describe Gitlab::ImportExport::Project::TreeSaver do
 
   context 'with NDJSON' do
     it_behaves_like "saves project tree successfully", true
+  end
+
+  context 'when streaming has to retry', :aggregate_failures do
+    let(:shared) { double('shared', export_path: exportable_path) }
+    let(:logger) { Gitlab::Import::Logger.build }
+    let(:serializer) { double('serializer') }
+    let(:error_class) { Net::OpenTimeout }
+    let(:info_params) do
+      {
+        'error.class': error_class,
+        project_name: project.name,
+        project_id: project.id
+      }
+    end
+
+    before do
+      allow(Gitlab::ImportExport::Json::StreamingSerializer).to receive(:new).and_return(serializer)
+    end
+
+    subject(:project_tree_saver) do
+      described_class.new(project: project, current_user: user, shared: shared, logger: logger)
+    end
+
+    it 'retries and succeeds' do
+      call_count = 0
+      allow(serializer).to receive(:execute) do
+        call_count += 1
+        call_count > 1 ? true : raise(error_class, 'execution expired')
+      end
+
+      expect(logger).to receive(:info).with(hash_including(info_params)).once
+
+      expect(project_tree_saver.save).to be(true)
+    end
+
+    it 'retries and does not succeed' do
+      retry_count = 3
+      allow(serializer).to receive(:execute).and_raise(error_class, 'execution expired')
+
+      expect(logger).to receive(:info).with(hash_including(info_params)).exactly(retry_count).times
+      expect(shared).to receive(:error).with(instance_of(error_class))
+
+      expect(project_tree_saver.save).to be(false)
+    end
   end
 
   def setup_project
@@ -427,7 +471,7 @@ RSpec.describe Gitlab::ImportExport::Project::TreeSaver do
     merge_request = create(:merge_request, source_project: project, milestone: milestone)
 
     ci_build = create(:ci_build, project: project, when: nil)
-    ci_build.pipeline.update(project: project)
+    ci_build.pipeline.update!(project: project)
     create(:commit_status, project: project, pipeline: ci_build.pipeline)
 
     create(:milestone, project: project)

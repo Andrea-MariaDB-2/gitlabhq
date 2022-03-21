@@ -3,10 +3,11 @@ import { shallowMount } from '@vue/test-utils';
 import Vue from 'vue';
 import Vuex from 'vuex';
 import { extendedWrapper } from 'helpers/vue_test_utils_helper';
+import ValueStreamMetrics from '~/analytics/shared/components/value_stream_metrics.vue';
 import BaseComponent from '~/cycle_analytics/components/base.vue';
 import PathNavigation from '~/cycle_analytics/components/path_navigation.vue';
 import StageTable from '~/cycle_analytics/components/stage_table.vue';
-import ValueStreamMetrics from '~/cycle_analytics/components/value_stream_metrics.vue';
+import ValueStreamFilters from '~/cycle_analytics/components/value_stream_filters.vue';
 import { NOT_ENOUGH_DATA_ERROR } from '~/cycle_analytics/constants';
 import initState from '~/cycle_analytics/store/state';
 import {
@@ -18,6 +19,7 @@ import {
   createdAfter,
   currentGroup,
   stageCounts,
+  initialPaginationState as pagination,
 } from './mock_data';
 
 const selectedStageEvents = issueEvents.events;
@@ -30,13 +32,14 @@ Vue.use(Vuex);
 
 let wrapper;
 
+const { id: groupId, path: groupPath } = currentGroup;
 const defaultState = {
   permissions,
   currentGroup,
   createdBefore,
   createdAfter,
   stageCounts,
-  endpoints: { fullPath },
+  endpoints: { fullPath, groupId, groupPath },
 };
 
 function createStore({ initialState = {}, initialGetters = {} }) {
@@ -74,10 +77,12 @@ function createComponent({ initialState, initialGetters } = {}) {
 
 const findLoadingIcon = () => wrapper.findComponent(GlLoadingIcon);
 const findPathNavigation = () => wrapper.findComponent(PathNavigation);
+const findFilters = () => wrapper.findComponent(ValueStreamFilters);
 const findOverviewMetrics = () => wrapper.findComponent(ValueStreamMetrics);
 const findStageTable = () => wrapper.findComponent(StageTable);
 const findStageEvents = () => findStageTable().props('stageEvents');
 const findEmptyStageTitle = () => wrapper.findComponent(GlEmptyState).props('title');
+const findPagination = () => wrapper.findByTestId('vsa-stage-pagination');
 
 const hasMetricsRequests = (reqs) => {
   const foundReqs = findOverviewMetrics().props('requests');
@@ -87,7 +92,7 @@ const hasMetricsRequests = (reqs) => {
 
 describe('Value stream analytics component', () => {
   beforeEach(() => {
-    wrapper = createComponent({ initialState: { selectedStage, selectedStageEvents } });
+    wrapper = createComponent({ initialState: { selectedStage, selectedStageEvents, pagination } });
   });
 
   afterEach(() => {
@@ -123,8 +128,38 @@ describe('Value stream analytics component', () => {
     expect(findStageEvents()).toEqual(selectedStageEvents);
   });
 
+  it('renders the filters', () => {
+    expect(findFilters().exists()).toBe(true);
+  });
+
+  it('displays the date range selector and hides the project selector', () => {
+    expect(findFilters().props()).toMatchObject({
+      hasProjectFilter: false,
+      hasDateRangeFilter: true,
+    });
+  });
+
+  it('passes the paths to the filter bar', () => {
+    expect(findFilters().props()).toEqual({
+      groupId,
+      groupPath,
+      canToggleAggregation: false,
+      endDate: createdBefore,
+      hasDateRangeFilter: true,
+      hasProjectFilter: false,
+      isAggregationEnabled: false,
+      isUpdatingAggregationData: false,
+      selectedProjects: [],
+      startDate: createdAfter,
+    });
+  });
+
   it('does not render the loading icon', () => {
     expect(findLoadingIcon().exists()).toBe(false);
+  });
+
+  it('renders pagination', () => {
+    expect(findPagination().exists()).toBe(true);
   });
 
   describe('with `cycleAnalyticsForGroups=true` license', () => {

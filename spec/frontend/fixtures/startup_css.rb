@@ -9,15 +9,15 @@ RSpec.describe 'Startup CSS fixtures', type: :controller do
 
   render_views
 
-  before(:all) do
-    clean_frontend_fixtures('startup_css/')
-  end
-
   shared_examples 'startup css project fixtures' do |type|
     let(:user) { create(:user, :admin) }
     let(:project) { create(:project, :public, :repository, description: 'Code and stuff', creator: user) }
 
     before do
+      # We want vNext badge to be included and com/canary don't remove/hide any other elements.
+      # This is why we're turning com and canary on by default for now.
+      allow(Gitlab).to receive(:com?).and_return(true)
+      allow(Gitlab).to receive(:canary?).and_return(true)
       sign_in(user)
     end
 
@@ -32,6 +32,21 @@ RSpec.describe 'Startup CSS fixtures', type: :controller do
 
     it "startup_css/project-#{type}-signed-out.html" do
       sign_out(user)
+
+      get :show, params: {
+        namespace_id: project.namespace.to_param,
+        id: project
+      }
+
+      expect(response).to be_successful
+    end
+
+    # This Feature Flag is off by default
+    # This ensures that the correct css is generated
+    # When the feature flag is off, the general startup will capture it
+    # This will be removed as part of https://gitlab.com/gitlab-org/gitlab/-/issues/339348
+    it "startup_css/project-#{type}-search-ff-on.html" do
+      stub_feature_flags(new_header_search: true)
 
       get :show, params: {
         namespace_id: project.namespace.to_param,

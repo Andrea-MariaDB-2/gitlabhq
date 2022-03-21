@@ -45,7 +45,7 @@ many groups or projects, and the access level (including guest, developer, or
 maintainer) to groups and projects determines what users can see and
 what they can access.
 
-Users with admin access can access all projects and even impersonate
+Users with administrator access can access all projects and even impersonate
 users.
 
 #### Sharding and partitioning
@@ -123,8 +123,7 @@ the read replicas. [Omnibus ships with Patroni](../administration/postgresql/rep
 
 #### Load-balancing
 
-GitLab EE has [application support for load balancing using read
-replicas](../administration/database_load_balancing.md). This load balancer does
+GitLab EE has [application support for load balancing using read replicas](../administration/postgresql/database_load_balancing.md). This load balancer does
 some actions that aren't traditionally available in standard load balancers. For
 example, the application considers a replica only if its replication lag is low
 (for example, WAL data behind by less than 100 MB).

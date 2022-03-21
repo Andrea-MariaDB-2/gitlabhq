@@ -42,7 +42,7 @@ RSpec.describe ::Gitlab::LetsEncrypt::Client do
     context 'when private key is saved in settings' do
       let!(:saved_private_key) do
         key = OpenSSL::PKey::RSA.new(4096).to_pem
-        Gitlab::CurrentSettings.current_application_settings.update(lets_encrypt_private_key: key)
+        Gitlab::CurrentSettings.current_application_settings.update!(lets_encrypt_private_key: key)
         key
       end
 
@@ -73,7 +73,7 @@ RSpec.describe ::Gitlab::LetsEncrypt::Client do
     subject(:new_order) { client.new_order('example.com') }
 
     before do
-      order_double = instance_double('Acme::Order')
+      order_double = double('Acme::Order')
       allow(stub_client).to receive(:new_order).and_return(order_double)
     end
 
@@ -107,7 +107,7 @@ RSpec.describe ::Gitlab::LetsEncrypt::Client do
     subject { client.load_challenge(url) }
 
     before do
-      acme_challenge = instance_double('Acme::Client::Resources::Challenge')
+      acme_challenge = double('Acme::Client::Resources::Challenge')
       allow(stub_client).to receive(:challenge).with(url: url).and_return(acme_challenge)
     end
 

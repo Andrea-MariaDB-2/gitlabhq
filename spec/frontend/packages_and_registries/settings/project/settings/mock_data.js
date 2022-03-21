@@ -11,7 +11,9 @@ export const containerExpirationPolicyData = () => ({
 export const expirationPolicyPayload = (override) => ({
   data: {
     project: {
+      id: '1',
       containerExpirationPolicy: {
+        __typename: 'ContainerExpirationPolicy',
         ...containerExpirationPolicyData(),
         ...override,
       },

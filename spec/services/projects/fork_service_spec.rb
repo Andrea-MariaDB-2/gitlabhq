@@ -28,7 +28,8 @@ RSpec.describe Projects::ForkService do
                                namespace: @from_namespace,
                                star_count: 107,
                                avatar: avatar,
-                               description: 'wow such project')
+                               description: 'wow such project',
+                               external_authorization_classification_label: 'classification-label')
         @to_user = create(:user)
         @to_namespace = @to_user.namespace
         @from_project.add_user(@to_user, :developer)
@@ -60,12 +61,13 @@ RSpec.describe Projects::ForkService do
 
           it { expect(to_project).to be_persisted }
           it { expect(to_project.errors).to be_empty }
-          it { expect(to_project.owner).to eq(@to_user) }
+          it { expect(to_project.first_owner).to eq(@to_user) }
           it { expect(to_project.namespace).to eq(@to_user.namespace) }
           it { expect(to_project.star_count).to be_zero }
           it { expect(to_project.description).to eq(@from_project.description) }
           it { expect(to_project.avatar.file).to be_exists }
           it { expect(to_project.ci_config_path).to eq(@from_project.ci_config_path) }
+          it { expect(to_project.external_authorization_classification_label).to eq(@from_project.external_authorization_classification_label) }
 
           # This test is here because we had a bug where the from-project lost its
           # avatar after being forked.
@@ -272,7 +274,7 @@ RSpec.describe Projects::ForkService do
 
           expect(to_project).to                be_persisted
           expect(to_project.errors).to         be_empty
-          expect(to_project.owner).to          eq(@group)
+          expect(to_project.first_owner).to    eq(@group_owner)
           expect(to_project.namespace).to      eq(@group)
           expect(to_project.name).to           eq(@project.name)
           expect(to_project.path).to           eq(@project.path)

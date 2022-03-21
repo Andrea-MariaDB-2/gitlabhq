@@ -34,6 +34,7 @@ module Types
           null: true,
           method: :project_creation_level_str,
           description: 'Permission level required to create projects in the group.'
+
     field :subgroup_creation_level,
           type: GraphQL::Types::String,
           null: true,
@@ -44,6 +45,7 @@ module Types
           type: GraphQL::Types::Boolean,
           null: true,
           description: 'Indicates if all users in this group are required to set up two-factor authentication.'
+
     field :two_factor_grace_period,
           type: GraphQL::Types::Int,
           null: true,
@@ -91,6 +93,12 @@ module Types
           description: 'Boards of the group.',
           max_page_size: 2000,
           resolver: Resolvers::BoardsResolver
+
+    field :recent_issue_boards,
+          Types::BoardType.connection_type,
+          null: true,
+          description: 'List of recently visited boards of the group. Maximum size is 4.',
+          resolver: Resolvers::RecentBoardsResolver
 
     field :board,
           Types::BoardType,
@@ -158,14 +166,15 @@ module Types
           null: false,
           description: 'Total size of the dependency proxy cached images.'
 
-    def label(title:)
-      BatchLoader::GraphQL.for(title).batch(key: group) do |titles, loader, args|
-        LabelsFinder
-          .new(current_user, group: args[:key], title: titles)
-          .execute
-          .each { |label| loader.call(label.title, label) }
-      end
-    end
+    field :dependency_proxy_image_prefix,
+          GraphQL::Types::String,
+          null: false,
+          description: 'Prefix for pulling images when using the dependency proxy.'
+
+    field :dependency_proxy_image_ttl_policy,
+          Types::DependencyProxy::ImageTtlGroupPolicyType,
+          null: true,
+          description: 'Dependency proxy TTL policy for the group.'
 
     field :labels,
           Types::LabelType.connection_type,
@@ -190,6 +199,29 @@ module Types
           resolver: Resolvers::Ci::GroupRunnersResolver,
           description: "Find runners visible to the current user."
 
+    field :organizations, Types::CustomerRelations::OrganizationType.connection_type,
+          null: true,
+          description: "Find organizations of this group."
+
+    field :contacts, Types::CustomerRelations::ContactType.connection_type,
+          null: true,
+          description: "Find contacts of this group."
+
+    field :work_item_types, Types::WorkItems::TypeType.connection_type,
+          resolver: Resolvers::WorkItems::TypesResolver,
+          description: 'Work item types available to the group.' \
+                       ' Returns `null` if `work_items` feature flag is disabled.' \
+                       ' This flag is disabled by default, because the feature is experimental and is subject to change without notice.'
+
+    def label(title:)
+      BatchLoader::GraphQL.for(title).batch(key: group) do |titles, loader, args|
+        LabelsFinder
+          .new(current_user, group: args[:key], title: titles)
+          .execute
+          .each { |label| loader.call(label.title, label) }
+      end
+    end
+
     def avatar_url
       object.avatar_url(only_path: false)
     end
@@ -202,18 +234,26 @@ module Types
       group.container_repositories.size
     end
 
+    def dependency_proxy_manifests
+      group.dependency_proxy_manifests.order_id_desc
+    end
+
     def dependency_proxy_image_count
-      group.dependency_proxy_manifests.count
+      group.dependency_proxy_manifests.size
     end
 
     def dependency_proxy_blob_count
-      group.dependency_proxy_blobs.count
+      group.dependency_proxy_blobs.size
     end
 
     def dependency_proxy_total_size
       ActiveSupport::NumberHelper.number_to_human_size(
         group.dependency_proxy_manifests.sum(:size) + group.dependency_proxy_blobs.sum(:size)
       )
+    end
+
+    def dependency_proxy_setting
+      group.dependency_proxy_setting || group.create_dependency_proxy_setting
     end
 
     private

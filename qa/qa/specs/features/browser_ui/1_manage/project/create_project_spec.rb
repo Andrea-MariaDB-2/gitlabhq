@@ -5,13 +5,13 @@ module QA
     describe 'Project' do
       shared_examples 'successful project creation' do
         it 'creates a new project' do
-          Page::Project::Show.perform do |project|
-            expect(project).to have_content(project_name)
-            expect(project).to have_content(
+          Page::Project::Show.perform do |project_page|
+            expect(project_page).to have_content(project_name)
+            expect(project_page).to have_content(
               /Project \S?#{project_name}\S+ was successfully created/
             )
-            expect(project).to have_content('create awesome project test')
-            expect(project).to have_content('The repository for this project is empty')
+            expect(project_page).to have_content('create awesome project test')
+            expect(project_page).to have_content('The repository for this project is empty')
           end
         end
       end
@@ -21,7 +21,7 @@ module QA
         project
       end
 
-      context 'in group', testcase: 'https://gitlab.com/gitlab-org/quality/testcases/-/quality/test_cases/1620' do
+      context 'in group', testcase: 'https://gitlab.com/gitlab-org/gitlab/-/quality/test_cases/347876' do
         let(:project_name) { "project-in-group-#{SecureRandom.hex(8)}" }
         let(:project) do
           Resource::Project.fabricate_via_browser_ui! do |project|
@@ -33,13 +33,13 @@ module QA
         it_behaves_like 'successful project creation'
       end
 
-      context 'in personal namespace', testcase: 'https://gitlab.com/gitlab-org/quality/testcases/-/quality/test_cases/1914' do
+      context 'in personal namespace', testcase: 'https://gitlab.com/gitlab-org/gitlab/-/quality/test_cases/347643' do
         let(:project_name) { "project-in-personal-namespace-#{SecureRandom.hex(8)}" }
         let(:project) do
           Resource::Project.fabricate_via_browser_ui! do |project|
             project.name = project_name
             project.description = 'create awesome project test'
-            project.personal_namespace = true
+            project.personal_namespace = Runtime::User.username
           end
         end
 

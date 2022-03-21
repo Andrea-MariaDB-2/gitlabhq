@@ -1,8 +1,9 @@
 import { GlBreakpointInstance as bp, breakpoints } from '@gitlab/ui/dist/utils';
 import $ from 'jquery';
-import Cookies from 'js-cookie';
 import { debounce } from 'lodash';
-import { parseBoolean } from '~/lib/utils/common_utils';
+import { getCookie, setCookie, parseBoolean } from '~/lib/utils/common_utils';
+import initInviteMembersModal from '~/invite_members/init_invite_members_modal';
+import initInviteMembersTrigger from '~/invite_members/init_invite_members_trigger';
 
 export const SIDEBAR_COLLAPSED_CLASS = 'js-sidebar-collapsed';
 
@@ -57,7 +58,7 @@ export default class ContextualSidebar {
     if (!ContextualSidebar.isDesktopBreakpoint()) {
       return;
     }
-    Cookies.set('sidebar_collapsed', value, { expires: 365 * 10 });
+    setCookie('sidebar_collapsed', value, { expires: 365 * 10 });
   }
 
   toggleSidebarNav(show) {
@@ -109,8 +110,11 @@ export default class ContextualSidebar {
     if (!ContextualSidebar.isDesktopBreakpoint()) {
       this.toggleSidebarNav(false);
     } else {
-      const collapse = parseBoolean(Cookies.get('sidebar_collapsed'));
+      const collapse = parseBoolean(getCookie('sidebar_collapsed'));
       this.toggleCollapsedSidebar(collapse, true);
     }
+
+    initInviteMembersModal();
+    initInviteMembersTrigger();
   }
 }

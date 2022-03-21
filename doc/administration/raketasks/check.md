@@ -7,6 +7,7 @@ info: To determine the technical writer assigned to the Stage/Group associated w
 # Integrity check Rake task **(FREE SELF)**
 
 GitLab provides Rake tasks to check the integrity of various components.
+See also the [check GitLab configuration Rake task](maintenance.md#check-gitlab-configuration).
 
 ## Repository integrity
 
@@ -14,7 +15,8 @@ Even though Git is very resilient and tries to prevent data integrity issues,
 there are times when things go wrong. The following Rake tasks intend to
 help GitLab administrators diagnose problem repositories so they can be fixed.
 
-There are 3 things that are checked to determine integrity.
+These Rake tasks use three different methods to determine the integrity of Git
+repositories.
 
 1. Git repository file system check ([`git fsck`](https://git-scm.com/docs/git-fsck)).
    This step verifies the connectivity and validity of objects in the repository.
@@ -37,7 +39,7 @@ exactly which repositories are causing the trouble.
 ### Check project code repositories
 
 This task loops through the project code repositories and runs the integrity check
-described previously. If a project uses a pool repository, that will also be checked.
+described previously. If a project uses a pool repository, that is also checked.
 Other types of Git repositories [are not checked](https://gitlab.com/gitlab-org/gitaly/-/issues/3643).
 
 **Omnibus Installation**
@@ -67,7 +69,7 @@ source repository.
 This task loops through all repositories on the GitLab server and outputs
 checksums in the format `<PROJECT ID>,<CHECKSUM>`.
 
-- If a repository doesn't exist, the project ID will have a blank checksum.
+- If a repository doesn't exist, the project ID is a blank checksum.
 - If a repository exists but is empty, the output checksum is `0000000000000000000000000000000000000000`.
 - Projects which don't exist are skipped.
 
@@ -85,9 +87,9 @@ sudo -u git -H bundle exec rake gitlab:git:checksum_projects RAILS_ENV=productio
 
 For example, if:
 
-- Project with ID#2 doesn't exist, it will be skipped.
-- Project with ID#4 doesn't have a repository, its checksum will be blank.
-- Project with ID#5 has an empty repository, its checksum will be `0000000000000000000000000000000000000000`.
+- Project with ID#2 doesn't exist, it is skipped.
+- Project with ID#4 doesn't have a repository, its checksum is blank.
+- Project with ID#5 has an empty repository, its checksum is `0000000000000000000000000000000000000000`.
 
 The output would then look something like:
 
@@ -105,7 +107,7 @@ Optionally, specific project IDs can be checksummed by setting an environment
 variable `CHECKSUM_PROJECT_IDS` with a list of comma-separated integers, for example:
 
 ```shell
-CHECKSUM_PROJECT_IDS="1,3" sudo gitlab-rake gitlab:git:checksum_projects
+sudo CHECKSUM_PROJECT_IDS="1,3" gitlab-rake gitlab:git:checksum_projects
 ```
 
 ## Uploaded files integrity
@@ -115,11 +117,11 @@ These integrity checks can detect missing files. Additionally, for locally
 stored files, checksums are generated and stored in the database upon upload,
 and these checks verify them against current files.
 
-Currently, integrity checks are supported for the following types of file:
+Integrity checks are supported for the following types of file:
 
-- CI artifacts (Available from version 10.7.0)
-- LFS objects (Available from version 10.6.0)
-- User uploads (Available from version 10.6.0)
+- CI artifacts (introduced in GitLab 10.7.0)
+- LFS objects (introduced in GitLab 10.6.0)
+- User uploads (introduced in GitLab 10.6.0)
 
 **Omnibus Installation**
 
@@ -199,22 +201,115 @@ The LDAP check Rake task tests the bind DN and password credentials
 executed as part of the `gitlab:check` task, but can run independently.
 See [LDAP Rake Tasks - LDAP Check](ldap.md#check) for details.
 
+## Verify database values can be decrypted using the current secrets
+
+> [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/20069) in GitLab 13.1.
+
+This task runs through all possible encrypted values in the
+database, verifying that they are decryptable using the current
+secrets file (`gitlab-secrets.json`).
+
+Automatic resolution is not yet implemented. If you have values that
+cannot be decrypted, you can follow steps to reset them, see our
+docs on what to do [when the secrets file is lost](../../raketasks/backup_restore.md#when-the-secrets-file-is-lost).
+
+This can take a very long time, depending on the size of your
+database, as it checks all rows in all tables.
+
+**Omnibus Installation**
+
+```shell
+sudo gitlab-rake gitlab:doctor:secrets
+```
+
+**Source Installation**
+
+```shell
+bundle exec rake gitlab:doctor:secrets RAILS_ENV=production
+```
+
+**Example output**
+
+```plaintext
+I, [2020-06-11T17:17:54.951815 #27148]  INFO -- : Checking encrypted values in the database
+I, [2020-06-11T17:18:12.677708 #27148]  INFO -- : - ApplicationSetting failures: 0
+I, [2020-06-11T17:18:12.823692 #27148]  INFO -- : - User failures: 0
+[...] other models possibly containing encrypted data
+I, [2020-06-11T17:18:14.938335 #27148]  INFO -- : - Group failures: 1
+I, [2020-06-11T17:18:15.559162 #27148]  INFO -- : - Operations::FeatureFlagsClient failures: 0
+I, [2020-06-11T17:18:15.575533 #27148]  INFO -- : - ScimOauthAccessToken failures: 0
+I, [2020-06-11T17:18:15.575678 #27148]  INFO -- : Total: 1 row(s) affected
+I, [2020-06-11T17:18:15.575711 #27148]  INFO -- : Done!
+```
+
+### Verbose mode
+
+To get more detailed information about which rows and columns can't be
+decrypted, you can pass a `VERBOSE` environment variable:
+
+**Omnibus Installation**
+
+```shell
+sudo gitlab-rake gitlab:doctor:secrets VERBOSE=1
+```
+
+**Source Installation**
+
+```shell
+bundle exec rake gitlab:doctor:secrets RAILS_ENV=production VERBOSE=1
+```
+
+**Example verbose output**
+
+<!-- vale gitlab.SentenceSpacing = NO -->
+
+```plaintext
+I, [2020-06-11T17:17:54.951815 #27148]  INFO -- : Checking encrypted values in the database
+I, [2020-06-11T17:18:12.677708 #27148]  INFO -- : - ApplicationSetting failures: 0
+I, [2020-06-11T17:18:12.823692 #27148]  INFO -- : - User failures: 0
+[...] other models possibly containing encrypted data
+D, [2020-06-11T17:19:53.224344 #27351] DEBUG -- : > Something went wrong for Group[10].runners_token: Validation failed: Route can't be blank
+I, [2020-06-11T17:19:53.225178 #27351]  INFO -- : - Group failures: 1
+D, [2020-06-11T17:19:53.225267 #27351] DEBUG -- :   - Group[10]: runners_token
+I, [2020-06-11T17:18:15.559162 #27148]  INFO -- : - Operations::FeatureFlagsClient failures: 0
+I, [2020-06-11T17:18:15.575533 #27148]  INFO -- : - ScimOauthAccessToken failures: 0
+I, [2020-06-11T17:18:15.575678 #27148]  INFO -- : Total: 1 row(s) affected
+I, [2020-06-11T17:18:15.575711 #27148]  INFO -- : Done!
+```
+
+<!-- vale gitlab.SentenceSpacing = YES -->
+
 ## Troubleshooting
 
 The following are solutions to problems you might discover using the Rake tasks documented
 above.
 
-### Dangling commits
+### Dangling objects
 
-`gitlab:git:fsck` can find dangling commits. To fix them, try
-[enabling housekeeping](../housekeeping.md).
+The `gitlab-rake gitlab:git:fsck` task can find dangling objects such as:
 
-If the issue persists, try triggering `gc` via the
+```plaintext
+dangling blob a12...
+dangling commit b34...
+dangling tag c56...
+dangling tree d78...
+```
+
+To delete them, try [running housekeeping](../housekeeping.md).
+
+If the issue persists, try triggering garbage collection via the
 [Rails Console](../operations/rails_console.md#starting-a-rails-console-session):
 
 ```ruby
 p = Project.find_by_path("project-name")
 Repositories::HousekeepingService.new(p, :gc).execute
+```
+
+If the dangling objects are younger than the 2 weeks default grace period,
+and you don't want to wait until they expire automatically, run:
+
+```ruby
+Repositories::HousekeepingService.new(p, :prune).execute
 ```
 
 ### Delete references to missing remote uploads
@@ -271,7 +366,7 @@ To delete these references to missing local artifacts (`job.log` files):
 
    ```ruby
    artifacts_deleted = 0
-   ::Ci::JobArtifact.all.each do |artifact|                       ### Iterate artifacts
+   ::Ci::JobArtifact.find_each do |artifact|                       ### Iterate artifacts
    #  next if artifact.file.filename != "job.log"                 ### Uncomment if only `job.log` files' references are to be processed
      next if artifact.file.exists?                                ### Skip if the file reference is valid
      artifacts_deleted += 1

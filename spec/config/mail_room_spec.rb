@@ -18,19 +18,20 @@ RSpec.describe 'mail_room.yml' do
 
     result = Gitlab::Popen.popen_with_detail(%W(ruby -rerb -e #{cmd}), absolute_path('config'), vars)
     output = result.stdout
+    errors = result.stderr
     status = result.status
-    raise "Error interpreting #{mailroom_config_path}: #{output}" unless status == 0
+    raise "Error interpreting #{mailroom_config_path}: #{output}\n#{errors}" unless status == 0
 
     YAML.safe_load(output, permitted_classes: [Symbol])
   end
 
   before do
     stub_env('GITLAB_REDIS_QUEUES_CONFIG_FILE', absolute_path(queues_config_path))
-    clear_queues_raw_config
+    redis_clear_raw_config!(Gitlab::Redis::Queues)
   end
 
   after do
-    clear_queues_raw_config
+    redis_clear_raw_config!(Gitlab::Redis::Queues)
   end
 
   context 'when incoming email is disabled' do
@@ -101,12 +102,6 @@ RSpec.describe 'mail_room.yml' do
       expect(configuration[:mailboxes].map { |m| m[:delivery_options] }).to all(include(expected_options))
       expect(configuration[:mailboxes].map { |m| m[:arbitration_options] }).to all(include(expected_options))
     end
-  end
-
-  def clear_queues_raw_config
-    Gitlab::Redis::Queues.remove_instance_variable(:@_raw_config)
-  rescue NameError
-    # raised if @_raw_config was not set; ignore
   end
 
   def absolute_path(path)

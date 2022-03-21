@@ -1,7 +1,8 @@
-import Store from 'ee_else_ce/sidebar/stores/sidebar_store';
+import Store from '~/sidebar/stores/sidebar_store';
 import createFlash from '~/flash';
-import { __ } from '~/locale';
+import { __, sprintf } from '~/locale';
 import toast from '~/vue_shared/plugins/global_toast';
+import { refreshUserMergeRequestCounts } from '~/commons/nav/user_merge_requests';
 import { visitUrl } from '../lib/utils/url_utility';
 import Service from './services/sidebar_service';
 
@@ -30,7 +31,7 @@ export default class SidebarMediator {
     this.store.addAssignee(this.store.currentUser);
   }
 
-  saveAssignees(field) {
+  async saveAssignees(field) {
     const selected = this.store.assignees.map((u) => u.id);
 
     // If there are no ids, that means we have to unassign (which is id = 0)
@@ -38,10 +39,22 @@ export default class SidebarMediator {
     const assignees = selected.length === 0 ? [0] : selected;
     const data = { assignee_ids: assignees };
 
-    return this.service.update(field, data);
+    try {
+      const res = await this.service.update(field, data);
+
+      this.store.overwrite('assignees', res.data.assignees);
+
+      if (res.data.reviewers) {
+        this.store.overwrite('reviewers', res.data.reviewers);
+      }
+
+      return Promise.resolve(res);
+    } catch (e) {
+      return Promise.reject(e);
+    }
   }
 
-  saveReviewers(field) {
+  async saveReviewers(field) {
     const selected = this.store.reviewers.map((u) => u.id);
 
     // If there are no ids, that means we have to unassign (which is id = 0)
@@ -49,18 +62,86 @@ export default class SidebarMediator {
     const reviewers = selected.length === 0 ? [0] : selected;
     const data = { reviewer_ids: reviewers };
 
-    return this.service.update(field, data);
+    try {
+      const res = await this.service.update(field, data);
+
+      this.store.overwrite('reviewers', res.data.reviewers);
+      this.store.overwrite('assignees', res.data.assignees);
+
+      return Promise.resolve(res);
+    } catch (e) {
+      return Promise.reject();
+    }
   }
 
   requestReview({ userId, callback }) {
     return this.service
       .requestReview(userId)
       .then(() => {
-        this.store.updateReviewer(userId);
+        this.store.updateReviewer(userId, 'reviewed');
         toast(__('Requested review'));
         callback(userId, true);
       })
       .catch(() => callback(userId, false));
+  }
+
+  removeCurrentUserAttentionRequested() {
+    const currentUserId = gon.current_user_id;
+
+    const currentUserReviewer = this.store.findReviewer({ id: currentUserId });
+    const currentUserAssignee = this.store.findAssignee({ id: currentUserId });
+
+    if (currentUserReviewer?.attention_requested || currentUserAssignee?.attention_requested) {
+      // Update current users attention_requested state
+      this.store.updateReviewer(currentUserId, 'attention_requested');
+      this.store.updateAssignee(currentUserId, 'attention_requested');
+    }
+  }
+
+  async toggleAttentionRequested(type, { user, callback }) {
+    try {
+      const isReviewer = type === 'reviewer';
+      const reviewerOrAssignee = isReviewer
+        ? this.store.findReviewer(user)
+        : this.store.findAssignee(user);
+
+      await this.service.toggleAttentionRequested(user.id);
+
+      if (reviewerOrAssignee.attention_requested) {
+        toast(
+          sprintf(__('Removed attention request from @%{username}'), {
+            username: user.username,
+          }),
+        );
+      } else {
+        const currentUserId = gon.current_user_id;
+
+        if (currentUserId !== user.id) {
+          this.removeCurrentUserAttentionRequested();
+        }
+
+        toast(sprintf(__('Requested attention from @%{username}'), { username: user.username }));
+      }
+
+      this.store.updateReviewer(user.id, 'attention_requested');
+      this.store.updateAssignee(user.id, 'attention_requested');
+
+      refreshUserMergeRequestCounts();
+      callback();
+    } catch (error) {
+      callback();
+      createFlash({
+        message: sprintf(__('Updating the attention request for %{username} failed.'), {
+          username: user.username,
+        }),
+        error,
+        captureError: true,
+        actionConfig: {
+          title: __('Try again'),
+          clickHandler: () => this.toggleAttentionRequired(type, { user, callback }),
+        },
+      });
+    }
   }
 
   setMoveToProjectId(projectId) {

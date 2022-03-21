@@ -96,7 +96,7 @@ RSpec.describe Gitlab::GitAccess do
 
           context 'when the DeployKey has access to the project' do
             before do
-              deploy_key.deploy_keys_projects.create(project: project, can_push: true)
+              deploy_key.deploy_keys_projects.create!(project: project, can_push: true)
             end
 
             it 'allows push and pull access' do
@@ -435,17 +435,19 @@ RSpec.describe Gitlab::GitAccess do
 
     it 'disallows users with expired password to pull' do
       project.add_maintainer(user)
-      user.update!(password_expires_at: 2.minutes.ago, password_automatically_set: true)
+      user.update!(password_expires_at: 2.minutes.ago)
 
       expect { pull_access_check }.to raise_forbidden("Your password expired. Please access GitLab from a web browser to update your password.")
     end
 
-    it 'allows ldap users with expired password to pull' do
-      project.add_maintainer(user)
-      user.update!(password_expires_at: 2.minutes.ago)
-      allow(user).to receive(:ldap_user?).and_return(true)
+    context 'with an ldap user' do
+      let(:user) { create(:omniauth_user, provider: 'ldap', password_expires_at: 2.minutes.ago) }
 
-      expect { pull_access_check }.not_to raise_error
+      it 'allows ldap users with expired password to pull' do
+        project.add_maintainer(user)
+
+        expect { pull_access_check }.not_to raise_error
+      end
     end
 
     context 'when the project repository does not exist' do
@@ -818,7 +820,7 @@ RSpec.describe Gitlab::GitAccess do
             project.add_role(user, role)
           end
 
-          protected_branch.save
+          protected_branch.save!
 
           aggregate_failures do
             matrix.each do |action, allowed|
@@ -987,29 +989,23 @@ RSpec.describe Gitlab::GitAccess do
       end
 
       it 'disallows users with expired password to push' do
-        user.update!(password_expires_at: 2.minutes.ago, password_automatically_set: true)
+        user.update!(password_expires_at: 2.minutes.ago)
 
         expect { push_access_check }.to raise_forbidden("Your password expired. Please access GitLab from a web browser to update your password.")
       end
 
-      it 'allows ldap users with expired password to push' do
-        user.update!(password_expires_at: 2.minutes.ago)
-        allow(user).to receive(:ldap_user?).and_return(true)
+      context 'with an ldap user' do
+        let(:user) { create(:omniauth_user, provider: 'ldap', password_expires_at: 2.minutes.ago) }
 
-        expect { push_access_check }.not_to raise_error
-      end
+        it 'allows ldap users with expired password to push' do
+          expect { push_access_check }.not_to raise_error
+        end
 
-      it 'disallows blocked ldap users with expired password to push' do
-        user.block
-        user.update!(password_expires_at: 2.minutes.ago)
-        allow(user).to receive(:ldap_user?).and_return(true)
+        it 'disallows blocked ldap users with expired password to push' do
+          user.block
 
-        expect { push_access_check }.to raise_forbidden("Your account has been blocked.")
-      end
-
-      it 'cleans up the files' do
-        expect(project.repository).to receive(:clean_stale_repository_files).and_call_original
-        expect { push_access_check }.not_to raise_error
+          expect { push_access_check }.to raise_forbidden("Your account has been blocked.")
+        end
       end
 
       it 'avoids N+1 queries', :request_store do
@@ -1089,7 +1085,7 @@ RSpec.describe Gitlab::GitAccess do
     context 'when deploy_key can push' do
       context 'when project is authorized' do
         before do
-          key.deploy_keys_projects.create(project: project, can_push: true)
+          key.deploy_keys_projects.create!(project: project, can_push: true)
         end
 
         it { expect { push_access_check }.not_to raise_error }
@@ -1119,7 +1115,7 @@ RSpec.describe Gitlab::GitAccess do
     context 'when deploy_key cannot push' do
       context 'when project is authorized' do
         before do
-          key.deploy_keys_projects.create(project: project, can_push: false)
+          key.deploy_keys_projects.create!(project: project, can_push: false)
         end
 
         it { expect { push_access_check }.to raise_forbidden(described_class::ERROR_MESSAGES[:deploy_key_upload]) }

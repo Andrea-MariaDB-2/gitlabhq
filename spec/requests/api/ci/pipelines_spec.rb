@@ -33,6 +33,7 @@ RSpec.describe API::Ci::Pipelines do
         expect(json_response).to be_an Array
         expect(json_response.first['sha']).to match(/\A\h{40}\z/)
         expect(json_response.first['id']).to eq pipeline.id
+        expect(json_response.first['iid']).to eq pipeline.iid
         expect(json_response.first['web_url']).to be_present
       end
 
@@ -40,7 +41,7 @@ RSpec.describe API::Ci::Pipelines do
         it 'includes pipeline source' do
           get api("/projects/#{project.id}/pipelines", user)
 
-          expect(json_response.first.keys).to contain_exactly(*%w[id project_id sha ref status web_url created_at updated_at source])
+          expect(json_response.first.keys).to contain_exactly(*%w[id iid project_id sha ref status web_url created_at updated_at source])
         end
       end
 
@@ -160,30 +161,6 @@ RSpec.describe API::Ci::Pipelines do
           context 'when ref does not exist' do
             it 'returns empty' do
               get api("/projects/#{project.id}/pipelines", user), params: { ref: 'invalid-ref' }
-
-              expect(response).to have_gitlab_http_status(:ok)
-              expect(response).to include_pagination_headers
-              expect(json_response).to be_empty
-            end
-          end
-        end
-
-        context 'when name is specified' do
-          let_it_be(:pipeline) { create(:ci_pipeline, project: project, user: user) }
-
-          context 'when name exists' do
-            it 'returns matched pipelines' do
-              get api("/projects/#{project.id}/pipelines", user), params: { name: user.name }
-
-              expect(response).to have_gitlab_http_status(:ok)
-              expect(response).to include_pagination_headers
-              expect(json_response.first['id']).to eq(pipeline.id)
-            end
-          end
-
-          context 'when name does not exist' do
-            it 'returns empty' do
-              get api("/projects/#{project.id}/pipelines", user), params: { name: 'invalid-name' }
 
               expect(response).to have_gitlab_http_status(:ok)
               expect(response).to include_pagination_headers
@@ -864,7 +841,7 @@ RSpec.describe API::Ci::Pipelines do
         it 'exposes the coverage' do
           get api("/projects/#{project.id}/pipelines/#{pipeline.id}", user)
 
-          expect(json_response["coverage"].to_i).to eq(30)
+          expect(json_response["coverage"]).to eq('30.00')
         end
       end
     end
@@ -1011,7 +988,7 @@ RSpec.describe API::Ci::Pipelines do
 
   describe 'DELETE /projects/:id/pipelines/:pipeline_id' do
     context 'authorized user' do
-      let(:owner) { project.owner }
+      let(:owner) { project.first_owner }
 
       it 'destroys the pipeline' do
         delete api("/projects/#{project.id}/pipelines/#{pipeline.id}", owner)
@@ -1095,6 +1072,23 @@ RSpec.describe API::Ci::Pipelines do
 
         expect(response).to have_gitlab_http_status(:not_found)
         expect(json_response['message']).to eq '404 Project Not Found'
+        expect(json_response['id']).to be nil
+      end
+    end
+
+    context 'handles errors' do
+      before do
+        service_response = ServiceResponse.error(http_status: 403, message: 'hello world')
+        allow_next_instance_of(::Ci::RetryPipelineService) do |service|
+          allow(service).to receive(:check_access).and_return(service_response)
+        end
+      end
+
+      it 'returns error' do
+        post api("/projects/#{project.id}/pipelines/#{pipeline.id}/retry", user)
+
+        expect(response).to have_gitlab_http_status(:forbidden)
+        expect(json_response['message']).to eq 'hello world'
         expect(json_response['id']).to be nil
       end
     end

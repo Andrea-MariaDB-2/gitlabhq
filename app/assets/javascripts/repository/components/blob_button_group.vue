@@ -1,11 +1,13 @@
 <script>
-import { GlButtonGroup, GlButton, GlModalDirective } from '@gitlab/ui';
+import { GlButtonGroup, GlButton } from '@gitlab/ui';
 import { uniqueId } from 'lodash';
 import { sprintf, __ } from '~/locale';
 import glFeatureFlagMixin from '~/vue_shared/mixins/gl_feature_flags_mixin';
 import getRefMixin from '../mixins/get_ref';
 import DeleteBlobModal from './delete_blob_modal.vue';
 import UploadBlobModal from './upload_blob_modal.vue';
+
+const REPLACE_BLOB_MODAL_ID = 'modal-replace-blob';
 
 export default {
   i18n: {
@@ -19,9 +21,6 @@ export default {
     UploadBlobModal,
     DeleteBlobModal,
     LockButton: () => import('ee_component/repository/components/lock_button.vue'),
-  },
-  directives: {
-    GlModal: GlModalDirective,
   },
   mixins: [getRefMixin, glFeatureFlagMixin()],
   inject: {
@@ -53,6 +52,10 @@ export default {
       type: Boolean,
       required: true,
     },
+    canPushToBranch: {
+      type: Boolean,
+      required: true,
+    },
     emptyRepo: {
       type: Boolean,
       required: true,
@@ -69,11 +72,12 @@ export default {
       type: Boolean,
       required: true,
     },
+    showForkSuggestion: {
+      type: Boolean,
+      required: true,
+    },
   },
   computed: {
-    replaceModalId() {
-      return uniqueId('replace-modal');
-    },
     replaceModalTitle() {
       return sprintf(__('Replace %{name}'), { name: this.name });
     },
@@ -83,7 +87,21 @@ export default {
     deleteModalTitle() {
       return sprintf(__('Delete %{name}'), { name: this.name });
     },
+    lockBtnQASelector() {
+      return this.canLock ? 'lock_button' : 'disabled_lock_button';
+    },
   },
+  methods: {
+    showModal(modalId) {
+      if (this.showForkSuggestion) {
+        this.$emit('fork', 'view');
+        return;
+      }
+
+      this.$refs[modalId].show();
+    },
+  },
+  replaceBlobModalId: REPLACE_BLOB_MODAL_ID,
 };
 </script>
 
@@ -98,16 +116,18 @@ export default {
         :is-locked="isLocked"
         :can-lock="canLock"
         data-testid="lock"
+        :data-qa-selector="lockBtnQASelector"
       />
-      <gl-button v-gl-modal="replaceModalId" data-testid="replace">
+      <gl-button data-testid="replace" @click="showModal($options.replaceBlobModalId)">
         {{ $options.i18n.replace }}
       </gl-button>
-      <gl-button v-gl-modal="deleteModalId" data-testid="delete">
+      <gl-button data-testid="delete" @click="showModal(deleteModalId)">
         {{ $options.i18n.delete }}
       </gl-button>
     </gl-button-group>
     <upload-blob-modal
-      :modal-id="replaceModalId"
+      :ref="$options.replaceBlobModalId"
+      :modal-id="$options.replaceBlobModalId"
       :modal-title="replaceModalTitle"
       :commit-message="replaceModalTitle"
       :target-branch="targetBranch || ref"
@@ -118,6 +138,7 @@ export default {
       :primary-btn-text="$options.i18n.replacePrimaryBtnText"
     />
     <delete-blob-modal
+      :ref="deleteModalId"
       :modal-id="deleteModalId"
       :modal-title="deleteModalTitle"
       :delete-path="deletePath"
@@ -125,6 +146,7 @@ export default {
       :target-branch="targetBranch || ref"
       :original-branch="originalBranch || ref"
       :can-push-code="canPushCode"
+      :can-push-to-branch="canPushToBranch"
       :empty-repo="emptyRepo"
     />
   </div>

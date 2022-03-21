@@ -21,7 +21,7 @@ All newly-introduced feature flags should be [disabled by default](https://about
 NOTE:
 This document is the subject of continued work as part of an epic to [improve internal usage of Feature Flags](https://gitlab.com/groups/gitlab-org/-/epics/3551). Raise any suggestions as new issues and attach them to the epic.
 
-For an [overview of the feature flag lifecycle](https://about.gitlab.com/handbook/product-development-flow/feature-flag-lifecycle/#feature-flag-lifecycle), or if you need help deciding [if you should use a feature flag](https://about.gitlab.com/handbook/product-development-flow/feature-flag-lifecycle/#when-to-use-feature-flags) or not, please see the [feature flag lifecycle](https://about.gitlab.com/handbook/product-development-flow/feature-flag-lifecycle) handbook page.
+For an [overview of the feature flag lifecycle](https://about.gitlab.com/handbook/product-development-flow/feature-flag-lifecycle/#feature-flag-lifecycle), or if you need help deciding [if you should use a feature flag](https://about.gitlab.com/handbook/product-development-flow/feature-flag-lifecycle/#when-to-use-feature-flags) or not, please see the [feature flag lifecycle](https://about.gitlab.com/handbook/product-development-flow/feature-flag-lifecycle/) handbook page.
 
 ## When to use feature flags
 
@@ -169,8 +169,9 @@ Each feature flag is defined in a separate YAML file consisting of a number of f
 | `name`              | yes      | Name of the feature flag.                                      |
 | `type`              | yes      | Type of feature flag.                                          |
 | `default_enabled`   | yes      | The default state of the feature flag that is strictly validated, with `default_enabled:` passed as an argument. |
-| `introduced_by_url` | no       | The URL to the Merge Request that introduced the feature flag. |
+| `introduced_by_url` | no       | The URL to the merge request that introduced the feature flag. |
 | `rollout_issue_url` | no       | The URL to the Issue covering the feature flag rollout.        |
+| `milestone`         | no       | Milestone in which the feature was added.                      |
 | `group`             | no       | The [group](https://about.gitlab.com/handbook/product/categories/#devops-stages) that owns the feature flag. |
 
 NOTE:
@@ -512,7 +513,7 @@ Feature.remove(:feature_flag_name)
 
 - Any change behind a feature flag **disabled** by default **should not** have a changelog entry.
   - **Exception:** database migrations **should** have a changelog entry.
-- Any change related to a feature flag itself (flag removal, default-on setting) **should** have a changelog entry.
+- Any change related to a feature flag itself (flag removal, default-on setting) **should** have [a changelog entry](../changelog.md).
   Use the flowchart to determine the changelog entry type.
 
   ```mermaid
@@ -529,13 +530,14 @@ Feature.remove(:feature_flag_name)
 ## Feature flags in tests
 
 Introducing a feature flag into the codebase creates an additional code path that should be tested.
-It is strongly advised to test all code affected by a feature flag, both when **enabled** and **disabled**
-to ensure the feature works properly.
+It is strongly advised to include automated tests for all code affected by a feature flag, both when **enabled** and **disabled**
+to ensure the feature works properly. If automated tests are not included for both states, the functionality associated
+with the untested code path should be manually tested before deployment to production.
 
 When using the testing environment, all feature flags are enabled by default.
 
 WARNING:
-This does not apply to end-to-end (QA) tests, which [do not disable feature flags by default](#end-to-end-qa-tests). There is a different [process for using feature flags in end-to-end tests](../testing_guide/end_to_end/feature_flags.md).
+This does not apply to end-to-end (QA) tests, which [do not enable feature flags by default](#end-to-end-qa-tests). There is a different [process for using feature flags in end-to-end tests](../testing_guide/end_to_end/feature_flags.md).
 
 To disable a feature flag in a test, use the `stub_feature_flags`
 helper. For example, to globally disable the `ci_live_trace` feature

@@ -5,14 +5,12 @@ require 'spec_helper'
 RSpec.describe Gitlab::Database::LoadBalancing::SidekiqClientMiddleware do
   let(:middleware) { described_class.new }
 
-  let(:load_balancer) { double.as_null_object }
   let(:worker_class) { 'TestDataConsistencyWorker' }
   let(:job) { { "job_id" => "a180b47c-3fd6-41b8-81e9-34da61c3400e" } }
 
   before do
     skip_feature_flags_yaml_validation
     skip_default_enabled_yaml_check
-    allow(::Gitlab::Database::LoadBalancing).to receive_message_chain(:proxy, :load_balancer).and_return(load_balancer)
   end
 
   after do
@@ -23,7 +21,7 @@ RSpec.describe Gitlab::Database::LoadBalancing::SidekiqClientMiddleware do
     middleware.call(worker_class, job, nil, nil) {}
   end
 
-  describe '#call' do
+  describe '#call', :database_replica do
     shared_context 'data consistency worker class' do |data_consistency, feature_flag|
       let(:expected_consistency) { data_consistency }
       let(:worker_class) do
@@ -58,8 +56,7 @@ RSpec.describe Gitlab::Database::LoadBalancing::SidekiqClientMiddleware do
       it 'does not pass database locations', :aggregate_failures do
         run_middleware
 
-        expect(job['database_replica_location']).to be_nil
-        expect(job['database_write_location']).to be_nil
+        expect(job['wal_locations']).to be_nil
       end
 
       include_examples 'job data consistency'
@@ -86,11 +83,19 @@ RSpec.describe Gitlab::Database::LoadBalancing::SidekiqClientMiddleware do
         end
 
         it 'passes database_replica_location' do
-          expect(load_balancer).to receive_message_chain(:host, "database_replica_location").and_return(location)
+          expected_location = {}
+
+          Gitlab::Database::LoadBalancing.each_load_balancer do |lb|
+            expect(lb.host)
+              .to receive(:database_replica_location)
+              .and_return(location)
+
+            expected_location[lb.name] = location
+          end
 
           run_middleware
 
-          expect(job['database_replica_location']).to eq(location)
+          expect(job['wal_locations']).to eq(expected_location)
         end
 
         include_examples 'job data consistency'
@@ -102,46 +107,22 @@ RSpec.describe Gitlab::Database::LoadBalancing::SidekiqClientMiddleware do
         end
 
         it 'passes primary write location', :aggregate_failures do
-          expect(load_balancer).to receive(:primary_write_location).and_return(location)
+          expected_location = {}
+
+          Gitlab::Database::LoadBalancing.each_load_balancer do |lb|
+            expect(lb)
+              .to receive(:primary_write_location)
+              .and_return(location)
+
+            expected_location[lb.name] = location
+          end
 
           run_middleware
 
-          expect(job['database_write_location']).to eq(location)
+          expect(job['wal_locations']).to eq(expected_location)
         end
 
         include_examples 'job data consistency'
-      end
-    end
-
-    shared_examples_for 'database location was already provided' do |provided_database_location, other_location|
-      shared_examples_for 'does not set database location again' do |use_primary|
-        before do
-          allow(Gitlab::Database::LoadBalancing::Session.current).to receive(:use_primary?).and_return(use_primary)
-        end
-
-        it 'does not set database locations again' do
-          run_middleware
-
-          expect(job[provided_database_location]).to eq(old_location)
-          expect(job[other_location]).to be_nil
-        end
-      end
-
-      let(:old_location) { '0/D525E3A8' }
-      let(:new_location) { 'AB/12345' }
-      let(:job) { { "job_id" => "a180b47c-3fd6-41b8-81e9-34da61c3400e", provided_database_location => old_location } }
-
-      before do
-        allow(load_balancer).to receive(:primary_write_location).and_return(new_location)
-        allow(load_balancer).to receive(:database_replica_location).and_return(new_location)
-      end
-
-      context "when write was performed" do
-        include_examples 'does not set database location again', true
-      end
-
-      context "when write was not performed" do
-        include_examples 'does not set database location again', false
       end
     end
 
@@ -159,12 +140,38 @@ RSpec.describe Gitlab::Database::LoadBalancing::SidekiqClientMiddleware do
       include_examples 'does not pass database locations'
     end
 
-    context 'database write location was already provided' do
-      include_examples 'database location was already provided', 'database_write_location', 'database_replica_location'
-    end
+    context 'database wal location was already provided' do
+      let(:old_location) { '0/D525E3A8' }
+      let(:new_location) { 'AB/12345' }
+      let(:wal_locations) { { Gitlab::Database::MAIN_DATABASE_NAME.to_sym => old_location } }
+      let(:job) { { "job_id" => "a180b47c-3fd6-41b8-81e9-34da61c3400e", 'wal_locations' => wal_locations } }
 
-    context 'database replica location was already provided' do
-      include_examples 'database location was already provided', 'database_replica_location', 'database_write_location'
+      before do
+        Gitlab::Database::LoadBalancing.each_load_balancer do |lb|
+          allow(lb).to receive(:primary_write_location).and_return(new_location)
+          allow(lb).to receive(:database_replica_location).and_return(new_location)
+        end
+      end
+
+      shared_examples_for 'does not set database location again' do |use_primary|
+        before do
+          allow(Gitlab::Database::LoadBalancing::Session.current).to receive(:use_primary?).and_return(use_primary)
+        end
+
+        it 'does not set database locations again' do
+          run_middleware
+
+          expect(job['wal_locations']).to eq(wal_locations)
+        end
+      end
+
+      context "when write was performed" do
+        include_examples 'does not set database location again', true
+      end
+
+      context "when write was not performed" do
+        include_examples 'does not set database location again', false
+      end
     end
 
     context 'when worker data consistency is :always' do
@@ -174,11 +181,11 @@ RSpec.describe Gitlab::Database::LoadBalancing::SidekiqClientMiddleware do
     end
 
     context 'when worker data consistency is :delayed' do
-      include_examples  'mark data consistency location', :delayed
+      include_examples 'mark data consistency location', :delayed
     end
 
     context 'when worker data consistency is :sticky' do
-      include_examples  'mark data consistency location', :sticky
+      include_examples 'mark data consistency location', :sticky
     end
   end
 end

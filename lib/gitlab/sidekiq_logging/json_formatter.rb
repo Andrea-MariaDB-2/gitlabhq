@@ -2,11 +2,12 @@
 
 # This is needed for sidekiq-cluster
 require 'json'
+require 'sidekiq/job_retry'
 
 module Gitlab
   module SidekiqLogging
     class JSONFormatter
-      TIMESTAMP_FIELDS = %w[created_at enqueued_at started_at retried_at failed_at completed_at].freeze
+      TIMESTAMP_FIELDS = %w[created_at scheduled_at enqueued_at started_at retried_at failed_at completed_at].freeze
 
       def call(severity, timestamp, progname, data)
         output = {

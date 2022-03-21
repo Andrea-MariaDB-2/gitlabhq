@@ -1,13 +1,10 @@
 ---
-stage: Release
-group: Release
+stage: Configure
+group: Configure
 info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
-type: reference, howto
 ---
 
-# Vault Authentication with GitLab OpenID Connect
-
-> [Introduced](https://gitlab.com/gitlab-org/gitlab-foss/-/issues/22323) in GitLab 9.0
+# Vault Authentication with GitLab OpenID Connect **(FREE)**
 
 [Vault](https://www.vaultproject.io/) is a secrets management application offered by HashiCorp.
 It allows you to store and manage sensitive information such as secret environment variables, encryption keys, and authentication tokens.
@@ -23,7 +20,7 @@ The following assumes you already have Vault installed and running.
 
    1. In the top-right corner, select your avatar.
    1. Select **Edit profile**.
-   1. In the left sidebar, select **Applications**.
+   1. On the left sidebar, select **Applications**.
    1. Fill out the application **Name** and [**Redirect URI**](https://www.vaultproject.io/docs/auth/jwt#redirect-uris).
    1. Select the **OpenID** scope.
    1. Select **Save application**.

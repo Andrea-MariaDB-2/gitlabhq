@@ -5,24 +5,28 @@ require 'spec_helper'
 RSpec.describe Gitlab::RackAttack, :aggregate_failures do
   describe '.configure' do
     let(:fake_rack_attack) { class_double("Rack::Attack") }
-    let(:fake_rack_attack_request) { class_double("Rack::Attack::Request") }
-    let(:fake_cache) { instance_double("Rack::Attack::Cache") }
+    let(:fake_rack_attack_request) { class_double(Rack::Attack::Request) }
+    let(:fake_cache) { instance_double(Rack::Attack::Cache) }
 
     let(:throttles) do
       {
-        throttle_unauthenticated: Gitlab::Throttle.unauthenticated_options,
-        throttle_authenticated_api: Gitlab::Throttle.authenticated_api_options,
+        throttle_unauthenticated_api: Gitlab::Throttle.options(:api, authenticated: false),
+        throttle_authenticated_api: Gitlab::Throttle.options(:api, authenticated: true),
+        throttle_unauthenticated_web: Gitlab::Throttle.unauthenticated_web_options,
+        throttle_authenticated_web: Gitlab::Throttle.authenticated_web_options,
         throttle_product_analytics_collector: { limit: 100, period: 60 },
-        throttle_unauthenticated_protected_paths: Gitlab::Throttle.unauthenticated_options,
-        throttle_authenticated_protected_paths_api: Gitlab::Throttle.authenticated_api_options,
-        throttle_authenticated_protected_paths_web: Gitlab::Throttle.authenticated_web_options
+        throttle_unauthenticated_protected_paths: Gitlab::Throttle.protected_paths_options,
+        throttle_authenticated_protected_paths_api: Gitlab::Throttle.protected_paths_options,
+        throttle_authenticated_protected_paths_web: Gitlab::Throttle.protected_paths_options,
+        throttle_unauthenticated_packages_api: Gitlab::Throttle.options(:packages_api, authenticated: false),
+        throttle_authenticated_packages_api: Gitlab::Throttle.options(:packages_api, authenticated: true),
+        throttle_authenticated_git_lfs: Gitlab::Throttle.throttle_authenticated_git_lfs_options,
+        throttle_unauthenticated_files_api: Gitlab::Throttle.options(:files_api, authenticated: false),
+        throttle_authenticated_files_api: Gitlab::Throttle.options(:files_api, authenticated: true)
       }
     end
 
     before do
-      stub_const("Rack::Attack", fake_rack_attack)
-      stub_const("Rack::Attack::Request", fake_rack_attack_request)
-
       allow(fake_rack_attack).to receive(:throttled_response=)
       allow(fake_rack_attack).to receive(:throttle)
       allow(fake_rack_attack).to receive(:track)
@@ -30,6 +34,9 @@ RSpec.describe Gitlab::RackAttack, :aggregate_failures do
       allow(fake_rack_attack).to receive(:blocklist)
       allow(fake_rack_attack).to receive(:cache).and_return(fake_cache)
       allow(fake_cache).to receive(:store=)
+
+      fake_rack_attack.const_set('Request', fake_rack_attack_request)
+      stub_const("Rack::Attack", fake_rack_attack)
     end
 
     it 'extends the request class' do
@@ -71,7 +78,7 @@ RSpec.describe Gitlab::RackAttack, :aggregate_failures do
 
     it 'configures tracks and throttles with a selected set of dry-runs' do
       dry_run_throttles = throttles.each_key.first(2)
-      regular_throttles = throttles.keys[2..-1]
+      regular_throttles = throttles.keys[2..]
       stub_env('GITLAB_THROTTLE_DRY_RUN', dry_run_throttles.join(','))
 
       described_class.configure(fake_rack_attack)
@@ -82,6 +89,15 @@ RSpec.describe Gitlab::RackAttack, :aggregate_failures do
       regular_throttles.each do |throttle|
         expect(fake_rack_attack).to have_received(:throttle).with(throttle.to_s, throttles[throttle])
       end
+    end
+
+    it 'enables dry-runs for `throttle_unauthenticated_api` and `throttle_unauthenticated_web` when selecting `throttle_unauthenticated`' do
+      stub_env('GITLAB_THROTTLE_DRY_RUN', 'throttle_unauthenticated')
+
+      described_class.configure(fake_rack_attack)
+
+      expect(fake_rack_attack).to have_received(:track).with('throttle_unauthenticated_api', throttles[:throttle_unauthenticated_api])
+      expect(fake_rack_attack).to have_received(:track).with('throttle_unauthenticated_web', throttles[:throttle_unauthenticated_web])
     end
 
     context 'user allowlist' do

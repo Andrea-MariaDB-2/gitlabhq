@@ -20,18 +20,7 @@ module Atlassian
         end
 
         def type
-          case environment.name
-          when /prod/i
-            'production'
-          when /test/i
-            'testing'
-          when /staging/i
-            'staging'
-          when /(dev|review)/i
-            'development'
-          else
-            'unmapped'
-          end
+          environment.tier == 'other' ? 'unmapped' : environment.tier
         end
       end
     end

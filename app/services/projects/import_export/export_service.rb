@@ -36,6 +36,7 @@ module Projects
       private
 
       attr_accessor :shared
+      attr_reader :logger
 
       def execute_after_export_action(after_export_strategy)
         return unless after_export_strategy
@@ -46,8 +47,7 @@ module Projects
       end
 
       def save_all!
-        if save_exporters
-          Gitlab::ImportExport::Saver.save(exportable: project, shared: shared)
+        if save_exporters && save_export_archive
           notify_success
         else
           notify_error!
@@ -56,6 +56,10 @@ module Projects
 
       def save_exporters
         exporters.all?(&:save)
+      end
+
+      def save_export_archive
+        Gitlab::ImportExport::Saver.save(exportable: project, shared: shared)
       end
 
       def exporters
@@ -74,7 +78,11 @@ module Projects
       end
 
       def project_tree_saver
-        tree_saver_class.new(project: project, current_user: current_user, shared: shared, params: params)
+        tree_saver_class.new(project: project,
+                             current_user: current_user,
+                             shared: shared,
+                             params: params,
+                             logger: logger)
       end
 
       def tree_saver_class
@@ -116,7 +124,7 @@ module Projects
       end
 
       def notify_success
-        @logger.info(
+        logger.info(
           message: 'Project successfully exported',
           project_name: project.name,
           project_id: project.id
@@ -124,7 +132,7 @@ module Projects
       end
 
       def notify_error
-        @logger.error(
+        logger.error(
           message: 'Project export error',
           export_errors: shared.errors.join(', '),
           project_name: project.name,

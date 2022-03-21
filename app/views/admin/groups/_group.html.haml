@@ -15,8 +15,7 @@
         = markdown_field(group, :description)
 
   .stats.gl-text-gray-500.gl-flex-shrink-0.gl-display-none.gl-sm-display-flex
-    %span.badge.badge-muted.badge-pill.gl-badge.sm
-      = storage_counter(group.storage_size)
+    = gl_badge_tag storage_counter(group.storage_size), size: :sm
 
     = render_if_exists 'admin/namespace_plan_badge', namespace: group, css_class: 'gl-ml-5 gl-mr-0'
     = render_if_exists 'admin/groups/marked_for_deletion_badge', group: group, css_class: 'gl-ml-5'
@@ -34,4 +33,4 @@
 
   .controls.gl-flex-shrink-0.gl-ml-5
     = link_to _('Edit'), admin_group_edit_path(group), id: "edit_#{dom_id(group)}", class: 'btn gl-button btn-default'
-    = link_to _('Delete'), [:admin, group], data: { confirm: _("Are you sure you want to remove %{group_name}?") % { group_name: group.name } }, method: :delete, class: 'gl-button btn btn-danger'
+    = link_to _('Delete'), [:admin, group], aria: { label: _('Remove') }, data: { confirm: _("Are you sure you want to remove %{group_name}?") % { group_name: group.name }, confirm_btn_variant: 'danger' }, method: :delete, class: 'gl-button btn btn-danger'

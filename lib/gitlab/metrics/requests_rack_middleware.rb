@@ -15,7 +15,8 @@ module Gitlab
 
       HEALTH_ENDPOINT = %r{^/-/(liveness|readiness|health|metrics)/?$}.freeze
 
-      FEATURE_CATEGORY_DEFAULT = 'unknown'
+      FEATURE_CATEGORY_DEFAULT = ::Gitlab::FeatureCategories::FEATURE_CATEGORY_DEFAULT
+      ENDPOINT_MISSING = 'unknown'
 
       # These were the top 5 categories at a point in time, chosen as a
       # reasonable default. If we initialize every category we'll end up
@@ -61,6 +62,8 @@ module Gitlab
             http_requests_total.get({ method: method, status: status, feature_category: feature_category })
           end
         end
+
+        Gitlab::Metrics::RailsSlis.initialize_request_slis!
       end
 
       def call(env)
@@ -77,6 +80,8 @@ module Gitlab
 
           if !health_endpoint && ::Gitlab::Metrics.record_duration_for_status?(status)
             self.class.http_request_duration_seconds.observe({ method: method }, elapsed)
+
+            record_apdex(env, elapsed)
           end
 
           [status, headers, body]
@@ -104,6 +109,37 @@ module Gitlab
 
       def feature_category
         ::Gitlab::ApplicationContext.current_context_attribute(:feature_category)
+      end
+
+      def endpoint_id
+        ::Gitlab::ApplicationContext.current_context_attribute(:caller_id)
+      end
+
+      def record_apdex(env, elapsed)
+        urgency = urgency_for_env(env)
+
+        Gitlab::Metrics::RailsSlis.request_apdex.increment(
+          labels: labels_from_context.merge(request_urgency: urgency.name),
+          success: elapsed < urgency.duration
+        )
+      end
+
+      def labels_from_context
+        {
+          feature_category: feature_category.presence || FEATURE_CATEGORY_DEFAULT,
+          endpoint_id: endpoint_id.presence || ENDPOINT_MISSING
+        }
+      end
+
+      def urgency_for_env(env)
+        endpoint_urgency =
+          if env['api.endpoint'].present?
+            env['api.endpoint'].options[:for].try(:urgency_for_app, env['api.endpoint'])
+          elsif env['action_controller.instance'].present? && env['action_controller.instance'].respond_to?(:urgency)
+            env['action_controller.instance'].urgency
+          end
+
+        endpoint_urgency || Gitlab::EndpointAttributes::DEFAULT_URGENCY
       end
     end
   end

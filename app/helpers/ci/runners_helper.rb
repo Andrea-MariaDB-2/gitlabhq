@@ -6,27 +6,30 @@ module Ci
 
     def runner_status_icon(runner, size: 16, icon_class: '')
       status = runner.status
+      active = runner.active
 
       title = ''
       icon = 'warning-solid'
       span_class = ''
 
       case status
-      when :not_connected
-        title = s_("Runners|New runner, has not connected yet")
-        icon = 'warning-solid'
       when :online
-        title = s_("Runners|Runner is online, last contact was %{runner_contact} ago") % { runner_contact: time_ago_in_words(runner.contacted_at) }
-        icon = 'status-active'
-        span_class = 'gl-text-green-500'
+        if active
+          title = s_("Runners|Runner is online, last contact was %{runner_contact} ago") % { runner_contact: time_ago_in_words(runner.contacted_at) }
+          icon = 'status-active'
+          span_class = 'gl-text-green-500'
+        else
+          title = s_("Runners|Runner is paused, last contact was %{runner_contact} ago") % { runner_contact: time_ago_in_words(runner.contacted_at) }
+          icon = 'status-paused'
+          span_class = 'gl-text-gray-600'
+        end
+      when :not_connected, :never_contacted
+        title = s_("Runners|New runner, has not contacted yet")
+        icon = 'warning-solid'
       when :offline
         title = s_("Runners|Runner is offline, last contact was %{runner_contact} ago") % { runner_contact: time_ago_in_words(runner.contacted_at) }
         icon = 'status-failed'
         span_class = 'gl-text-red-500'
-      when :paused
-        title = s_("Runners|Runner is paused, last contact was %{runner_contact} ago") % { runner_contact: time_ago_in_words(runner.contacted_at) }
-        icon = 'status-paused'
-        span_class = 'gl-text-gray-600'
       end
 
       content_tag(:span, class: span_class, title: title, data: { toggle: 'tooltip', container: 'body', testid: 'runner_status_icon', qa_selector: "runner_status_#{status}_content" }) do
@@ -57,11 +60,23 @@ module Ci
       end
     end
 
+    def admin_runners_data_attributes
+      {
+        # Runner install help page is external, located at
+        # https://gitlab.com/gitlab-org/gitlab-runner
+        runner_install_help_page: 'https://docs.gitlab.com/runner/install/',
+        registration_token: Gitlab::CurrentSettings.runners_registration_token
+      }
+    end
+
     def group_shared_runners_settings_data(group)
       {
         update_path: api_v4_groups_path(id: group.id),
         shared_runners_availability: group.shared_runners_setting,
-        parent_shared_runners_availability: group.parent&.shared_runners_setting
+        parent_shared_runners_availability: group.parent&.shared_runners_setting,
+        runner_enabled: Namespace::SR_ENABLED,
+        runner_disabled: Namespace::SR_DISABLED_AND_UNOVERRIDABLE,
+        runner_allow_override: Namespace::SR_DISABLED_WITH_OVERRIDE
       }
     end
 
@@ -77,7 +92,7 @@ module Ci
     def toggle_shared_runners_settings_data(project)
       {
         is_enabled: "#{project.shared_runners_enabled?}",
-        is_disabled_and_unoverridable: "#{project.group&.shared_runners_setting == 'disabled_and_unoverridable'}",
+        is_disabled_and_unoverridable: "#{project.group&.shared_runners_setting == Namespace::SR_DISABLED_AND_UNOVERRIDABLE}",
         update_path: toggle_shared_runners_project_runners_path(project)
       }
     end

@@ -2,29 +2,17 @@
 
 require 'spec_helper'
 
-RSpec.describe WebHookService do
+RSpec.describe WebHookService, :request_store, :clean_gitlab_redis_shared_state do
   include StubRequests
 
   let_it_be(:project) { create(:project) }
   let_it_be_with_reload(:project_hook) { create(:project_hook, project: project) }
-
-  let(:headers) do
-    {
-      'Content-Type' => 'application/json',
-      'User-Agent' => "GitLab/#{Gitlab::VERSION}",
-      'X-Gitlab-Event' => 'Push Hook'
-    }
-  end
 
   let(:data) do
     { before: 'oldrev', after: 'newrev', ref: 'ref' }
   end
 
   let(:service_instance) { described_class.new(project_hook, data, :push_hooks) }
-
-  around do |example|
-    travel_to(Time.current) { example.run }
-  end
 
   describe '#initialize' do
     before do
@@ -60,7 +48,41 @@ RSpec.describe WebHookService do
     end
   end
 
+  describe '#disabled?' do
+    using RSpec::Parameterized::TableSyntax
+
+    subject { described_class.new(hook, data, :push_hooks, force: forced) }
+
+    let(:hook) { double(executable?: executable, allow_local_requests?: false) }
+
+    where(:forced, :executable, :disabled) do
+      false | true | false
+      false | false | true
+      true | true | false
+      true | false | false
+    end
+
+    with_them do
+      it { is_expected.to have_attributes(disabled?: disabled) }
+    end
+  end
+
   describe '#execute' do
+    let!(:uuid) { SecureRandom.uuid }
+    let(:headers) do
+      {
+        'Content-Type' => 'application/json',
+        'User-Agent' => "GitLab/#{Gitlab::VERSION}",
+        'X-Gitlab-Event' => 'Push Hook',
+        'X-Gitlab-Event-UUID' => uuid
+      }
+    end
+
+    before do
+      # Set a stable value for the `X-Gitlab-Event-UUID` header.
+      Gitlab::WebHooks::RecursionDetection.set_request_uuid(uuid)
+    end
+
     context 'when token is defined' do
       let_it_be(:project_hook) { create(:project_hook, :token) }
 
@@ -122,15 +144,74 @@ RSpec.describe WebHookService do
     end
 
     it 'does not execute disabled hooks' do
-      project_hook.update!(recent_failures: 4)
+      allow(service_instance).to receive(:disabled?).and_return(true)
 
       expect(service_instance.execute).to eq({ status: :error, message: 'Hook disabled' })
+    end
+
+    it 'executes and registers the hook with the recursion detection', :aggregate_failures do
+      stub_full_request(project_hook.url, method: :post)
+      cache_key = Gitlab::WebHooks::RecursionDetection.send(:cache_key_for_hook, project_hook)
+
+      ::Gitlab::Redis::SharedState.with do |redis|
+        expect { service_instance.execute }.to change {
+          redis.sismember(cache_key, project_hook.id)
+        }.to(true)
+      end
+
+      expect(WebMock).to have_requested(:post, stubbed_hostname(project_hook.url))
+        .with(headers: headers)
+        .once
+    end
+
+    it 'blocks and logs if a recursive web hook is detected', :aggregate_failures do
+      stub_full_request(project_hook.url, method: :post)
+      Gitlab::WebHooks::RecursionDetection.register!(project_hook)
+
+      expect(Gitlab::AuthLogger).to receive(:error).with(
+        include(
+          message: 'Recursive webhook blocked from executing',
+          hook_id: project_hook.id,
+          hook_type: 'ProjectHook',
+          hook_name: 'push_hooks',
+          recursion_detection: Gitlab::WebHooks::RecursionDetection.to_log(project_hook),
+          'correlation_id' => kind_of(String)
+        )
+      )
+
+      service_instance.execute
+
+      expect(WebMock).not_to have_requested(:post, stubbed_hostname(project_hook.url))
+    end
+
+    it 'blocks and logs if the recursion count limit would be exceeded', :aggregate_failures do
+      stub_full_request(project_hook.url, method: :post)
+      stub_const("#{Gitlab::WebHooks::RecursionDetection.name}::COUNT_LIMIT", 3)
+      previous_hooks = create_list(:project_hook, 3)
+      previous_hooks.each { Gitlab::WebHooks::RecursionDetection.register!(_1) }
+
+      expect(Gitlab::AuthLogger).to receive(:error).with(
+        include(
+          message: 'Recursive webhook blocked from executing',
+          hook_id: project_hook.id,
+          hook_type: 'ProjectHook',
+          hook_name: 'push_hooks',
+          recursion_detection: Gitlab::WebHooks::RecursionDetection.to_log(project_hook),
+          'correlation_id' => kind_of(String)
+        )
+      )
+
+      service_instance.execute
+
+      expect(WebMock).not_to have_requested(:post, stubbed_hostname(project_hook.url))
     end
 
     it 'handles exceptions' do
       exceptions = Gitlab::HTTP::HTTP_ERRORS + [
         Gitlab::Json::LimitedEncoder::LimitExceeded, URI::InvalidURIError
       ]
+
+      allow(Gitlab::WebHooks::RecursionDetection).to receive(:block?).and_return(false)
 
       exceptions.each do |exception_class|
         exception = exception_class.new('Exception message')
@@ -172,51 +253,53 @@ RSpec.describe WebHookService do
     end
 
     context 'execution logging' do
-      let(:hook_log) { project_hook.web_hook_logs.last }
-
-      def run_service
-        service_instance.execute
-        ::WebHooks::LogExecutionWorker.drain
-        project_hook.reload
-      end
-
       context 'with success' do
         before do
           stub_full_request(project_hook.url, method: :post).to_return(status: 200, body: 'Success')
         end
 
-        it 'log successful execution' do
-          run_service
+        context 'when forced' do
+          let(:service_instance) { described_class.new(project_hook, data, :push_hooks, force: true) }
 
-          expect(hook_log.trigger).to eq('push_hooks')
-          expect(hook_log.url).to eq(project_hook.url)
-          expect(hook_log.request_headers).to eq(headers)
-          expect(hook_log.response_body).to eq('Success')
-          expect(hook_log.response_status).to eq('200')
-          expect(hook_log.execution_duration).to be > 0
-          expect(hook_log.internal_error_message).to be_nil
+          it 'logs execution inline' do
+            expect(::WebHooks::LogExecutionWorker).not_to receive(:perform_async)
+            expect(::WebHooks::LogExecutionService)
+              .to receive(:new)
+              .with(hook: project_hook, log_data: Hash, response_category: :ok)
+              .and_return(double(execute: nil))
+
+            service_instance.execute
+          end
+        end
+
+        it 'queues LogExecutionWorker correctly' do
+          expect(WebHooks::LogExecutionWorker).to receive(:perform_async)
+            .with(
+              project_hook.id,
+              hash_including(
+                trigger: 'push_hooks',
+                url: project_hook.url,
+                request_headers: headers,
+                request_data: data,
+                response_body: 'Success',
+                response_headers: {},
+                response_status: 200,
+                execution_duration: be > 0,
+                internal_error_message: nil
+              ),
+              :ok,
+              nil
+            )
+
+          service_instance.execute
+        end
+
+        it 'queues LogExecutionWorker correctly, resulting in a log record (integration-style test)', :sidekiq_inline do
+          expect { service_instance.execute }.to change(::WebHookLog, :count).by(1)
         end
 
         it 'does not log in the service itself' do
           expect { service_instance.execute }.not_to change(::WebHookLog, :count)
-        end
-
-        it 'does not increment the failure count' do
-          expect { run_service }.not_to change(project_hook, :recent_failures)
-        end
-
-        it 'does not change the disabled_until attribute' do
-          expect { run_service }.not_to change(project_hook, :disabled_until)
-        end
-
-        context 'when the hook had previously failed' do
-          before do
-            project_hook.update!(recent_failures: 2)
-          end
-
-          it 'resets the failure count' do
-            expect { run_service }.to change(project_hook, :recent_failures).to(0)
-          end
         end
       end
 
@@ -225,45 +308,26 @@ RSpec.describe WebHookService do
           stub_full_request(project_hook.url, method: :post).to_return(status: 400, body: 'Bad request')
         end
 
-        it 'logs failed execution' do
-          run_service
+        it 'queues LogExecutionWorker correctly' do
+          expect(WebHooks::LogExecutionWorker).to receive(:perform_async)
+            .with(
+              project_hook.id,
+              hash_including(
+                trigger: 'push_hooks',
+                url: project_hook.url,
+                request_headers: headers,
+                request_data: data,
+                response_body: 'Bad request',
+                response_headers: {},
+                response_status: 400,
+                execution_duration: be > 0,
+                internal_error_message: nil
+              ),
+              :failed,
+              nil
+            )
 
-          expect(hook_log).to have_attributes(
-            trigger: eq('push_hooks'),
-            url: eq(project_hook.url),
-            request_headers: eq(headers),
-            response_body: eq('Bad request'),
-            response_status: eq('400'),
-            execution_duration: be > 0,
-            internal_error_message: be_nil
-          )
-        end
-
-        it 'increments the failure count' do
-          expect { run_service }.to change(project_hook, :recent_failures).by(1)
-        end
-
-        it 'does not change the disabled_until attribute' do
-          expect { run_service }.not_to change(project_hook, :disabled_until)
-        end
-
-        it 'does not allow the failure count to overflow' do
-          project_hook.update!(recent_failures: 32767)
-
-          expect { run_service }.not_to change(project_hook, :recent_failures)
-        end
-
-        context 'when the web_hooks_disable_failed FF is disabled' do
-          before do
-            # Hook will only be executed if the flag is disabled.
-            stub_feature_flags(web_hooks_disable_failed: false)
-          end
-
-          it 'does not allow the failure count to overflow' do
-            project_hook.update!(recent_failures: 32767)
-
-            expect { run_service }.not_to change(project_hook, :recent_failures)
-          end
+          service_instance.execute
         end
       end
 
@@ -272,65 +336,54 @@ RSpec.describe WebHookService do
           stub_full_request(project_hook.url, method: :post).to_raise(SocketError.new('Some HTTP Post error'))
         end
 
-        it 'log failed execution' do
-          run_service
+        it 'queues LogExecutionWorker correctly' do
+          expect(WebHooks::LogExecutionWorker).to receive(:perform_async)
+            .with(
+              project_hook.id,
+              hash_including(
+                trigger: 'push_hooks',
+                url: project_hook.url,
+                request_headers: headers,
+                request_data: data,
+                response_body: '',
+                response_headers: {},
+                response_status: 'internal error',
+                execution_duration: be > 0,
+                internal_error_message: 'Some HTTP Post error'
+              ),
+              :error,
+              nil
+            )
 
-          expect(hook_log.trigger).to eq('push_hooks')
-          expect(hook_log.url).to eq(project_hook.url)
-          expect(hook_log.request_headers).to eq(headers)
-          expect(hook_log.response_body).to eq('')
-          expect(hook_log.response_status).to eq('internal error')
-          expect(hook_log.execution_duration).to be > 0
-          expect(hook_log.internal_error_message).to eq('Some HTTP Post error')
-        end
-
-        it 'does not increment the failure count' do
-          expect { run_service }.not_to change(project_hook, :recent_failures)
-        end
-
-        it 'backs off' do
-          expect { run_service }.to change(project_hook, :disabled_until)
-        end
-
-        it 'increases the backoff count' do
-          expect { run_service }.to change(project_hook, :backoff_count).by(1)
-        end
-
-        context 'when the previous cool-off was near the maximum' do
-          before do
-            project_hook.update!(disabled_until: 5.minutes.ago, backoff_count: 8)
-          end
-
-          it 'sets the disabled_until attribute' do
-            expect { run_service }.to change(project_hook, :disabled_until).to(1.day.from_now)
-          end
-        end
-
-        context 'when we have backed-off many many times' do
-          before do
-            project_hook.update!(disabled_until: 5.minutes.ago, backoff_count: 365)
-          end
-
-          it 'sets the disabled_until attribute' do
-            expect { run_service }.to change(project_hook, :disabled_until).to(1.day.from_now)
-          end
+          service_instance.execute
         end
       end
 
       context 'with unsafe response body' do
         before do
           stub_full_request(project_hook.url, method: :post).to_return(status: 200, body: "\xBB")
-          run_service
         end
 
-        it 'log successful execution' do
-          expect(hook_log.trigger).to eq('push_hooks')
-          expect(hook_log.url).to eq(project_hook.url)
-          expect(hook_log.request_headers).to eq(headers)
-          expect(hook_log.response_body).to eq('')
-          expect(hook_log.response_status).to eq('200')
-          expect(hook_log.execution_duration).to be > 0
-          expect(hook_log.internal_error_message).to be_nil
+        it 'queues LogExecutionWorker with sanitized response_body' do
+          expect(WebHooks::LogExecutionWorker).to receive(:perform_async)
+            .with(
+              project_hook.id,
+              hash_including(
+                trigger: 'push_hooks',
+                url: project_hook.url,
+                request_headers: headers,
+                request_data: data,
+                response_body: '',
+                response_headers: {},
+                response_status: 200,
+                execution_duration: be > 0,
+                internal_error_message: nil
+              ),
+              :ok,
+              nil
+            )
+
+          service_instance.execute
         end
       end
     end
@@ -338,7 +391,7 @@ RSpec.describe WebHookService do
 
   describe '#async_execute' do
     def expect_to_perform_worker(hook)
-      expect(WebHookWorker).to receive(:perform_async).with(hook.id, data, 'push_hooks')
+      expect(WebHookWorker).to receive(:perform_async).with(hook.id, data, 'push_hooks', an_instance_of(Hash))
     end
 
     def expect_to_rate_limit(hook, threshold:, throttled: false)
@@ -392,7 +445,7 @@ RSpec.describe WebHookService do
         end
       end
 
-      context 'when the hook is throttled (via Redis)', :clean_gitlab_redis_cache do
+      context 'when the hook is throttled (via Redis)', :clean_gitlab_redis_rate_limiting do
         before do
           # Set a high interval to avoid intermittent failures in CI
           allow(Gitlab::ApplicationRateLimiter).to receive(:rate_limits).and_return(
@@ -417,6 +470,57 @@ RSpec.describe WebHookService do
 
           described_class.new(other_hook, data, :push_hooks).async_execute
         end
+      end
+    end
+
+    context 'recursion detection' do
+      before do
+        # Set a request UUID so `RecursionDetection.block?` will query redis.
+        Gitlab::WebHooks::RecursionDetection.set_request_uuid(SecureRandom.uuid)
+      end
+
+      it 'does not queue a worker and logs an error if the call chain limit would be exceeded' do
+        stub_const("#{Gitlab::WebHooks::RecursionDetection.name}::COUNT_LIMIT", 3)
+        previous_hooks = create_list(:project_hook, 3)
+        previous_hooks.each { Gitlab::WebHooks::RecursionDetection.register!(_1) }
+
+        expect(WebHookWorker).not_to receive(:perform_async)
+        expect(Gitlab::AuthLogger).to receive(:error).with(
+          include(
+            message: 'Recursive webhook blocked from executing',
+            hook_id: project_hook.id,
+            hook_type: 'ProjectHook',
+            hook_name: 'push_hooks',
+            recursion_detection: Gitlab::WebHooks::RecursionDetection.to_log(project_hook),
+            'correlation_id' => kind_of(String),
+            'meta.project' => project.full_path,
+            'meta.related_class' => 'ProjectHook',
+            'meta.root_namespace' => project.root_namespace.full_path
+          )
+        )
+
+        service_instance.async_execute
+      end
+
+      it 'does not queue a worker and logs an error if a recursive call chain is detected' do
+        Gitlab::WebHooks::RecursionDetection.register!(project_hook)
+
+        expect(WebHookWorker).not_to receive(:perform_async)
+        expect(Gitlab::AuthLogger).to receive(:error).with(
+          include(
+            message: 'Recursive webhook blocked from executing',
+            hook_id: project_hook.id,
+            hook_type: 'ProjectHook',
+            hook_name: 'push_hooks',
+            recursion_detection: Gitlab::WebHooks::RecursionDetection.to_log(project_hook),
+            'correlation_id' => kind_of(String),
+            'meta.project' => project.full_path,
+            'meta.related_class' => 'ProjectHook',
+            'meta.root_namespace' => project.root_namespace.full_path
+          )
+        )
+
+        service_instance.async_execute
       end
     end
 

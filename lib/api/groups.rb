@@ -84,15 +84,16 @@ module API
         paginate(projects)
       end
 
-      def present_projects(params, projects)
+      def present_projects(params, projects, single_hierarchy: false)
         options = {
           with: params[:simple] ? Entities::BasicProjectDetails : Entities::Project,
-          current_user: current_user
+          current_user: current_user,
+          single_hierarchy: single_hierarchy
         }
 
         projects, options = with_custom_attributes(projects, options)
 
-        present options[:with].prepare_relation(projects), options
+        present options[:with].prepare_relation(projects, options), options
       end
 
       def present_groups(params, groups)
@@ -106,6 +107,20 @@ module API
         groups, options = with_custom_attributes(groups, options)
 
         present paginate(groups), options
+      end
+
+      def present_groups_with_pagination_strategies(params, groups)
+        return present_groups(params, groups) if current_user.present?
+
+        options = {
+          with: Entities::Group,
+          current_user: nil,
+          statistics: false
+        }
+
+        groups, options = with_custom_attributes(groups, options)
+
+        present paginate_with_strategies(groups), options
       end
 
       def delete_group(group)
@@ -168,7 +183,7 @@ module API
       end
       get do
         groups = find_groups(declared_params(include_missing: false), params[:id])
-        present_groups params, groups
+        present_groups_with_pagination_strategies params, groups
       end
 
       desc 'Create a group. Available only for users who can create groups.' do
@@ -278,6 +293,7 @@ module API
         optional :with_merge_requests_enabled, type: Boolean, default: false, desc: 'Limit by enabled merge requests feature'
         optional :with_shared, type: Boolean, default: true, desc: 'Include projects shared to this group'
         optional :include_subgroups, type: Boolean, default: false, desc: 'Includes projects in subgroups of this group'
+        optional :include_ancestor_groups, type: Boolean, default: false, desc: 'Includes projects in ancestors of this group'
         optional :min_access_level, type: Integer, values: Gitlab::Access.all_values, desc: 'Limit by minimum access level of authenticated user on projects'
 
         use :pagination
@@ -287,12 +303,13 @@ module API
       get ":id/projects" do
         finder_options = {
           only_owned: !params[:with_shared],
-          include_subgroups: params[:include_subgroups]
+          include_subgroups: params[:include_subgroups],
+          include_ancestor_groups: params[:include_ancestor_groups]
         }
 
         projects = find_group_projects(params, finder_options)
 
-        present_projects(params, projects)
+        present_projects(params, projects, single_hierarchy: true)
       end
 
       desc 'Get a list of shared projects in this group' do
@@ -365,6 +382,28 @@ module API
           present group, with: Entities::GroupDetail, current_user: current_user
         else
           render_api_error!("Failed to transfer project #{project.errors.messages}", 400)
+        end
+      end
+
+      desc 'Transfer a group to a new parent group or promote a subgroup to a root group'
+      params do
+        optional :group_id, type: Integer,
+          desc: 'The ID of the target group to which the group needs to be transferred to.'\
+                'If not provided, the source group will be promoted to a root group.'
+      end
+      post ':id/transfer' do
+        group = find_group!(params[:id])
+        authorize! :admin_group, group
+
+        new_parent_group = find_group!(params[:group_id]) if params[:group_id].present?
+
+        service = ::Groups::TransferService.new(group, current_user)
+
+        if service.execute(new_parent_group)
+          group.preload_shared_group_links
+          present group, with: Entities::GroupDetail, current_user: current_user
+        else
+          render_api_error!(service.error, 400)
         end
       end
 

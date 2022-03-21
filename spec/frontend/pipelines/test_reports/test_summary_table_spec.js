@@ -1,17 +1,15 @@
-import { mount, createLocalVue } from '@vue/test-utils';
+import { mount } from '@vue/test-utils';
+import Vue from 'vue';
 import Vuex from 'vuex';
-import { getJSONFixture } from 'helpers/fixtures';
+import testReports from 'test_fixtures/pipelines/test_report.json';
 import SummaryTable from '~/pipelines/components/test_reports/test_summary_table.vue';
 import * as getters from '~/pipelines/stores/test_reports/getters';
 
-const localVue = createLocalVue();
-localVue.use(Vuex);
+Vue.use(Vuex);
 
 describe('Test reports summary table', () => {
   let wrapper;
   let store;
-
-  const testReports = getJSONFixture('pipelines/test_report.json');
 
   const allSuitesRows = () => wrapper.findAll('.js-suite-row');
   const noSuitesToShow = () => wrapper.find('.js-no-tests-suites');
@@ -31,7 +29,6 @@ describe('Test reports summary table', () => {
     wrapper = mount(SummaryTable, {
       propsData: defaultProps,
       store,
-      localVue,
     });
   };
 

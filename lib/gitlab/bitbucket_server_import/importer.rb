@@ -19,7 +19,8 @@ module Gitlab
       end
 
       def self.refmap
-        [:heads, :tags, '+refs/pull-requests/*/to:refs/merge-requests/*/head']
+        # We omit :heads and :tags since these are fetched in the import_repository
+        ['+refs/pull-requests/*/to:refs/merge-requests/*/head']
       end
 
       # Unlike GitHub, you can't grab the commit SHAs for pull requests that
@@ -56,7 +57,7 @@ module Gitlab
 
         log_info(stage: "complete")
 
-        Gitlab::Cache::Import::Caching.expire(already_imported_cache_key, 15.minutes.to_i)
+        Gitlab::Cache::Import::Caching.expire(already_imported_cache_key, Gitlab::Cache::Import::Caching::SHORTER_TIMEOUT)
         true
       end
 
@@ -140,11 +141,11 @@ module Gitlab
       def import_repository
         log_info(stage: 'import_repository', message: 'starting import')
 
-        project.ensure_repository
+        project.repository.import_repository(project.import_url)
         project.repository.fetch_as_mirror(project.import_url, refmap: self.class.refmap)
 
         log_info(stage: 'import_repository', message: 'finished import')
-      rescue Gitlab::Shell::Error => e
+      rescue ::Gitlab::Git::CommandError => e
         Gitlab::ErrorTracking.log_exception(
           e,
           stage: 'import_repository', message: 'failed import', error: e.message
@@ -461,10 +462,14 @@ module Gitlab
       end
 
       def uid(rep_object)
-        find_user_id(by: :email, value: rep_object.author_email) unless Feature.enabled?(:bitbucket_server_user_mapping_by_username)
-
-        find_user_id(by: :username, value: rep_object.author_username) ||
+        # We want this explicit to only be username on the FF
+        # Otherwise, match email.
+        # There should be no default fall-through on username. Fall-through to import user
+        if Feature.enabled?(:bitbucket_server_user_mapping_by_username)
+          find_user_id(by: :username, value: rep_object.author_username)
+        else
           find_user_id(by: :email, value: rep_object.author_email)
+        end
       end
     end
   end

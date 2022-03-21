@@ -6,7 +6,7 @@ module AutoMerge
     include MergeRequests::AssignsMergeParams
 
     def execute(merge_request)
-      ActiveRecord::Base.transaction do # rubocop: disable Database/MultipleDatabases
+      ApplicationRecord.transaction do
         register_auto_merge_parameters!(merge_request)
         yield if block_given?
       end
@@ -29,7 +29,7 @@ module AutoMerge
     end
 
     def cancel(merge_request)
-      ActiveRecord::Base.transaction do # rubocop: disable Database/MultipleDatabases
+      ApplicationRecord.transaction do
         clear_auto_merge_parameters!(merge_request)
         yield if block_given?
       end
@@ -41,7 +41,7 @@ module AutoMerge
     end
 
     def abort(merge_request, reason)
-      ActiveRecord::Base.transaction do # rubocop: disable Database/MultipleDatabases
+      ApplicationRecord.transaction do
         clear_auto_merge_parameters!(merge_request)
         yield if block_given?
       end
@@ -64,7 +64,7 @@ module AutoMerge
     # NOTE: This method is to be removed when `disallow_to_create_merge_request_pipelines_in_target_project`
     # feature flag is removed.
     def self.can_add_to_merge_train?(merge_request)
-      if Gitlab::Ci::Features.disallow_to_create_merge_request_pipelines_in_target_project?(merge_request.target_project)
+      if ::Feature.enabled?(:ci_disallow_to_create_merge_request_pipelines_in_target_project, merge_request.target_project)
         merge_request.for_same_project?
       else
         true

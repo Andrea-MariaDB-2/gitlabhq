@@ -207,9 +207,9 @@ RSpec.describe Gitlab::ImportExport::FastHashSerializer do
 
   context 'relation ordering' do
     it 'orders exported pipelines by primary key' do
-      expected_order = project.ci_pipelines.reorder(:id).ids
+      expected_order = project.ci_pipelines.reorder(:id).pluck(:sha)
 
-      expect(subject['ci_pipelines'].pluck('id')).to eq(expected_order)
+      expect(subject['ci_pipelines'].pluck('sha')).to eq(expected_order)
     end
   end
 
@@ -240,7 +240,7 @@ RSpec.describe Gitlab::ImportExport::FastHashSerializer do
     merge_request = create(:merge_request, source_project: project, milestone: milestone)
 
     ci_build = create(:ci_build, project: project, when: nil)
-    ci_build.pipeline.update(project: project)
+    ci_build.pipeline.update!(project: project)
     create(:commit_status, project: project, pipeline: ci_build.pipeline)
 
     create_list(:ci_pipeline, 5, :success, project: project)
@@ -258,7 +258,7 @@ RSpec.describe Gitlab::ImportExport::FastHashSerializer do
     create(:resource_label_event, label: group_label, merge_request: merge_request)
 
     create(:event, :created, target: milestone, project: project, author: user)
-    create(:service, project: project, type: 'CustomIssueTrackerService', category: 'issue_tracker', properties: { one: 'value' })
+    create(:integration, project: project, type: 'CustomIssueTrackerService', category: 'issue_tracker', properties: { one: 'value' })
 
     create(:project_custom_attribute, project: project)
     create(:project_custom_attribute, project: project)

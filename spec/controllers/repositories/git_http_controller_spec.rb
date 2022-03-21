@@ -7,11 +7,32 @@ RSpec.describe Repositories::GitHttpController do
   let_it_be(:personal_snippet) { create(:personal_snippet, :public, :repository) }
   let_it_be(:project_snippet) { create(:project_snippet, :public, :repository, project: project) }
 
+  shared_examples 'handles unavailable Gitaly' do
+    let(:params) { super().merge(service: 'git-upload-pack') }
+
+    before do
+      request.headers.merge! auth_env(user.username, user.password, nil)
+    end
+
+    context 'when Gitaly is unavailable' do
+      it 'responds with a 503 message' do
+        expect(Gitlab::GitalyClient).to receive(:call).and_raise(GRPC::Unavailable)
+
+        get :info_refs, params: params
+
+        expect(response).to have_gitlab_http_status(:service_unavailable)
+        expect(response.body).to eq('The git server, Gitaly, is not available at this time. Please contact your administrator.')
+      end
+    end
+  end
+
   context 'when repository container is a project' do
     it_behaves_like Repositories::GitHttpController do
       let(:container) { project }
-      let(:user) { project.owner }
+      let(:user) { project.first_owner }
       let(:access_checker_class) { Gitlab::GitAccess }
+
+      it_behaves_like 'handles unavailable Gitaly'
 
       describe 'POST #git_upload_pack' do
         before do
@@ -69,12 +90,20 @@ RSpec.describe Repositories::GitHttpController do
         end
       end
     end
+
+    context 'when the user is a deploy token' do
+      it_behaves_like Repositories::GitHttpController do
+        let(:container) { project }
+        let(:user) { create(:deploy_token, :project, projects: [project]) }
+        let(:access_checker_class) { Gitlab::GitAccess }
+      end
+    end
   end
 
   context 'when repository container is a project wiki' do
     it_behaves_like Repositories::GitHttpController do
       let(:container) { create(:project_wiki, :empty_repo, project: project) }
-      let(:user) { project.owner }
+      let(:user) { project.first_owner }
       let(:access_checker_class) { Gitlab::GitAccessWiki }
     end
   end
@@ -84,6 +113,8 @@ RSpec.describe Repositories::GitHttpController do
       let(:container) { personal_snippet }
       let(:user) { personal_snippet.author }
       let(:access_checker_class) { Gitlab::GitAccessSnippet }
+
+      it_behaves_like 'handles unavailable Gitaly'
     end
   end
 
@@ -92,6 +123,8 @@ RSpec.describe Repositories::GitHttpController do
       let(:container) { project_snippet }
       let(:user) { project_snippet.author }
       let(:access_checker_class) { Gitlab::GitAccessSnippet }
+
+      it_behaves_like 'handles unavailable Gitaly'
     end
   end
 end

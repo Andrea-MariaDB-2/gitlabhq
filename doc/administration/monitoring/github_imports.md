@@ -1,12 +1,10 @@
 ---
 stage: Monitor
-group: Monitor
+group: Respond
 info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
 ---
 
 # Monitoring GitHub imports **(FREE SELF)**
-
-> [Introduced](https://gitlab.com/gitlab-org/gitlab-foss/-/merge_requests/14731) in GitLab 10.2.
 
 The GitHub importer exposes various Prometheus metrics that you can use to
 monitor the health and progress of the importer.

@@ -33,7 +33,8 @@ module Gitlab
                       links: 'Releases::Link',
                       metrics_setting: 'ProjectMetricsSetting',
                       commit_author: 'MergeRequest::DiffCommitUser',
-                      committer: 'MergeRequest::DiffCommitUser' }.freeze
+                      committer: 'MergeRequest::DiffCommitUser',
+                      merge_request_diff_commits: 'MergeRequestDiffCommit' }.freeze
 
         BUILD_MODELS = %i[Ci::Build commit_status].freeze
 
@@ -59,6 +60,7 @@ module Gitlab
           external_pull_requests
           DesignManagement::Design
           MergeRequest::DiffCommitUser
+          MergeRequestDiffCommit
         ].freeze
 
         def create
@@ -84,6 +86,7 @@ module Gitlab
           when :'Ci::Pipeline' then setup_pipeline
           when *BUILD_MODELS then setup_build
           when :issues then setup_issue
+          when :'Ci::PipelineSchedule' then setup_pipeline_schedule
           end
 
           update_project_references
@@ -128,7 +131,9 @@ module Gitlab
         end
 
         def setup_diff
-          @relation_hash['diff'] = @relation_hash.delete('utf8_diff')
+          diff = @relation_hash.delete('utf8_diff')
+
+          parsed_relation_hash['diff'] = diff
         end
 
         def setup_pipeline
@@ -141,6 +146,10 @@ module Gitlab
 
         def setup_issue
           @relation_hash['relative_position'] = compute_relative_position
+        end
+
+        def setup_pipeline_schedule
+          @relation_hash['active'] = false
         end
 
         def compute_relative_position

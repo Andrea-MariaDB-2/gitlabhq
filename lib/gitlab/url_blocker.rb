@@ -13,6 +13,7 @@ module Gitlab
       # ports - Raises error if the given URL port does is not between given ports.
       # allow_localhost - Raises error if URL resolves to a localhost IP address and argument is false.
       # allow_local_network - Raises error if URL resolves to a link-local address and argument is false.
+      # allow_object_storage - Avoid raising an error if URL resolves to an object storage endpoint and argument is true.
       # ascii_only - Raises error if URL has unicode characters and argument is true.
       # enforce_user - Raises error if URL user doesn't start with alphanumeric characters and argument is true.
       # enforce_sanitization - Raises error if URL includes any HTML/CSS/JS tags and argument is true.
@@ -25,6 +26,7 @@ module Gitlab
         schemes: [],
         allow_localhost: false,
         allow_local_network: true,
+        allow_object_storage: false,
         ascii_only: false,
         enforce_user: false,
         enforce_sanitization: false,
@@ -57,6 +59,8 @@ module Gitlab
 
         # Allow url from the GitLab instance itself but only for the configured hostname and ports
         return protected_uri_with_hostname if internal?(uri)
+
+        return protected_uri_with_hostname if allow_object_storage && object_storage_endpoint?(uri)
 
         validate_local_request(
           address_info: address_info,
@@ -148,7 +152,16 @@ module Gitlab
         unless allow_local_network
           validate_local_network(address_info)
           validate_link_local(address_info)
+          validate_shared_address(address_info)
+          validate_limited_broadcast_address(address_info)
         end
+      end
+
+      def validate_shared_address(addrs_info)
+        netmask = IPAddr.new('100.64.0.0/10')
+        return unless addrs_info.any? { |addr| netmask.include?(addr.ip_address) }
+
+        raise BlockedUrlError, "Requests to the shared address space are not allowed"
       end
 
       def get_port(uri)
@@ -164,15 +177,21 @@ module Gitlab
       end
 
       def parse_url(url)
-        raise Addressable::URI::InvalidURIError if multiline?(url)
-
-        Addressable::URI.parse(url)
+        Addressable::URI.parse(url).tap do |parsed_url|
+          raise Addressable::URI::InvalidURIError if multiline_blocked?(parsed_url)
+        end
       rescue Addressable::URI::InvalidURIError, URI::InvalidURIError
         raise BlockedUrlError, 'URI is invalid'
       end
 
-      def multiline?(url)
-        CGI.unescape(url.to_s) =~ /\n|\r/
+      def multiline_blocked?(parsed_url)
+        url = parsed_url.to_s
+
+        return true if url =~ /\n|\r/
+        # Google Cloud Storage uses a multi-line, encoded Signature query string
+        return false if %w(http https).include?(parsed_url.scheme&.downcase)
+
+        CGI.unescape(url) =~ /\n|\r/
       end
 
       def validate_port(port, ports)
@@ -239,6 +258,17 @@ module Gitlab
         raise BlockedUrlError, "Requests to the link local network are not allowed"
       end
 
+      # Raises a BlockedUrlError if any IP in `addrs_info` is the limited
+      # broadcast address.
+      # https://datatracker.ietf.org/doc/html/rfc919#section-7
+      def validate_limited_broadcast_address(addrs_info)
+        blocked_ips = ["255.255.255.255"]
+
+        return if (blocked_ips & addrs_info.map(&:ip_address)).empty?
+
+        raise BlockedUrlError, "Requests to the limited broadcast address are not allowed"
+      end
+
       def internal?(uri)
         internal_web?(uri) || internal_shell?(uri)
       end
@@ -246,13 +276,37 @@ module Gitlab
       def internal_web?(uri)
         uri.scheme == config.gitlab.protocol &&
           uri.hostname == config.gitlab.host &&
-          (uri.port.blank? || uri.port == config.gitlab.port)
+          get_port(uri) == config.gitlab.port
       end
 
       def internal_shell?(uri)
         uri.scheme == 'ssh' &&
           uri.hostname == config.gitlab_shell.ssh_host &&
-          (uri.port.blank? || uri.port == config.gitlab_shell.ssh_port)
+          get_port(uri) == config.gitlab_shell.ssh_port
+      end
+
+      def enabled_object_storage_endpoints
+        ObjectStoreSettings::SUPPORTED_TYPES.collect do |type|
+          section_setting = config.try(type)
+
+          next unless section_setting
+
+          object_store_setting = section_setting['object_store']
+
+          next unless object_store_setting && object_store_setting['enabled']
+
+          object_store_setting.dig('connection', 'endpoint')
+        end.compact.uniq
+      end
+
+      def object_storage_endpoint?(uri)
+        enabled_object_storage_endpoints.any? do |endpoint|
+          endpoint_uri = URI(endpoint)
+
+          uri.scheme == endpoint_uri.scheme &&
+            uri.hostname == endpoint_uri.hostname &&
+            get_port(uri) == get_port(endpoint_uri)
+        end
       end
 
       def domain_allowed?(uri)

@@ -17,6 +17,7 @@ export const REPORT_FILE_TYPES = {
  * Security scan report types, as provided by the backend.
  */
 export const REPORT_TYPE_SAST = 'sast';
+export const REPORT_TYPE_SAST_IAC = 'sast_iac';
 export const REPORT_TYPE_DAST = 'dast';
 export const REPORT_TYPE_DAST_PROFILES = 'dast_profiles';
 export const REPORT_TYPE_SECRET_DETECTION = 'secret_detection';
@@ -24,6 +25,7 @@ export const REPORT_TYPE_DEPENDENCY_SCANNING = 'dependency_scanning';
 export const REPORT_TYPE_CONTAINER_SCANNING = 'container_scanning';
 export const REPORT_TYPE_CLUSTER_IMAGE_SCANNING = 'cluster_image_scanning';
 export const REPORT_TYPE_COVERAGE_FUZZING = 'coverage_fuzzing';
+export const REPORT_TYPE_CORPUS_MANAGEMENT = 'corpus_management';
 export const REPORT_TYPE_LICENSE_COMPLIANCE = 'license_scanning';
 export const REPORT_TYPE_API_FUZZING = 'api_fuzzing';
 

@@ -1,8 +1,10 @@
 # frozen_string_literal: true
 
-class PostReceive # rubocop:disable Scalability/IdempotentWorker
+class PostReceive
   include ApplicationWorker
 
+  idempotent!
+  deduplicate :none
   data_consistency :always
 
   sidekiq_options retry: 3
@@ -126,7 +128,6 @@ class PostReceive # rubocop:disable Scalability/IdempotentWorker
   end
 
   def after_project_changes_hooks(project, user, refs, changes)
-    experiment(:empty_repo_upload, project: project).track_initial_write
     repository_update_hook_data = Gitlab::DataBuilder::Repository.update(project, user, changes, refs)
     SystemHooksService.new.execute_hooks(repository_update_hook_data, :repository_update_hooks)
     Gitlab::UsageDataCounters::SourceCodeCounter.count(:pushes)

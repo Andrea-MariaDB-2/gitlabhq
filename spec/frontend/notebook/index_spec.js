@@ -1,30 +1,26 @@
-import Vue from 'vue';
+import { mount } from '@vue/test-utils';
+import Vue, { nextTick } from 'vue';
+import json from 'test_fixtures/blob/notebook/basic.json';
+import jsonWithWorksheet from 'test_fixtures/blob/notebook/worksheets.json';
 import Notebook from '~/notebook/index.vue';
 
 const Component = Vue.extend(Notebook);
 
 describe('Notebook component', () => {
   let vm;
-  let json;
-  let jsonWithWorksheet;
 
-  beforeEach(() => {
-    json = getJSONFixture('blob/notebook/basic.json');
-    jsonWithWorksheet = getJSONFixture('blob/notebook/worksheets.json');
-  });
+  function buildComponent(notebook) {
+    return mount(Component, {
+      propsData: { notebook, codeCssClass: 'js-code-class' },
+      provide: { relativeRawPath: '' },
+    }).vm;
+  }
 
   describe('without JSON', () => {
-    beforeEach((done) => {
-      vm = new Component({
-        propsData: {
-          notebook: {},
-        },
-      });
-      vm.$mount();
+    beforeEach(() => {
+      vm = buildComponent({});
 
-      setImmediate(() => {
-        done();
-      });
+      return nextTick();
     });
 
     it('does not render', () => {
@@ -33,18 +29,10 @@ describe('Notebook component', () => {
   });
 
   describe('with JSON', () => {
-    beforeEach((done) => {
-      vm = new Component({
-        propsData: {
-          notebook: json,
-          codeCssClass: 'js-code-class',
-        },
-      });
-      vm.$mount();
+    beforeEach(() => {
+      vm = buildComponent(json);
 
-      setImmediate(() => {
-        done();
-      });
+      return nextTick();
     });
 
     it('renders cells', () => {
@@ -65,18 +53,10 @@ describe('Notebook component', () => {
   });
 
   describe('with worksheets', () => {
-    beforeEach((done) => {
-      vm = new Component({
-        propsData: {
-          notebook: jsonWithWorksheet,
-          codeCssClass: 'js-code-class',
-        },
-      });
-      vm.$mount();
+    beforeEach(() => {
+      vm = buildComponent(jsonWithWorksheet);
 
-      setImmediate(() => {
-        done();
-      });
+      return nextTick();
     });
 
     it('renders cells', () => {

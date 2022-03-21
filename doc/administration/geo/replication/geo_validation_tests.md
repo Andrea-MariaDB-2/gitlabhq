@@ -2,7 +2,6 @@
 stage: Enablement
 group: Geo
 info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
-type: howto
 ---
 
 # Geo validation tests **(PREMIUM SELF)**
@@ -114,6 +113,13 @@ The following are GitLab upgrade validation tests we performed.
 
 The following are PostgreSQL upgrade validation tests we performed.
 
+### September 2021
+
+[Verify Geo installation with PostgreSQL 13](https://gitlab.com/gitlab-org/omnibus-gitlab/-/issues/6131):
+
+- Description: With PostgreSQL 13 available as an opt-in version in GitLab 14.1, we tested fresh installations of GitLab with Geo when PostgreSQL 13 is enabled.
+- Outcome: Successfully built an environment with Geo and PostgreSQL 13 using [GitLab Environment Toolkit](https://gitlab.com/gitlab-org/gitlab-environment-toolkit) and performed Geo QA tests against the environment without failures.
+
 ### September 2020
 
 [Verify PostgreSQL 12 upgrade for Geo installations](https://gitlab.com/gitlab-org/omnibus-gitlab/-/issues/5454):
@@ -168,7 +174,7 @@ The following are PostgreSQL upgrade validation tests we performed.
 [Test and validate PostgreSQL 10.0 upgrade for Geo](https://gitlab.com/gitlab-org/gitlab/-/issues/12092):
 
 - Description: With the 12.0 release, GitLab required an upgrade to PostgreSQL 10.0. We tested
-  various upgrade scenarios from GitLab 11.11.5 through to GitLab 12.1.8.
+  various upgrade scenarios up to GitLab 12.1.8.
 - Outcome: Multiple issues were found when upgrading and addressed in follow-up issues.
 - Follow up issues:
   - [`gitlab-ctl` reconfigure fails on Redis node in multi-node Geo setup](https://gitlab.com/gitlab-org/omnibus-gitlab/-/issues/4706).
@@ -194,3 +200,12 @@ The following are additional validation tests we performed.
 
 - Description: Tested a Geo deployment with Gitaly clusters configured on both the primary and secondary Geo sites. Triggered automatic Gitaly cluster failover on the primary Geo site, and ran end-to-end Geo tests. Then triggered Gitaly cluster failover on the secondary Geo site, and re-ran the end-to-end Geo tests.
 - Outcome: Successful end-to-end tests before and after Gitaly cluster failover on the primary site, and before and after Gitaly cluster failover on the secondary site.
+
+### January 2022
+
+[Validate Object storage replication using Azure based object storage](https://gitlab.com/gitlab-org/gitlab/-/issues/348804#note_821294631):
+
+- Description: Tested the average time it takes for a single image to replicate from the primary object storage location to the secondary when using Azure based object storage replication and [GitLab based object storage replication](object_storage.md#enabling-gitlab-managed-object-storage-replication). This was tested by uploading a 1mb image to a project on the primary site every second for 60 seconds. The time was then measured until a image was available on the secondary site. This was achieved using a [Ruby Script](https://gitlab.com/gitlab-org/quality/geo-replication-tester).
+- Outcome: When using Azure based replication the average time for an image to replicate from the primary object storage to the secondary was recorded as 40 seconds, the longest replication time was 70 seconds and the quickest was 11 seconds. When using GitLab based replication the average time for replication to complete was 5 seconds, the longest replication time was 10 seconds and the quickest was 3 seconds.
+- Follow up issue:
+  - [Test and validate object storage replication performance on reference architectures](https://gitlab.com/gitlab-org/gitlab/-/issues/347314)

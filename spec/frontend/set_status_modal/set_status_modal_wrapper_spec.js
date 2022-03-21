@@ -1,6 +1,7 @@
 import { GlModal, GlFormCheckbox } from '@gitlab/ui';
 import { shallowMount } from '@vue/test-utils';
-import { initEmojiMock } from 'helpers/emoji';
+import { nextTick } from 'vue';
+import { initEmojiMock, clearEmojiMock } from 'helpers/emoji';
 import * as UserApi from '~/api/user_api';
 import EmojiPicker from '~/emoji/components/picker.vue';
 import createFlash from '~/flash';
@@ -12,7 +13,6 @@ jest.mock('~/flash');
 
 describe('SetStatusModalWrapper', () => {
   let wrapper;
-  let mockEmoji;
   const $toast = {
     show: jest.fn(),
   };
@@ -49,7 +49,7 @@ describe('SetStatusModalWrapper', () => {
   const findAvailabilityCheckbox = () => wrapper.find(GlFormCheckbox);
   const findClearStatusAtMessage = () => wrapper.find('[data-testid="clear-status-at-message"]');
 
-  const initModal = ({ mockOnUpdateSuccess = true, mockOnUpdateFailure = true } = {}) => {
+  const initModal = async ({ mockOnUpdateSuccess = true, mockOnUpdateFailure = true } = {}) => {
     const modal = findModal();
     // mock internal emoji methods
     wrapper.vm.showEmojiMenu = jest.fn();
@@ -58,17 +58,17 @@ describe('SetStatusModalWrapper', () => {
     if (mockOnUpdateFailure) wrapper.vm.onUpdateFail = jest.fn();
 
     modal.vm.$emit('shown');
-    return wrapper.vm.$nextTick();
+    await nextTick();
   };
 
   afterEach(() => {
     wrapper.destroy();
-    mockEmoji.restore();
+    clearEmojiMock();
   });
 
   describe('with minimum props', () => {
     beforeEach(async () => {
-      mockEmoji = await initEmojiMock();
+      await initEmojiMock();
       wrapper = createComponent();
       return initModal();
     });
@@ -111,14 +111,23 @@ describe('SetStatusModalWrapper', () => {
   });
 
   describe('improvedEmojiPicker is true', () => {
+    const getEmojiPicker = () => wrapper.findComponent(EmojiPicker);
+
     beforeEach(async () => {
-      mockEmoji = await initEmojiMock();
+      await initEmojiMock();
       wrapper = createComponent({}, true);
       return initModal();
     });
 
+    it('renders emoji picker dropdown with custom positioning', () => {
+      expect(getEmojiPicker().props()).toMatchObject({
+        right: false,
+        boundary: 'viewport',
+      });
+    });
+
     it('sets emojiTag when clicking in emoji picker', async () => {
-      await wrapper.findComponent(EmojiPicker).vm.$emit('click', 'thumbsup');
+      await getEmojiPicker().vm.$emit('click', 'thumbsup');
 
       expect(wrapper.vm.emojiTag).toContain('data-name="thumbsup"');
     });
@@ -126,7 +135,7 @@ describe('SetStatusModalWrapper', () => {
 
   describe('with no currentMessage set', () => {
     beforeEach(async () => {
-      mockEmoji = await initEmojiMock();
+      await initEmojiMock();
       wrapper = createComponent({ currentMessage: '' });
       return initModal();
     });
@@ -146,7 +155,7 @@ describe('SetStatusModalWrapper', () => {
 
   describe('with no currentEmoji set', () => {
     beforeEach(async () => {
-      mockEmoji = await initEmojiMock();
+      await initEmojiMock();
       wrapper = createComponent({ currentEmoji: '' });
       return initModal();
     });
@@ -161,7 +170,7 @@ describe('SetStatusModalWrapper', () => {
 
     describe('with no currentMessage set', () => {
       beforeEach(async () => {
-        mockEmoji = await initEmojiMock();
+        await initEmojiMock();
         wrapper = createComponent({ currentEmoji: '', currentMessage: '' });
         return initModal();
       });
@@ -174,7 +183,7 @@ describe('SetStatusModalWrapper', () => {
 
   describe('with currentClearStatusAfter set', () => {
     beforeEach(async () => {
-      mockEmoji = await initEmojiMock();
+      await initEmojiMock();
       wrapper = createComponent({ currentClearStatusAfter: '2021-01-01 00:00:00 UTC' });
       return initModal();
     });
@@ -190,7 +199,7 @@ describe('SetStatusModalWrapper', () => {
   describe('update status', () => {
     describe('succeeds', () => {
       beforeEach(async () => {
-        mockEmoji = await initEmojiMock();
+        await initEmojiMock();
         wrapper = createComponent();
         await initModal();
 
@@ -198,16 +207,16 @@ describe('SetStatusModalWrapper', () => {
       });
 
       it('clicking "removeStatus" clears the emoji and message fields', async () => {
-        findModal().vm.$emit('cancel');
-        await wrapper.vm.$nextTick();
+        findModal().vm.$emit('secondary');
+        await nextTick();
 
         expect(findFormField('message').element.value).toBe('');
         expect(findFormField('emoji').element.value).toBe('');
       });
 
       it('clicking "setStatus" submits the user status', async () => {
-        findModal().vm.$emit('ok');
-        await wrapper.vm.$nextTick();
+        findModal().vm.$emit('primary');
+        await nextTick();
 
         // set the availability status
         findAvailabilityCheckbox().vm.$emit('input', true);
@@ -215,8 +224,8 @@ describe('SetStatusModalWrapper', () => {
         // set the currentClearStatusAfter to 30 minutes
         wrapper.find('[data-testid="thirtyMinutes"]').vm.$emit('click');
 
-        findModal().vm.$emit('ok');
-        await wrapper.vm.$nextTick();
+        findModal().vm.$emit('primary');
+        await nextTick();
 
         const commonParams = {
           emoji: defaultEmoji,
@@ -237,8 +246,8 @@ describe('SetStatusModalWrapper', () => {
       });
 
       it('calls the "onUpdateSuccess" handler', async () => {
-        findModal().vm.$emit('ok');
-        await wrapper.vm.$nextTick();
+        findModal().vm.$emit('primary');
+        await nextTick();
 
         expect(wrapper.vm.onUpdateSuccess).toHaveBeenCalled();
       });
@@ -246,15 +255,15 @@ describe('SetStatusModalWrapper', () => {
 
     describe('success message', () => {
       beforeEach(async () => {
-        mockEmoji = await initEmojiMock();
+        await initEmojiMock();
         wrapper = createComponent({ currentEmoji: '', currentMessage: '' });
         jest.spyOn(UserApi, 'updateUserStatus').mockResolvedValue();
         return initModal({ mockOnUpdateSuccess: false });
       });
 
       it('displays a toast success message', async () => {
-        findModal().vm.$emit('ok');
-        await wrapper.vm.$nextTick();
+        findModal().vm.$emit('primary');
+        await nextTick();
 
         expect($toast.show).toHaveBeenCalledWith('Status updated');
       });
@@ -262,7 +271,7 @@ describe('SetStatusModalWrapper', () => {
 
     describe('with errors', () => {
       beforeEach(async () => {
-        mockEmoji = await initEmojiMock();
+        await initEmojiMock();
         wrapper = createComponent();
         await initModal();
 
@@ -270,8 +279,8 @@ describe('SetStatusModalWrapper', () => {
       });
 
       it('calls the "onUpdateFail" handler', async () => {
-        findModal().vm.$emit('ok');
-        await wrapper.vm.$nextTick();
+        findModal().vm.$emit('primary');
+        await nextTick();
 
         expect(wrapper.vm.onUpdateFail).toHaveBeenCalled();
       });
@@ -279,15 +288,15 @@ describe('SetStatusModalWrapper', () => {
 
     describe('error message', () => {
       beforeEach(async () => {
-        mockEmoji = await initEmojiMock();
+        await initEmojiMock();
         wrapper = createComponent({ currentEmoji: '', currentMessage: '' });
         jest.spyOn(UserApi, 'updateUserStatus').mockRejectedValue();
         return initModal({ mockOnUpdateFailure: false });
       });
 
       it('flashes an error message', async () => {
-        findModal().vm.$emit('ok');
-        await wrapper.vm.$nextTick();
+        findModal().vm.$emit('primary');
+        await nextTick();
 
         expect(createFlash).toHaveBeenCalledWith({
           message: "Sorry, we weren't able to set your status. Please try again later.",

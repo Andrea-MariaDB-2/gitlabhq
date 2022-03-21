@@ -51,7 +51,7 @@ import {
 } from '~/diffs/store/actions';
 import * as types from '~/diffs/store/mutation_types';
 import * as utils from '~/diffs/store/utils';
-import * as workerUtils from '~/diffs/utils/workers';
+import * as treeWorkerUtils from '~/diffs/utils/tree_worker_utils';
 import createFlash from '~/flash';
 import axios from '~/lib/utils/axios_utils';
 import * as commonUtils from '~/lib/utils/common_utils';
@@ -99,6 +99,10 @@ describe('DiffsStoreActions', () => {
       const projectPath = '/root/project';
       const dismissEndpoint = '/-/user_callouts';
       const showSuggestPopover = false;
+      const mrReviews = {
+        a: ['z', 'hash:a'],
+        b: ['y', 'hash:a'],
+      };
 
       testAction(
         setBaseConfig,
@@ -110,6 +114,7 @@ describe('DiffsStoreActions', () => {
           projectPath,
           dismissEndpoint,
           showSuggestPopover,
+          mrReviews,
         },
         {
           endpoint: '',
@@ -131,7 +136,20 @@ describe('DiffsStoreActions', () => {
               projectPath,
               dismissEndpoint,
               showSuggestPopover,
+              mrReviews,
             },
+          },
+          {
+            type: types.SET_DIFF_FILE_VIEWED,
+            payload: { id: 'z', seen: true },
+          },
+          {
+            type: types.SET_DIFF_FILE_VIEWED,
+            payload: { id: 'a', seen: true },
+          },
+          {
+            type: types.SET_DIFF_FILE_VIEWED,
+            payload: { id: 'y', seen: true },
           },
         ],
         [],
@@ -184,17 +202,18 @@ describe('DiffsStoreActions', () => {
       testAction(
         fetchDiffFilesBatch,
         {},
-        { endpointBatch, diffViewType: 'inline' },
+        { endpointBatch, diffViewType: 'inline', diffFiles: [] },
         [
-          { type: types.SET_BATCH_LOADING, payload: true },
+          { type: types.SET_BATCH_LOADING_STATE, payload: 'loading' },
           { type: types.SET_RETRIEVING_BATCHES, payload: true },
           { type: types.SET_DIFF_DATA_BATCH, payload: { diff_files: res1.diff_files } },
-          { type: types.SET_BATCH_LOADING, payload: false },
-          { type: types.VIEW_DIFF_FILE, payload: 'test' },
+          { type: types.SET_BATCH_LOADING_STATE, payload: 'loaded' },
+          { type: types.SET_CURRENT_DIFF_FILE, payload: 'test' },
           { type: types.SET_DIFF_DATA_BATCH, payload: { diff_files: res2.diff_files } },
-          { type: types.SET_BATCH_LOADING, payload: false },
-          { type: types.VIEW_DIFF_FILE, payload: 'test2' },
+          { type: types.SET_BATCH_LOADING_STATE, payload: 'loaded' },
+          { type: types.SET_CURRENT_DIFF_FILE, payload: 'test2' },
           { type: types.SET_RETRIEVING_BATCHES, payload: false },
+          { type: types.SET_BATCH_LOADING_STATE, payload: 'error' },
         ],
         [{ type: 'startRenderDiffsQueue' }, { type: 'startRenderDiffsQueue' }],
         done,
@@ -252,7 +271,7 @@ describe('DiffsStoreActions', () => {
           // Workers are synchronous in Jest environment (see https://gitlab.com/gitlab-org/gitlab/-/merge_requests/58805)
           {
             type: types.SET_TREE_DATA,
-            payload: workerUtils.generateTreeList(diffMetadata.diff_files),
+            payload: treeWorkerUtils.generateTreeList(diffMetadata.diff_files),
           },
         ],
         [],
@@ -306,7 +325,7 @@ describe('DiffsStoreActions', () => {
     it('should mark currently selected diff and set lineHash and fileHash of highlightedRow', () => {
       testAction(setHighlightedRow, 'ABC_123', {}, [
         { type: types.SET_HIGHLIGHTED_ROW, payload: 'ABC_123' },
-        { type: types.VIEW_DIFF_FILE, payload: 'ABC' },
+        { type: types.SET_CURRENT_DIFF_FILE, payload: 'ABC' },
       ]);
     });
   });
@@ -525,10 +544,8 @@ describe('DiffsStoreActions', () => {
         [{ type: types.SET_DIFF_VIEW_TYPE, payload: INLINE_DIFF_VIEW_TYPE }],
         [],
         () => {
-          setImmediate(() => {
-            expect(Cookies.get('diff_view')).toEqual(INLINE_DIFF_VIEW_TYPE);
-            done();
-          });
+          expect(Cookies.get('diff_view')).toEqual(INLINE_DIFF_VIEW_TYPE);
+          done();
         },
       );
     });
@@ -543,10 +560,8 @@ describe('DiffsStoreActions', () => {
         [{ type: types.SET_DIFF_VIEW_TYPE, payload: PARALLEL_DIFF_VIEW_TYPE }],
         [],
         () => {
-          setImmediate(() => {
-            expect(Cookies.get(DIFF_VIEW_COOKIE_NAME)).toEqual(PARALLEL_DIFF_VIEW_TYPE);
-            done();
-          });
+          expect(Cookies.get(DIFF_VIEW_COOKIE_NAME)).toEqual(PARALLEL_DIFF_VIEW_TYPE);
+          done();
         },
       );
     });
@@ -889,12 +904,12 @@ describe('DiffsStoreActions', () => {
         },
       };
 
-      scrollToFile({ state, commit, getters }, 'path');
+      scrollToFile({ state, commit, getters }, { path: 'path' });
 
       expect(document.location.hash).toBe('#test');
     });
 
-    it('commits VIEW_DIFF_FILE', () => {
+    it('commits SET_CURRENT_DIFF_FILE', () => {
       const state = {
         treeEntries: {
           path: {
@@ -903,9 +918,9 @@ describe('DiffsStoreActions', () => {
         },
       };
 
-      scrollToFile({ state, commit, getters }, 'path');
+      scrollToFile({ state, commit, getters }, { path: 'path' });
 
-      expect(commit).toHaveBeenCalledWith(types.VIEW_DIFF_FILE, 'test');
+      expect(commit).toHaveBeenCalledWith(types.SET_CURRENT_DIFF_FILE, 'test');
     });
   });
 
@@ -1427,7 +1442,7 @@ describe('DiffsStoreActions', () => {
   });
 
   describe('setCurrentDiffFileIdFromNote', () => {
-    it('commits VIEW_DIFF_FILE', () => {
+    it('commits SET_CURRENT_DIFF_FILE', () => {
       const commit = jest.fn();
       const state = { diffFiles: [{ file_hash: '123' }] };
       const rootGetters = {
@@ -1437,10 +1452,10 @@ describe('DiffsStoreActions', () => {
 
       setCurrentDiffFileIdFromNote({ commit, state, rootGetters }, '1');
 
-      expect(commit).toHaveBeenCalledWith(types.VIEW_DIFF_FILE, '123');
+      expect(commit).toHaveBeenCalledWith(types.SET_CURRENT_DIFF_FILE, '123');
     });
 
-    it('does not commit VIEW_DIFF_FILE when discussion has no diff_file', () => {
+    it('does not commit SET_CURRENT_DIFF_FILE when discussion has no diff_file', () => {
       const commit = jest.fn();
       const state = { diffFiles: [{ file_hash: '123' }] };
       const rootGetters = {
@@ -1453,7 +1468,7 @@ describe('DiffsStoreActions', () => {
       expect(commit).not.toHaveBeenCalled();
     });
 
-    it('does not commit VIEW_DIFF_FILE when diff file does not exist', () => {
+    it('does not commit SET_CURRENT_DIFF_FILE when diff file does not exist', () => {
       const commit = jest.fn();
       const state = { diffFiles: [{ file_hash: '123' }] };
       const rootGetters = {
@@ -1468,12 +1483,12 @@ describe('DiffsStoreActions', () => {
   });
 
   describe('navigateToDiffFileIndex', () => {
-    it('commits VIEW_DIFF_FILE', (done) => {
+    it('commits SET_CURRENT_DIFF_FILE', (done) => {
       testAction(
         navigateToDiffFileIndex,
         0,
         { diffFiles: [{ file_hash: '123' }] },
-        [{ type: types.VIEW_DIFF_FILE, payload: '123' }],
+        [{ type: types.SET_CURRENT_DIFF_FILE, payload: '123' }],
         [],
         done,
       );
@@ -1522,13 +1537,14 @@ describe('DiffsStoreActions', () => {
   describe('reviewFile', () => {
     const file = {
       id: '123',
+      file_hash: 'xyz',
       file_identifier_hash: 'abc',
       load_collapsed_diff_url: 'gitlab-org/gitlab-test/-/merge_requests/1/diffs',
     };
     it.each`
-      reviews             | diffFile | reviewed
-      ${{ abc: ['123'] }} | ${file}  | ${true}
-      ${{}}               | ${file}  | ${false}
+      reviews                         | diffFile | reviewed
+      ${{ abc: ['123', 'hash:xyz'] }} | ${file}  | ${true}
+      ${{}}                           | ${file}  | ${false}
     `(
       'sets reviews ($reviews) to localStorage and state for file $file if it is marked reviewed=$reviewed',
       ({ reviews, diffFile, reviewed }) => {

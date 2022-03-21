@@ -9,7 +9,7 @@ const INVITATIONS_API_ERROR_EMAIL_INVALID = {
 const INVITATIONS_API_EMAIL_RESTRICTED = {
   message: {
     'email@example.com':
-      "Invite email 'email@example.com' does not match the allowed domains: example1.org",
+      "The member's email address is not allowed for this project. Go to the Admin area > Sign-up restrictions, and check Allowed domains for sign-ups.",
   },
   status: 'error',
 };
@@ -17,16 +17,16 @@ const INVITATIONS_API_EMAIL_RESTRICTED = {
 const INVITATIONS_API_MULTIPLE_EMAIL_RESTRICTED = {
   message: {
     'email@example.com':
-      "Invite email email 'email@example.com' does not match the allowed domains: example1.org",
+      "The member's email address is not allowed for this project. Go to the Admin area > Sign-up restrictions, and check Allowed domains for sign-ups.",
     'email4@example.com':
-      "Invite email email 'email4@example.com' does not match the allowed domains: example1.org",
+      "The member's email address is not allowed for this project. Go to the Admin area > Sign-up restrictions, and check the Domain denylist.",
   },
   status: 'error',
 };
 
 const INVITATIONS_API_EMAIL_TAKEN = {
   message: {
-    'email@example2.com': 'Invite email has already been taken',
+    'email@example.org': 'Invite email has already been taken',
   },
   status: 'error',
 };
@@ -36,7 +36,11 @@ const MEMBERS_API_MEMBER_ALREADY_EXISTS = {
 };
 
 const MEMBERS_API_SINGLE_USER_RESTRICTED = {
-  message: { user: ["email 'email@example.com' does not match the allowed domains: example1.org"] },
+  message: {
+    user: [
+      "The member's email address is not allowed for this project. Go to the Admin area > Sign-up restrictions, and check Allowed domains for sign-ups.",
+    ],
+  },
 };
 
 const MEMBERS_API_SINGLE_USER_ACCESS_LEVEL = {
@@ -49,7 +53,7 @@ const MEMBERS_API_SINGLE_USER_ACCESS_LEVEL = {
 
 const MEMBERS_API_MULTIPLE_USERS_RESTRICTED = {
   message:
-    "root: User email 'admin@example.com' does not match the allowed domain of example2.com and user18: User email 'user18@example.org' does not match the allowed domain of example2.com",
+    "root: The member's email address is not allowed for this project. Go to the Admin area > Sign-up restrictions, and check Allowed domains for sign-ups. and user18: The member's email address is not allowed for this project. Go to the Admin area > Sign-up restrictions, and check the Domain denylist. and john_doe31: The member's email address is not allowed for this project. Go to the Admin area > Sign-up restrictions, and check Email restrictions for sign-ups.",
   status: 'error',
 };
 

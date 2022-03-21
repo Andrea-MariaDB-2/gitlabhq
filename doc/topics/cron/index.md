@@ -9,8 +9,7 @@ info: To determine the technical writer assigned to the Stage/Group associated w
 Cron syntax is used to schedule when jobs should run.
 
 You may need to use a cron syntax string to
-[trigger nightly pipelines](../../ci/triggers/index.md#using-cron-to-trigger-nightly-pipelines),
-create a [pipeline schedule](../../api/pipeline_schedules.md#create-a-new-pipeline-schedule),
+create a [pipeline schedule](../../ci/pipelines/schedules.md),
 or to prevent unintentional releases by setting a
 [deploy freeze](../../user/project/releases/index.md#prevent-unintentional-releases-by-setting-a-deploy-freeze).
 
@@ -39,7 +38,10 @@ are valid:
 - Run once a day at midnight: `0 0 * * *`
 - Run once a week at midnight on Sunday morning: `0 0 * * 0`
 - Run once a month at midnight of the first day of the month: `0 0 1 * *`
+- Run once a month on the 22nd: `0 0 22 * *`)
+- Run once a month on the 2nd Monday: `0 0 * * 1#2`
 - Run once a year at midnight of 1 January: `0 0 1 1 *`
+- Run every other Sunday at 0900 hours: `0 9 * * sun%2`
 
 For complete cron documentation, refer to the
 [crontab(5) — Linux manual page](https://man7.org/linux/man-pages/man5/crontab.5.html).
@@ -65,5 +67,7 @@ More examples of how to write a cron schedule can be found at
 ## How GitLab parses cron syntax strings
 
 GitLab uses [`fugit`](https://github.com/floraison/fugit) to parse cron syntax
-strings on the server and [cron-validate](https://github.com/Airfooox/cron-validate)
-to validate cron syntax in the browser.
+strings on the server and [cron-validator](https://github.com/TheCloudConnectors/cron-validator)
+to validate cron syntax in the browser. GitLab uses
+[`cRonstrue`](https://github.com/bradymholt/cRonstrue) to convert cron to human-readable strings
+in the browser.

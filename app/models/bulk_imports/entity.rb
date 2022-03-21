@@ -20,6 +20,8 @@
 class BulkImports::Entity < ApplicationRecord
   self.table_name = 'bulk_import_entities'
 
+  FailedError = Class.new(StandardError)
+
   belongs_to :bulk_import, optional: false
   belongs_to :parent, class_name: 'BulkImports::Entity', optional: true
 
@@ -76,6 +78,66 @@ class BulkImports::Entity < ApplicationRecord
 
   def encoded_source_full_path
     ERB::Util.url_encode(source_full_path)
+  end
+
+  def pipelines
+    @pipelines ||= case source_type
+                   when 'group_entity'
+                     BulkImports::Groups::Stage.new(bulk_import).pipelines
+                   when 'project_entity'
+                     BulkImports::Projects::Stage.new(bulk_import).pipelines
+                   end
+  end
+
+  def pipeline_exists?(name)
+    pipelines.any? { |_, pipeline| pipeline.to_s == name.to_s }
+  end
+
+  def create_pipeline_trackers!
+    self.class.transaction do
+      pipelines.each do |stage, pipeline|
+        trackers.create!(
+          stage: stage,
+          pipeline_name: pipeline
+        )
+      end
+    end
+  end
+
+  def entity_type
+    source_type.gsub('_entity', '')
+  end
+
+  def pluralized_name
+    entity_type.pluralize
+  end
+
+  def base_resource_url_path
+    "/#{pluralized_name}/#{encoded_source_full_path}"
+  end
+
+  def export_relations_url_path
+    "#{base_resource_url_path}/export_relations"
+  end
+
+  def relation_download_url_path(relation)
+    "#{export_relations_url_path}/download?relation=#{relation}"
+  end
+
+  def wikis_url_path
+    "#{base_resource_url_path}/wikis"
+  end
+
+  def project?
+    source_type == 'project_entity'
+  end
+
+  def group?
+    source_type == 'group_entity'
+  end
+
+  def update_service
+    "::#{pluralized_name.capitalize}::UpdateService".constantize
   end
 
   private

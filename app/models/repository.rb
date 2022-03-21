@@ -15,6 +15,7 @@ class Repository
     heads
     tags
     replace
+    #{REF_MERGE_REQUEST}
     #{REF_ENVIRONMENTS}
     #{REF_KEEP_AROUND}
     #{REF_PIPELINES}
@@ -191,7 +192,11 @@ class Repository
   end
 
   def find_tag(name)
-    tags.find { |tag| tag.name == name }
+    if @tags.blank?
+      raw_repository.find_tag(name)
+    else
+      tags.find { |tag| tag.name == name }
+    end
   end
 
   def ambiguous_ref?(ref)
@@ -515,6 +520,8 @@ class Repository
     raw_repository.batch_blobs(items, blob_size_limit: blob_size_limit).map do |blob|
       Blob.decorate(blob, container)
     end
+  rescue Gitlab::Git::Repository::NoRepository
+    []
   end
 
   def root_ref
@@ -627,7 +634,14 @@ class Repository
   def license
     return unless license_key
 
-    Licensee::License.new(license_key)
+    licensee_object = Licensee::License.new(license_key)
+
+    return if licensee_object.name.blank?
+
+    licensee_object
+  rescue Licensee::InvalidLicense => ex
+    Gitlab::ErrorTracking.track_exception(ex)
+    nil
   end
   memoize_method :license
 
@@ -720,19 +734,8 @@ class Repository
     raw_repository.local_branches(sort_by: sort_by, pagination_params: pagination_params)
   end
 
-  def tags_sorted_by(value)
-    case value
-    when 'name_asc'
-      VersionSorter.sort(tags) { |tag| tag.name }
-    when 'name_desc'
-      VersionSorter.rsort(tags) { |tag| tag.name }
-    when 'updated_desc'
-      tags_sorted_by_committed_date.reverse
-    when 'updated_asc'
-      tags_sorted_by_committed_date
-    else
-      tags
-    end
+  def tags_sorted_by(value, pagination_params = nil)
+    raw_repository.tags(sort_by: value, pagination_params: pagination_params)
   end
 
   # Params:
@@ -1052,10 +1055,10 @@ class Repository
   end
 
   def squash(user, merge_request, message)
-    raw.squash(user, merge_request.id, start_sha: merge_request.diff_start_sha,
-                                       end_sha: merge_request.diff_head_sha,
-                                       author: merge_request.author,
-                                       message: message)
+    raw.squash(user, start_sha: merge_request.diff_start_sha,
+                     end_sha: merge_request.diff_head_sha,
+                     author: merge_request.author,
+                     message: message)
   end
 
   def submodule_links
@@ -1082,13 +1085,20 @@ class Repository
     blob.data
   end
 
-  def create_if_not_exists
+  def create_if_not_exists(default_branch = nil)
     return if exists?
 
-    raw.create_repository
+    raw.create_repository(default_branch)
     after_create
 
     true
+  rescue Gitlab::Git::Repository::RepositoryExists
+    # We do not want to call `#after_create` given that we didn't create the
+    # repo, but we obviously have a mismatch between what's in our exists cache
+    # and actual on-disk state as seen by Gitaly. Let's thus expire our caches.
+    expire_status_cache
+
+    nil
   end
 
   def create_from_bundle(bundle_path)
@@ -1125,13 +1135,14 @@ class Repository
       copy_gitattributes(branch)
       after_change_head
     else
-      # For example, `Wiki` does not have `errors` because it is not an `ActiveModel`
-      if container.respond_to?(:errors)
-        container.errors.add(:base, _("Could not change HEAD: branch '%{branch}' does not exist") % { branch: branch })
-      end
+      container.after_change_head_branch_does_not_exist(branch)
 
       false
     end
+  end
+
+  def cache
+    @cache ||= Gitlab::RepositoryCache.new(self)
   end
 
   private
@@ -1148,10 +1159,6 @@ class Repository
     ::Commit.new(commit, container) if commit
   end
 
-  def cache
-    @cache ||= Gitlab::RepositoryCache.new(self)
-  end
-
   def redis_set_cache
     @redis_set_cache ||= Gitlab::RepositorySetCache.new(self)
   end
@@ -1162,17 +1169,6 @@ class Repository
 
   def request_store_cache
     @request_store_cache ||= Gitlab::RepositoryCache.new(self, backend: Gitlab::SafeRequestStore)
-  end
-
-  def tags_sorted_by_committed_date
-    # Annotated tags can point to any object (e.g. a blob), but generally
-    # tags point to a commit. If we don't have a commit, then just default
-    # to putting the tag at the end of the list.
-    default = Time.current
-
-    tags.sort_by do |tag|
-      tag.dereferenced_target&.committed_date || default
-    end
   end
 
   def repository_event(event, tags = {})

@@ -39,9 +39,9 @@ RSpec.describe 'Profile > Password' do
 
       describe 'User puts the same passwords in the field and in the confirmation' do
         it 'shows a success message' do
-          fill_passwords('mypassword', 'mypassword')
+          fill_passwords(Gitlab::Password.test_default, Gitlab::Password.test_default)
 
-          page.within('.flash-notice') do
+          page.within('[data-testid="alert-info"]') do
             expect(page).to have_content('Password was successfully updated. Please sign in again.')
           end
         end
@@ -78,40 +78,80 @@ RSpec.describe 'Profile > Password' do
     end
   end
 
-  context 'Change passowrd' do
+  context 'Change password' do
+    let(:new_password) { "new" + Gitlab::Password.test_default }
+
     before do
       sign_in(user)
       visit(edit_profile_password_path)
     end
 
-    it 'does not change user passowrd without old one' do
-      page.within '.update-password' do
-        fill_passwords('22233344', '22233344')
+    shared_examples 'user enters an incorrect current password' do
+      subject do
+        page.within '.update-password' do
+          fill_in 'user_password', with: user_current_password
+          fill_passwords(new_password, new_password)
+        end
       end
 
-      page.within '.flash-container' do
-        expect(page).to have_content 'You must provide a valid current password'
+      it 'handles the invalid password attempt, and prompts the user to try again', :aggregate_failures do
+        expect(Gitlab::AppLogger).to receive(:info)
+          .with(message: 'Invalid current password when attempting to update user password', username: user.username, ip: user.current_sign_in_ip)
+
+        subject
+
+        user.reload
+
+        expect(user.failed_attempts).to eq(1)
+        expect(user.valid_password?(new_password)).to eq(false)
+        expect(page).to have_current_path(edit_profile_password_path, ignore_query: true)
+
+        page.within '.flash-container' do
+          expect(page).to have_content('You must provide a valid current password')
+        end
+      end
+
+      it 'locks the user account when user passes the maximum attempts threshold', :aggregate_failures do
+        user.update!(failed_attempts: User.maximum_attempts.pred)
+
+        subject
+
+        expect(page).to have_current_path(new_user_session_path, ignore_query: true)
+
+        page.within '.flash-container' do
+          expect(page).to have_content('Your account is locked.')
+        end
       end
     end
 
-    it 'does not change password with invalid old password' do
-      page.within '.update-password' do
-        fill_in 'user_current_password', with: 'invalid'
-        fill_passwords('password', 'confirmation')
-      end
+    context 'when current password is blank' do
+      let(:user_current_password) { nil }
 
-      page.within '.flash-container' do
-        expect(page).to have_content 'You must provide a valid current password'
-      end
+      it_behaves_like 'user enters an incorrect current password'
     end
 
-    it 'changes user password' do
-      page.within '.update-password' do
-        fill_in "user_current_password", with: user.password
-        fill_passwords('22233344', '22233344')
+    context 'when current password is incorrect' do
+      let(:user_current_password) { 'invalid' }
+
+      it_behaves_like 'user enters an incorrect current password'
+    end
+
+    context 'when the password reset is successful' do
+      subject do
+        page.within '.update-password' do
+          fill_in "user_password", with: user.password
+          fill_passwords(new_password, new_password)
+        end
       end
 
-      expect(current_path).to eq new_user_session_path
+      it 'changes the password, logs the user out and prompts them to sign in again', :aggregate_failures do
+        expect { subject }.to change { user.reload.valid_password?(new_password) }.to(true)
+        expect(page).to have_current_path new_user_session_path, ignore_query: true
+
+        page.within '.flash-container' do
+          expect(page).to have_content('Password was successfully updated. Please sign in again.')
+        end
+      end
     end
   end
 
@@ -127,14 +167,14 @@ RSpec.describe 'Profile > Password' do
     it 'needs change user password' do
       visit edit_profile_password_path
 
-      expect(current_path).to eq new_profile_password_path
+      expect(page).to have_current_path new_profile_password_path, ignore_query: true
 
-      fill_in :user_current_password,      with: user.password
-      fill_in :user_password,              with: '12345678'
-      fill_in :user_password_confirmation, with: '12345678'
+      fill_in :user_password,      with: user.password
+      fill_in :user_new_password,  with: Gitlab::Password.test_default
+      fill_in :user_password_confirmation, with: Gitlab::Password.test_default
       click_button 'Set new password'
 
-      expect(current_path).to eq new_user_session_path
+      expect(page).to have_current_path new_user_session_path, ignore_query: true
     end
 
     context 'when global require_two_factor_authentication is enabled' do
@@ -143,7 +183,7 @@ RSpec.describe 'Profile > Password' do
 
         visit profile_path
 
-        expect(current_path).to eq new_profile_password_path
+        expect(page).to have_current_path new_profile_password_path, ignore_query: true
       end
     end
   end

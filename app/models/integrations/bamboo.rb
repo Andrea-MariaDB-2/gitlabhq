@@ -2,8 +2,8 @@
 
 module Integrations
   class Bamboo < BaseCi
-    include ActionView::Helpers::UrlHelper
-    include ReactiveService
+    include ReactivelyCached
+    prepend EnableSslVerification
 
     prop_accessor :bamboo_url, :build_key, :username, :password
 
@@ -35,7 +35,7 @@ module Integrations
     end
 
     def help
-      docs_link = link_to _('Learn more.'), Rails.application.routes.url_helpers.help_page_url('user/project/integrations/bamboo'), target: '_blank', rel: 'noopener noreferrer'
+      docs_link = ActionController::Base.helpers.link_to _('Learn more.'), Rails.application.routes.url_helpers.help_page_url('user/project/integrations/bamboo'), target: '_blank', rel: 'noopener noreferrer'
       s_('BambooService|Run CI/CD pipelines with Atlassian Bamboo. You must set up automatic revision labeling and a repository trigger in Bamboo. %{docs_link}').html_safe % { docs_link: docs_link.html_safe }
     end
 
@@ -162,7 +162,7 @@ module Integrations
     end
 
     def build_get_params(query_params)
-      params = { verify: false, query: query_params }
+      params = { verify: enable_ssl_verification, query: query_params }
       return params if username.blank? && password.blank?
 
       query_params[:os_authType] = 'basic'

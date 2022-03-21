@@ -9,6 +9,8 @@ import {
   linkedIssueTypesMap,
   addRelatedIssueErrorMap,
   addRelatedItemErrorMap,
+  issuablesFormCategoryHeaderTextMap,
+  issuablesFormInputTextMap,
 } from '../constants';
 import RelatedIssuableInput from './related_issuable_input.vue';
 
@@ -74,6 +76,16 @@ export default {
       required: false,
       default: false,
     },
+    autoCompleteEpics: {
+      type: Boolean,
+      required: false,
+      default: true,
+    },
+    autoCompleteIssues: {
+      type: Boolean,
+      required: false,
+      default: true,
+    },
   },
   data() {
     return {
@@ -124,6 +136,12 @@ export default {
         epics: mergeUrlParams({ confidential_only: true }, this.autoCompleteSources.epics),
       };
     },
+    issuableCategoryHeaderText() {
+      return issuablesFormCategoryHeaderTextMap[this.issuableType];
+    },
+    issuableInputText() {
+      return issuablesFormInputTextMap[this.issuableType];
+    },
   },
   methods: {
     onPendingIssuableRemoveRequest(params) {
@@ -152,7 +170,7 @@ export default {
   <form @submit.prevent="onFormSubmit">
     <template v-if="showCategorizedIssues">
       <gl-form-group
-        :label="__('The current issue')"
+        :label="issuableCategoryHeaderText"
         label-for="linked-issue-type-radio"
         label-class="label-bold"
         class="mb-2"
@@ -165,7 +183,7 @@ export default {
         />
       </gl-form-group>
       <p class="bold">
-        {{ __('the following issue(s)') }}
+        {{ issuableInputText }}
       </p>
     </template>
     <related-issuable-input
@@ -177,7 +195,7 @@ export default {
       :path-id-separator="pathIdSeparator"
       :input-value="inputValue"
       :auto-complete-sources="transformedAutocompleteSources"
-      :auto-complete-options="{ issues: true, epics: true }"
+      :auto-complete-options="{ issues: autoCompleteIssues, epics: autoCompleteEpics }"
       :issuable-type="issuableType"
       @pendingIssuableRemoveRequest="onPendingIssuableRemoveRequest"
       @formCancel="onFormCancel"
@@ -187,15 +205,15 @@ export default {
     <p v-if="hasError" class="gl-field-error">
       {{ addRelatedErrorMessage }}
     </p>
-    <div class="add-issuable-form-actions clearfix">
+    <div class="gl-mt-5 gl-clearfix">
       <gl-button
         ref="addButton"
         category="primary"
-        variant="success"
+        variant="confirm"
         :disabled="isSubmitButtonDisabled"
         :loading="isSubmitting"
         type="submit"
-        class="js-add-issuable-form-add-button float-left"
+        class="float-left"
         data-qa-selector="add_issue_button"
       >
         {{ __('Add') }}

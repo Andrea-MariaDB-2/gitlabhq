@@ -138,10 +138,10 @@ hr {
   margin-right: -15px;
   margin-left: -15px;
 }
-.col,
-.col-sm-5,
+.col-sm-12,
 .col-sm-7,
-.col-sm-12 {
+.col-sm-5,
+.col {
   position: relative;
   width: 100%;
   padding-right: 15px;
@@ -160,12 +160,12 @@ hr {
 }
 @media (min-width: 576px) {
   .col-sm-5 {
-    flex: 0 0 41.66667%;
-    max-width: 41.66667%;
+    flex: 0 0 41.6666666667%;
+    max-width: 41.6666666667%;
   }
   .col-sm-7 {
-    flex: 0 0 58.33333%;
-    max-width: 58.33333%;
+    flex: 0 0 58.3333333333%;
+    max-width: 58.3333333333%;
   }
   .col-sm-12 {
     flex: 0 0 100%;
@@ -189,7 +189,7 @@ hr {
   color: #303030;
   background-color: #fff;
   background-clip: padding-box;
-  border: 1px solid #dbdbdb;
+  border: 1px solid #868686;
   border-radius: 0.25rem;
 }
 @media (prefers-reduced-motion: reduce) {
@@ -258,30 +258,12 @@ fieldset:disabled a.btn {
   align-items: center;
   justify-content: space-between;
 }
-.d-block {
-  display: block !important;
-}
-.d-flex {
-  display: flex !important;
-}
-.flex-wrap {
-  flex-wrap: wrap !important;
-}
-.justify-content-between {
-  justify-content: space-between !important;
-}
-.align-items-center {
-  align-items: center !important;
-}
 .fixed-top {
   position: fixed;
   top: 0;
   right: 0;
   left: 0;
   z-index: 1030;
-}
-.ml-2 {
-  margin-left: 0.5rem !important;
 }
 .mt-3 {
   margin-top: 1rem !important;
@@ -348,6 +330,15 @@ fieldset:disabled a.btn {
   align-items: center;
   font-size: 0.875rem;
   border-radius: 0.25rem;
+}
+.gl-button.gl-button .gl-button-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding-top: 1px;
+  padding-bottom: 1px;
+  margin-top: -1px;
+  margin-bottom: -1px;
 }
 .gl-button.gl-button .gl-button-icon {
   height: 1rem;
@@ -428,7 +419,7 @@ body.navless {
   }
 }
 .navless-container {
-  margin-top: 40px;
+  margin-top: var(--header-height, 40px);
   padding-top: 32px;
 }
 .btn {
@@ -515,26 +506,13 @@ label.label-bold {
 }
 .navbar-empty {
   justify-content: center;
-  height: 40px;
+  height: var(--header-height, 40px);
   background: #fff;
   border-bottom: 1px solid #dbdbdb;
 }
 .navbar-empty .tanuki-logo,
 .navbar-empty .brand-header-logo {
   max-height: 100%;
-}
-.tanuki-logo .tanuki-left-ear,
-.tanuki-logo .tanuki-right-ear,
-.tanuki-logo .tanuki-nose {
-  fill: #e24329;
-}
-.tanuki-logo .tanuki-left-eye,
-.tanuki-logo .tanuki-right-eye {
-  fill: #fc6d26;
-}
-.tanuki-logo .tanuki-left-cheek,
-.tanuki-logo .tanuki-right-cheek {
-  fill: #fca326;
 }
 input::-moz-placeholder {
   color: #868686;
@@ -557,6 +535,8 @@ svg {
 }
 .login-page .flash-container {
   margin-bottom: 16px;
+  position: relative;
+  top: 8px;
 }
 .login-page .brand-holder {
   font-size: 18px;
@@ -637,10 +617,6 @@ svg {
   padding: 0;
   border: 0;
   background: none;
-  margin-bottom: 16px;
-}
-.login-page .omniauth-container .omniauth-btn {
-  width: 100%;
 }
 .login-page .new-session-tabs {
   display: flex;
@@ -736,11 +712,14 @@ svg {
   margin-top: 40px;
 }
 .devise-layout-html body .navless-container {
-  padding: 65px 15px;
+  padding: 0 15px 65px;
+}
+.devise-layout-html body .flash-container {
+  padding-bottom: 65px;
 }
 @media (max-width: 575.98px) {
-  .devise-layout-html body .navless-container {
-    padding: 0 15px 65px;
+  .devise-layout-html body .flash-container {
+    padding-bottom: 0;
   }
 }
 
@@ -771,11 +750,11 @@ svg {
 .gl-align-items-center {
   align-items: center;
 }
+.gl-flex-wrap {
+  flex-wrap: wrap;
+}
 .gl-w-full {
   width: 100%;
-}
-.gl-p-2 {
-  padding: 0.25rem;
 }
 .gl-p-4 {
   padding: 0.75rem;
@@ -783,8 +762,8 @@ svg {
 .gl-mt-2 {
   margin-top: 0.25rem;
 }
-.gl-mb-2 {
-  margin-bottom: 0.25rem;
+.gl-mt-5 {
+  margin-top: 1rem;
 }
 .gl-mb-3 {
   margin-bottom: 0.5rem;
@@ -792,13 +771,13 @@ svg {
 .gl-mb-5 {
   margin-bottom: 1rem;
 }
-@media (min-width: 36rem) {
+@media (min-width: 576px) {
   .gl-sm-mt-0 {
     margin-top: 0;
   }
 }
-.gl-text-left {
-  text-align: left;
+.gl-font-weight-bold {
+  font-weight: 600;
 }
 
 @import "startup/cloaking";

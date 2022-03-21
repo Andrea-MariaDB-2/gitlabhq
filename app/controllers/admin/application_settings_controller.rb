@@ -27,7 +27,7 @@ class Admin::ApplicationSettingsController < Admin::ApplicationController
 
   feature_category :source_code_management, [:repository, :clear_repository_check_states]
   feature_category :continuous_integration, [:ci_cd, :reset_registration_token]
-  feature_category :service_ping, [:usage_data]
+  feature_category :service_ping, [:usage_data, :service_usage_data]
   feature_category :integrations, [:integrations]
   feature_category :pages, [:lets_encrypt_terms_of_service]
 
@@ -52,6 +52,9 @@ class Admin::ApplicationSettingsController < Admin::ApplicationController
     @integrations = Integration.find_or_initialize_all_non_project_specific(Integration.for_instance).sort_by(&:title)
   end
 
+  def service_usage_data
+  end
+
   def update
     perform_update
   end
@@ -59,16 +62,21 @@ class Admin::ApplicationSettingsController < Admin::ApplicationController
   def usage_data
     respond_to do |format|
       format.html do
-        usage_data_json = Gitlab::Json.pretty_generate(Gitlab::UsageData.data)
+        usage_data_json = Gitlab::Json.pretty_generate(Gitlab::Usage::ServicePingReport.for(output: :all_metrics_values, cached: true))
 
         render html: Gitlab::Highlight.highlight('payload.json', usage_data_json, language: 'json')
       end
-      format.json { render json: Gitlab::UsageData.to_json }
+
+      format.json do
+        Gitlab::UsageDataCounters::ServiceUsageDataCounter.count(:download_payload_click)
+
+        render json: Gitlab::Usage::ServicePingReport.for(output: :all_metrics_values, cached: true).to_json
+      end
     end
   end
 
   def reset_registration_token
-    @application_setting.reset_runners_registration_token!
+    ::Ci::Runners::ResetRegistrationTokenService.new(@application_setting, current_user).execute
 
     flash[:notice] = _('New runners registration token has been generated!')
     redirect_to admin_runners_path
@@ -98,7 +106,7 @@ class Admin::ApplicationSettingsController < Admin::ApplicationController
 
   # Specs are in spec/requests/self_monitoring_project_spec.rb
   def create_self_monitoring_project
-    job_id = SelfMonitoringProjectCreateWorker.perform_async # rubocop:disable CodeReuse/Worker
+    job_id = SelfMonitoringProjectCreateWorker.with_status.perform_async # rubocop:disable CodeReuse/Worker
 
     render status: :accepted, json: {
       job_id: job_id,
@@ -137,7 +145,7 @@ class Admin::ApplicationSettingsController < Admin::ApplicationController
 
   # Specs are in spec/requests/self_monitoring_project_spec.rb
   def delete_self_monitoring_project
-    job_id = SelfMonitoringProjectDeleteWorker.perform_async # rubocop:disable CodeReuse/Worker
+    job_id = SelfMonitoringProjectDeleteWorker.with_status.perform_async # rubocop:disable CodeReuse/Worker
 
     render status: :accepted, json: {
       job_id: job_id,
@@ -194,7 +202,7 @@ class Admin::ApplicationSettingsController < Admin::ApplicationController
     Gitlab::QueryLimiting.disable!('https://gitlab.com/gitlab-org/gitlab/-/issues/29418')
   end
 
-  def application_setting_params
+  def application_setting_params # rubocop:disable Metrics/AbcSize
     params[:application_setting] ||= {}
 
     if params[:application_setting].key?(:enabled_oauth_sign_in_sources)
@@ -220,6 +228,10 @@ class Admin::ApplicationSettingsController < Admin::ApplicationController
     params.delete(:domain_denylist_raw) if params[:domain_denylist_file]
     params.delete(:domain_denylist_raw) if params[:domain_denylist]
     params.delete(:domain_allowlist_raw) if params[:domain_allowlist]
+
+    if params[:application_setting].key?(:user_email_lookup_limit)
+      params[:application_setting][:search_rate_limit] ||= params[:application_setting][:user_email_lookup_limit]
+    end
 
     params[:application_setting].permit(visible_application_setting_attributes)
   end

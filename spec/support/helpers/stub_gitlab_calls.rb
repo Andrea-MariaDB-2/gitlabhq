@@ -51,6 +51,8 @@ module StubGitlabCalls
     allow(Gitlab.config.registry).to receive_messages(registry_settings)
     allow(Auth::ContainerRegistryAuthenticationService)
       .to receive(:full_access_token).and_return('token')
+    allow(Auth::ContainerRegistryAuthenticationService)
+      .to receive(:import_access_token).and_return('token')
   end
 
   def stub_container_registry_tags(repository: :any, tags: [], with_manifest: false)
@@ -79,10 +81,24 @@ module StubGitlabCalls
     end
   end
 
+  def stub_container_registry_info(info: {})
+    allow(ContainerRegistry::Client)
+      .to receive(:registry_info)
+      .and_return(info)
+  end
+
+  def stub_container_registry_network_error(client_method:)
+    allow_next_instance_of(ContainerRegistry::Client) do |client|
+      allow(client).to receive(client_method).and_raise(::Faraday::Error, nil, nil)
+    end
+  end
+
   def stub_commonmark_sourcepos_disabled
+    render_options = Banzai::Filter::MarkdownEngines::CommonMark::RENDER_OPTIONS
+
     allow_any_instance_of(Banzai::Filter::MarkdownEngines::CommonMark)
       .to receive(:render_options)
-      .and_return(Banzai::Filter::MarkdownEngines::CommonMark::RENDER_OPTIONS)
+      .and_return(render_options)
   end
 
   private

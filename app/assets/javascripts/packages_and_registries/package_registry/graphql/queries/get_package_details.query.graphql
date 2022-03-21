@@ -7,8 +7,19 @@ query getPackageDetails($id: ID!) {
     createdAt
     updatedAt
     status
+    canDestroy
+    npmUrl
+    mavenUrl
+    conanUrl
+    nugetUrl
+    pypiUrl
+    pypiSetupUrl
+    composerUrl
+    composerConfigRepositoryUrl
     project {
+      id
       path
+      name
     }
     tags(first: 10) {
       nodes {
@@ -25,9 +36,11 @@ query getPackageDetails($id: ID!) {
         commitPath
         path
         user {
+          id
           name
         }
         project {
+          id
           name
           webUrl
         }
@@ -86,15 +99,18 @@ query getPackageDetails($id: ID!) {
         }
       }
       ... on PypiMetadata {
+        id
         requiredPython
       }
       ... on ConanMetadata {
+        id
         packageChannel
         packageUsername
         recipe
         recipePath
       }
       ... on MavenMetadata {
+        id
         appName
         appGroup
         appVersion
@@ -102,6 +118,7 @@ query getPackageDetails($id: ID!) {
       }
 
       ... on NugetMetadata {
+        id
         iconUrl
         licenseUrl
         projectUrl

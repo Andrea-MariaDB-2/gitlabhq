@@ -48,7 +48,7 @@ RSpec.describe Ci::RetryBuildService do
        job_artifacts_network_referee job_artifacts_dotenv
        job_artifacts_cobertura needs job_artifacts_accessibility
        job_artifacts_requirements job_artifacts_coverage_fuzzing
-       job_artifacts_api_fuzzing].freeze
+       job_artifacts_api_fuzzing terraform_state_versions].freeze
 
   ignore_accessors =
     %i[type lock_version target_url base_tags trace_sections
@@ -60,7 +60,8 @@ RSpec.describe Ci::RetryBuildService do
        artifacts_file artifacts_metadata artifacts_size commands
        resource resource_group_id processed security_scans author
        pipeline_id report_results pending_state pages_deployments
-       queuing_entry runtime_metadata trace_metadata].freeze
+       queuing_entry runtime_metadata trace_metadata
+       dast_site_profile dast_scanner_profile].freeze
 
   shared_examples 'build duplication' do
     let_it_be(:another_pipeline) { create(:ci_empty_pipeline, project: project) }
@@ -72,6 +73,8 @@ RSpec.describe Ci::RetryBuildService do
              pipeline: pipeline, auto_canceled_by: another_pipeline,
              scheduled_at: 10.seconds.since)
     end
+
+    let_it_be(:internal_job_variable) { create(:ci_job_variable, job: build) }
 
     before_all do
       # Make sure that build has both `stage_id` and `stage` because FactoryBot
@@ -86,8 +89,9 @@ RSpec.describe Ci::RetryBuildService do
                file_type: file_type, job: build, expire_at: build.artifacts_expire_at)
       end
 
-      create(:ci_job_variable, job: build)
+      create(:ci_job_variable, :dotenv_source, job: build)
       create(:ci_build_need, build: build)
+      create(:terraform_state_version, build: build)
     end
 
     describe 'clone accessors' do
@@ -124,6 +128,11 @@ RSpec.describe Ci::RetryBuildService do
         expect(new_build.needs_attributes).to match(build.needs_attributes)
         expect(new_build.needs).not_to match(build.needs)
       end
+
+      it 'clones only internal job variables' do
+        expect(new_build.job_variables.count).to eq(1)
+        expect(new_build.job_variables).to contain_exactly(having_attributes(key: internal_job_variable.key, value: internal_job_variable.value))
+      end
     end
 
     describe 'reject accessors' do
@@ -146,7 +155,7 @@ RSpec.describe Ci::RetryBuildService do
         Ci::Build.attribute_names.map(&:to_sym) +
         Ci::Build.attribute_aliases.keys.map(&:to_sym) +
         Ci::Build.reflect_on_all_associations.map(&:name) +
-        [:tag_list, :needs_attributes] -
+        [:tag_list, :needs_attributes, :job_variables_attributes] -
         # ee-specific accessors should be tested in ee/spec/services/ci/retry_build_service_spec.rb instead
         described_class.extra_accessors -
         [:dast_site_profiles_build, :dast_scanner_profiles_build] # join tables
@@ -178,13 +187,6 @@ RSpec.describe Ci::RetryBuildService do
 
       it 'enqueues the new build' do
         expect(new_build).to be_pending
-      end
-
-      it 'resolves todos for old build that failed' do
-        expect(::MergeRequests::AddTodoWhenBuildFailsService)
-          .to receive_message_chain(:new, :close)
-
-        service.execute(build)
       end
 
       context 'when there are subsequent processables that are skipped' do
@@ -264,6 +266,17 @@ RSpec.describe Ci::RetryBuildService do
           expect(bridge.reload).to be_pending
         end
       end
+
+      context 'when there is a failed job todo for the MR' do
+        let!(:merge_request) { create(:merge_request, source_project: project, author: user, head_pipeline: pipeline) }
+        let!(:todo) { create(:todo, :build_failed, user: user, project: project, author: user, target: merge_request) }
+
+        it 'resolves the todo for the old failed build' do
+          expect do
+            service.execute(build)
+          end.to change { todo.reload.state }.from('pending').to('done')
+        end
+      end
     end
 
     context 'when user does not have ability to execute build' do
@@ -276,11 +289,15 @@ RSpec.describe Ci::RetryBuildService do
     end
   end
 
-  describe '#reprocess' do
+  describe '#clone!' do
     let(:new_build) do
       travel_to(1.second.from_now) do
-        service.reprocess!(build)
+        service.clone!(build)
       end
+    end
+
+    it 'raises an error when an unexpected class is passed' do
+      expect { service.clone!(create(:ci_build).present) }.to raise_error(TypeError)
     end
 
     context 'when user has ability to execute build' do
@@ -305,7 +322,7 @@ RSpec.describe Ci::RetryBuildService do
         expect(build).to be_processed
       end
 
-      context 'when build with deployment is retried' do
+      shared_examples_for 'when build with deployment is retried' do
         let!(:build) do
           create(:ci_build, :with_deployment, :deploy_to_production,
                  pipeline: pipeline, stage_id: stage.id, project: project)
@@ -318,7 +335,41 @@ RSpec.describe Ci::RetryBuildService do
         it 'persists expanded environment name' do
           expect(new_build.metadata.expanded_environment_name).to eq('production')
         end
+
+        it 'does not create a new environment' do
+          expect { new_build }.not_to change { Environment.count }
+        end
       end
+
+      shared_examples_for 'when build with dynamic environment is retried' do
+        let_it_be(:other_developer) { create(:user).tap { |u| project.add_developer(u) } }
+
+        let(:environment_name) { 'review/$CI_COMMIT_REF_SLUG-$GITLAB_USER_ID' }
+
+        let!(:build) do
+          create(:ci_build, :with_deployment, environment: environment_name,
+                options: { environment: { name: environment_name } },
+                pipeline: pipeline, stage_id: stage.id, project: project,
+                user: other_developer)
+        end
+
+        it 're-uses the previous persisted environment' do
+          expect(build.persisted_environment.name).to eq("review/#{build.ref}-#{other_developer.id}")
+
+          expect(new_build.persisted_environment.name).to eq("review/#{build.ref}-#{other_developer.id}")
+        end
+
+        it 'creates a new deployment' do
+          expect { new_build }.to change { Deployment.count }.by(1)
+        end
+
+        it 'does not create a new environment' do
+          expect { new_build }.not_to change { Environment.count }
+        end
+      end
+
+      it_behaves_like 'when build with deployment is retried'
+      it_behaves_like 'when build with dynamic environment is retried'
 
       context 'when build has needs' do
         before do
@@ -338,7 +389,7 @@ RSpec.describe Ci::RetryBuildService do
       let(:user) { reporter }
 
       it 'raises an error' do
-        expect { service.reprocess!(build) }
+        expect { service.clone!(build) }
           .to raise_error Gitlab::Access::AccessDeniedError
       end
     end

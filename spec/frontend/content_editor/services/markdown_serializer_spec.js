@@ -5,10 +5,15 @@ import Code from '~/content_editor/extensions/code';
 import CodeBlockHighlight from '~/content_editor/extensions/code_block_highlight';
 import DescriptionItem from '~/content_editor/extensions/description_item';
 import DescriptionList from '~/content_editor/extensions/description_list';
+import Details from '~/content_editor/extensions/details';
+import DetailsContent from '~/content_editor/extensions/details_content';
 import Division from '~/content_editor/extensions/division';
 import Emoji from '~/content_editor/extensions/emoji';
 import Figure from '~/content_editor/extensions/figure';
 import FigureCaption from '~/content_editor/extensions/figure_caption';
+import FootnoteDefinition from '~/content_editor/extensions/footnote_definition';
+import FootnoteReference from '~/content_editor/extensions/footnote_reference';
+import FootnotesSection from '~/content_editor/extensions/footnotes_section';
 import HardBreak from '~/content_editor/extensions/hard_break';
 import Heading from '~/content_editor/extensions/heading';
 import HorizontalRule from '~/content_editor/extensions/horizontal_rule';
@@ -26,15 +31,10 @@ import TableHeader from '~/content_editor/extensions/table_header';
 import TableRow from '~/content_editor/extensions/table_row';
 import TaskItem from '~/content_editor/extensions/task_item';
 import TaskList from '~/content_editor/extensions/task_list';
-import Text from '~/content_editor/extensions/text';
 import markdownSerializer from '~/content_editor/services/markdown_serializer';
 import { createTestEditor, createDocBuilder } from '../test_utils';
 
 jest.mock('~/emoji');
-
-jest.mock('~/content_editor/services/feature_flags', () => ({
-  isBlockTablesFeatureEnabled: jest.fn().mockReturnValue(true),
-}));
 
 const tiptapEditor = createTestEditor({
   extensions: [
@@ -45,8 +45,13 @@ const tiptapEditor = createTestEditor({
     CodeBlockHighlight,
     DescriptionItem,
     DescriptionList,
+    Details,
+    DetailsContent,
     Division,
     Emoji,
+    FootnoteDefinition,
+    FootnoteReference,
+    FootnotesSection,
     Figure,
     FigureCaption,
     HardBreak,
@@ -58,7 +63,6 @@ const tiptapEditor = createTestEditor({
     Link,
     ListItem,
     OrderedList,
-    Paragraph,
     Strike,
     Table,
     TableCell,
@@ -66,7 +70,6 @@ const tiptapEditor = createTestEditor({
     TableRow,
     TaskItem,
     TaskList,
-    Text,
   ],
 });
 
@@ -78,10 +81,15 @@ const {
     bulletList,
     code,
     codeBlock,
+    details,
+    detailsContent,
     division,
     descriptionItem,
     descriptionList,
     emoji,
+    footnoteDefinition,
+    footnoteReference,
+    footnotesSection,
     figure,
     figureCaption,
     heading,
@@ -110,12 +118,17 @@ const {
     bulletList: { nodeType: BulletList.name },
     code: { markType: Code.name },
     codeBlock: { nodeType: CodeBlockHighlight.name },
+    details: { nodeType: Details.name },
+    detailsContent: { nodeType: DetailsContent.name },
     division: { nodeType: Division.name },
     descriptionItem: { nodeType: DescriptionItem.name },
     descriptionList: { nodeType: DescriptionList.name },
     emoji: { markType: Emoji.name },
     figure: { nodeType: Figure.name },
     figureCaption: { nodeType: FigureCaption.name },
+    footnoteDefinition: { nodeType: FootnoteDefinition.name },
+    footnoteReference: { nodeType: FootnoteReference.name },
+    footnotesSection: { nodeType: FootnotesSection.name },
     hardBreak: { nodeType: HardBreak.name },
     heading: { nodeType: Heading.name },
     horizontalRule: { nodeType: HorizontalRule.name },
@@ -149,6 +162,17 @@ describe('markdownSerializer', () => {
 
   it('correctly serializes italics', () => {
     expect(serialize(paragraph(italic('italics')))).toBe('_italics_');
+  });
+
+  it('correctly serializes code blocks wrapped by italics and bold marks', () => {
+    const text = 'code block';
+
+    expect(serialize(paragraph(italic(code(text))))).toBe(`_\`${text}\`_`);
+    expect(serialize(paragraph(code(italic(text))))).toBe(`_\`${text}\`_`);
+    expect(serialize(paragraph(bold(code(text))))).toBe(`**\`${text}\`**`);
+    expect(serialize(paragraph(code(bold(text))))).toBe(`**\`${text}\`**`);
+    expect(serialize(paragraph(strike(code(text))))).toBe(`~~\`${text}\`~~`);
+    expect(serialize(paragraph(code(strike(text))))).toBe(`~~\`${text}\`~~`);
   });
 
   it('correctly serializes inline diff', () => {
@@ -326,6 +350,10 @@ this is not really json but just trying out whether this case works or not
     expect(serialize(paragraph(image({ src: 'img.jpg', alt: 'foo bar' })))).toBe(
       '![foo bar](img.jpg)',
     );
+  });
+
+  it('does not serialize an image when src and canonicalSrc are empty', () => {
+    expect(serialize(paragraph(image({})))).toBe('');
   });
 
   it('correctly serializes an image with a title', () => {
@@ -569,6 +597,7 @@ this is not really json but just trying out whether this case works or not
             paragraph('A giant ', italic('owl-like'), ' creature.'),
           ),
         ),
+        heading('this is a heading'),
       ),
     ).toBe(
       `
@@ -584,6 +613,113 @@ A giant _owl-like_ creature.
 
 </dd>
 </dl>
+
+# this is a heading
+      `.trim(),
+    );
+  });
+
+  it('correctly renders a simple details/summary', () => {
+    expect(
+      serialize(
+        details(
+          detailsContent(paragraph('this is the summary')),
+          detailsContent(paragraph('this content will be hidden')),
+        ),
+        heading('this is a heading'),
+      ),
+    ).toBe(
+      `
+<details>
+<summary>this is the summary</summary>
+this content will be hidden
+</details>
+
+# this is a heading
+      `.trim(),
+    );
+  });
+
+  it('correctly renders details/summary with styled content', () => {
+    expect(
+      serialize(
+        details(
+          detailsContent(paragraph('this is the ', bold('summary'))),
+          detailsContent(
+            codeBlock(
+              { language: 'javascript' },
+              'var a = 2;\nvar b = 3;\nvar c = a + d;\n\nconsole.log(c);',
+            ),
+          ),
+          detailsContent(paragraph('this content will be ', italic('hidden'))),
+        ),
+        details(detailsContent(paragraph('summary 2')), detailsContent(paragraph('content 2'))),
+      ).trim(),
+    ).toBe(
+      `
+<details>
+<summary>
+
+this is the **summary**
+
+</summary>
+
+\`\`\`javascript
+var a = 2;
+var b = 3;
+var c = a + d;
+
+console.log(c);
+\`\`\`
+
+this content will be _hidden_
+
+</details>
+
+<details>
+<summary>summary 2</summary>
+content 2
+</details>
+      `.trim(),
+    );
+  });
+
+  it('correctly renders nested details', () => {
+    expect(
+      serialize(
+        details(
+          detailsContent(paragraph('dream level 1')),
+          detailsContent(
+            details(
+              detailsContent(paragraph('dream level 2')),
+              detailsContent(
+                details(
+                  detailsContent(paragraph('dream level 3')),
+                  detailsContent(paragraph(italic('inception'))),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ).trim(),
+    ).toBe(
+      `
+<details>
+<summary>dream level 1</summary>
+
+<details>
+<summary>dream level 2</summary>
+
+<details>
+<summary>dream level 3</summary>
+
+_inception_
+
+</details>
+
+</details>
+
+</details>
       `.trim(),
     );
   });
@@ -1002,6 +1138,24 @@ there
 <td colspan="2">cell with rowspan: 2</td>
 </tr>
 </table>
+      `.trim(),
+    );
+  });
+
+  it('correctly serializes footnotes', () => {
+    expect(
+      serialize(
+        paragraph(
+          'Oranges are orange ',
+          footnoteReference({ footnoteId: '1', footnoteNumber: '1' }),
+        ),
+        footnotesSection(footnoteDefinition(paragraph('Oranges are fruits'))),
+      ),
+    ).toBe(
+      `
+Oranges are orange [^1]
+
+[^1]: Oranges are fruits
       `.trim(),
     );
   });

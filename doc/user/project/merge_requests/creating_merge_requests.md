@@ -2,7 +2,6 @@
 stage: Create
 group: Code Review
 info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
-type: howto
 description: "How to create merge requests in GitLab."
 disqus_identifier: 'https://docs.gitlab.com/ee/gitlab-basics/add-merge-request.html'
 ---
@@ -20,6 +19,10 @@ You can create a merge request from the list of merge requests.
 1. In the top right, select **New merge request**.
 1. Select a source and target branch and then **Compare branches and continue**.
 1. Fill out the fields and select **Create merge request**.
+
+NOTE:
+Merge requests are designed around a one-to-one (1:1) branch relationship. Only one open merge request may
+be associated with a given target branch at a time.
 
 ## From an issue
 
@@ -74,7 +77,7 @@ You can create a merge request by running Git commands on your local machine.
 
    ```plaintext
    ...
-   remote: To create a merge request for docs-new-merge-request, visit:
+   remote: To create a merge request for my-new-branch, visit:
    remote:   https://gitlab.example.com/my-group/my-project/merge_requests/new?merge_request%5Bsource_branch%5D=my-new-branch
    ```
 
@@ -107,10 +110,6 @@ For more information, [see the forking workflow documentation](../repository/for
 
 ## By sending an email
 
-> The format of the generated email address changed in GitLab 11.7.
-  The earlier format is still supported so existing aliases
-  or contacts still work.
-
 You can create a merge request by sending an email message to GitLab.
 The merge request target branch is the project's default branch.
 
@@ -138,8 +137,6 @@ A merge request is created.
 
 ### Add attachments when creating a merge request by email
 
-> [Introduced](https://gitlab.com/gitlab-org/gitlab-foss/-/merge_requests/22723) in GitLab 11.5.
-
 You can add commits to a merge request by adding
 patches as attachments to the email. All attachments with a filename
 ending in `.patch` are considered patches and are processed
@@ -154,6 +151,8 @@ You can specify the target branch by using the
 branch already exists, the patches are applied on top of it.
 
 ## Set the default target project
+
+> [Introduced](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/58093) in GitLab 13.11.
 
 Merge requests have a source and a target project that are the same, unless
 forking is involved. Creating a fork of the project can cause either of these

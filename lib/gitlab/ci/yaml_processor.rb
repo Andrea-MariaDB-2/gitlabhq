@@ -29,10 +29,8 @@ module Gitlab
         run_logical_validations!
 
         Result.new(ci_config: @ci_config, warnings: @ci_config&.warnings)
-
       rescue Gitlab::Ci::Config::ConfigError => e
         Result.new(ci_config: @ci_config, errors: [e.message], warnings: @ci_config&.warnings)
-
       rescue ValidationError => e
         Result.new(ci_config: @ci_config, errors: [e.message], warnings: @ci_config&.warnings)
       end
@@ -47,7 +45,7 @@ module Gitlab
           validate_job!(name, job)
         end
 
-        YamlProcessor::Dag.check_circular_dependencies!(@jobs)
+        check_circular_dependencies
       end
 
       def validate_job!(name, job)
@@ -88,8 +86,16 @@ module Gitlab
       def validate_job_needs!(name, job)
         return unless needs = job.dig(:needs, :job)
 
+        validate_duplicate_needs!(name, needs)
+
         needs.each do |need|
           validate_job_dependency!(name, need[:name], 'need')
+        end
+      end
+
+      def validate_duplicate_needs!(name, needs)
+        unless needs.uniq == needs
+          error!("#{name} has duplicate entries in the needs section.")
         end
       end
 
@@ -138,6 +144,17 @@ module Gitlab
         unless on_stop_job[:environment][:action] == 'stop'
           error!("#{name} job: on_stop job #{on_stop} needs to have action stop defined")
         end
+      end
+
+      def check_circular_dependencies
+        jobs = @jobs.values.to_h do |job|
+          name = job[:name].to_s
+          needs = job.dig(:needs, :job).to_a
+
+          [name, needs.map { |need| need[:name].to_s }]
+        end
+
+        Dag.check_circular_dependencies!(jobs)
       end
 
       def error!(message)

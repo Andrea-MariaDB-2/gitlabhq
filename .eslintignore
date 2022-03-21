@@ -2,9 +2,11 @@
 /builds/
 /coverage/
 /coverage-frontend/
-/coverage-javascript/
 /node_modules/
 /public/
 /tmp/
 /vendor/
 /sitespeed-result/
+/fixtures/**/*.graphql
+spec/fixtures/**/*.graphql
+**/contracts/consumer/

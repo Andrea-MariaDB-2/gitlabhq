@@ -14,14 +14,14 @@ eventually.
 ## Quarantined tests
 
 When a test frequently fails in `main`,
-[a ~"master:broken" issue](https://about.gitlab.com/handbook/engineering/workflow/#broken-master)
-should be created.
+create [a ~"failure::flaky-test" issue](https://about.gitlab.com/handbook/engineering/workflow/#broken-master).
+
 If the test cannot be fixed in a timely fashion, there is an impact on the
-productivity of all the developers, so it should be placed in quarantine by
-assigning the `:quarantine` metadata with the issue URL.
+productivity of all the developers, so it should be quarantined by
+assigning the `:quarantine` metadata with the issue URL, and add the `~"quarantined test"` label to the issue.
 
 ```ruby
-it 'should succeed', quarantine: 'https://gitlab.com/gitlab-org/gitlab/-/issues/12345' do
+it 'succeeds', quarantine: 'https://gitlab.com/gitlab-org/gitlab/-/issues/12345' do
   expect(response).to have_gitlab_http_status(:ok)
 end
 ```
@@ -32,23 +32,13 @@ This means it is skipped unless run with `--tag quarantine`:
 bin/rspec --tag quarantine
 ```
 
-**Before putting a test in quarantine, you should make sure that a
-~"master:broken" issue exists for it so it doesn't stay in quarantine forever.**
-
 Once a test is in quarantine, there are 3 choices:
 
-- Should the test be fixed (i.e. get rid of its flakiness)?
-- Should the test be moved to a lower level of testing?
-- Should the test be removed entirely (e.g. because there's already a
+- Fix the test (that is, get rid of its flakiness).
+- Move the test to a lower level of testing.
+- Remove the test entirely (for example, because there's already a
   lower-level test, or it's duplicating another same-level test, or it's testing
-  too much etc.)?
-
-### Quarantine tests on the CI
-
-Quarantined tests are run on the CI in dedicated jobs that are allowed to fail:
-
-- `rspec-pg-quarantine` (CE & EE)
-- `rspec-pg-quarantine-ee` (EE only)
+  too much etc.).
 
 ## Automatic retries and flaky tests detection
 
@@ -82,26 +72,19 @@ These flaky tests can fail depending on the order they run with other tests. For
 
 - <https://gitlab.com/gitlab-org/gitlab/-/issues/327668>
 
-To identify the tests that lead to such failure, we can use `rspec --bisect`,
+To identify the tests that lead to such failure, we can use `scripts/rspec_bisect_flaky`,
 which would give us the minimal test combination to reproduce the failure:
 
-```shell
-rspec --bisect ee/spec/services/ee/merge_requests/update_service_spec.rb ee/spec/services/ee/notes/quick_actions_service_spec.rb ee/spec/services/epic_links/create_service_spec.rb  ee/spec/services/ee/issuable/bulk_update_service_spec.rb
-Bisect started using options: "ee/spec/services/ee/merge_requests/update_service_spec.rb ee/spec/services/ee/notes/quick_actions_service_spec.rb ee/spec/services/epic_links/create_service_spec.rb ee/spec/services/ee/issuable/bulk_update_service_spec.rb"
-Running suite to find failures... (2 minutes 18.4 seconds)
-Starting bisect with 3 failing examples and 144 non-failing examples.
-Checking that failure(s) are order-dependent... failure appears to be order-dependent
+1. First obtain the list of specs that ran before the flaky test. You can search
+   for the list under `Knapsack node specs:` in the CI job output log.
+1. Save the list of specs as a file, and run:
 
-Round 1: bisecting over non-failing examples 1-144 . ignoring examples 1-72 (1 minute 11.33 seconds)
-...
-Round 7: bisecting over non-failing examples 132-133 . ignoring example 132 (43.78 seconds)
-Bisect complete! Reduced necessary non-failing examples from 144 to 1 in 8 minutes 31 seconds.
+    ```shell
+    cat knapsack_specs.txt | xargs scripts/rspec_bisect_flaky
+    ```
 
-The minimal reproduction command is:
-  rspec ./ee/spec/services/ee/issuable/bulk_update_service_spec.rb[1:2:1:1:1:1,1:2:1:2:1:1,1:2:1:3:1] ./ee/spec/services/epic_links/create_service_spec.rb[1:1:2:2:6:4]
-```
-
-We can reproduce the test failure with the reproduction command above. If we change the order of the tests, the test would pass.
+If there is an order-dependency issue, the script above will print the minimal
+reproduction.
 
 ### Time-sensitive flaky tests
 
@@ -123,6 +106,7 @@ We can reproduce the test failure with the reproduction command above. If we cha
   - [Lazy loaded images can cause Capybara to mis-click](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/18713)
 - [Triggering JS events before the event handlers are set up](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/18742)
 - [Wait for the image to be lazy-loaded when asserting on a Markdown image's `src` attribute](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/25408)
+- [Avoid asserting against flash notice banners](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/79432)
 
 #### Capybara viewport size related issues
 
@@ -133,13 +117,16 @@ We can reproduce the test failure with the reproduction command above. If we cha
 - [Don't wait for AJAX when no AJAX request is fired](https://gitlab.com/gitlab-org/gitlab-foss/-/issues/30461): <https://gitlab.com/gitlab-org/gitlab-foss/-/merge_requests/10454>
 - [Bis](https://gitlab.com/gitlab-org/gitlab-foss/-/issues/34647): <https://gitlab.com/gitlab-org/gitlab-foss/-/merge_requests/12626>
 
-#### PhantomJS / WebKit related issues
-
-- Memory is through the roof! (Load images but block images requests!): <https://gitlab.com/gitlab-org/gitlab-foss/-/merge_requests/12003>
-
 #### Capybara expectation times out
 
 - [Test imports a project (via Sidekiq) that is growing over time, leading to timeouts when the import takes longer than 60 seconds](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/22599)
+
+### Hanging specs
+
+If a spec hangs, it might be caused by a [bug in Rails](https://github.com/rails/rails/issues/34310):
+
+- <https://gitlab.com/gitlab-org/gitlab/-/merge_requests/81112>
+- <https://gitlab.com/gitlab-org/gitlab/-/issues/337039>
 
 ## Resources
 

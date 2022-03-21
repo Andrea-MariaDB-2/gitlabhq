@@ -3,8 +3,9 @@
 require 'spec_helper'
 
 RSpec.describe 'Issue Detail', :js do
+  let_it_be_with_refind(:project) { create(:project, :public) }
+
   let(:user)     { create(:user) }
-  let(:project)  { create(:project, :public) }
   let(:issue)    { create(:issue, project: project, author: user) }
   let(:incident) { create(:incident, project: project, author: user) }
 
@@ -16,7 +17,7 @@ RSpec.describe 'Issue Detail', :js do
 
     it 'shows the issue' do
       page.within('.issuable-details') do
-        expect(find('h2')).to have_content(issue.title)
+        expect(find('h1')).to have_content(issue.title)
       end
     end
   end
@@ -29,6 +30,21 @@ RSpec.describe 'Issue Detail', :js do
 
     it 'does not show design management' do
       expect(page).not_to have_selector('.js-design-management')
+    end
+  end
+
+  context 'when issue description has emojis' do
+    let(:issue) { create(:issue, project: project, author: user, description: 'hello world :100:') }
+
+    before do
+      sign_in(user)
+      visit project_issue_path(project, issue)
+    end
+
+    it 'renders gl-emoji tag' do
+      page.within('.description') do
+        expect(page).to have_selector('gl-emoji', count: 1)
+      end
     end
   end
 
@@ -69,13 +85,19 @@ RSpec.describe 'Issue Detail', :js do
 
     it 'shows the issue' do
       page.within('.issuable-details') do
-        expect(find('h2')).to have_content(issue.reload.title)
+        expect(find('h1')).to have_content(issue.reload.title)
       end
     end
   end
 
   describe 'user updates `issue_type` via the issue type dropdown' do
-    context 'when an issue `issue_type` is edited by a signed in user' do
+    let_it_be(:reporter) { create(:user) }
+
+    before_all do
+      project.add_reporter(reporter)
+    end
+
+    describe 'when an issue `issue_type` is edited' do
       before do
         sign_in(user)
 
@@ -83,18 +105,33 @@ RSpec.describe 'Issue Detail', :js do
         wait_for_requests
       end
 
-      it 'routes the user to the incident details page when the `issue_type` is set to incident' do
-        open_issue_edit_form
+      context 'by non-member author' do
+        it 'cannot see Incident option' do
+          open_issue_edit_form
 
-        page.within('[data-testid="issuable-form"]') do
-          update_type_select('Issue', 'Incident')
+          page.within('[data-testid="issuable-form"]') do
+            expect(page).to have_content('Issue')
+            expect(page).not_to have_content('Incident')
+          end
+        end
+      end
 
-          expect(page).to have_current_path(project_issues_incident_path(project, issue))
+      context 'by reporter' do
+        let(:user) { reporter }
+
+        it 'routes the user to the incident details page when the `issue_type` is set to incident' do
+          open_issue_edit_form
+
+          page.within('[data-testid="issuable-form"]') do
+            update_type_select('Issue', 'Incident')
+
+            expect(page).to have_current_path(project_issues_incident_path(project, issue))
+          end
         end
       end
     end
 
-    context 'when an incident `issue_type` is edited by a signed in user' do
+    describe 'when an incident `issue_type` is edited' do
       before do
         sign_in(user)
 
@@ -102,13 +139,29 @@ RSpec.describe 'Issue Detail', :js do
         wait_for_requests
       end
 
-      it 'routes the user to the issue details page when the `issue_type` is set to issue' do
-        open_issue_edit_form
+      context 'by non-member author' do
+        it 'routes the user to the issue details page when the `issue_type` is set to issue' do
+          open_issue_edit_form
 
-        page.within('[data-testid="issuable-form"]') do
-          update_type_select('Incident', 'Issue')
+          page.within('[data-testid="issuable-form"]') do
+            update_type_select('Incident', 'Issue')
 
-          expect(page).to have_current_path(project_issue_path(project, incident))
+            expect(page).to have_current_path(project_issue_path(project, incident))
+          end
+        end
+      end
+
+      context 'by reporter' do
+        let(:user) { reporter }
+
+        it 'routes the user to the issue details page when the `issue_type` is set to issue' do
+          open_issue_edit_form
+
+          page.within('[data-testid="issuable-form"]') do
+            update_type_select('Incident', 'Issue')
+
+            expect(page).to have_current_path(project_issue_path(project, incident))
+          end
         end
       end
     end

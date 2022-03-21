@@ -2,9 +2,9 @@ import Api from '~/api';
 import createFlash from '~/flash';
 import { visitUrl, setUrlParams } from '~/lib/utils/url_utility';
 import { __ } from '~/locale';
-import { GROUPS_LOCAL_STORAGE_KEY, PROJECTS_LOCAL_STORAGE_KEY } from './constants';
+import { GROUPS_LOCAL_STORAGE_KEY, PROJECTS_LOCAL_STORAGE_KEY, SIDEBAR_PARAMS } from './constants';
 import * as types from './mutation_types';
-import { loadDataFromLS, setFrequentItemToLS, mergeById } from './utils';
+import { loadDataFromLS, setFrequentItemToLS, mergeById, isSidebarDirty } from './utils';
 
 export const fetchGroups = ({ commit }, search) => {
   commit(types.REQUEST_GROUPS);
@@ -40,7 +40,7 @@ export const fetchProjects = ({ commit, state }, search) => {
     );
   } else {
     // The .catch() is due to the API method not handling a rejection properly
-    Api.projects(search, { order_by: 'id' }, callback).catch(() => {
+    Api.projects(search, { order_by: 'similarity' }, callback).catch(() => {
       callback();
     });
   }
@@ -86,8 +86,12 @@ export const setFrequentProject = ({ state, commit }, item) => {
   commit(types.LOAD_FREQUENT_ITEMS, { key: PROJECTS_LOCAL_STORAGE_KEY, data: frequentItems });
 };
 
-export const setQuery = ({ commit }, { key, value }) => {
+export const setQuery = ({ state, commit }, { key, value }) => {
   commit(types.SET_QUERY, { key, value });
+
+  if (SIDEBAR_PARAMS.includes(key)) {
+    commit(types.SET_SIDEBAR_DIRTY, isSidebarDirty(state.query, state.urlQuery));
+  }
 };
 
 export const applyQuery = ({ state }) => {

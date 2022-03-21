@@ -1,8 +1,16 @@
 import { shallowMount } from '@vue/test-utils';
-import filesQuery from 'shared_queries/repository/files.query.graphql';
+import { nextTick } from 'vue';
+import paginatedTreeQuery from 'shared_queries/repository/paginated_tree.query.graphql';
 import FilePreview from '~/repository/components/preview/index.vue';
 import FileTable from '~/repository/components/table/index.vue';
-import TreeContent from '~/repository/components/tree_content.vue';
+import TreeContent from 'jh_else_ce/repository/components/tree_content.vue';
+import { loadCommits, isRequested, resetRequestedCommits } from '~/repository/commits_service';
+
+jest.mock('~/repository/commits_service', () => ({
+  loadCommits: jest.fn(() => Promise.resolve()),
+  isRequested: jest.fn(),
+  resetRequestedCommits: jest.fn(),
+}));
 
 let vm;
 let $apollo;
@@ -22,6 +30,8 @@ function factory(path, data = () => ({})) {
     provide: {
       glFeatures: {
         increasePageSizeExponentially: true,
+        paginatedTreeGraphqlQuery: true,
+        lazyLoadCommits: true,
       },
     },
   });
@@ -37,28 +47,31 @@ describe('Repository table component', () => {
   it('renders file preview', async () => {
     factory('/');
 
+    // setData usage is discouraged. See https://gitlab.com/groups/gitlab-org/-/epics/7330 for details
+    // eslint-disable-next-line no-restricted-syntax
     vm.setData({ entries: { blobs: [{ name: 'README.md' }] } });
 
-    await vm.vm.$nextTick();
+    await nextTick();
 
     expect(vm.find(FilePreview).exists()).toBe(true);
   });
 
-  it('trigger fetchFiles when mounted', async () => {
+  it('trigger fetchFiles and resetRequestedCommits when mounted', async () => {
     factory('/');
 
     jest.spyOn(vm.vm, 'fetchFiles').mockImplementation(() => {});
 
-    await vm.vm.$nextTick();
+    await nextTick();
 
     expect(vm.vm.fetchFiles).toHaveBeenCalled();
+    expect(resetRequestedCommits).toHaveBeenCalled();
   });
 
   describe('normalizeData', () => {
     it('normalizes edge nodes', () => {
       factory('/');
 
-      const output = vm.vm.normalizeData('blobs', [{ node: '1' }, { node: '2' }]);
+      const output = vm.vm.normalizeData('blobs', { nodes: ['1', '2'] });
 
       expect(output).toEqual(['1', '2']);
     });
@@ -99,7 +112,7 @@ describe('Repository table component', () => {
       it('is changes hasShowMore to false when "showMore" event is emitted', async () => {
         findFileTable().vm.$emit('showMore');
 
-        await vm.vm.$nextTick();
+        await nextTick();
 
         expect(vm.vm.hasShowMore).toBe(false);
       });
@@ -107,7 +120,7 @@ describe('Repository table component', () => {
       it('changes clickedShowMore when "showMore" event is emitted', async () => {
         findFileTable().vm.$emit('showMore');
 
-        await vm.vm.$nextTick();
+        await nextTick();
 
         expect(vm.vm.clickedShowMore).toBe(true);
       });
@@ -124,9 +137,11 @@ describe('Repository table component', () => {
     it('is not rendered if less than 1000 files', async () => {
       factory('/');
 
+      // setData usage is discouraged. See https://gitlab.com/groups/gitlab-org/-/epics/7330 for details
+      // eslint-disable-next-line no-restricted-syntax
       vm.setData({ fetchCounter: 5, clickedShowMore: false });
 
-      await vm.vm.$nextTick();
+      await nextTick();
 
       expect(vm.vm.hasShowMore).toBe(false);
     });
@@ -143,9 +158,11 @@ describe('Repository table component', () => {
       factory('/');
 
       const blobs = new Array(totalBlobs).fill('fakeBlob');
+      // setData usage is discouraged. See https://gitlab.com/groups/gitlab-org/-/epics/7330 for details
+      // eslint-disable-next-line no-restricted-syntax
       vm.setData({ entries: { blobs }, pagesLoaded });
 
-      await vm.vm.$nextTick();
+      await nextTick();
 
       expect(findFileTable().props('hasMore')).toBe(limitReached);
     });
@@ -163,12 +180,14 @@ describe('Repository table component', () => {
       ${200}       | ${100}
     `('exponentially increases page size, to a maximum of 100', ({ fetchCounter, pageSize }) => {
       factory('/');
+      // setData usage is discouraged. See https://gitlab.com/groups/gitlab-org/-/epics/7330 for details
+      // eslint-disable-next-line no-restricted-syntax
       vm.setData({ fetchCounter });
 
       vm.vm.fetchFiles();
 
       expect($apollo.query).toHaveBeenCalledWith({
-        query: filesQuery,
+        query: paginatedTreeQuery,
         variables: {
           pageSize,
           nextPageCursor: '',
@@ -177,6 +196,31 @@ describe('Repository table component', () => {
           ref: '',
         },
       });
+    });
+  });
+
+  describe('commit data', () => {
+    const path = 'some/path';
+
+    it('loads commit data for both top and bottom batches when row-appear event is emitted', () => {
+      const rowNumber = 50;
+
+      factory(path);
+      findFileTable().vm.$emit('row-appear', rowNumber);
+
+      expect(isRequested).toHaveBeenCalledWith(rowNumber);
+
+      expect(loadCommits.mock.calls).toEqual([
+        ['', path, '', rowNumber],
+        ['', path, '', rowNumber - 25],
+      ]);
+    });
+
+    it('loads commit data once if rowNumber is zero', () => {
+      factory(path);
+      findFileTable().vm.$emit('row-appear', 0);
+
+      expect(loadCommits.mock.calls).toEqual([['', path, '', 0]]);
     });
   });
 });

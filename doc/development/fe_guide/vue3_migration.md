@@ -6,12 +6,10 @@ info: To determine the technical writer assigned to the Stage/Group associated w
 
 # Migration to Vue 3
 
-Preparations for a Vue 3 migration are tracked in epic [&3174](https://gitlab.com/groups/gitlab-org/-/epics/3174)
+The migration from Vue 2 to 3 is tracked in epic [&6252](https://gitlab.com/groups/gitlab-org/-/epics/6252).
 
-In order to prepare for the eventual migration to Vue 3.x, we should not use the following deprecated features in the codebase:
-
-NOTE:
-Our linting rules block the use of these deprecated features.
+To ease migration to Vue 3.x, we have added [eslint rules](https://gitlab.com/gitlab-org/frontend/eslint-plugin/-/merge_requests/50)
+that prevent us from using the following deprecated features in the codebase.
 
 ## Vue filters
 
@@ -29,34 +27,16 @@ Component's computed properties / methods or external helpers.
 
 `$on`, `$once`, and `$off` methods [are removed](https://github.com/vuejs/rfcs/blob/master/active-rfcs/0020-events-api-change.md) from the Vue instance, so in Vue 3 it can't be used to create an event hub.
 
+**When to use**
+
+If you are in a Vue app that doesn't use any event hub, try to avoid adding a new one unless absolutely necessary. For example, if you need a child component to react to its parent's event, it's preferred to pass a prop down. Then, use the watch property on that prop in the child component to create the desired side effect.
+
+If you need cross-component communication (between different Vue apps), then perhaps introducing a hub is the right decision.
+
 **What to use instead**
 
-Vue documentation recommends using the [mitt](https://github.com/developit/mitt) library. It's relatively small (200 bytes, compressed) and has a clear API:
+We have created a factory that you can use to instantiate a new [mitt](https://github.com/developit/mitt)-like event hub.
 
-```javascript
-import mitt from 'mitt'
-
-const emitter = mitt()
-
-// listen to an event
-emitter.on('foo', e => console.log('foo', e) )
-
-// listen to all events
-emitter.on('*', (type, e) => console.log(type, e) )
-
-// fire an event
-emitter.emit('foo', { a: 'b' })
-
-// working with handler references:
-function onFoo() {}
-
-emitter.on('foo', onFoo)   // listen
-emitter.off('foo', onFoo)  // unlisten
-```
-
-**Event hub factory**
-
-We have created a factory that you can use to instantiate a new mitt-based event hub.
 This makes it easier to migrate existing event hubs to the new recommended approach, or
 to create new ones.
 

@@ -5,17 +5,26 @@ import { handleFileEvent } from '../services/upload_helpers';
 export default Extension.create({
   name: 'attachment',
 
-  defaultOptions: {
-    uploadsPath: null,
-    renderMarkdown: null,
+  addOptions() {
+    return {
+      uploadsPath: null,
+      renderMarkdown: null,
+      eventHub: null,
+    };
   },
 
   addCommands() {
     return {
       uploadAttachment: ({ file }) => () => {
-        const { uploadsPath, renderMarkdown } = this.options;
+        const { uploadsPath, renderMarkdown, eventHub } = this.options;
 
-        return handleFileEvent({ file, uploadsPath, renderMarkdown, editor: this.editor });
+        return handleFileEvent({
+          file,
+          uploadsPath,
+          renderMarkdown,
+          editor: this.editor,
+          eventHub,
+        });
       },
     };
   },
@@ -27,23 +36,25 @@ export default Extension.create({
         key: new PluginKey('attachment'),
         props: {
           handlePaste: (_, event) => {
-            const { uploadsPath, renderMarkdown } = this.options;
+            const { uploadsPath, renderMarkdown, eventHub } = this.options;
 
             return handleFileEvent({
               editor,
               file: event.clipboardData.files[0],
               uploadsPath,
               renderMarkdown,
+              eventHub,
             });
           },
           handleDrop: (_, event) => {
-            const { uploadsPath, renderMarkdown } = this.options;
+            const { uploadsPath, renderMarkdown, eventHub } = this.options;
 
             return handleFileEvent({
               editor,
               file: event.dataTransfer.files[0],
               uploadsPath,
               renderMarkdown,
+              eventHub,
             });
           },
         },

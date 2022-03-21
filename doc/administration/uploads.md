@@ -51,12 +51,6 @@ _The uploads are stored by default in
 
 ## Using object storage **(FREE SELF)**
 
-> **Notes:**
->
-> - [Introduced](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/3867) in [GitLab Premium](https://about.gitlab.com/pricing/) 10.5.
-> - [Introduced](https://gitlab.com/gitlab-org/gitlab-foss/-/merge_requests/17358) in [GitLab Free](https://about.gitlab.com/pricing/) 10.7.
-> - Since version 11.1, we support direct_upload to S3.
-
 If you don't want to use the local disk where GitLab is installed to store the
 uploads, you can use an object storage provider like AWS S3 instead.
 This configuration relies on valid AWS credentials to be configured already.
@@ -73,7 +67,7 @@ For source installations the following settings are nested under `uploads:` and 
 |---------|-------------|---------|
 | `enabled` | Enable/disable object storage | `false` |
 | `remote_directory` | The bucket name where Uploads will be stored| |
-| `direct_upload` | Set to `true` to remove Puma from the Upload path. Workhorse handles the actual Artifact Upload to Object Storage while Puma does minimal processing to keep track of the upload. There is no need for local shared storage. The option may be removed if support for a single storage type for all files is introduced. Read more on [direct upload](../development/uploads.md#direct-upload). | `false` |
+| `direct_upload` | Set to `true` to remove Puma from the Upload path. Workhorse handles the actual Artifact Upload to Object Storage while Puma does minimal processing to keep track of the upload. There is no need for local shared storage. The option may be removed if support for a single storage type for all files is introduced. Read more on [direct upload](../development/uploads/implementation.md#direct-upload). | `false` |
 | `background_upload` | Set to `false` to disable automatic upload. Option may be removed once upload is direct to S3 (if `direct_upload` is set to `true` it will override `background_upload`) | `true` |
 | `proxy_download` | Set to `true` to enable proxying all files served. Option allows to reduce egress traffic as this allows clients to download directly from remote storage instead of proxying all data | `false` |
 | `connection` | Various connection options described below | |
@@ -112,24 +106,7 @@ _The uploads are stored by default in
    ```
 
 1. Save the file and [reconfigure GitLab](restart_gitlab.md#omnibus-gitlab-reconfigure) for the changes to take effect.
-1. Migrate any existing local uploads to the object storage using [`gitlab:uploads:migrate` Rake task](raketasks/uploads/migrate.md).
-1. Optional: Verify all files migrated properly.
-   From [PostgreSQL console](https://docs.gitlab.com/omnibus/settings/database.html#connecting-to-the-bundled-postgresql-database)
-   (`sudo gitlab-psql -d gitlabhq_production`) verify `objectstg` below (where `store=2`) has count of all artifacts:
-
-   ```shell
-   gitlabhq_production=# SELECT count(*) AS total, sum(case when store = '1' then 1 else 0 end) AS filesystem, sum(case when store = '2' then 1 else 0 end) AS objectstg FROM uploads;
-
-   total | filesystem | objectstg
-   ------+------------+-----------
-    2409 |          0 |      2409
-   ```
-
-   Verify no files on disk in `artifacts` folder:
-
-   ```shell
-   sudo find /var/opt/gitlab/gitlab-rails/uploads -type f | grep -v tmp | wc -l
-   ```
+1. Migrate any existing local uploads to the object storage using [`gitlab:uploads:migrate:all` Rake task](raketasks/uploads/migrate.md).
 
 **In installations from source:**
 
@@ -153,22 +130,6 @@ _The uploads are stored by default in
 
 1. Save the file and [restart GitLab](restart_gitlab.md#installations-from-source) for the changes to take effect.
 1. Migrate any existing local uploads to the object storage using [`gitlab:uploads:migrate:all` Rake task](raketasks/uploads/migrate.md).
-1. Optional: Verify all files migrated properly.
-   From PostgreSQL console (`sudo -u git -H psql -d gitlabhq_production`) verify `objectstg` below (where `file_store=2`) has count of all artifacts:
-
-   ```shell
-   gitlabhq_production=# SELECT count(*) AS total, sum(case when store = '1' then 1 else 0 end) AS filesystem, sum(case when store = '2' then 1 else 0 end) AS objectstg FROM uploads;
-
-   total | filesystem | objectstg
-   ------+------------+-----------
-    2409 |          0 |      2409
-   ```
-
-   Verify no files on disk in `artifacts` folder:
-
-   ```shell
-   sudo find /var/opt/gitlab/gitlab-rails/uploads -type f | grep -v tmp | wc -l
-   ```
 
 #### OpenStack example
 
@@ -195,23 +156,6 @@ _The uploads are stored by default in
 
 1. Save the file and [reconfigure GitLab](restart_gitlab.md#omnibus-gitlab-reconfigure) for the changes to take effect.
 1. Migrate any existing local uploads to the object storage using [`gitlab:uploads:migrate:all` Rake task](raketasks/uploads/migrate.md).
-1. Optional: Verify all files migrated properly.
-   From [PostgreSQL console](https://docs.gitlab.com/omnibus/settings/database.html#connecting-to-the-bundled-postgresql-database)
-   (`sudo gitlab-psql -d gitlabhq_production`) verify `objectstg` below (where `store=2`) has count of all artifacts:
-
-   ```shell
-   gitlabhq_production=# SELECT count(*) AS total, sum(case when store = '1' then 1 else 0 end) AS filesystem, sum(case when store = '2' then 1 else 0 end) AS objectstg FROM uploads;
-
-   total | filesystem | objectstg
-   ------+------------+-----------
-    2409 |          0 |      2409
-   ```
-
-   Verify no files on disk in `artifacts` folder:
-
-   ```shell
-   sudo find /var/opt/gitlab/gitlab-rails/uploads -type f | grep -v tmp | wc -l
-   ```
 
 ---
 
@@ -243,19 +187,3 @@ _The uploads are stored by default in
 
 1. Save the file and [reconfigure GitLab](restart_gitlab.md#omnibus-gitlab-reconfigure) for the changes to take effect.
 1. Migrate any existing local uploads to the object storage using [`gitlab:uploads:migrate:all` Rake task](raketasks/uploads/migrate.md).
-1. Optional: Verify all files migrated properly.
-   From PostgreSQL console (`sudo -u git -H psql -d gitlabhq_production`) verify `objectstg` below (where `file_store=2`) has count of all artifacts:
-
-   ```shell
-   gitlabhq_production=# SELECT count(*) AS total, sum(case when store = '1' then 1 else 0 end) AS filesystem, sum(case when store = '2' then 1 else 0 end) AS objectstg FROM uploads;
-
-   total | filesystem | objectstg
-   ------+------------+-----------
-    2409 |          0 |      2409
-   ```
-
-   Verify no files on disk in `artifacts` folder:
-
-   ```shell
-   sudo find /var/opt/gitlab/gitlab-rails/uploads -type f | grep -v tmp | wc -l
-   ```

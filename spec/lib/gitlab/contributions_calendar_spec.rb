@@ -5,6 +5,7 @@ require 'spec_helper'
 RSpec.describe Gitlab::ContributionsCalendar do
   let(:contributor) { create(:user) }
   let(:user) { create(:user) }
+  let(:travel_time) { nil }
 
   let(:private_project) do
     create(:project, :private) do |project|
@@ -31,7 +32,7 @@ RSpec.describe Gitlab::ContributionsCalendar do
   let(:last_year) { today - 1.year }
 
   before do
-    travel_to Time.now.utc.end_of_day
+    travel_to travel_time || Time.now.utc.end_of_day
   end
 
   after do
@@ -49,7 +50,8 @@ RSpec.describe Gitlab::ContributionsCalendar do
     Event.create!(
       project: project,
       action: action,
-      target: @targets[project],
+      target_type: @targets[project].class.name,
+      target_id: @targets[project].id,
       author: contributor,
       created_at: DateTime.new(day.year, day.month, day.day, hour)
     )
@@ -65,14 +67,34 @@ RSpec.describe Gitlab::ContributionsCalendar do
     end
 
     context "when the user has opted-in for private contributions" do
+      before do
+        contributor.update_column(:include_private_contributions, true)
+      end
+
       it "shows private and public events to all users" do
-        user.update_column(:include_private_contributions, true)
         create_event(private_project, today)
         create_event(public_project, today)
 
+        expect(calendar.activity_dates[today]).to eq(2)
+        expect(calendar(user).activity_dates[today]).to eq(2)
+        expect(calendar(contributor).activity_dates[today]).to eq(2)
+      end
+
+      # tests for bug https://gitlab.com/gitlab-org/gitlab/-/merge_requests/74826
+      it "still counts correct with feature access levels set to private" do
+        create_event(private_project, today)
+
+        private_project.project_feature.update_attribute(:issues_access_level, ProjectFeature::PRIVATE)
+        private_project.project_feature.update_attribute(:repository_access_level, ProjectFeature::PRIVATE)
+        private_project.project_feature.update_attribute(:merge_requests_access_level, ProjectFeature::PRIVATE)
+
         expect(calendar.activity_dates[today]).to eq(1)
         expect(calendar(user).activity_dates[today]).to eq(1)
-        expect(calendar(contributor).activity_dates[today]).to eq(2)
+        expect(calendar(contributor).activity_dates[today]).to eq(1)
+      end
+
+      it "does not fail if there are no contributed projects" do
+        expect(calendar.activity_dates[today]).to eq(nil)
       end
     end
 
@@ -89,7 +111,7 @@ RSpec.describe Gitlab::ContributionsCalendar do
       expect(calendar(contributor).activity_dates[today]).to eq(2)
     end
 
-    context "when events fall under different dates depending on the time zone" do
+    context "when events fall under different dates depending on the system time zone" do
       before do
         create_event(public_project, today, 1)
         create_event(public_project, today, 4)
@@ -116,6 +138,38 @@ RSpec.describe Gitlab::ContributionsCalendar do
         end
       end
     end
+
+    context "when events fall under different dates depending on the contributor's time zone" do
+      before do
+        create_event(public_project, today, 1)
+        create_event(public_project, today, 4)
+        create_event(public_project, today, 10)
+        create_event(public_project, today, 16)
+        create_event(public_project, today, 23)
+        create_event(public_project, tomorrow, 1)
+      end
+
+      it "renders correct event counts within the UTC timezone" do
+        Time.use_zone('UTC') do
+          contributor.timezone = 'UTC'
+          expect(calendar.activity_dates).to eq(today => 5)
+        end
+      end
+
+      it "renders correct event counts within the Sydney timezone" do
+        Time.use_zone('UTC') do
+          contributor.timezone = 'Sydney'
+          expect(calendar.activity_dates).to eq(today => 3, tomorrow => 3)
+        end
+      end
+
+      it "renders correct event counts within the US Central timezone" do
+        Time.use_zone('UTC') do
+          contributor.timezone = 'Central Time (US & Canada)'
+          expect(calendar.activity_dates).to eq(yesterday => 2, today => 4)
+        end
+      end
+    end
   end
 
   describe '#events_by_date' do
@@ -137,6 +191,12 @@ RSpec.describe Gitlab::ContributionsCalendar do
       expect(calendar(contributor).events_by_date(today)).to contain_exactly(e1, e2, e3)
     end
 
+    it "includes diff notes on merge request" do
+      e1 = create_event(public_project, today, 0, :commented, :diff_note_on_merge_request)
+
+      expect(calendar.events_by_date(today)).to contain_exactly(e1)
+    end
+
     context 'when the user cannot read cross project' do
       before do
         allow(Ability).to receive(:allowed?).and_call_original
@@ -152,14 +212,38 @@ RSpec.describe Gitlab::ContributionsCalendar do
   end
 
   describe '#starting_year' do
-    it "is the start of last year" do
-      expect(calendar.starting_year).to eq(last_year.year)
+    let(:travel_time) { Time.find_zone('UTC').local(2020, 12, 31, 19, 0, 0) }
+
+    context "when the contributor's timezone is not set" do
+      it "is the start of last year in the system timezone" do
+        expect(calendar.starting_year).to eq(2019)
+      end
+    end
+
+    context "when the contributor's timezone is set to Sydney" do
+      let(:contributor) { create(:user, { timezone: 'Sydney' }) }
+
+      it "is the start of last year in Sydney" do
+        expect(calendar.starting_year).to eq(2020)
+      end
     end
   end
 
   describe '#starting_month' do
-    it "is the start of this month" do
-      expect(calendar.starting_month).to eq(today.month)
+    let(:travel_time) { Time.find_zone('UTC').local(2020, 12, 31, 19, 0, 0) }
+
+    context "when the contributor's timezone is not set" do
+      it "is the start of this month in the system timezone" do
+        expect(calendar.starting_month).to eq(12)
+      end
+    end
+
+    context "when the contributor's timezone is set to Sydney" do
+      let(:contributor) { create(:user, { timezone: 'Sydney' }) }
+
+      it "is the start of this month in Sydney" do
+        expect(calendar.starting_month).to eq(1)
+      end
     end
   end
 end

@@ -37,6 +37,7 @@ It is also a good idea to first open a proof-of-concept merge request. It can be
 You can look into the following examples of MRs for implementing replication/verification for a new blob type:
 - [Add db changes](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/60935) and [add verification for MR diffs using SSF](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/63309)
 - [Verify Terraform state versions](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/58800)
+- [Verify LFS objects](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/63981)
 
 ### Modify database schemas to prepare to add Geo support for Cool Widgets
 
@@ -57,42 +58,38 @@ Geo secondary sites have a [Geo tracking database](https://gitlab.com/gitlab-org
   ```ruby
   # frozen_string_literal: true
 
-  class CreateCoolWidgetRegistry < ActiveRecord::Migration[6.0]
-    include Gitlab::Database::MigrationHelpers
-
+  class CreateCoolWidgetRegistry < Gitlab::Database::Migration[1.0]
     disable_ddl_transaction!
 
     def up
-      unless table_exists?(:cool_widget_registry)
-        ActiveRecord::Base.transaction do
-          create_table :cool_widget_registry, id: :bigserial, force: :cascade do |t|
-            t.bigint :cool_widget_id, null: false
-            t.datetime_with_timezone :created_at, null: false
-            t.datetime_with_timezone :last_synced_at
-            t.datetime_with_timezone :retry_at
-            t.datetime_with_timezone :verified_at
-            t.datetime_with_timezone :verification_started_at
-            t.datetime_with_timezone :verification_retry_at
-            t.integer :state, default: 0, null: false, limit: 2
-            t.integer :verification_state, default: 0, null: false, limit: 2
-            t.integer :retry_count, default: 0, limit: 2, null: false
-            t.integer :verification_retry_count, default: 0, limit: 2, null: false
-            t.boolean :checksum_mismatch, default: false, null: false
-            t.binary :verification_checksum
-            t.binary :verification_checksum_mismatched
-            t.string :verification_failure, limit: 255 # rubocop:disable Migration/PreventStrings see https://gitlab.com/gitlab-org/gitlab/-/issues/323806
-            t.string :last_sync_failure, limit: 255 # rubocop:disable Migration/PreventStrings see https://gitlab.com/gitlab-org/gitlab/-/issues/323806
+      ActiveRecord::Base.transaction do
+        create_table :cool_widget_registry, id: :bigserial, force: :cascade do |t|
+          t.bigint :cool_widget_id, null: false
+          t.datetime_with_timezone :created_at, null: false
+          t.datetime_with_timezone :last_synced_at
+          t.datetime_with_timezone :retry_at
+          t.datetime_with_timezone :verified_at
+          t.datetime_with_timezone :verification_started_at
+          t.datetime_with_timezone :verification_retry_at
+          t.integer :state, default: 0, null: false, limit: 2
+          t.integer :verification_state, default: 0, null: false, limit: 2
+          t.integer :retry_count, default: 0, limit: 2, null: false
+          t.integer :verification_retry_count, default: 0, limit: 2, null: false
+          t.boolean :checksum_mismatch, default: false, null: false
+          t.binary :verification_checksum
+          t.binary :verification_checksum_mismatched
+          t.text :verification_failure, limit: 255
+          t.text :last_sync_failure, limit: 255
 
-            t.index :cool_widget_id, name: :index_cool_widget_registry_on_cool_widget_id, unique: true
-            t.index :retry_at
-            t.index :state
-            # To optimize performance of CoolWidgetRegistry.verification_failed_batch
-            t.index :verification_retry_at, name:  :cool_widget_registry_failed_verification, order: "NULLS FIRST",  where: "((state = 2) AND (verification_state = 3))"
-            # To optimize performance of CoolWidgetRegistry.needs_verification_count
-            t.index :verification_state, name:  :cool_widget_registry_needs_verification, where: "((state = 2)  AND (verification_state = ANY (ARRAY[0, 3])))"
-            # To optimize performance of CoolWidgetRegistry.verification_pending_batch
-            t.index :verified_at, name: :cool_widget_registry_pending_verification, order: "NULLS FIRST", where: "((state = 2) AND (verification_state = 0))"
-          end
+          t.index :cool_widget_id, name: :index_cool_widget_registry_on_cool_widget_id, unique: true
+          t.index :retry_at
+          t.index :state
+          # To optimize performance of CoolWidgetRegistry.verification_failed_batch
+          t.index :verification_retry_at, name:  :cool_widget_registry_failed_verification, order: "NULLS FIRST",  where: "((state = 2) AND (verification_state = 3))"
+          # To optimize performance of CoolWidgetRegistry.needs_verification_count
+          t.index :verification_state, name:  :cool_widget_registry_needs_verification, where: "((state = 2)  AND (verification_state = ANY (ARRAY[0, 3])))"
+          # To optimize performance of CoolWidgetRegistry.verification_pending_batch
+          t.index :verified_at, name: :cool_widget_registry_pending_verification, order: "NULLS FIRST", where: "((state = 2) AND (verification_state = 0))"
         end
       end
     end
@@ -110,117 +107,13 @@ Geo secondary sites have a [Geo tracking database](https://gitlab.com/gitlab-org
   bin/rake geo:db:migrate
   ```
 
-- [ ] Be sure to commit the relevant changes in `ee/db/geo/schema.rb`
+- [ ] Be sure to commit the relevant changes in `ee/db/geo/structure.sql`
 
 ### Add verification state fields on the Geo primary site
 
-The Geo primary site needs to checksum every replicable in order for secondaries to verify their own checksums. To do this, Geo requires fields on the Model. There are two ways to add the necessary verification state fields. If the table is large and wide, then it may be a good idea to add verification state fields to a separate table (Option 2). Consult a database expert if needed.
+The Geo primary site needs to checksum every replicable so secondaries can verify their own checksums. To do this, Geo requires fields on the Model. Add verification state fields to a separate table. Consult a database expert if needed.
 
-#### Add verification state fields to the model table (Option 1)
-
-- [ ] Create the migration file in `db/migrate`:
-
-  ```shell
-  bin/rails generate migration AddVerificationStateToCoolWidgets
-  ```
-
-- [ ] Replace the contents of the migration file with:
-
-  ```ruby
-  # frozen_string_literal: true
-
-  class AddVerificationStateToCoolWidgets < ActiveRecord::Migration[6.0]
-    def change
-      change_table(:cool_widgets) do |t|
-        t.integer :verification_state, default: 0, limit: 2, null: false
-        t.column :verification_started_at, :datetime_with_timezone
-        t.integer :verification_retry_count, limit: 2, null: false
-        t.column :verification_retry_at, :datetime_with_timezone
-        t.column :verified_at, :datetime_with_timezone
-        t.binary :verification_checksum, using: 'verification_checksum::bytea'
-
-        t.text :verification_failure # rubocop:disable Migration/AddLimitToTextColumns
-      end
-    end
-  end
-  ```
-
-- [ ] If deviating from the above example, then be sure to order columns according to [our guidelines](https://gitlab.com/gitlab-org/gitlab/-/blob/master/doc/development/ordering_table_columns.md).
-- [ ] If `cool_widgets` is a high-traffic table, follow [the database documentation to use `with_lock_retries`](https://gitlab.com/gitlab-org/gitlab/-/blob/master/doc/development/migration_style_guide.md#when-to-use-the-helper-method)
-- [ ] Adding a `text` column also [requires](../database/strings_and_the_text_data_type.md#add-a-text-column-to-an-existing-table) setting a limit. Create the migration file in `db/migrate`:
-
-  ```shell
-  bin/rails generate migration AddVerificationFailureLimitToCoolWidgets
-  ```
-
-- [ ] Replace the contents of the migration file with:
-
-  ```ruby
-  # frozen_string_literal: true
-
-  class AddVerificationFailureLimitToCoolWidgets < ActiveRecord::Migration[6.0]
-    include Gitlab::Database::MigrationHelpers
-
-    disable_ddl_transaction!
-
-    CONSTRAINT_NAME = 'cool_widget_verification_failure_text_limit'
-
-    def up
-      add_text_limit :cool_widget, :verification_failure, 255, constraint_name: CONSTRAINT_NAME
-    end
-
-    def down
-      remove_check_constraint(:cool_widget, CONSTRAINT_NAME)
-    end
-  end
-  ```
-
-- [ ] Add indexes on verification fields to ensure verification can be performed efficiently. Some or all of these indexes can be omitted if the table is guaranteed to be small. Ask a database expert if you are considering omitting indexes. Create the migration file in `db/migrate`:
-
-  ```shell
-  bin/rails generate migration AddVerificationIndexesToCoolWidgets
-  ```
-
-- [ ] Replace the contents of the migration file with:
-
-  ```ruby
-  # frozen_string_literal: true
-
-  class AddVerificationIndexesToCoolWidgets < ActiveRecord::Migration[6.0]
-    include Gitlab::Database::MigrationHelpers
-
-    VERIFICATION_STATE_INDEX_NAME = "index_cool_widgets_on_verification_state"
-    PENDING_VERIFICATION_INDEX_NAME = "index_cool_widgets_pending_verification"
-    FAILED_VERIFICATION_INDEX_NAME = "index_cool_widgets_failed_verification"
-    NEEDS_VERIFICATION_INDEX_NAME = "index_cool_widgets_needs_verification"
-
-    disable_ddl_transaction!
-
-    def up
-      add_concurrent_index :cool_widgets, :verification_state, name: VERIFICATION_STATE_INDEX_NAME
-      add_concurrent_index :cool_widgets, :verified_at, where: "(verification_state = 0)", order: { verified_at: 'ASC NULLS FIRST' }, name: PENDING_VERIFICATION_INDEX_NAME
-      add_concurrent_index :cool_widgets, :verification_retry_at, where: "(verification_state = 3)", order: { verification_retry_at: 'ASC NULLS FIRST' }, name: FAILED_VERIFICATION_INDEX_NAME
-      add_concurrent_index :cool_widgets, :verification_state, where: "(verification_state = 0 OR verification_state = 3)", name: NEEDS_VERIFICATION_INDEX_NAME
-    end
-
-    def down
-      remove_concurrent_index_by_name :cool_widgets, VERIFICATION_STATE_INDEX_NAME
-      remove_concurrent_index_by_name :cool_widgets, PENDING_VERIFICATION_INDEX_NAME
-      remove_concurrent_index_by_name :cool_widgets, FAILED_VERIFICATION_INDEX_NAME
-      remove_concurrent_index_by_name :cool_widgets, NEEDS_VERIFICATION_INDEX_NAME
-    end
-  end
-  ```
-
-- [ ] Run database migrations:
-
-  ```shell
-  bin/rake db:migrate
-  ```
-
-- [ ] Be sure to commit the relevant changes in `db/structure.sql`
-
-#### Add verification state fields to a separate table (Option 2)
+#### Add verification state fields to a new table
 
 - [ ] Create the migration file in `db/migrate`:
 
@@ -233,38 +126,30 @@ The Geo primary site needs to checksum every replicable in order for secondaries
   ```ruby
   # frozen_string_literal: true
 
-  class CreateCoolWidgetStates < ActiveRecord::Migration[6.0]
-    include Gitlab::Database::MigrationHelpers
-
+  class CreateCoolWidgetStates < Gitlab::Database::Migration[1.0]
     VERIFICATION_STATE_INDEX_NAME = "index_cool_widget_states_on_verification_state"
     PENDING_VERIFICATION_INDEX_NAME = "index_cool_widget_states_pending_verification"
     FAILED_VERIFICATION_INDEX_NAME = "index_cool_widget_states_failed_verification"
     NEEDS_VERIFICATION_INDEX_NAME = "index_cool_widget_states_needs_verification"
 
-    disable_ddl_transaction!
+    enable_lock_retries!
 
     def up
-      unless table_exists?(:cool_widget_states)
-        with_lock_retries do
-          create_table :cool_widget_states, id: false do |t|
-            t.references :cool_widget, primary_key: true, null: false, foreign_key: { on_delete: :cascade }
-            t.integer :verification_state, default: 0, limit: 2, null: false
-            t.column :verification_started_at, :datetime_with_timezone
-            t.datetime_with_timezone :verification_retry_at
-            t.datetime_with_timezone :verified_at
-            t.integer :verification_retry_count, limit: 2
-            t.binary :verification_checksum, using: 'verification_checksum::bytea'
-            t.text :verification_failure
+      create_table :cool_widget_states, id: false do |t|
+        t.datetime_with_timezone :verification_started_at
+        t.datetime_with_timezone :verification_retry_at
+        t.datetime_with_timezone :verified_at
+        t.references :cool_widget, primary_key: true, null: false, foreign_key: { on_delete: :cascade }
+        t.integer :verification_state, default: 0, limit: 2, null: false
+        t.integer :verification_retry_count, limit: 2
+        t.binary :verification_checksum, using: 'verification_checksum::bytea'
+        t.text :verification_failure, limit: 255
 
-            t.index :verification_state, name: VERIFICATION_STATE_INDEX_NAME
-            t.index :verified_at, where: "(verification_state = 0)", order: { verified_at: 'ASC NULLS FIRST' }, name: PENDING_VERIFICATION_INDEX_NAME
-            t.index :verification_retry_at, where: "(verification_state = 3)", order: { verification_retry_at: 'ASC NULLS FIRST' }, name: FAILED_VERIFICATION_INDEX_NAME
-            t.index :verification_state, where: "(verification_state = 0 OR verification_state = 3)", name: NEEDS_VERIFICATION_INDEX_NAME
-          end
-        end
+        t.index :verification_state, name: VERIFICATION_STATE_INDEX_NAME
+        t.index :verified_at, where: "(verification_state = 0)", order: { verified_at: 'ASC NULLS FIRST' }, name: PENDING_VERIFICATION_INDEX_NAME
+        t.index :verification_retry_at, where: "(verification_state = 3)", order: { verification_retry_at: 'ASC NULLS FIRST' }, name: FAILED_VERIFICATION_INDEX_NAME
+        t.index :verification_state, where: "(verification_state = 0 OR verification_state = 3)", name: NEEDS_VERIFICATION_INDEX_NAME
       end
-
-      add_text_limit :cool_widget_states, :verification_failure, 255
     end
 
     def down
@@ -274,11 +159,14 @@ The Geo primary site needs to checksum every replicable in order for secondaries
   ```
 
 - [ ] If deviating from the above example, then be sure to order columns according to [our guidelines](https://gitlab.com/gitlab-org/gitlab/-/blob/master/doc/development/ordering_table_columns.md).
+
 - [ ] Run database migrations:
 
   ```shell
   bin/rake db:migrate
   ```
+
+- [ ] If `cool_widgets` is a high-traffic table, follow [the database documentation to use `with_lock_retries`](https://gitlab.com/gitlab-org/gitlab/-/blob/master/doc/development/migration_style_guide.md#when-to-use-the-helper-method)
 
 - [ ] Be sure to commit the relevant changes in `db/structure.sql`
 
@@ -288,7 +176,14 @@ That's all of the required database changes.
 
 #### Step 1. Implement replication and verification
 
-- [ ] Include `Gitlab::Geo::ReplicableModel` in the `CoolWidget` class, and specify the Replicator class `with_replicator Geo::CoolWidgetReplicator`.
+- [ ] Add the following lines to the `cool_widget` model to accomplish some important tasks:
+  - Include `::Geo::ReplicableModel` in the `CoolWidget` class, and specify the Replicator class `with_replicator Geo::CoolWidgetReplicator`.
+  - Include the `::Geo::VerifiableModel` concern.
+  - Delegate verification related methods to the `cool_widget_state` model.
+  - For verification, override some scopes to use the `cool_widget_states` table instead of the model table.
+  - Implement the `verification_state_object` method to return the object that holds
+    the verification details
+  - Override some methods to use the `cool_widget_states` table in verification-related queries.
 
   At this point the `CoolWidget` class should look like this:
 
@@ -296,45 +191,96 @@ That's all of the required database changes.
   # frozen_string_literal: true
 
   class CoolWidget < ApplicationRecord
-    include ::Gitlab::Geo::ReplicableModel
-    include ::Gitlab::Geo::VerificationState
+    ...
+    include ::Geo::ReplicableModel
+    include ::Geo::VerifiableModel
 
     with_replicator Geo::CoolWidgetReplicator
 
     mount_uploader :file, CoolWidgetUploader
+
+    has_one :cool_widget_state, autosave: false, inverse_of: :cool_widget, class_name: 'Geo::CoolWidgetState'
+
+    after_save :save_verification_details
+
+    delegate :verification_retry_at, :verification_retry_at=,
+             :verified_at, :verified_at=,
+             :verification_checksum, :verification_checksum=,
+             :verification_failure, :verification_failure=,
+             :verification_retry_count, :verification_retry_count=,
+             :verification_state=, :verification_state,
+             :verification_started_at=, :verification_started_at,
+             to: :cool_widget_state
+    ...
+
+    scope :with_verification_state, ->(state) { joins(:cool_widget_state).where(cool_widget_states: { verification_state: verification_state_value(state) }) }
+    scope :checksummed, -> { joins(:cool_widget_state).where.not(cool_widget_states: { verification_checksum: nil } ) }
+    scope :not_checksummed, -> { joins(:cool_widget_state).where(cool_widget_states: { verification_checksum: nil } ) }
+
+    scope :available_verifiables, -> { joins(:cool_widget_state) }
 
     # Override the `all` default if not all records can be replicated. For an
     # example of an existing Model that needs to do this, see
     # `EE::MergeRequestDiff`.
     # scope :available_replicables, -> { all }
 
-    # @param primary_key_in [Range, CoolWidget] arg to pass to primary_key_in scope
-    # @return [ActiveRecord::Relation<CoolWidget>] everything that should be synced to this node, restricted by primary key
-    def self.replicables_for_current_secondary(primary_key_in)
-      # This issue template does not help you write this method.
-      #
-      # This method is called only on Geo secondary sites. It is called when
-      # we want to know which records to replicate. This is not easy to automate
-      # because for example:
-      #
-      # * The "selective sync" feature allows admins to choose which namespaces #   to replicate, per secondary site. Most Models are scoped to a
-      #   namespace, but the nature of the relationship to a namespace varies
-      #   between Models.
-      # * The "selective sync" feature allows admins to choose which shards to
-      #   replicate, per secondary site. Repositories are associated with
-      #   shards. Most blob types are not, but Project Uploads are.
-      # * Remote stored replicables are not replicated, by default. But the
-      #   setting `sync_object_storage` enables replication of remote stored
-      #   replicables.
-      #
-      # Search the codebase for examples, and consult a Geo expert if needed.
+    def verification_state_object
+      cool_widget_state
     end
+    ...
+
+    class_methods do
+      extend ::Gitlab::Utils::Override
+      ...
+
+      # @param primary_key_in [Range, CoolWidget] arg to pass to primary_key_in scope
+      # @return [ActiveRecord::Relation<CoolWidget>] everything that should be synced to this node, restricted by primary key
+      def self.replicables_for_current_secondary(primary_key_in)
+        # This issue template does not help you write this method.
+        #
+        # This method is called only on Geo secondary sites. It is called when
+        # we want to know which records to replicate. This is not easy to automate
+        # because for example:
+        #
+        # * The "selective sync" feature allows admins to choose which namespaces #   to replicate, per secondary site. Most Models are scoped to a
+        #   namespace, but the nature of the relationship to a namespace varies
+        #   between Models.
+        # * The "selective sync" feature allows admins to choose which shards to
+        #   replicate, per secondary site. Repositories are associated with
+        #   shards. Most blob types are not, but Project Uploads are.
+        # * Remote stored replicables are not replicated, by default. But the
+        #   setting `sync_object_storage` enables replication of remote stored
+        #   replicables.
+        #
+        # Search the codebase for examples, and consult a Geo expert if needed.
+      end
+
+      override :verification_state_table_class
+      def verification_state_table_class
+        CoolWidgetState
+      end
+    end
+    ...
+
+    def cool_widget_state
+      super || build_cool_widget_state
+    end
+
     ...
   end
   ```
 
 - [ ] Implement `CoolWidget.replicables_for_current_secondary` above.
 - [ ] Ensure `CoolWidget.replicables_for_current_secondary` is well-tested. Search the codebase for `replicables_for_current_secondary` to find examples of parameterized table specs. You may need to add more `FactoryBot` traits.
+- [ ] Add the following shared examples to `ee/spec/models/ee/cool_widget_spec.rb`:
+
+  ```ruby
+    include_examples 'a replicable model with a separate table for verification state' do
+      let(:verifiable_model_record) { build(:cool_widget) } # add extra params if needed to make sure the record is included in `available_verifiables`
+      let(:unverifiable_model_record) { build(:cool_widget) } # add extra params if needed to make sure the record is NOT included in `available_verifiables`
+    end
+  ```
+
 - [ ] Create `ee/app/replicators/geo/cool_widget_replicator.rb`. Implement the `#carrierwave_uploader` method which should return a `CarrierWave::Uploader`, and implement the class method `.model` to return the `CoolWidget` class:
 
   ```ruby
@@ -372,10 +318,11 @@ That's all of the required database changes.
   end
   ```
 
-- [ ] Generate the feature flag definition file by running the feature flag command and following the command prompts:
+- [ ] Generate the feature flag definition fileы by running the feature flag commands and following the command prompts:
 
   ```shell
   bin/feature-flag --ee geo_cool_widget_replication --type development --group 'group::geo'
+  bin/feature-flag --ee geo_cool_widget_verification --type development --group 'group::geo'
   ```
 
 - [ ] Add this replicator class to the method `replicator_classes` in
@@ -498,20 +445,19 @@ That's all of the required database changes.
 
 - [ ] Make sure the factory also allows setting a `project` attribute. If the model does not have a direct relation to a project, you can use a `transient` attribute. Check out `spec/factories/merge_request_diffs.rb` for an example.
 
-##### If you added verification state fields to a separate table (option 2 above), then you need to make additional model and factory changes
-
-If you did not add verification state fields to a separate table, `cool_widget_states`, then skip to [Step 2. Implement metrics gathering](#step-2-implement-metrics-gathering).
-
-Otherwise, you can follow [the example of Merge Request Diffs](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/63309).
-
-- [ ] Add a `Geo::CoolWidgetState` model in `ee/app/models/ee/geo/cool_widget_state.rb`:
+- [ ] Following [the example of Merge Request Diffs](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/63309) add a `Geo::CoolWidgetState` model in `ee/app/models/ee/geo/cool_widget_state.rb`:
 
   ``` ruby
   module Geo
     class CoolWidgetState < ApplicationRecord
+      include EachBatch
+
       self.primary_key = :cool_widget_id
 
       belongs_to :cool_widget, inverse_of: :cool_widget_state
+
+      validates :verification_failure, length: { maximum: 255 }
+      validates :verification_state, :cool_widget, presence: true
     end
   end
   ```
@@ -533,63 +479,6 @@ Otherwise, you can follow [the example of Merge Request Diffs](https://gitlab.co
         verification_failure { 'Could not calculate the checksum' }
       end
     end
-  end
-  ```
-
-- [ ] Add the following lines to the `cool_widget` model to accomplish some important tasks:
-  - Include the `::Gitlab::Geo::VerificationState` concern.
-  - Delegate verification related methods to the `cool_widget_state` model.
-  - Override some scopes to use the `cool_widget_states` table instead of the model table, for verification.
-  - Override some methods to use the `cool_widget_states` table in verification related queries.
-
-  ```ruby
-  class CoolWidget < ApplicationRecord
-    ...
-    include ::Gitlab::Geo::VerificationState
-
-    has_one :cool_widget_state, autosave: true, inverse_of: :cool_widget, class_name: 'Geo::CoolWidgetState'
-
-    delegate :verification_retry_at, :verification_retry_at=,
-             :verified_at, :verified_at=,
-             :verification_checksum, :verification_checksum=,
-             :verification_failure, :verification_failure=,
-             :verification_retry_count, :verification_retry_count=,
-             :verification_state=, :verification_state,
-             :verification_started_at=, :verification_started_at,
-             to: :cool_widget_state
-    ...
-
-    scope :with_verification_state, ->(state) { joins(:cool_widget_state).where(cool_widget_states: { verification_state: verification_state_value(state) }) }
-    scope :checksummed, -> { joins(:cool_widget_state).where.not(cool_widget_states: { verification_checksum: nil } ) }
-    scope :not_checksummed, -> { joins(:cool_widget_state).where(cool_widget_states: { verification_checksum: nil } ) }
-
-    ...
-
-    class_methods do
-      extend ::Gitlab::Utils::Override
-      ...
-      override :verification_state_table_name
-      def verification_state_table_name
-        'cool_widget_states'
-      end
-
-      override :verification_state_model_key
-      def verification_state_model_key
-        'cool_widget_id'
-      end
-
-      override :verification_arel_table
-      def verification_arel_table
-        CoolWidgetState.arel_table
-      end
-    end
-    ...
-
-    def cool_widget_state
-      super || build_cool_widget_state
-    end
-
-    ...
   end
   ```
 
@@ -793,6 +682,8 @@ Individual Cool Widget replication and verification data should now be available
         description: 'Find Cool Widget registries on this Geo node',
         feature_flag: :geo_cool_widget_replication # REMOVE THIS LINE
   ```
+
+- [ ] Run `bundle exec rake gitlab:graphql:compile_docs` after the step above to regenerate the GraphQL docs.
 
 - [ ] Add a row for Cool Widgets to the `Data types` table in [Geo data types support](https://gitlab.com/gitlab-org/gitlab/blob/master/doc/administration/geo/replication/datatypes.md#data-types)
 - [ ] Add a row for Cool Widgets to the `Limitations on replication/verification` table in [Geo data types support](https://gitlab.com/gitlab-org/gitlab/blob/master/doc/administration/geo/replication/datatypes.md#limitations-on-replicationverification). If the row already exists, then update it to show that Replication and Verification is released in the current version.

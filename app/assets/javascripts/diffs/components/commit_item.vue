@@ -1,6 +1,5 @@
 <script>
-/* eslint-disable vue/no-v-html */
-import { GlButtonGroup, GlButton, GlTooltipDirective } from '@gitlab/ui';
+import { GlButtonGroup, GlButton, GlTooltipDirective, GlSafeHtmlDirective } from '@gitlab/ui';
 
 import CommitPipelineStatus from '~/projects/tree/components/commit_pipeline_status_component.vue';
 import ModalCopyButton from '~/vue_shared/components/modal_copy_button.vue';
@@ -35,6 +34,7 @@ export default {
   },
   directives: {
     GlTooltip: GlTooltipDirective,
+    SafeHtml: GlSafeHtmlDirective,
   },
   mixins: [glFeatureFlagsMixin()],
   props: {
@@ -72,8 +72,6 @@ export default {
       return this.author.id ? this.author.id : '';
     },
     authorUrl() {
-      // name: 'mailto:' is a false positive: https://gitlab.com/gitlab-org/frontend/eslint-plugin-i18n/issues/26#possible-false-positives
-      // eslint-disable-next-line @gitlab/require-i18n-strings
       return this.author.web_url || `mailto:${this.commit.author_email}`;
     },
     authorAvatar() {
@@ -89,6 +87,9 @@ export default {
       initUserPopovers(this.$el.querySelectorAll('.js-user-link'));
     });
   },
+  safeHtmlConfig: {
+    ADD_TAGS: ['gl-emoji'],
+  },
 };
 </script>
 
@@ -100,7 +101,10 @@ export default {
       <div
         class="commit-actions flex-row d-none d-sm-flex align-items-start flex-wrap justify-content-end"
       >
-        <div v-if="commit.signature_html" v-html="commit.signature_html"></div>
+        <div
+          v-if="commit.signature_html"
+          v-safe-html:[$options.safeHtmlConfig]="commit.signature_html"
+        ></div>
         <commit-pipeline-status
           v-if="commit.pipeline_status_path"
           :endpoint="commit.pipeline_status_path"
@@ -140,18 +144,20 @@ export default {
         <div class="commit-detail flex-list">
           <div class="commit-content" data-qa-selector="commit_content">
             <a
+              v-safe-html:[$options.safeHtmlConfig]="commit.title_html"
               :href="commit.commit_url"
               class="commit-row-message item-title"
-              v-html="commit.title_html"
             ></a>
 
             <span class="commit-row-message d-block d-sm-none">&middot; {{ commit.short_id }}</span>
 
             <gl-button
               v-if="commit.description_html && collapsible"
+              v-gl-tooltip
               class="js-toggle-button"
               size="small"
               icon="ellipsis_h"
+              :title="__('Toggle commit description')"
               :aria-label="__('Toggle commit description')"
             />
 
@@ -172,9 +178,9 @@ export default {
     <div>
       <pre
         v-if="commit.description_html"
+        v-safe-html:[$options.safeHtmlConfig]="commitDescription"
         :class="{ 'js-toggle-content': collapsible, 'd-block': !collapsible }"
         class="commit-row-description gl-mb-3 gl-text-body"
-        v-html="commitDescription"
       ></pre>
     </div>
   </li>

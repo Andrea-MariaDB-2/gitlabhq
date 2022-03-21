@@ -33,7 +33,7 @@ RSpec.describe 'Group issues page' do
         # However,`:js` option forces Capybara to use Selenium that doesn't support`:has`
         context "it has an RSS button with current_user's feed token" do
           it "shows the RSS button with current_user's feed token" do
-            expect(find('[data-testid="rss-feed-link"]')['href']).to have_content(user.feed_token)
+            expect(page).to have_link 'Subscribe to RSS feed', href: /feed_token=#{user.feed_token}/
           end
         end
       end
@@ -46,7 +46,7 @@ RSpec.describe 'Group issues page' do
         # Note: please see the above
         context "it has an RSS button without a feed token" do
           it "shows the RSS button without a feed token" do
-            expect(find('[data-testid="rss-feed-link"]')['href']).not_to have_content('feed_token')
+            expect(page).not_to have_link 'Subscribe to RSS feed', href: /feed_token/
           end
         end
       end
@@ -83,6 +83,18 @@ RSpec.describe 'Group issues page' do
       end
     end
 
+    it 'truncates issue counts if over the threshold', :clean_gitlab_redis_cache do
+      allow(Rails.cache).to receive(:read).and_call_original
+      allow(Rails.cache).to receive(:read).with(
+        ['group', group.id, 'issues'],
+        { expires_in: Gitlab::IssuablesCountForState::CACHE_EXPIRES_IN }
+      ).and_return({ opened: 1050, closed: 500, all: 1550 })
+
+      visit issues_group_path(group)
+
+      expect(page).to have_text('Open 1.1k Closed 500 All 1.6k')
+    end
+
     context 'when project is archived' do
       before do
         ::Projects::UpdateService.new(project, user_in_group, archived: true).execute
@@ -94,39 +106,43 @@ RSpec.describe 'Group issues page' do
         expect(page).not_to have_content issue.title[0..80]
       end
     end
+  end
 
-    context 'when cached issues state count is enabled', :clean_gitlab_redis_cache do
-      before do
-        stub_feature_flags(cached_issues_state_count: true)
-      end
+  context 'group with no issues', :js do
+    let!(:group_with_no_issues) { create(:group) }
+    let!(:subgroup_with_issues) { create(:group, parent: group_with_no_issues) }
+    let!(:subgroup_project) { create(:project, :public, group: subgroup_with_issues) }
+    let!(:subgroup_issue) { create(:issue, project: subgroup_project) }
 
-      it 'truncates issue counts if over the threshold' do
-        allow(Rails.cache).to receive(:read).and_call_original
-        allow(Rails.cache).to receive(:read).with(
-          ['group', group.id, 'issues'],
-          { expires_in: Gitlab::IssuablesCountForState::CACHE_EXPIRES_IN }
-        ).and_return({ opened: 1050, closed: 500, all: 1550 })
-
-        visit issues_group_path(group)
-
-        expect(page).to have_text('Open 1.1k Closed 500 All 1.6k')
-      end
+    before do
+      stub_feature_flags(vue_issues_list: true)
+      visit issues_group_path(group_with_no_issues)
     end
 
-    context 'when cached issues state count is disabled', :clean_gitlab_redis_cache do
+    it 'shows issues from subgroups on issues list' do
+      expect(page).to have_text subgroup_issue.title
+    end
+  end
+
+  context 'projects with issues disabled' do
+    describe 'issue dropdown' do
+      let(:user_in_group) { create(:group_member, :maintainer, user: create(:user), group: group ).user }
+
       before do
-        stub_feature_flags(cached_issues_state_count: false)
+        [project, project_with_issues_disabled].each { |project| project.add_maintainer(user_in_group) }
+        sign_in(user_in_group)
+        visit issues_group_path(group)
       end
 
-      it 'does not truncate counts if they are over the threshold' do
-        allow_next_instance_of(IssuesFinder) do |finder|
-          allow(finder).to receive(:count_by_state).and_return(true)
-            .and_return({ opened: 1050, closed: 500, all: 1550 })
+      it 'shows projects only with issues feature enabled', :js do
+        within '.empty-state' do
+          click_button 'Toggle project select'
         end
 
-        visit issues_group_path(group)
-
-        expect(page).to have_text('Open 1,050 Closed 500 All 1,550')
+        page.within('.select2-results') do
+          expect(page).to have_content(project.full_name)
+          expect(page).not_to have_content(project_with_issues_disabled.full_name)
+        end
       end
     end
   end
@@ -156,12 +172,10 @@ RSpec.describe 'Group issues page' do
       expect(page).to have_selector('.manual-ordering')
     end
 
-    it 'each issue item has a user-can-drag css applied' do
+    it 'each issue item has a gl-cursor-grab css applied' do
       visit issues_group_path(group, sort: 'relative_position')
 
-      page.within('.manual-ordering') do
-        expect(page).to have_selector('.issue.user-can-drag', count: 3)
-      end
+      expect(page).to have_selector('.issue.gl-cursor-grab', count: 3)
     end
 
     it 'issues should be draggable and persist order' do
@@ -225,7 +239,8 @@ RSpec.describe 'Group issues page' do
     end
 
     it 'shows the pagination' do
-      expect(page).to have_selector('.gl-pagination')
+      expect(page).to have_link 'Prev'
+      expect(page).to have_link 'Next'
     end
 
     it 'first pagination item is active' do

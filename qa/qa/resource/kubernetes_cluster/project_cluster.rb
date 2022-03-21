@@ -13,8 +13,8 @@ module QA
           Resource::Project.fabricate!
         end
 
-        def ingress_ip
-          @ingress_ip ||= @cluster.fetch_external_ip_for_ingress
+        attribute :ingress_ip do
+          @cluster.fetch_external_ip_for_ingress
         end
 
         def fabricate!
@@ -24,10 +24,7 @@ module QA
             &:go_to_infrastructure_kubernetes)
 
           Page::Project::Infrastructure::Kubernetes::Index.perform(
-            &:add_kubernetes_cluster)
-
-          Page::Project::Infrastructure::Kubernetes::Add.perform(
-            &:add_existing_cluster)
+            &:connect_existing_cluster)
 
           Page::Project::Infrastructure::Kubernetes::AddExisting.perform do |cluster_page|
             cluster_page.set_cluster_name(@cluster.cluster_name)
@@ -39,14 +36,10 @@ module QA
           end
 
           Page::Project::Infrastructure::Kubernetes::Show.perform do |show|
-            # We must wait a few seconds for permissions to be set up correctly for new cluster
-            sleep 25
-
             if @install_ingress
-              populate(:ingress_ip)
+              ingress_ip
 
-              show.open_details
-              show.set_domain("#{ingress_ip}.nip.io")
+              show.set_domain("#{@ingress_ip}.nip.io")
               show.save_domain
             end
           end

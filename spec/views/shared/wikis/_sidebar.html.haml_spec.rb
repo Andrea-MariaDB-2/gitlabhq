@@ -3,7 +3,7 @@ require 'spec_helper'
 
 RSpec.describe 'shared/wikis/_sidebar.html.haml' do
   let_it_be(:project) { create(:project) }
-  let_it_be(:wiki) { Wiki.for_container(project, project.default_owner) }
+  let_it_be(:wiki) { Wiki.for_container(project, project.first_owner) }
 
   before do
     assign(:wiki, wiki)
@@ -31,7 +31,7 @@ RSpec.describe 'shared/wikis/_sidebar.html.haml' do
 
   context 'The sidebar comes from a custom page' do
     before do
-      assign(:sidebar_page, double('WikiPage', path: 'sidebar.md', slug: 'sidebar', content: 'Some sidebar content'))
+      assign(:sidebar_page, double('WikiPage', path: 'sidebar.md', slug: 'sidebar', content: 'Some sidebar content', wiki: wiki))
     end
 
     it 'does not show an alert' do

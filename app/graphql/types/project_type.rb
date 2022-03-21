@@ -11,6 +11,8 @@ module Types
     field :id, GraphQL::Types::ID, null: false,
           description: 'ID of the project.'
 
+    field :ci_config_path_or_default, GraphQL::Types::String, null: false,
+          description: 'Path of the CI configuration file.'
     field :full_path, GraphQL::Types::ID, null: false,
           description: 'Full path of the project.'
     field :path, GraphQL::Types::String, null: false,
@@ -20,33 +22,32 @@ module Types
       calls_gitaly: true,
       description: 'SAST CI configuration for the project.'
 
-    field :name_with_namespace, GraphQL::Types::String, null: false,
-          description: 'Full name of the project with its namespace.'
     field :name, GraphQL::Types::String, null: false,
           description: 'Name of the project (without namespace).'
+    field :name_with_namespace, GraphQL::Types::String, null: false,
+          description: 'Full name of the project with its namespace.'
 
     field :description, GraphQL::Types::String, null: true,
           description: 'Short description of the project.'
-    markdown_field :description_html, null: true
 
     field :tag_list, GraphQL::Types::String, null: true,
           deprecated: { reason: 'Use `topics`', milestone: '13.12' },
-          description: 'List of project topics (not Git tags).'
+          description: 'List of project topics (not Git tags).', method: :topic_list
 
     field :topics, [GraphQL::Types::String], null: true,
-          description: 'List of project topics.'
+          description: 'List of project topics.', method: :topic_list
 
-    field :ssh_url_to_repo, GraphQL::Types::String, null: true,
-          description: 'URL to connect to the project via SSH.'
     field :http_url_to_repo, GraphQL::Types::String, null: true,
           description: 'URL to connect to the project via HTTPS.'
+    field :ssh_url_to_repo, GraphQL::Types::String, null: true,
+          description: 'URL to connect to the project via SSH.'
     field :web_url, GraphQL::Types::String, null: true,
           description: 'Web URL of the project.'
 
-    field :star_count, GraphQL::Types::Int, null: false,
-          description: 'Number of times the project has been starred.'
     field :forks_count, GraphQL::Types::Int, null: false, calls_gitaly: true, # 4 times
           description: 'Number of times the project has been forked.'
+    field :star_count, GraphQL::Types::Int, null: false,
+          description: 'Number of times the project has been starred.'
 
     field :created_at, Types::TimeType, null: true,
           description: 'Timestamp of the project creation.'
@@ -59,12 +60,12 @@ module Types
     field :visibility, GraphQL::Types::String, null: true,
           description: 'Visibility of the project.'
 
-    field :shared_runners_enabled, GraphQL::Types::Boolean, null: true,
-          description: 'Indicates if shared runners are enabled for the project.'
     field :lfs_enabled, GraphQL::Types::Boolean, null: true,
           description: 'Indicates if the project has Large File Storage (LFS) enabled.'
     field :merge_requests_ff_only_enabled, GraphQL::Types::Boolean, null: true,
           description: 'Indicates if no merge commits should be created and all merges should instead be fast-forwarded, which means that merging is only allowed if the branch could be fast-forwarded.'
+    field :shared_runners_enabled, GraphQL::Types::Boolean, null: true,
+          description: 'Indicates if shared runners are enabled for the project.'
 
     field :service_desk_enabled, GraphQL::Types::Boolean, null: true,
           description: 'Indicates if the project has service desk enabled.'
@@ -75,21 +76,6 @@ module Types
     field :avatar_url, GraphQL::Types::String, null: true, calls_gitaly: true,
           description: 'URL to avatar image file of the project.'
 
-    {
-      issues: "Issues are",
-      merge_requests: "Merge Requests are",
-      wiki: 'Wikis are',
-      snippets: 'Snippets are',
-      container_registry: 'Container Registry is'
-    }.each do |feature, name_string|
-      field "#{feature}_enabled", GraphQL::Types::Boolean, null: true,
-            description: "Indicates if #{name_string} enabled for the current user"
-
-      define_method "#{feature}_enabled" do
-        object.feature_available?(feature, context[:current_user])
-      end
-    end
-
     field :jobs_enabled, GraphQL::Types::Boolean, null: true,
           description: 'Indicates if CI/CD pipeline jobs are enabled for the current user.'
 
@@ -99,33 +85,35 @@ module Types
     field :open_issues_count, GraphQL::Types::Int, null: true,
           description: 'Number of open issues for the project.'
 
+    field :allow_merge_on_skipped_pipeline, GraphQL::Types::Boolean, null: true,
+          description: 'If `only_allow_merge_if_pipeline_succeeds` is true, indicates if merge requests of the project can also be merged with skipped jobs.'
+    field :autoclose_referenced_issues, GraphQL::Types::Boolean, null: true,
+          description: 'Indicates if issues referenced by merge requests and commits within the default branch are closed automatically.'
     field :import_status, GraphQL::Types::String, null: true,
           description: 'Status of import background job of the project.'
     field :jira_import_status, GraphQL::Types::String, null: true,
           description: 'Status of Jira import background job of the project.'
-    field :only_allow_merge_if_pipeline_succeeds, GraphQL::Types::Boolean, null: true,
-          description: 'Indicates if merge requests of the project can only be merged with successful jobs.'
-    field :allow_merge_on_skipped_pipeline, GraphQL::Types::Boolean, null: true,
-          description: 'If `only_allow_merge_if_pipeline_succeeds` is true, indicates if merge requests of the project can also be merged with skipped jobs.'
-    field :request_access_enabled, GraphQL::Types::Boolean, null: true,
-          description: 'Indicates if users can request member access to the project.'
     field :only_allow_merge_if_all_discussions_are_resolved, GraphQL::Types::Boolean, null: true,
           description: 'Indicates if merge requests of the project can only be merged when all the discussions are resolved.'
+    field :only_allow_merge_if_pipeline_succeeds, GraphQL::Types::Boolean, null: true,
+          description: 'Indicates if merge requests of the project can only be merged with successful jobs.'
     field :printing_merge_request_link_enabled, GraphQL::Types::Boolean, null: true,
           description: 'Indicates if a link to create or view a merge request should display after a push to Git repositories of the project from the command line.'
     field :remove_source_branch_after_merge, GraphQL::Types::Boolean, null: true,
           description: 'Indicates if `Delete source branch` option should be enabled by default for all new merge requests of the project.'
-    field :autoclose_referenced_issues, GraphQL::Types::Boolean, null: true,
-          description: 'Indicates if issues referenced by merge requests and commits within the default branch are closed automatically.'
-    field :suggestion_commit_message, GraphQL::Types::String, null: true,
-          description: 'Commit message used to apply merge request suggestions.'
+    field :request_access_enabled, GraphQL::Types::Boolean, null: true,
+          description: 'Indicates if users can request member access to the project.'
     field :squash_read_only, GraphQL::Types::Boolean, null: false, method: :squash_readonly?,
           description: 'Indicates if `squashReadOnly` is enabled.'
+    field :suggestion_commit_message, GraphQL::Types::String, null: true,
+          description: 'Commit message used to apply merge request suggestions.'
 
+    # No, the quotes are not a typo. Used to get around circular dependencies.
+    # See https://gitlab.com/gitlab-org/gitlab/-/merge_requests/27536#note_871009675
+    field :group, 'Types::GroupType', null: true,
+          description: 'Group of the project.'
     field :namespace, Types::NamespaceType, null: true,
           description: 'Namespace of the project.'
-    field :group, Types::GroupType, null: true,
-          description: 'Group of the project.'
 
     field :statistics, Types::ProjectStatisticsType,
           null: true,
@@ -194,7 +182,7 @@ module Types
     field :jobs,
           type: Types::Ci::JobType.connection_type,
           null: true,
-          authorize: :read_commit_status,
+          authorize: :read_build,
           description: 'Jobs of a project. This field can only be resolved for one project in any single request.',
           resolver: Resolvers::ProjectJobsResolver
 
@@ -208,7 +196,14 @@ module Types
           Types::Ci::PipelineType,
           null: true,
           description: 'Build pipeline of the project.',
+          extras: [:lookahead],
           resolver: Resolvers::ProjectPipelineResolver
+
+    field :pipeline_counts,
+          Types::Ci::PipelineCountsType,
+          null: true,
+          description: 'Build pipeline counts of the project.',
+          resolver: Resolvers::Ci::ProjectPipelineCountsResolver
 
     field :ci_cd_settings,
           Types::Ci::CiCdSettingType,
@@ -245,6 +240,12 @@ module Types
           description: 'Boards of the project.',
           max_page_size: 2000,
           resolver: Resolvers::BoardsResolver
+
+    field :recent_issue_boards,
+          Types::BoardType.connection_type,
+          null: true,
+          description: 'List of recently visited boards of the project. Maximum size is 4.',
+          resolver: Resolvers::RecentBoardsResolver
 
     field :board,
           Types::BoardType,
@@ -305,7 +306,7 @@ module Types
           null: true,
           description: 'A single release of the project.',
           resolver: Resolvers::ReleasesResolver.single,
-          authorize: :download_code
+          authorize: :read_release
 
     field :container_expiration_policy,
           Types::ContainerExpirationPolicyType,
@@ -361,6 +362,47 @@ module Types
           complexity: 5,
           resolver: ::Resolvers::TimelogResolver
 
+    field :agent_configurations,
+          ::Types::Kas::AgentConfigurationType.connection_type,
+          null: true,
+          description: 'Agent configurations defined by the project',
+          resolver: ::Resolvers::Kas::AgentConfigurationsResolver
+
+    field :cluster_agent,
+          ::Types::Clusters::AgentType,
+          null: true,
+          description: 'Find a single cluster agent by name.',
+          resolver: ::Resolvers::Clusters::AgentsResolver.single
+
+    field :cluster_agents,
+          ::Types::Clusters::AgentType.connection_type,
+          extras: [:lookahead],
+          null: true,
+          description: 'Cluster agents associated with the project.',
+          resolver: ::Resolvers::Clusters::AgentsResolver
+
+    field :merge_commit_template,
+          GraphQL::Types::String,
+          null: true,
+          description: 'Template used to create merge commit message in merge requests.'
+
+    field :squash_commit_template,
+          GraphQL::Types::String,
+          null: true,
+          description: 'Template used to create squash commit message in merge requests.'
+
+    field :labels,
+          Types::LabelType.connection_type,
+          null: true,
+          description: 'Labels available on this project.',
+          resolver: Resolvers::LabelsResolver
+
+    field :work_item_types, Types::WorkItems::TypeType.connection_type,
+          resolver: Resolvers::WorkItems::TypesResolver,
+          description: 'Work item types available to the project.' \
+                       ' Returns `null` if `work_items` feature flag is disabled.' \
+                       ' This flag is disabled by default, because the feature is experimental and is subject to change without notice.'
+
     def label(title:)
       BatchLoader::GraphQL.for(title).batch(key: project) do |titles, loader, args|
         LabelsFinder
@@ -370,11 +412,22 @@ module Types
       end
     end
 
-    field :labels,
-          Types::LabelType.connection_type,
-          null: true,
-          description: 'Labels available on this project.',
-          resolver: Resolvers::LabelsResolver
+    {
+      issues: "Issues are",
+      merge_requests: "Merge Requests are",
+      wiki: 'Wikis are',
+      snippets: 'Snippets are',
+      container_registry: 'Container Registry is'
+    }.each do |feature, name_string|
+      field "#{feature}_enabled", GraphQL::Types::Boolean, null: true,
+            description: "Indicates if #{name_string} enabled for the current user"
+
+      define_method "#{feature}_enabled" do
+        object.feature_available?(feature, context[:current_user])
+      end
+    end
+
+    markdown_field :description_html, null: true
 
     def avatar_url
       object.avatar_url(only_path: false)
@@ -402,12 +455,10 @@ module Types
       ::Security::CiConfiguration::SastParserService.new(object).configuration
     end
 
-    def tag_list
-      object.topic_list
-    end
+    def service_desk_address
+      return unless Ability.allowed?(current_user, :admin_issue, project)
 
-    def topics
-      object.topic_list
+      object.service_desk_address
     end
 
     private

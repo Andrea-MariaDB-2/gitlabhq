@@ -2,11 +2,15 @@
 
 module FeatureFlags
   class UpdateService < FeatureFlags::BaseService
-    AUDITABLE_SCOPE_ATTRIBUTES_HUMAN_NAMES = {
-      'active' => 'active state',
-      'environment_scope' => 'environment scope',
-      'strategies' => 'strategies'
+    AUDITABLE_STRATEGY_ATTRIBUTES_HUMAN_NAMES = {
+      'scopes' => 'environment scopes',
+      'parameters' => 'parameters'
     }.freeze
+
+    def success(**args)
+      execute_hooks_after_commit(args[:feature_flag])
+      super
+    end
 
     def execute(feature_flag)
       return error('Access Denied', 403) unless can_update?(feature_flag)
@@ -21,16 +25,11 @@ module FeatureFlags
           end
         end
 
+        # We generate the audit event before the feature flag is saved as #changed_strategies_messages depends on the strategies' states before save
         audit_event = audit_event(feature_flag)
 
-        if feature_flag.active_changed?
-          feature_flag.execute_hooks(current_user)
-        end
-
         if feature_flag.save
-          save_audit_event(audit_event)
-
-          success(feature_flag: feature_flag)
+          success(feature_flag: feature_flag, audit_event: audit_event)
         else
           error(feature_flag.errors.full_messages, :bad_request)
         end
@@ -39,9 +38,19 @@ module FeatureFlags
 
     private
 
+    def execute_hooks_after_commit(feature_flag)
+      return unless feature_flag.active_previously_changed?
+
+      # The `current_user` method (defined in `BaseService`) is not available within the `run_after_commit` block
+      user = current_user
+      feature_flag.run_after_commit do
+        HookService.new(feature_flag, user).execute
+      end
+    end
+
     def audit_message(feature_flag)
       changes = changed_attributes_messages(feature_flag)
-      changes += changed_scopes_messages(feature_flag)
+      changes += changed_strategies_messages(feature_flag)
 
       return if changes.empty?
 
@@ -56,29 +65,30 @@ module FeatureFlags
       end
     end
 
-    def changed_scopes_messages(feature_flag)
-      feature_flag.scopes.map do |scope|
-        if scope.new_record?
-          created_scope_message(scope)
-        elsif scope.marked_for_destruction?
-          deleted_scope_message(scope)
+    def changed_strategies_messages(feature_flag)
+      feature_flag.strategies.map do |strategy|
+        if strategy.new_record?
+          created_strategy_message(strategy)
+        elsif strategy.marked_for_destruction?
+          deleted_strategy_message(strategy)
         else
-          updated_scope_message(scope)
+          updated_strategy_message(strategy)
         end
-      end.compact # updated_scope_message can return nil if nothing has been changed
+      end.compact # updated_strategy_message can return nil if nothing has been changed
     end
 
-    def deleted_scope_message(scope)
-      "Deleted rule #{scope.environment_scope}."
+    def deleted_strategy_message(strategy)
+      scopes = strategy.scopes.map { |scope| scope.environment_scope }.join(', ')
+      "Deleted strategy #{strategy.name} with environment scopes #{scopes}."
     end
 
-    def updated_scope_message(scope)
-      changes = scope.changes.slice(*AUDITABLE_SCOPE_ATTRIBUTES_HUMAN_NAMES.keys)
+    def updated_strategy_message(strategy)
+      changes = strategy.changes.slice(*AUDITABLE_STRATEGY_ATTRIBUTES_HUMAN_NAMES.keys)
       return if changes.empty?
 
-      message = "Updated rule #{scope.environment_scope} "
+      message = "Updated strategy #{strategy.name} "
       message += changes.map do |attribute_name, change|
-        name = AUDITABLE_SCOPE_ATTRIBUTES_HUMAN_NAMES[attribute_name]
+        name = AUDITABLE_STRATEGY_ATTRIBUTES_HUMAN_NAMES[attribute_name]
         "#{name} from #{change.first} to #{change.second}"
       end.join(' ')
 

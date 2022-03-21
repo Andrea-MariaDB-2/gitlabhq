@@ -43,6 +43,12 @@ constraints(::Constraints::GroupUrlConstrainer.new) do
         post :create_deploy_token, path: 'deploy_token/create'
       end
 
+      resources :access_tokens, only: [:index, :create] do
+        member do
+          put :revoke
+        end
+      end
+
       resources :integrations, only: [:index, :edit, :update] do
         member do
           put :test
@@ -64,7 +70,7 @@ constraints(::Constraints::GroupUrlConstrainer.new) do
       post :toggle_subscription, on: :member
     end
 
-    resources :packages, only: [:index]
+    resources :packages, only: [:index, :show]
 
     resources :milestones, constraints: { id: %r{[^/]+} } do
       member do
@@ -88,7 +94,7 @@ constraints(::Constraints::GroupUrlConstrainer.new) do
 
     concerns :clusterable
 
-    resources :group_members, only: [:index, :create, :update, :destroy], concerns: :access_requestable do
+    resources :group_members, only: [:index, :update, :destroy], concerns: :access_requestable do
       post :resend_invite, on: :member
       delete :leave, on: :collection
     end
@@ -112,6 +118,7 @@ constraints(::Constraints::GroupUrlConstrainer.new) do
     end
 
     resources :container_registries, only: [:index, :show], controller: 'registry/repositories'
+    resources :harbor_registries, only: [:index, :show], controller: 'harbor/repositories'
     resource :dependency_proxy, only: [:show, :update]
     resources :email_campaigns, only: :index
 
@@ -124,6 +131,11 @@ constraints(::Constraints::GroupUrlConstrainer.new) do
         get 'commands'
         get 'milestones'
       end
+    end
+
+    namespace :crm do
+      resources :contacts, only: [:index, :new, :edit]
+      resources :organizations, only: [:index, :new]
     end
   end
 
@@ -146,5 +158,9 @@ scope format: false do
   constraints image: Gitlab::PathRegex.container_image_regex, sha: Gitlab::PathRegex.container_image_blob_sha_regex do
     get 'v2/*group_id/dependency_proxy/containers/*image/manifests/*tag' => 'groups/dependency_proxy_for_containers#manifest' # rubocop:todo Cop/PutGroupRoutesUnderScope
     get 'v2/*group_id/dependency_proxy/containers/*image/blobs/:sha' => 'groups/dependency_proxy_for_containers#blob' # rubocop:todo Cop/PutGroupRoutesUnderScope
+    post 'v2/*group_id/dependency_proxy/containers/*image/blobs/:sha/upload/authorize' => 'groups/dependency_proxy_for_containers#authorize_upload_blob' # rubocop:todo Cop/PutGroupRoutesUnderScope
+    post 'v2/*group_id/dependency_proxy/containers/*image/blobs/:sha/upload' => 'groups/dependency_proxy_for_containers#upload_blob' # rubocop:todo Cop/PutGroupRoutesUnderScope
+    post 'v2/*group_id/dependency_proxy/containers/*image/manifests/*tag/upload/authorize' => 'groups/dependency_proxy_for_containers#authorize_upload_manifest' # rubocop:todo Cop/PutGroupRoutesUnderScope
+    post 'v2/*group_id/dependency_proxy/containers/*image/manifests/*tag/upload' => 'groups/dependency_proxy_for_containers#upload_manifest' # rubocop:todo Cop/PutGroupRoutesUnderScope
   end
 end

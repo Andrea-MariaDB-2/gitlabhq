@@ -38,6 +38,7 @@
 
   = render 'layouts/startup_css', { startup_filename: local_assigns.fetch(:startup_filename, nil) }
   - if user_application_theme == 'gl-dark'
+    %meta{ name: 'color-scheme', content: 'dark light' }
     = stylesheet_link_tag_defer "application_dark"
     = yield :page_specific_styles
     = stylesheet_link_tag_defer "application_utilities_dark"
@@ -56,7 +57,7 @@
 
   = Gon::Base.render_data(nonce: content_security_policy_nonce)
 
-  = javascript_include_tag locale_path unless I18n.locale == :en
+  = render_if_exists 'layouts/header/translations'
   = webpack_bundle_tag "sentry" if Gitlab.config.sentry.enabled
   = webpack_bundle_tag 'performance_bar' if performance_bar_enabled?
 
@@ -92,3 +93,5 @@
   = render 'layouts/google_analytics' if extra_config.has_key?('google_analytics_id')
   = render 'layouts/matomo' if extra_config.has_key?('matomo_url') && extra_config.has_key?('matomo_site_id')
   = render 'layouts/snowplow'
+  -# This is needed by [GitLab JH](https://gitlab.com/gitlab-jh/gitlab/-/issues/184)
+  = render_if_exists "layouts/frontend_monitor"

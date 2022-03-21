@@ -1,10 +1,10 @@
 ---
 stage: Verify
-group: Testing
+group: Pipeline Insights
 info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
 ---
 
-# Job Artifacts API
+# Job Artifacts API **(FREE)**
 
 ## Get job artifacts
 
@@ -20,7 +20,7 @@ GET /projects/:id/jobs/:job_id/artifacts
 |-------------|----------------|----------|--------------------------------------------------------------------------------------------------------------|
 | `id`        | integer/string | yes      | ID or [URL-encoded path of the project](index.md#namespaced-path-encoding) owned by the authenticated user. |
 | `job_id`    | integer        | yes      | ID of a job.                                                                                                 |
-| `job_token` **(PREMIUM)** | string | no | To be used with [triggers](../ci/triggers/index.md#when-a-pipeline-depends-on-the-artifacts-of-another-pipeline) for multi-project pipelines. It should be invoked only inside `.gitlab-ci.yml`. Its value is always `$CI_JOB_TOKEN`. |
+| `job_token` **(PREMIUM)** | string | no | To be used with [triggers](../ci/jobs/ci_job_token.md#download-an-artifact-from-a-different-pipeline) for multi-project pipelines. It should be invoked only inside `.gitlab-ci.yml`. Its value is always `$CI_JOB_TOKEN`. |
 
 Example request using the `PRIVATE-TOKEN` header:
 
@@ -85,7 +85,7 @@ Parameters
 | `id`        | integer/string | yes      | ID or [URL-encoded path of the project](index.md#namespaced-path-encoding) owned by the authenticated user. |
 | `ref_name`  | string         | yes      | Branch or tag name in repository. HEAD or SHA references are not supported.                                  |
 | `job`       | string         | yes      | The name of the job.                                                                                         |
-| `job_token` **(PREMIUM)** | string | no | To be used with [triggers](../ci/triggers/index.md#when-a-pipeline-depends-on-the-artifacts-of-another-pipeline) for multi-project pipelines. It should be invoked only inside `.gitlab-ci.yml`. Its value is always `$CI_JOB_TOKEN`. |
+| `job_token` **(PREMIUM)** | string | no | To be used with [triggers](../ci/jobs/ci_job_token.md#download-an-artifact-from-a-different-pipeline) for multi-project pipelines. It should be invoked only inside `.gitlab-ci.yml`. Its value is always `$CI_JOB_TOKEN`. |
 
 Example request using the `PRIVATE-TOKEN` header:
 
@@ -146,7 +146,7 @@ Parameters
 | `id`            | integer/string | yes      | ID or [URL-encoded path of the project](index.md#namespaced-path-encoding) owned by the authenticated user. |
 | `job_id`        | integer        | yes      | The unique job identifier.                                                                                       |
 | `artifact_path` | string         | yes      | Path to a file inside the artifacts archive.                                                                     |
-| `job_token` **(PREMIUM)** | string | no     | To be used with [triggers](../ci/triggers/index.md#when-a-pipeline-depends-on-the-artifacts-of-another-pipeline) for multi-project pipelines. It should be invoked only inside `.gitlab-ci.yml`. Its value is always `$CI_JOB_TOKEN`. |
+| `job_token` **(PREMIUM)** | string | no     | To be used with [triggers](../ci/jobs/ci_job_token.md#download-an-artifact-from-a-different-pipeline) for multi-project pipelines. It should be invoked only inside `.gitlab-ci.yml`. Its value is always `$CI_JOB_TOKEN`. |
 
 Example request:
 
@@ -188,7 +188,7 @@ Parameters:
 | `ref_name`      | string         | yes      | Branch or tag name in repository. `HEAD` or `SHA` references are not supported.                              |
 | `artifact_path` | string         | yes      | Path to a file inside the artifacts archive.                                                                 |
 | `job`           | string         | yes      | The name of the job.                                                                                         |
-| `job_token` **(PREMIUM)** | string | no     | To be used with [triggers](../ci/triggers/index.md#when-a-pipeline-depends-on-the-artifacts-of-another-pipeline) for multi-project pipelines. It should be invoked only inside `.gitlab-ci.yml`. Its value is always `$CI_JOB_TOKEN`. |
+| `job_token` **(PREMIUM)** | string | no     | To be used with [triggers](../ci/jobs/ci_job_token.md#download-an-artifact-from-a-different-pipeline) for multi-project pipelines. It should be invoked only inside `.gitlab-ci.yml`. Its value is always `$CI_JOB_TOKEN`. |
 
 Example request:
 
@@ -252,13 +252,14 @@ Example response:
   "finished_at": "2016-01-11T10:15:10.506Z",
   "duration": 97.0,
   "status": "failed",
+  "failure_reason": "script_failure",
   "tag": false,
   "web_url": "https://example.com/foo/bar/-/jobs/42",
   "user": null
 }
 ```
 
-## Delete artifacts
+## Delete job artifacts
 
 > [Introduced](https://gitlab.com/gitlab-org/gitlab-foss/-/merge_requests/25522) in GitLab 11.9.
 
@@ -283,3 +284,35 @@ NOTE:
 At least Maintainer role is required to delete artifacts.
 
 If the artifacts were deleted successfully, a response with status `204 No Content` is returned.
+
+## Delete project artifacts
+
+> [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/223793) in GitLab 14.7 [with a flag](../administration/feature_flags.md) named `bulk_expire_project_artifacts`. Enabled by default on GitLab self-managed. Enabled on GitLab.com.
+
+FLAG:
+On self-managed GitLab, by default this feature is available. To hide the feature, ask an administrator to
+[disable the `bulk_expire_project_artifacts` flag](../administration/feature_flags.md). On GitLab.com, this feature is available.
+
+Delete artifacts of a project that can be deleted.
+
+By default, [artifacts from the most recent successful pipeline of each ref are kept](../ci/pipelines/job_artifacts.md#keep-artifacts-from-most-recent-successful-jobs).
+
+```plaintext
+DELETE /projects/:id/artifacts
+```
+
+| Attribute | Type           | Required | Description                                                                 |
+|-----------|----------------|----------|-----------------------------------------------------------------------------|
+| `id`      | integer/string | yes      | ID or [URL-encoded path of the project](index.md#namespaced-path-encoding) |
+
+Example request:
+
+```shell
+curl --request DELETE --header "PRIVATE-TOKEN: <your_access_token>" "https://gitlab.example.com/api/v4/projects/1/artifacts"
+```
+
+NOTE:
+At least Maintainer role is required to delete artifacts.
+
+Schedules a worker to update to the current time the expiry of all artifacts that can be deleted.
+A response with status `202 Accepted` is returned.

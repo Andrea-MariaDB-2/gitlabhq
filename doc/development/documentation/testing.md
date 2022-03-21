@@ -126,6 +126,24 @@ If you don't want to install all of the dependencies to test the links, you can:
 If you manually install `haml-lint` with this process, it does not update automatically
 and you should make sure your version matches the version used by GitLab.
 
+## Update linter configuration
+
+[Vale configuration](#vale) and [markdownlint configuration](#markdownlint) is under source control in each
+project, so updates must be committed to each project individually.
+
+We consider the configuration in the `gitlab` project as the source of truth and that's where all updates should
+first be made.
+
+On a regular basis, the changes made in `gitlab` project to the Vale and markdownlint configuration should be
+synchronized to the other projects. In `omnibus-gitlab`, `gitlab-runner`, and `charts/gitlab`:
+
+1. Create a new branch.
+1. Copy the configuration files from the `gitlab` project into this branch, overwriting
+   the project's old configuration. Make sure no project-specific changes from the `gitlab`
+   project are included. For example, [`RelativeLinks.yml`](https://gitlab.com/gitlab-org/gitlab/-/blob/master/doc/.vale/gitlab/RelativeLinks.yml)
+   is hard coded for specific projects.
+1. Create a merge request and submit it to a technical writer for review and merge.
+
 ## Local linters
 
 To help adhere to the [documentation style guidelines](styleguide/index.md), and improve the content
@@ -181,7 +199,7 @@ You can find Vale configuration in the following projects:
 - [`gitlab-runner`](https://gitlab.com/gitlab-org/gitlab-runner/-/tree/main/docs/.vale/gitlab)
 - [`omnibus-gitlab`](https://gitlab.com/gitlab-org/omnibus-gitlab/-/tree/master/doc/.vale/gitlab)
 - [`charts`](https://gitlab.com/gitlab-org/charts/gitlab/-/tree/master/doc/.vale/gitlab)
-- [`gitlab-development-kit`](https://gitlab.com/gitlab-org/gitlab-development-kit/-/tree/master/doc/.vale/gitlab)
+- [`gitlab-development-kit`](https://gitlab.com/gitlab-org/gitlab-development-kit/-/tree/main/doc/.vale/gitlab)
 
 This configuration is also used in build pipelines, where
 [error-level rules](#vale-result-types) are enforced.
@@ -195,20 +213,19 @@ You can use Vale:
 
 #### Vale result types
 
-Vale returns three types of results: `suggestion`, `warning`, and `error`:
+Vale returns three types of results:
 
-- **Suggestion**-level results are writing tips and aren't displayed in CI
-  job output. Suggestions don't break CI. See a list of
-  [suggestion-level rules](https://gitlab.com/search?utf8=✓&snippets=false&scope=&repository_ref=master&search=path%3Adoc%2F.vale%2Fgitlab+Suggestion%3A&group_id=9970&project_id=278964).
-- **Warning**-level results are [Style Guide](styleguide/index.md) violations, aren't displayed in CI
-  job output, and should contain clear explanations of how to resolve the warning.
-  Warnings may be technical debt, or can be future error-level test items
-  (after the Technical Writing team completes its cleanup). Warnings don't break CI. See a list of
-  [warning-level rules](https://gitlab.com/search?utf8=✓&snippets=false&scope=&repository_ref=master&search=path%3Adoc%2F.vale%2Fgitlab+Warning%3A&group_id=9970&project_id=278964).
-- **Error**-level results are Style Guide violations, and should contain clear explanations
-  about how to resolve the error. Errors break CI and are displayed in CI job output.
-  of how to resolve the error. Errors break CI and are displayed in CI job output. See a list of
-  [error-level rules](https://gitlab.com/search?utf8=✓&snippets=false&scope=&repository_ref=master&search=path%3Adoc%2F.vale%2Fgitlab+Error%3A&group_id=9970&project_id=278964).
+- **Error** - For branding and trademark issues, and words or phrases with ambiguous meanings.
+- **Warning** - For Technical Writing team style preferences.
+- **Suggestion** - For basic technical writing tenets and best practices.
+
+The result types have these attributes:
+
+| Result type  | Displayed in CI/CD job output | Causes CI/CD jobs to fail | Vale rule link |
+|--------------|-------------------------------|---------------------------|----------------|
+| `error`      | **{check-circle}** Yes        | **{check-circle}** Yes    | [Error-level Vale rules](https://gitlab.com/search?utf8=✓&snippets=false&scope=&repository_ref=master&search=path%3Adoc%2F.vale%2Fgitlab+Error%3A&group_id=9970&project_id=278964) |
+| `warning`    | **{dotted-circle}** No        | **{dotted-circle}** No    | [Warning-level Vale rules](https://gitlab.com/search?utf8=✓&snippets=false&scope=&repository_ref=master&search=path%3Adoc%2F.vale%2Fgitlab+Warning%3A&group_id=9970&project_id=278964) |
+| `suggestion` | **{dotted-circle}** No        | **{dotted-circle}** No    | [Suggestion-level Vale rules](https://gitlab.com/search?utf8=✓&snippets=false&scope=&repository_ref=master&search=path%3Adoc%2F.vale%2Fgitlab+Suggestion%3A&group_id=9970&project_id=278964) |
 
 #### Vale spelling test
 
@@ -228,22 +245,15 @@ guidelines:
 
 In [`ReadingLevel.yml`](https://gitlab.com/gitlab-org/gitlab/-/blob/master/doc/.vale/gitlab/ReadingLevel.yml),
 we have implemented
-[the Flesch-Kincaid grade level test](https://readable.com/blog/the-flesch-reading-ease-and-flesch-kincaid-grade-level/)
+[the Flesch-Kincaid grade level test](https://readable.com/readability/flesch-reading-ease-flesch-kincaid-grade-level/)
 to determine the readability of our documentation.
 
 As a general guideline, the lower the score, the more readable the documentation.
 For example, a page that scores `12` before a set of changes, and `9` after, indicates an iterative improvement to readability. The score is not an exact science, but is meant to help indicate the
 general complexity level of the page.
 
-The readability score is calculated by using the following formula:
-
-```plaintext
-(.39 x ASL) + (11.8 x ASW) – 15.59
-```
-
-- `ASL` is average sentence length (the number of words divided by the number of sentences).
-- `ASW` is the average number of syllables per word (the number of syllables divided by the number of words).
-- The score excludes headings, code blocks, and lists.
+The readability score is calculated based on the number of words per sentence, and the number
+of syllables per word. For more information, see [the Vale documentation](https://docs.errata.ai/vale/styles#metric).
 
 ### Install linters
 
@@ -260,12 +270,10 @@ build pipelines:
    [used (see `variables:` section)](https://gitlab.com/gitlab-org/gitlab-docs/-/blob/main/.gitlab-ci.yml) when building
    the `image:docs-lint-markdown`.
 
-1. Install [`vale`](https://github.com/errata-ai/vale/releases). For example, to install using
-   `brew` for macOS, run:
+1. Install [`vale`](https://github.com/errata-ai/vale/releases). To install for:
 
-   ```shell
-   brew install vale
-   ```
+   - macOS using `brew`, run: `brew install vale`.
+   - Linux, use your distribution's package manager or a [released binary](https://github.com/errata-ai/vale/releases).
 
 These tools can be [integrated with your code editor](#configure-editors).
 
@@ -301,24 +309,11 @@ To configure Vale in your editor, install one of the following as appropriate:
 
 - Sublime Text [`SublimeLinter-contrib-vale` package](https://packagecontrol.io/packages/SublimeLinter-contrib-vale).
 - Visual Studio Code [`errata-ai.vale-server` extension](https://marketplace.visualstudio.com/items?itemName=errata-ai.vale-server).
-  You can configure the plugin to
-  [display only a subset of alerts](#show-subset-of-vale-alerts).
-
-  In the extension's settings:
-
-  <!-- vale gitlab.Spelling = NO -->
-
-  - Select the **Use CLI** checkbox.
-  - In the  **Config** setting, enter an absolute
-    path to [`.vale.ini`](https://gitlab.com/gitlab-org/gitlab/-/blob/master/.vale.ini)
-    in one of the cloned GitLab repositories on your computer.
-
-  <!-- vale gitlab.Spelling = YES -->
-
-  - In the **Path** setting, enter the absolute path to the Vale binary. In most
-    cases, `vale` should work. To find the location, run `which vale` in a terminal.
-
+  You can configure the plugin to [display only a subset of alerts](#show-subset-of-vale-alerts).
 - Vim [ALE plugin](https://github.com/dense-analysis/ale).
+- Jetbrains IDEs - No plugin exists, but
+  [this issue comment](https://github.com/errata-ai/vale-server/issues/39#issuecomment-751714451)
+  contains tips for configuring an external tool.
 - Emacs [Flycheck extension](https://github.com/flycheck/flycheck).
   This requires some configuration:
 
@@ -352,7 +347,7 @@ To configure Vale in your editor, install one of the following as appropriate:
   In this setup the `markdownlint` checker is set as a "next" checker from the defined `vale` checker.
   Enabling this custom Vale checker provides error linting from both Vale and markdownlint.
 
-We don't use [Vale Server](https://errata-ai.github.io/vale/#using-vale-with-a-text-editor-or-another-third-party-application).
+We don't use [Vale Server](https://docs.errata.ai/vale-server/install).
 
 ### Configure pre-push hooks
 

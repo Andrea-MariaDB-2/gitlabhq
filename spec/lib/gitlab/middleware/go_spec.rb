@@ -98,9 +98,9 @@ RSpec.describe Gitlab::Middleware::Go do
                     end
                   end
 
-                  context 'without access to the project' do
+                  context 'without access to the project', :sidekiq_inline do
                     before do
-                      project.team.find_member(current_user).destroy
+                      project.team.find_member(current_user).destroy!
                     end
 
                     it_behaves_like 'unauthorized'
@@ -145,6 +145,22 @@ RSpec.describe Gitlab::Middleware::Go do
                         expect(response[1]['Content-Length']).to be_nil
                         expect(response[2]).to eq([''])
                       end
+                    end
+                  end
+
+                  context 'when a personal access token is missing' do
+                    before do
+                      env['REMOTE_ADDR'] = '192.168.0.1'
+                      env['HTTP_AUTHORIZATION'] = ActionController::HttpAuthentication::Basic.encode_credentials(current_user.username, 'dummy_password')
+                    end
+
+                    it 'returns unauthorized' do
+                      expect(Gitlab::Auth).to receive(:find_for_git_client).and_raise(Gitlab::Auth::MissingPersonalAccessTokenError)
+                      response = go
+
+                      expect(response[0]).to eq(401)
+                      expect(response[1]['Content-Length']).to be_nil
+                      expect(response[2]).to eq([''])
                     end
                   end
                 end

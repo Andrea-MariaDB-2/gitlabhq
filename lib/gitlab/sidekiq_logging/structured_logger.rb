@@ -2,10 +2,12 @@
 
 require 'active_record'
 require 'active_record/log_subscriber'
+require 'sidekiq/job_logger'
+require 'sidekiq/job_retry'
 
 module Gitlab
   module SidekiqLogging
-    class StructuredLogger
+    class StructuredLogger < Sidekiq::JobLogger
       include LogsJobs
 
       def call(job, queue)
@@ -55,6 +57,9 @@ module Gitlab
         scheduling_latency_s = ::Gitlab::InstrumentationHelper.queue_duration_for_job(payload)
         payload['scheduling_latency_s'] = scheduling_latency_s if scheduling_latency_s
 
+        enqueue_latency_s = ::Gitlab::InstrumentationHelper.enqueue_latency_for_scheduled_job(payload)
+        payload['enqueue_latency_s'] = enqueue_latency_s if enqueue_latency_s
+
         payload
       end
 
@@ -69,6 +74,7 @@ module Gitlab
         message = base_message(payload)
 
         payload['load_balancing_strategy'] = job['load_balancing_strategy'] if job['load_balancing_strategy']
+        payload['dedup_wal_locations'] = job['dedup_wal_locations'] if job['dedup_wal_locations'].present?
 
         if job_exception
           payload['message'] = "#{message}: fail: #{payload['duration_s']} sec"

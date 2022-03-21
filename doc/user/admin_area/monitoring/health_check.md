@@ -1,17 +1,10 @@
 ---
-stage: none
-group: unassigned
+stage: Monitor
+group: Respond
 info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
-type: concepts, howto
 ---
 
 # Health Check **(FREE SELF)**
-
-> - Liveness and readiness probes were [introduced](https://gitlab.com/gitlab-org/gitlab-foss/-/merge_requests/10416) in GitLab 9.1.
-> - The `health_check` endpoint was [introduced](https://gitlab.com/gitlab-org/gitlab-foss/-/merge_requests/3888) in GitLab 8.8 and was
->   deprecated in GitLab 9.1.
-> - [Access token](#access-token-deprecated) has been deprecated in GitLab 9.4
->   in favor of [IP whitelist](#ip-whitelist).
 
 GitLab provides liveness and readiness probes to indicate service health and
 reachability to required services. These probes report on the status of the
@@ -138,28 +131,9 @@ On failure, the endpoint returns a `503` HTTP status code.
 
 This check is being exempt from Rack Attack.
 
-## Access token (Deprecated)
+## Sidekiq
 
-NOTE:
-Access token has been deprecated in GitLab 9.4 in favor of [IP whitelist](#ip-whitelist).
-
-An access token needs to be provided while accessing the probe endpoints. You can
-find the current accepted token in the user interface:
-
-1. On the top bar, select **Menu > Admin**.
-1. In the left sidebar, select **Monitoring > Health Check**. (`admin/health_check`)
-
-![access token](img/health_check_token.png)
-
-The access token can be passed as a URL parameter:
-
-```plaintext
-https://gitlab.example.com/-/readiness?token=ACCESS_TOKEN
-```
-
-NOTE:
-In case the database or Redis service are inaccessible, the probe endpoints response is not guaranteed to be correct.
-You should switch to [IP whitelist](#ip-whitelist) from deprecated access token to avoid it.
+Learn how to configure the [Sidekiq health checks](../../../administration/sidekiq_health_check.md).
 
 <!-- ## Troubleshooting
 

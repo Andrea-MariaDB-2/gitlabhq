@@ -6,6 +6,7 @@ RSpec.describe 'Admin Groups' do
   include Select2Helper
   include Spec::Support::Helpers::Features::MembersHelpers
   include Spec::Support::Helpers::Features::InviteMembersModalHelper
+  include Spec::Support::Helpers::ModalHelpers
 
   let(:internal) { Gitlab::VisibilityLevel::INTERNAL }
 
@@ -57,7 +58,7 @@ RSpec.describe 'Admin Groups' do
       fill_in 'group_admin_note_attributes_note', with: group_admin_note
       click_button "Create group"
 
-      expect(current_path).to eq admin_group_path(Group.find_by(path: path_component))
+      expect(page).to have_current_path admin_group_path(Group.find_by(path: path_component)), ignore_query: true
       content = page.find('#content-body')
       h3_texts = content.all('h3').collect(&:text).join("\n")
       expect(h3_texts).to match group_name
@@ -250,25 +251,26 @@ RSpec.describe 'Admin Groups' do
     end
   end
 
-  describe 'admin remove themself from a group', :js, quarantine: 'https://gitlab.com/gitlab-org/gitlab/-/issues/222342' do
+  describe 'admin removes themself from a group', :js do
     it 'removes admin from the group' do
       group.add_user(current_user, Gitlab::Access::DEVELOPER)
 
       visit group_group_members_path(group)
 
-      page.within '[data-qa-selector="members_list"]' do # rubocop:disable QA/SelectorUsage
+      page.within members_table do
         expect(page).to have_content(current_user.name)
         expect(page).to have_content('Developer')
       end
 
-      accept_confirm { find(:css, 'li', text: current_user.name).find(:css, 'a.btn-danger').click }
+      find_member_row(current_user).click_button(title: 'Leave')
+
+      accept_gl_confirm(button_text: 'Leave')
+
+      wait_for_all_requests
 
       visit group_group_members_path(group)
 
-      page.within '[data-qa-selector="members_list"]' do # rubocop:disable QA/SelectorUsage
-        expect(page).not_to have_content(current_user.name)
-        expect(page).not_to have_content('Developer')
-      end
+      expect(members_table).not_to have_content(current_user.name)
     end
   end
 

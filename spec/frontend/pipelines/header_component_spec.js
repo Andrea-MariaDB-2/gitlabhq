@@ -1,9 +1,12 @@
 import { GlModal, GlLoadingIcon } from '@gitlab/ui';
 import { shallowMount } from '@vue/test-utils';
+import { nextTick } from 'vue';
+import waitForPromises from 'helpers/wait_for_promises';
 import HeaderComponent from '~/pipelines/components/header_component.vue';
 import cancelPipelineMutation from '~/pipelines/graphql/mutations/cancel_pipeline.mutation.graphql';
 import deletePipelineMutation from '~/pipelines/graphql/mutations/delete_pipeline.mutation.graphql';
 import retryPipelineMutation from '~/pipelines/graphql/mutations/retry_pipeline.mutation.graphql';
+import { BUTTON_TOOLTIP_RETRY } from '~/pipelines/constants';
 import {
   mockCancelledPipelineHeader,
   mockFailedPipelineHeader,
@@ -16,6 +19,7 @@ import {
 describe('Pipeline details header', () => {
   let wrapper;
   let glModalDirective;
+  let mutate = jest.fn();
 
   const findDeleteModal = () => wrapper.find(GlModal);
   const findRetryButton = () => wrapper.find('[data-testid="retryPipeline"]');
@@ -24,7 +28,7 @@ describe('Pipeline details header', () => {
   const findLoadingIcon = () => wrapper.find(GlLoadingIcon);
 
   const defaultProvideOptions = {
-    pipelineId: 14,
+    pipelineId: '14',
     pipelineIid: 1,
     paths: {
       pipelinesPath: '/namespace/my-project/-/pipelines',
@@ -43,7 +47,7 @@ describe('Pipeline details header', () => {
           startPolling: jest.fn(),
         },
       },
-      mutate: jest.fn(),
+      mutate,
     };
 
     return shallowMount(HeaderComponent, {
@@ -112,6 +116,30 @@ describe('Pipeline details header', () => {
           mutation: retryPipelineMutation,
           variables: { id: mockCancelledPipelineHeader.id },
         });
+      });
+
+      it('should render retry action tooltip', () => {
+        expect(findRetryButton().attributes('title')).toBe(BUTTON_TOOLTIP_RETRY);
+      });
+    });
+
+    describe('Retry action failed', () => {
+      beforeEach(() => {
+        mutate = jest.fn().mockRejectedValue('error');
+
+        wrapper = createComponent(mockCancelledPipelineHeader);
+      });
+
+      it('retry button loading state should reset on error', async () => {
+        findRetryButton().vm.$emit('click');
+
+        await nextTick();
+
+        expect(findRetryButton().props('loading')).toBe(true);
+
+        await waitForPromises();
+
+        expect(findRetryButton().props('loading')).toBe(false);
       });
     });
 

@@ -138,7 +138,7 @@ For more information, see [delete references to missing artifacts](raketasks/che
 > - Enabled on GitLab.com.
 > - [Recommended for production use](https://gitlab.com/groups/gitlab-org/-/epics/4275) in GitLab 13.6.
 > - [Recommended for production use with AWS S3](https://gitlab.com/gitlab-org/gitlab/-/issues/273498) in GitLab 13.7.
-> - To use in GitLab self-managed instances, ask a GitLab administrator to [enable it](#enable-or-disable-incremental-logging). **(FREE SELF)**
+> - To use in GitLab self-managed instances, ask a GitLab administrator to [enable it](#enable-or-disable-incremental-logging).
 
 By default job logs are sent from the GitLab Runner in chunks and cached temporarily on disk
 in `/var/opt/gitlab/gitlab-ci/builds` by Omnibus GitLab. After the job completes,
@@ -146,12 +146,12 @@ a background job archives the job log. The log is moved to `/var/opt/gitlab/gitl
 by default, or to object storage if configured.
 
 In a [scaled-out architecture](reference_architectures/index.md) with Rails and Sidekiq running on more than one
-server, these two locations on the filesystem have to be shared using NFS.
+server, these two locations on the file system have to be shared using NFS.
 
-To eliminate both filesystem requirements:
+To eliminate both file system requirements:
 
-- [Enable the incremental logging feature](#enable-or-disable-incremental-logging), which uses Redis instead of disk space for temporary caching of job logs.
-- Configure [object storage](job_artifacts.md#object-storage-settings) for storing archived job logs.
+1. Configure [object storage](job_artifacts.md#object-storage-settings) for storing archived job logs.
+1. [Enable the incremental logging feature](#enable-or-disable-incremental-logging), which uses Redis instead of disk space for temporary caching of job logs.
 
 ### Technical details
 
@@ -183,7 +183,7 @@ Here is the detailed data flow:
   to disk, and there is no protection against misconfiguration.
 - There is [an epic tracking other potential limitations and improvements](https://gitlab.com/groups/gitlab-org/-/epics/3791).
 
-### Enable or disable incremental logging **(FREE SELF)**
+### Enable or disable incremental logging
 
 Incremental logging is under development, but [ready for production use as of GitLab 13.6](https://gitlab.com/groups/gitlab-org/-/epics/4275). It is
 deployed behind a feature flag that is **disabled by default**.

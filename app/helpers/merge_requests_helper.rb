@@ -150,11 +150,20 @@ module MergeRequestsHelper
       review_requested_count = review_requested_merge_requests_count
       total_count = assigned_count + review_requested_count
 
-      {
+      counts = {
         assigned: assigned_count,
         review_requested: review_requested_count,
         total: total_count
       }
+
+      if Feature.enabled?(:mr_attention_requests, default_enabled: :yaml)
+        attention_requested_count = attention_requested_merge_requests_count
+
+        counts[:attention_requested_count] = attention_requested_count
+        counts[:total] = attention_requested_count
+      end
+
+      counts
     end
   end
 
@@ -182,7 +191,7 @@ module MergeRequestsHelper
       project_path: project_path(merge_request.project),
       changes_empty_state_illustration: image_path('illustrations/merge_request_changes_empty.svg'),
       is_fluid_layout: fluid_layout.to_s,
-      dismiss_endpoint: user_callouts_path,
+      dismiss_endpoint: callouts_path,
       show_suggest_popover: show_suggest_popover?.to_s,
       show_whitespace_default: @show_whitespace_default.to_s,
       file_by_file_default: @file_by_file_default.to_s,
@@ -203,6 +212,10 @@ module MergeRequestsHelper
 
   def review_requested_merge_requests_count
     current_user.review_requested_open_merge_requests_count
+  end
+
+  def attention_requested_merge_requests_count
+    current_user.attention_requested_open_merge_requests_count
   end
 
   def default_suggestion_commit_message

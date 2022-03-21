@@ -38,7 +38,9 @@ constraints(::Constraints::ProjectUrlConstrainer.new) do
         end
 
         namespace :security do
-          resource :configuration, only: [:show], controller: :configuration
+          resource :configuration, only: [:show], controller: :configuration do
+            resource :sast, only: [:show], controller: :sast_configuration
+          end
         end
 
         resources :artifacts, only: [:index, :destroy]
@@ -94,6 +96,7 @@ constraints(::Constraints::ProjectUrlConstrainer.new) do
         namespace :ci do
           resource :lint, only: [:show, :create]
           resource :pipeline_editor, only: [:show], controller: :pipeline_editor, path: 'editor'
+          resource :secure_files, only: [:show], controller: :secure_files, path: 'secure_files'
           resources :daily_build_group_report_results, only: [:index], constraints: { format: /(csv|json)/ }
           namespace :prometheus_metrics do
             resources :histograms, only: [:create], constraints: { format: 'json' }
@@ -156,17 +159,13 @@ constraints(::Constraints::ProjectUrlConstrainer.new) do
             get 'milestones'
             get 'commands'
             get 'snippets'
+            get 'contacts'
           end
         end
 
-        resources :project_members, except: [:show, :new, :edit], constraints: { id: %r{[a-zA-Z./0-9_\-#%+:]+} }, concerns: :access_requestable do
+        resources :project_members, except: [:show, :new, :create, :edit], constraints: { id: %r{[a-zA-Z./0-9_\-#%+:]+} }, concerns: :access_requestable do
           collection do
             delete :leave
-
-            # Used for import team
-            # from another project
-            get :import
-            post :apply_import
           end
 
           member do
@@ -210,7 +209,7 @@ constraints(::Constraints::ProjectUrlConstrainer.new) do
           end
         end
 
-        resources :services, constraints: { id: %r{[^/]+} }, only: [:edit, :update] do
+        resources :integrations, controller: :services, constraints: { id: %r{[^/]+} }, only: [:edit, :update] do
           member do
             put :test
           end
@@ -236,6 +235,8 @@ constraints(::Constraints::ProjectUrlConstrainer.new) do
             end
           end
         end
+
+        get 'releases/permalink/latest(/)(*suffix_path)', to: 'releases#latest_permalink', as: :latest_release_permalink, format: false
 
         resources :logs, only: [:index] do
           collection do
@@ -298,6 +299,8 @@ constraints(::Constraints::ProjectUrlConstrainer.new) do
           end
         end
 
+        resources :cluster_agents, only: [:show], param: :name
+
         concerns :clusterable
 
         namespace :serverless do
@@ -310,6 +313,17 @@ constraints(::Constraints::ProjectUrlConstrainer.new) do
         end
 
         resources :terraform, only: [:index]
+
+        resources :google_cloud, only: [:index]
+
+        namespace :google_cloud do
+          resources :revoke_oauth, only: [:create]
+          resources :service_accounts, only: [:index, :create]
+          resources :gcp_regions, only: [:index, :create]
+
+          get '/deployments/cloud_run', to: 'deployments#cloud_run'
+          get '/deployments/cloud_storage', to: 'deployments#cloud_storage'
+        end
 
         resources :environments, except: [:destroy] do
           member do
@@ -353,6 +367,10 @@ constraints(::Constraints::ProjectUrlConstrainer.new) do
         resources :alert_management, only: [:index] do
           get 'details', on: :member
         end
+
+        get 'alert_management/:id', to: 'alert_management#details', as: 'alert_management_alert'
+
+        get 'work_items/*work_items_path' => 'work_items#index', as: :work_items
 
         resource :tracing, only: [:show]
 
@@ -443,6 +461,20 @@ constraints(::Constraints::ProjectUrlConstrainer.new) do
             end
           end
         end
+
+        namespace :integrations do
+          resource :shimo, only: [:show]
+        end
+
+        get :planning_hierarchy
+
+        resources :badges, only: [] do
+          collection do
+            constraints format: /svg/ do
+              get :release
+            end
+          end
+        end
       end
       # End of the /-/ scope.
 
@@ -509,6 +541,9 @@ constraints(::Constraints::ProjectUrlConstrainer.new) do
       resources :container_registry, only: [:index, :destroy, :show], # rubocop: disable Cop/PutProjectRoutesUnderScope
                                      controller: 'registry/repositories'
 
+      resources :harbor_registry, only: [:index, :show], # rubocop: disable Cop/PutProjectRoutesUnderScope
+                                  controller: 'harbor/repositories'
+
       namespace :registry do
         resources :repository, only: [] do # rubocop: disable Cop/PutProjectRoutesUnderScope
           # We default to JSON format in the controller to avoid ambiguity.
@@ -530,6 +565,7 @@ constraints(::Constraints::ProjectUrlConstrainer.new) do
           delete :delete_attachment # rubocop:todo Cop/PutProjectRoutesUnderScope
           post :resolve # rubocop:todo Cop/PutProjectRoutesUnderScope
           delete :resolve, action: :unresolve # rubocop:todo Cop/PutProjectRoutesUnderScope
+          get :outdated_line_change # rubocop:todo Cop/PutProjectRoutesUnderScope
         end
       end
 
@@ -558,6 +594,7 @@ constraints(::Constraints::ProjectUrlConstrainer.new) do
 
       scope :service_ping, controller: :service_ping do
         post :web_ide_clientside_preview # rubocop:todo Cop/PutProjectRoutesUnderScope
+        post :web_ide_clientside_preview_success # rubocop:todo Cop/PutProjectRoutesUnderScope
         post :web_ide_pipelines_count # rubocop:todo Cop/PutProjectRoutesUnderScope
       end
 
@@ -601,7 +638,6 @@ constraints(::Constraints::ProjectUrlConstrainer.new) do
                                             :vulnerability_feedback, :security, :dependencies, :issues,
                                             :pipelines, :pipeline_schedules, :runners, :snippets)
     end
-
     # rubocop: disable Cop/PutProjectRoutesUnderScope
     resources(:projects,
               path: '/',

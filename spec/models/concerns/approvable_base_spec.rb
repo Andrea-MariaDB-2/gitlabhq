@@ -36,7 +36,7 @@ RSpec.describe ApprovableBase do
     subject { merge_request.can_be_approved_by?(user) }
 
     before do
-      merge_request.project.add_developer(user)
+      merge_request.project.add_developer(user) if user
     end
 
     it 'returns true' do
@@ -48,6 +48,34 @@ RSpec.describe ApprovableBase do
 
       it 'returns false' do
         is_expected.to be_falsy
+      end
+    end
+
+    context 'when a user is nil' do
+      let(:user) { nil }
+
+      it 'returns false' do
+        is_expected.to be_falsy
+      end
+    end
+  end
+
+  describe '#can_be_unapproved_by?' do
+    subject { merge_request.can_be_unapproved_by?(user) }
+
+    before do
+      merge_request.project.add_developer(user) if user
+    end
+
+    it 'returns false' do
+      is_expected.to be_falsy
+    end
+
+    context 'when a user has approved' do
+      let!(:approval) { create(:approval, merge_request: merge_request, user: user) }
+
+      it 'returns true' do
+        is_expected.to be_truthy
       end
     end
 

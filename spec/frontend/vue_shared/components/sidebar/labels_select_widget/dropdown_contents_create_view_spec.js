@@ -1,33 +1,43 @@
-import { GlLoadingIcon, GlLink } from '@gitlab/ui';
-import { shallowMount, createLocalVue } from '@vue/test-utils';
-import { nextTick } from 'vue';
+import { GlAlert, GlLoadingIcon, GlLink } from '@gitlab/ui';
+import { shallowMount } from '@vue/test-utils';
+import Vue, { nextTick } from 'vue';
 import VueApollo from 'vue-apollo';
 import createMockApollo from 'helpers/mock_apollo_helper';
 import waitForPromises from 'helpers/wait_for_promises';
 import createFlash from '~/flash';
+import { workspaceLabelsQueries } from '~/sidebar/constants';
 import DropdownContentsCreateView from '~/vue_shared/components/sidebar/labels_select_widget/dropdown_contents_create_view.vue';
 import createLabelMutation from '~/vue_shared/components/sidebar/labels_select_widget/graphql/create_label.mutation.graphql';
-import projectLabelsQuery from '~/vue_shared/components/sidebar/labels_select_widget/graphql/project_labels.query.graphql';
 import {
+  mockRegularLabel,
   mockSuggestedColors,
   createLabelSuccessfulResponse,
-  labelsQueryResponse,
+  workspaceLabelsQueryResponse,
 } from './mock_data';
 
 jest.mock('~/flash');
 
 const colors = Object.keys(mockSuggestedColors);
 
-const localVue = createLocalVue();
-localVue.use(VueApollo);
+Vue.use(VueApollo);
 
 const userRecoverableError = {
   ...createLabelSuccessfulResponse,
   errors: ['Houston, we have a problem'],
 };
 
+const titleTakenError = {
+  data: {
+    labelCreate: {
+      label: mockRegularLabel,
+      errors: ['Title has already been taken'],
+    },
+  },
+};
+
 const createLabelSuccessHandler = jest.fn().mockResolvedValue(createLabelSuccessfulResponse);
 const createLabelUserRecoverableErrorHandler = jest.fn().mockResolvedValue(userRecoverableError);
+const createLabelDuplicateErrorHandler = jest.fn().mockResolvedValue(titleTakenError);
 const createLabelErrorHandler = jest.fn().mockRejectedValue('Houston, we have a problem');
 
 describe('DropdownContentsCreateView', () => {
@@ -47,11 +57,15 @@ describe('DropdownContentsCreateView', () => {
     findAllColors().at(0).vm.$emit('click', new Event('mouseclick'));
   };
 
-  const createComponent = ({ mutationHandler = createLabelSuccessHandler } = {}) => {
+  const createComponent = ({
+    mutationHandler = createLabelSuccessHandler,
+    labelCreateType = 'project',
+    workspaceType = 'project',
+  } = {}) => {
     const mockApollo = createMockApollo([[createLabelMutation, mutationHandler]]);
     mockApollo.clients.defaultClient.cache.writeQuery({
-      query: projectLabelsQuery,
-      data: labelsQueryResponse.data,
+      query: workspaceLabelsQueries[workspaceType].query,
+      data: workspaceLabelsQueryResponse.data,
       variables: {
         fullPath: '',
         searchTerm: '',
@@ -59,8 +73,13 @@ describe('DropdownContentsCreateView', () => {
     });
 
     wrapper = shallowMount(DropdownContentsCreateView, {
-      localVue,
       apolloProvider: mockApollo,
+      propsData: {
+        fullPath: '',
+        attrWorkspacePath: '',
+        labelCreateType,
+        workspaceType,
+      },
     });
   };
 
@@ -120,9 +139,11 @@ describe('DropdownContentsCreateView', () => {
 
   it('emits a `hideCreateView` event on Cancel button click', () => {
     createComponent();
-    findCancelButton().vm.$emit('click');
+    const event = { stopPropagation: jest.fn() };
+    findCancelButton().vm.$emit('click', event);
 
     expect(wrapper.emitted('hideCreateView')).toHaveLength(1);
+    expect(event.stopPropagation).toHaveBeenCalled();
   });
 
   describe('when label title and selected color are set', () => {
@@ -133,15 +154,6 @@ describe('DropdownContentsCreateView', () => {
 
     it('enables a Create button', () => {
       expect(findCreateButton().props('disabled')).toBe(false);
-    });
-
-    it('calls a mutation with correct parameters on Create button click', () => {
-      findCreateButton().vm.$emit('click');
-      expect(createLabelSuccessHandler).toHaveBeenCalledWith({
-        color: '#009966',
-        projectPath: '',
-        title: 'Test title',
-      });
     });
 
     it('renders a loader spinner after Create button click', async () => {
@@ -159,6 +171,30 @@ describe('DropdownContentsCreateView', () => {
       await waitForPromises();
 
       expect(findLoadingIcon().exists()).toBe(false);
+    });
+  });
+
+  it('calls a mutation with `projectPath` variable on the issue', () => {
+    createComponent();
+    fillLabelAttributes();
+    findCreateButton().vm.$emit('click');
+
+    expect(createLabelSuccessHandler).toHaveBeenCalledWith({
+      color: '#009966',
+      projectPath: '',
+      title: 'Test title',
+    });
+  });
+
+  it('calls a mutation with `groupPath` variable on the epic', () => {
+    createComponent({ labelCreateType: 'group', workspaceType: 'group' });
+    fillLabelAttributes();
+    findCreateButton().vm.$emit('click');
+
+    expect(createLabelSuccessHandler).toHaveBeenCalledWith({
+      color: '#009966',
+      groupPath: '',
+      title: 'Test title',
     });
   });
 
@@ -182,5 +218,18 @@ describe('DropdownContentsCreateView', () => {
     await waitForPromises();
 
     expect(createFlash).toHaveBeenCalled();
+  });
+
+  it('displays error in alert if label title is already taken', async () => {
+    createComponent({ mutationHandler: createLabelDuplicateErrorHandler });
+    fillLabelAttributes();
+    await nextTick();
+
+    findCreateButton().vm.$emit('click');
+    await waitForPromises();
+
+    expect(wrapper.findComponent(GlAlert).text()).toEqual(
+      titleTakenError.data.labelCreate.errors[0],
+    );
   });
 });

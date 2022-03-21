@@ -1,8 +1,8 @@
 ---
 name: integrated_error_tracking
-introduced_by_url: https://gitlab.com/gitlab-org/gitlab/-/merge_requests/65767
-rollout_issue_url: https://gitlab.com/gitlab-org/gitlab/-/issues/335846
-milestone: '14.1'
+introduced_by_url: https://gitlab.com/gitlab-org/gitlab/-/merge_requests/81767
+rollout_issue_url: https://gitlab.com/gitlab-org/gitlab/-/issues/353956
+milestone: '14.9'
 type: development
-group: group::monitor
+group: group::respond
 default_enabled: false

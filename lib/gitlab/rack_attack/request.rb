@@ -3,6 +3,11 @@
 module Gitlab
   module RackAttack
     module Request
+      include ::Gitlab::Utils::StrongMemoize
+
+      FILES_PATH_REGEX = %r{^/api/v\d+/projects/[^/]+/repository/files/.+}.freeze
+      GROUP_PATH_REGEX = %r{^/api/v\d+/groups/[^/]+/?$}.freeze
+
       def unauthenticated?
         !(authenticated_user_id([:api, :rss, :ics]) || authenticated_runner_id)
       end
@@ -23,23 +28,31 @@ module Gitlab
       end
 
       def api_request?
-        path.start_with?('/api')
+        logical_path.start_with?('/api')
+      end
+
+      def logical_path
+        @logical_path ||= path.delete_prefix(Gitlab.config.gitlab.relative_url_root)
+      end
+
+      def matches?(regex)
+        logical_path.match?(regex)
       end
 
       def api_internal_request?
-        path =~ %r{^/api/v\d+/internal/}
+        matches?(%r{^/api/v\d+/internal/})
       end
 
       def health_check_request?
-        path =~ %r{^/-/(health|liveness|readiness|metrics)}
+        matches?(%r{^/-/(health|liveness|readiness|metrics)})
       end
 
       def container_registry_event?
-        path =~ %r{^/api/v\d+/container_registry_event/}
+        matches?(%r{^/api/v\d+/container_registry_event/})
       end
 
       def product_analytics_collector_request?
-        path.start_with?('/-/collector/i')
+        logical_path.start_with?('/-/collector/i')
       end
 
       def should_be_skipped?
@@ -51,28 +64,45 @@ module Gitlab
       end
 
       def protected_path?
-        !protected_path_regex.nil?
+        matches?(protected_paths_regex)
       end
 
-      def protected_path_regex
-        path =~ protected_paths_regex
+      def throttle?(throttle, authenticated:)
+        fragment = Gitlab::Throttle.throttle_fragment!(throttle, authenticated: authenticated)
+
+        __send__("#{fragment}?") # rubocop:disable GitlabSecurity/PublicSend
       end
 
-      def throttle_unauthenticated?
+      def throttle_unauthenticated_api?
+        api_request? &&
         !should_be_skipped? &&
+        !frontend_request? &&
         !throttle_unauthenticated_packages_api? &&
+        !throttle_unauthenticated_files_api? &&
+        !throttle_unauthenticated_deprecated_api? &&
+        Gitlab::Throttle.settings.throttle_unauthenticated_api_enabled &&
+        unauthenticated?
+      end
+
+      def throttle_unauthenticated_web?
+        (web_request? || frontend_request?) &&
+        !should_be_skipped? &&
+        # TODO: Column will be renamed in https://gitlab.com/gitlab-org/gitlab/-/issues/340031
         Gitlab::Throttle.settings.throttle_unauthenticated_enabled &&
         unauthenticated?
       end
 
       def throttle_authenticated_api?
         api_request? &&
+        !frontend_request? &&
         !throttle_authenticated_packages_api? &&
+        !throttle_authenticated_files_api? &&
+        !throttle_authenticated_deprecated_api? &&
         Gitlab::Throttle.settings.throttle_authenticated_api_enabled
       end
 
       def throttle_authenticated_web?
-        web_request? &&
+        (web_request? || frontend_request?) &&
         !throttle_authenticated_git_lfs? &&
         Gitlab::Throttle.settings.throttle_authenticated_web_enabled
       end
@@ -115,6 +145,28 @@ module Gitlab
         Gitlab::Throttle.settings.throttle_authenticated_git_lfs_enabled
       end
 
+      def throttle_unauthenticated_files_api?
+        files_api_path? &&
+        Gitlab::Throttle.settings.throttle_unauthenticated_files_api_enabled &&
+        unauthenticated?
+      end
+
+      def throttle_authenticated_files_api?
+        files_api_path? &&
+        Gitlab::Throttle.settings.throttle_authenticated_files_api_enabled
+      end
+
+      def throttle_unauthenticated_deprecated_api?
+        deprecated_api_request? &&
+        Gitlab::Throttle.settings.throttle_unauthenticated_deprecated_api_enabled &&
+        unauthenticated?
+      end
+
+      def throttle_authenticated_deprecated_api?
+        deprecated_api_request? &&
+        Gitlab::Throttle.settings.throttle_authenticated_deprecated_api_enabled
+      end
+
       private
 
       def authenticated_user_id(request_formats)
@@ -134,11 +186,33 @@ module Gitlab
       end
 
       def packages_api_path?
-        path =~ ::Gitlab::Regex::Packages::API_PATH_REGEX
+        matches?(::Gitlab::Regex::Packages::API_PATH_REGEX)
       end
 
       def git_lfs_path?
-        path =~ Gitlab::PathRegex.repository_git_lfs_route_regex
+        matches?(::Gitlab::PathRegex.repository_git_lfs_route_regex)
+      end
+
+      def files_api_path?
+        matches?(FILES_PATH_REGEX)
+      end
+
+      def frontend_request?
+        strong_memoize(:frontend_request) do
+          next false unless env.include?('HTTP_X_CSRF_TOKEN') && session.include?(:_csrf_token)
+
+          # CSRF tokens are not verified for GET/HEAD requests, so we pretend that we always have a POST request.
+          Gitlab::RequestForgeryProtection.verified?(env.merge('REQUEST_METHOD' => 'POST'))
+        end
+      end
+
+      def deprecated_api_request?
+        # The projects member of the groups endpoint is deprecated. If left
+        # unspecified, with_projects defaults to true
+        with_projects = params['with_projects']
+        with_projects = true if with_projects.blank?
+
+        matches?(GROUP_PATH_REGEX) && Gitlab::Utils.to_boolean(with_projects)
       end
     end
   end

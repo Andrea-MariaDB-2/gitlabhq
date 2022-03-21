@@ -1,12 +1,14 @@
 <script>
-import { GlTab, GlTabs, GlSprintf, GlLink } from '@gitlab/ui';
+import { GlTab, GlTabs, GlSprintf, GlLink, GlAlert } from '@gitlab/ui';
 import { __, s__ } from '~/locale';
+import glFeatureFlagsMixin from '~/vue_shared/mixins/gl_feature_flags_mixin';
 import LocalStorageSync from '~/vue_shared/components/local_storage_sync.vue';
 import UserCalloutDismisser from '~/vue_shared/components/user_callout_dismisser.vue';
 import AutoDevOpsAlert from './auto_dev_ops_alert.vue';
 import AutoDevOpsEnabledAlert from './auto_dev_ops_enabled_alert.vue';
 import { AUTO_DEVOPS_ENABLED_ALERT_DISMISSED_STORAGE_KEY } from './constants';
 import FeatureCard from './feature_card.vue';
+import TrainingProviderList from './training_provider_list.vue';
 import SectionLayout from './section_layout.vue';
 import UpgradeBanner from './upgrade_banner.vue';
 
@@ -23,6 +25,11 @@ export const i18n = {
      any subsequent feature branch you create will include the scan.`,
   ),
   securityConfiguration: __('Security Configuration'),
+  vulnerabilityManagement: s__('SecurityConfiguration|Vulnerability Management'),
+  securityTraining: s__('SecurityConfiguration|Security training'),
+  securityTrainingDescription: s__(
+    'SecurityConfiguration|Enable security training to help your developers learn how to fix vulnerabilities. Developers can view security training from selected educational providers, relevant to the detected vulnerability.',
+  ),
 };
 
 export default {
@@ -31,6 +38,7 @@ export default {
     AutoDevOpsAlert,
     AutoDevOpsEnabledAlert,
     FeatureCard,
+    GlAlert,
     GlLink,
     GlSprintf,
     GlTab,
@@ -39,8 +47,10 @@ export default {
     SectionLayout,
     UpgradeBanner,
     UserCalloutDismisser,
+    TrainingProviderList,
   },
-  inject: ['projectPath'],
+  mixins: [glFeatureFlagsMixin()],
+  inject: ['projectFullPath'],
   props: {
     augmentedSecurityFeatures: {
       type: Array,
@@ -79,6 +89,7 @@ export default {
   data() {
     return {
       autoDevopsEnabledAlertDismissedProjects: [],
+      errorMessage: '',
     };
   },
   computed: {
@@ -96,15 +107,21 @@ export default {
     shouldShowAutoDevopsEnabledAlert() {
       return (
         this.autoDevopsEnabled &&
-        !this.autoDevopsEnabledAlertDismissedProjects.includes(this.projectPath)
+        !this.autoDevopsEnabledAlertDismissedProjects.includes(this.projectFullPath)
       );
     },
   },
   methods: {
     dismissAutoDevopsEnabledAlert() {
       const dismissedProjects = new Set(this.autoDevopsEnabledAlertDismissedProjects);
-      dismissedProjects.add(this.projectPath);
+      dismissedProjects.add(this.projectFullPath);
       this.autoDevopsEnabledAlertDismissedProjects = Array.from(dismissedProjects);
+    },
+    onError(message) {
+      this.errorMessage = message;
+    },
+    dismissAlert() {
+      this.errorMessage = '';
     },
   },
   autoDevopsEnabledAlertStorageKey: AUTO_DEVOPS_ENABLED_ALERT_DISMISSED_STORAGE_KEY,
@@ -113,6 +130,16 @@ export default {
 
 <template>
   <article>
+    <gl-alert
+      v-if="errorMessage"
+      sticky
+      class="gl-top-8 gl-z-index-1"
+      data-testid="manage-via-mr-error-alert"
+      variant="danger"
+      @dismiss="dismissAlert"
+    >
+      {{ errorMessage }}
+    </gl-alert>
     <local-storage-sync
       v-model="autoDevopsEnabledAlertDismissedProjects"
       :storage-key="$options.autoDevopsEnabledAlertStorageKey"
@@ -136,8 +163,12 @@ export default {
       </template>
     </user-callout-dismisser>
 
-    <gl-tabs content-class="gl-pt-0">
-      <gl-tab data-testid="security-testing-tab" :title="$options.i18n.securityTesting">
+    <gl-tabs content-class="gl-pt-0" sync-active-tab-with-query-params lazy>
+      <gl-tab
+        data-testid="security-testing-tab"
+        :title="$options.i18n.securityTesting"
+        query-param-value="security-testing"
+      >
         <auto-dev-ops-enabled-alert
           v-if="shouldShowAutoDevopsEnabledAlert"
           class="gl-mt-3"
@@ -161,9 +192,12 @@ export default {
               {{ $options.i18n.description }}
             </p>
             <p v-if="canViewCiHistory">
-              <gl-link data-testid="security-view-history-link" :href="gitlabCiHistoryPath">{{
-                $options.i18n.configurationHistory
-              }}</gl-link>
+              <gl-link
+                data-testid="security-view-history-link"
+                data-qa-selector="security_configuration_history_link"
+                :href="gitlabCiHistoryPath"
+                >{{ $options.i18n.configurationHistory }}</gl-link
+              >
             </p>
           </template>
 
@@ -174,11 +208,16 @@ export default {
               data-testid="security-testing-card"
               :feature="feature"
               class="gl-mb-6"
+              @error="onError"
             />
           </template>
         </section-layout>
       </gl-tab>
-      <gl-tab data-testid="compliance-testing-tab" :title="$options.i18n.compliance">
+      <gl-tab
+        data-testid="compliance-testing-tab"
+        :title="$options.i18n.compliance"
+        query-param-value="compliance-testing"
+      >
         <section-layout :heading="$options.i18n.compliance">
           <template #description>
             <p>
@@ -207,7 +246,25 @@ export default {
               :key="feature.type"
               :feature="feature"
               class="gl-mb-6"
+              @error="onError"
             />
+          </template>
+        </section-layout>
+      </gl-tab>
+      <gl-tab
+        v-if="glFeatures.secureVulnerabilityTraining"
+        data-testid="vulnerability-management-tab"
+        :title="$options.i18n.vulnerabilityManagement"
+        query-param-value="vulnerability-management"
+      >
+        <section-layout :heading="$options.i18n.securityTraining">
+          <template #description>
+            <p>
+              {{ $options.i18n.securityTrainingDescription }}
+            </p>
+          </template>
+          <template #features>
+            <training-provider-list />
           </template>
         </section-layout>
       </gl-tab>

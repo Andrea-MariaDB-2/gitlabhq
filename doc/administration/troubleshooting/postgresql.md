@@ -2,10 +2,9 @@
 stage: Enablement
 group: Database
 info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
-type: reference
 ---
 
-# PostgreSQL
+# PostgreSQL **(FREE SELF)**
 
 This page contains information about PostgreSQL the GitLab Support team uses
 when troubleshooting. GitLab makes this information public, so that anyone can
@@ -99,6 +98,19 @@ This section is for links to information elsewhere in the GitLab documentation.
 
 - [Common Geo errors](../geo/replication/troubleshooting.md#fixing-common-errors).
 
+- Mismatch in `pg_dump` and `psql` versions:
+
+  ```plaintext
+  Dumping PostgreSQL database gitlabhq_production ... pg_dump: error: server version: 13.3; pg_dump version: 14.2
+  pg_dump: error: aborting because of server version mismatch
+  ```
+
+  To fix this, see [Backup and restore a non-packaged PostgreSQL database](https://docs.gitlab.com/omnibus/settings/database.html#backup-and-restore-a-non-packaged-postgresql-database).
+
+- Deploying PostgreSQL on Azure Database for PostgreSQL - Flexible Server may result in an error stating `extension "btree_gist" is not allow-listed for "azure_pg_admin" users in Azure Database for PostgreSQL`
+
+  To resolve the above error, [allow-list the extension](https://docs.microsoft.com/en-us/azure/postgresql/flexible-server/concepts-extensions#how-to-use-postgresql-extensions) prior to install.
+
 ## Support topics
 
 ### Database deadlocks
@@ -116,7 +128,7 @@ References:
 ERROR: deadlock detected
 ```
 
-Three applicable timeouts are identified in the issue [#1](https://gitlab.com/gitlab-org/gitlab/-/issues/30528); our recommended settings are as follows:
+Three applicable timeouts are identified in the issue [#30528](https://gitlab.com/gitlab-org/gitlab/-/issues/30528); our recommended settings are as follows:
 
 ```ini
 deadlock_timeout = 5s
@@ -124,7 +136,7 @@ statement_timeout = 15s
 idle_in_transaction_session_timeout = 60s
 ```
 
-Quoting from issue [#1](https://gitlab.com/gitlab-org/gitlab/-/issues/30528):
+Quoting from issue [#30528](https://gitlab.com/gitlab-org/gitlab/-/issues/30528):
 
 > "If a deadlock is hit, and we resolve it through aborting the transaction after a short period, then the retry mechanisms we already have will make the deadlocked piece of work try again, and it's unlikely we'll deadlock multiple times in a row."
 
@@ -146,7 +158,7 @@ PostgresSQL defaults:
 - `statement_timeout = 0` (never)
 - `idle_in_transaction_session_timeout = 0` (never)
 
-Comments in issue [#1](https://gitlab.com/gitlab-org/gitlab/-/issues/30528)
+Comments in issue [#30528](https://gitlab.com/gitlab-org/gitlab/-/issues/30528)
 indicate that these should both be set to at least a number of minutes for all
 Omnibus GitLab installations (so they don't hang indefinitely). However, 15s
 for statement_timeout is very short, and will only be effective if the
@@ -180,3 +192,43 @@ Once saved, [reconfigure GitLab](../restart_gitlab.md#omnibus-gitlab-reconfigure
 
 NOTE:
 These are Omnibus GitLab settings. If an external database, such as a customer's PostgreSQL installation or Amazon RDS is being used, these values don't get set, and would have to be set externally.
+
+### Temporarily changing the statement timeout
+
+WARNING:
+The following advice does not apply in case
+[PgBouncer](../postgresql/pgbouncer.md) is enabled,
+because the changed timeout might affect more transactions than intended.
+
+In some situations, it may be desirable to set a different statement timeout
+without having to [reconfigure GitLab](../restart_gitlab.md#omnibus-gitlab-reconfigure),
+which in this case would restart Puma and Sidekiq.
+
+For example, a backup may fail with the following errors in the output of the
+[backup command](../../raketasks/backup_restore.md#back-up-gitlab)
+because the statement timeout was too short:
+
+```plaintext
+pg_dump: error: Error message from server: server closed the connection unexpectedly
+```
+
+You may also see errors in the [PostgreSQL logs](../logs.md#postgresql-logs):
+
+```plaintext
+canceling statement due to statement timeout
+```
+
+To temporarily change the statement timeout:
+
+1. Open `/var/opt/gitlab/gitlab-rails/etc/database.yml` in an editor
+1. Set the value of `statement_timeout` to `0`, which sets an unlimited statement timeout.
+1. [Confirm in a new Rails console session](../operations/rails_console.md#using-the-rails-runner)
+   that this value is used:
+
+   ```shell
+   sudo gitlab-rails runner "ActiveRecord::Base.connection_config[:variables]"
+   ```
+
+1. Perform the action for which you need a different timeout
+   (for example the backup or the Rails command).
+1. Revert the edit in `/var/opt/gitlab/gitlab-rails/etc/database.yml`.

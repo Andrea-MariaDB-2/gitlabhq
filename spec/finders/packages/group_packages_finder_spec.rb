@@ -107,6 +107,28 @@ RSpec.describe Packages::GroupPackagesFinder do
           end
         end
 
+        context 'deploy tokens' do
+          let(:add_user_to_group) { false }
+
+          context 'group deploy token' do
+            let_it_be(:deploy_token_for_group) { create(:deploy_token, :group, read_package_registry: true) }
+            let_it_be(:group_deploy_token) { create(:group_deploy_token, deploy_token: deploy_token_for_group, group: group) }
+
+            let(:user) { deploy_token_for_group }
+
+            it { is_expected.to match_array([package1, package2, package4]) }
+          end
+
+          context 'project deploy token' do
+            let_it_be(:deploy_token_for_project) { create(:deploy_token, read_package_registry: true) }
+            let_it_be(:project_deploy_token) { create(:project_deploy_token, deploy_token: deploy_token_for_project, project: subproject) }
+
+            let(:user) { deploy_token_for_project }
+
+            it { is_expected.to match_array([package4]) }
+          end
+        end
+
         context 'avoid N+1 query' do
           it 'avoids N+1 database queries' do
             count = ActiveRecord::QueryRecorder.new { subject }
@@ -144,6 +166,19 @@ RSpec.describe Packages::GroupPackagesFinder do
 
             it { is_expected.to eq([named_package]) }
           end
+        end
+      end
+
+      context 'with exact package_name' do
+        let_it_be(:named_package) { create(:maven_package, project: project, name: 'maven') }
+        let_it_be(:other_package) { create(:maven_package, project: project, name: 'maventoo') }
+
+        let(:params) { { exact_name: true, package_name: package_name } }
+
+        context 'as complete name' do
+          let(:package_name) { 'maven' }
+
+          it { is_expected.to match_array([named_package]) }
         end
       end
 

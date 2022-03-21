@@ -36,10 +36,11 @@ function bundle_install_script() {
     exit 1;
   fi;
 
+  gem install bundler --no-document --conservative --version 2.3.6
   bundle --version
   bundle config set path "$(pwd)/vendor"
   bundle config set clean 'true'
-  test -d jh && bundle config set gemfile 'jh/Gemfile'
+  test -d jh && bundle config set --local gemfile 'jh/Gemfile'
 
   echo "${BUNDLE_WITHOUT}"
   bundle config
@@ -60,33 +61,49 @@ function setup_db_user_only() {
 
 function setup_db() {
   run_timed_command "setup_db_user_only"
-  run_timed_command "bundle exec rake db:drop db:create db:structure:load db:migrate gitlab:db:setup_ee"
+  run_timed_command_with_metric "bundle exec rake db:drop db:create db:structure:load db:migrate gitlab:db:setup_ee" "setup_db"
 }
 
 function install_api_client_dependencies_with_apk() {
-  apk add --update openssl curl jq
+  run_timed_command "apk add --update openssl curl jq"
 }
 
 function install_gitlab_gem() {
-  gem install httparty --no-document --version 0.18.1
-  gem install gitlab --no-document --version 4.17.0
+  run_timed_command "gem install httparty --no-document --version 0.18.1"
+  run_timed_command "gem install gitlab --no-document --version 4.17.0"
 }
 
 function install_tff_gem() {
-  gem install test_file_finder --version 0.1.1
+  run_timed_command "gem install test_file_finder --no-document --version 0.1.1"
+}
+
+function install_junit_merge_gem() {
+  run_timed_command "gem install junit_merge --no-document --version 0.1.2"
 }
 
 function run_timed_command() {
   local cmd="${1}"
+  local metric_name="${2:-no}"
+  local timed_metric_file
   local start=$(date +%s)
+
   echosuccess "\$ ${cmd}"
   eval "${cmd}"
+
   local ret=$?
   local end=$(date +%s)
   local runtime=$((end-start))
 
   if [[ $ret -eq 0 ]]; then
     echosuccess "==> '${cmd}' succeeded in ${runtime} seconds."
+
+    if [[ "${metric_name}" != "no" ]]; then
+      timed_metric_file=$(timed_metric_file $metric_name)
+      echo "# TYPE ${metric_name} gauge" > "${timed_metric_file}"
+      echo "# UNIT ${metric_name} seconds" >> "${timed_metric_file}"
+      echo "${metric_name} ${runtime}" >> "${timed_metric_file}"
+    fi
+
     return 0
   else
     echoerr "==> '${cmd}' failed (${ret}) in ${runtime} seconds."
@@ -94,10 +111,30 @@ function run_timed_command() {
   fi
 }
 
-function echoerr() {
-  local header="${2}"
+function run_timed_command_with_metric() {
+  local cmd="${1}"
+  local metric_name="${2}"
+  local metrics_file=${METRICS_FILE:-metrics.txt}
 
-  if [ -n "${header}" ]; then
+  run_timed_command "${cmd}" "${metric_name}"
+
+  local ret=$?
+
+  cat $(timed_metric_file $metric_name) >> "${metrics_file}"
+
+  return $ret
+}
+
+function timed_metric_file() {
+  local metric_name="${1}"
+
+  echo "$(pwd)/tmp/duration_${metric_name}.txt"
+}
+
+function echoerr() {
+  local header="${2:-no}"
+
+  if [ "${header}" != "no" ]; then
     printf "\n\033[0;31m** %s **\n\033[0m" "${1}" >&2;
   else
     printf "\033[0;31m%s\n\033[0m" "${1}" >&2;
@@ -105,9 +142,9 @@ function echoerr() {
 }
 
 function echoinfo() {
-  local header="${2}"
+  local header="${2:-no}"
 
-  if [ -n "${header}" ]; then
+  if [ "${header}" != "no" ]; then
     printf "\n\033[0;33m** %s **\n\033[0m" "${1}" >&2;
   else
     printf "\033[0;33m%s\n\033[0m" "${1}" >&2;
@@ -115,9 +152,9 @@ function echoinfo() {
 }
 
 function echosuccess() {
-  local header="${2}"
+  local header="${2:-no}"
 
-  if [ -n "${header}" ]; then
+  if [ "${header}" != "no" ]; then
     printf "\n\033[0;32m** %s **\n\033[0m" "${1}" >&2;
   else
     printf "\033[0;32m%s\n\033[0m" "${1}" >&2;
@@ -140,5 +177,5 @@ function danger_as_local() {
   # Force danger to skip CI source GitLab and fallback to "local only git repo".
   unset GITLAB_CI
   # We need to base SHA to help danger determine the base commit for this shallow clone.
-  bundle exec danger dry_run --fail-on-errors=true --verbose --base="${CI_MERGE_REQUEST_DIFF_BASE_SHA}"
+  bundle exec danger dry_run --fail-on-errors=true --verbose --base="${CI_MERGE_REQUEST_DIFF_BASE_SHA}" --head="${CI_MERGE_REQUEST_SOURCE_BRANCH_SHA:-$CI_COMMIT_SHA}"
 }

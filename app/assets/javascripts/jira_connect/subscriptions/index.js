@@ -7,21 +7,11 @@ import Translate from '~/vue_shared/translate';
 
 import JiraConnectApp from './components/app.vue';
 import createStore from './store';
-import { getLocation, sizeToParent } from './utils';
+import { sizeToParent } from './utils';
 
 const store = createStore();
 
-const updateSignInLinks = async () => {
-  const location = await getLocation();
-  Array.from(document.querySelectorAll('.js-jira-connect-sign-in')).forEach((el) => {
-    const updatedLink = `${el.getAttribute('href')}?return_to=${location}`;
-    el.setAttribute('href', updatedLink);
-  });
-};
-
-export async function initJiraConnect() {
-  await updateSignInLinks();
-
+export function initJiraConnect() {
   const el = document.querySelector('.js-jira-connect-app');
   if (!el) {
     return null;
@@ -31,7 +21,14 @@ export async function initJiraConnect() {
   Vue.use(Translate);
   Vue.use(GlFeatureFlagsPlugin);
 
-  const { groupsPath, subscriptions, subscriptionsPath, usersPath } = el.dataset;
+  const {
+    groupsPath,
+    subscriptions,
+    subscriptionsPath,
+    usersPath,
+    gitlabUserPath,
+    oauthMetadata,
+  } = el.dataset;
   sizeToParent();
 
   return new Vue({
@@ -42,6 +39,8 @@ export async function initJiraConnect() {
       subscriptions: JSON.parse(subscriptions),
       subscriptionsPath,
       usersPath,
+      gitlabUserPath,
+      oauthMetadata: oauthMetadata ? JSON.parse(oauthMetadata) : null,
     },
     render(createElement) {
       return createElement(JiraConnectApp);

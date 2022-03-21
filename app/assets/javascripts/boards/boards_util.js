@@ -1,6 +1,7 @@
 import { sortBy, cloneDeep } from 'lodash';
-import { getIdFromGraphQLId } from '~/graphql_shared/utils';
-import { ListType } from './constants';
+import { TYPE_BOARD, TYPE_ITERATION, TYPE_MILESTONE, TYPE_USER } from '~/graphql_shared/constants';
+import { isGid, convertToGraphQLId } from '~/graphql_shared/utils';
+import { ListType, MilestoneIDs, AssigneeFilterType, MilestoneFilterType } from './constants';
 
 export function getMilestone() {
   return null;
@@ -44,17 +45,17 @@ export function formatListIssues(listIssues) {
     let sortedIssues = list.issues.edges.map((issueNode) => ({
       ...issueNode.node,
     }));
-    sortedIssues = sortBy(sortedIssues, 'relativePosition');
+    if (list.listType !== ListType.closed) {
+      sortedIssues = sortBy(sortedIssues, 'relativePosition');
+    }
 
     return {
       ...map,
       [list.id]: sortedIssues.map((i) => {
-        const id = getIdFromGraphQLId(i.id);
+        const { id } = i;
 
         const listIssue = {
           ...i,
-          id,
-          fullId: i.id,
           labels: i.labels?.nodes || [],
           assignees: i.assignees?.nodes || [],
         };
@@ -80,22 +81,28 @@ export function formatListsPageInfo(lists) {
 }
 
 export function fullBoardId(boardId) {
-  return `gid://gitlab/Board/${boardId}`;
+  if (!boardId) {
+    return null;
+  }
+  return convertToGraphQLId(TYPE_BOARD, boardId);
 }
 
 export function fullIterationId(id) {
-  return `gid://gitlab/Iteration/${id}`;
+  return convertToGraphQLId(TYPE_ITERATION, id);
 }
 
 export function fullUserId(id) {
-  return `gid://gitlab/User/${id}`;
+  return convertToGraphQLId(TYPE_USER, id);
 }
 
 export function fullMilestoneId(id) {
-  return `gid://gitlab/Milestone/${id}`;
+  return convertToGraphQLId(TYPE_MILESTONE, id);
 }
 
 export function fullLabelId(label) {
+  if (isGid(label.id)) {
+    return label.id;
+  }
   if (label.project_id && label.project_id !== null) {
     return `gid://gitlab/ProjectLabel/${label.id}`;
   }
@@ -108,7 +115,10 @@ export function formatIssueInput(issueInput, boardConfig) {
 
   return {
     ...issueInput,
-    milestoneId: milestoneId ? fullMilestoneId(milestoneId) : null,
+    milestoneId:
+      milestoneId && milestoneId !== MilestoneIDs.ANY
+        ? fullMilestoneId(milestoneId)
+        : issueInput?.milestoneId,
     labelIds: [...labelIds, ...(labels?.map((l) => fullLabelId(l)) || [])],
     assigneeIds: [...assigneeIds, ...(assigneeId ? [fullUserId(assigneeId)] : [])],
   };
@@ -146,7 +156,8 @@ export function getMoveData(state, params) {
 }
 
 export function moveItemListHelper(item, fromList, toList) {
-  const updatedItem = item;
+  const updatedItem = cloneDeep(item);
+
   if (
     toList.listType === ListType.label &&
     !updatedItem.labels.find((label) => label.id === toList.label.id)
@@ -179,6 +190,7 @@ export function isListDraggable(list) {
 export const FiltersInfo = {
   assigneeUsername: {
     negatedSupport: true,
+    remap: (k, v) => (v === AssigneeFilterType.any ? 'assigneeWildcardId' : k),
   },
   assigneeId: {
     // assigneeId should be renamed to assigneeWildcardId.
@@ -197,6 +209,11 @@ export const FiltersInfo = {
   },
   milestoneTitle: {
     negatedSupport: true,
+    remap: (k, v) => (Object.values(MilestoneFilterType).includes(v) ? 'milestoneWildcardId' : k),
+  },
+  milestoneWildcardId: {
+    negatedSupport: true,
+    transform: (val) => val.toUpperCase(),
   },
   myReactionEmoji: {
     negatedSupport: true,
@@ -206,6 +223,10 @@ export const FiltersInfo = {
   },
   types: {
     negatedSupport: true,
+  },
+  confidential: {
+    negatedSupport: false,
+    transform: (val) => val === 'yes',
   },
   search: {
     negatedSupport: false,

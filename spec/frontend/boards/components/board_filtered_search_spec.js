@@ -7,6 +7,7 @@ import { __ } from '~/locale';
 import FilteredSearchBarRoot from '~/vue_shared/components/filtered_search_bar/filtered_search_bar_root.vue';
 import AuthorToken from '~/vue_shared/components/filtered_search_bar/tokens/author_token.vue';
 import LabelToken from '~/vue_shared/components/filtered_search_bar/tokens/label_token.vue';
+import { createStore } from '~/boards/stores';
 
 Vue.use(Vuex);
 
@@ -17,7 +18,7 @@ describe('BoardFilteredSearch', () => {
     {
       icon: 'labels',
       title: __('Label'),
-      type: 'label_name',
+      type: 'label',
       operators: [
         { value: '=', description: 'is' },
         { value: '!=', description: 'is not' },
@@ -30,7 +31,7 @@ describe('BoardFilteredSearch', () => {
     {
       icon: 'pencil',
       title: __('Author'),
-      type: 'author_username',
+      type: 'author',
       operators: [
         { value: '=', description: 'is' },
         { value: '!=', description: 'is not' },
@@ -42,17 +43,13 @@ describe('BoardFilteredSearch', () => {
     },
   ];
 
-  const createComponent = ({ initialFilterParams = {} } = {}) => {
-    store = new Vuex.Store({
-      actions: {
-        performSearch: jest.fn(),
-      },
-    });
-
+  const createComponent = ({ initialFilterParams = {}, props = {} } = {}) => {
+    store = createStore();
     wrapper = shallowMount(BoardFilteredSearch, {
       provide: { initialFilterParams, fullPath: '' },
       store,
       propsData: {
+        ...props,
         tokens,
       },
     });
@@ -68,11 +65,7 @@ describe('BoardFilteredSearch', () => {
     beforeEach(() => {
       createComponent();
 
-      jest.spyOn(store, 'dispatch');
-    });
-
-    it('renders FilteredSearch', () => {
-      expect(findFilteredSearch().exists()).toBe(true);
+      jest.spyOn(store, 'dispatch').mockImplementation();
     });
 
     it('passes the correct tokens to FilteredSearch', () => {
@@ -99,6 +92,22 @@ describe('BoardFilteredSearch', () => {
     });
   });
 
+  describe('when eeFilters is not empty', () => {
+    it('passes the correct initialFilterValue to FitleredSearchBarRoot', () => {
+      createComponent({ props: { eeFilters: { labelName: ['label'] } } });
+
+      expect(findFilteredSearch().props('initialFilterValue')).toEqual([
+        { type: 'label', value: { data: 'label', operator: '=' } },
+      ]);
+    });
+  });
+
+  it('renders FilteredSearch', () => {
+    createComponent();
+
+    expect(findFilteredSearch().exists()).toBe(true);
+  });
+
   describe('when searching', () => {
     beforeEach(() => {
       createComponent();
@@ -108,12 +117,15 @@ describe('BoardFilteredSearch', () => {
 
     it('sets the url params to the correct results', async () => {
       const mockFilters = [
-        { type: 'author_username', value: { data: 'root', operator: '=' } },
-        { type: 'label_name', value: { data: 'label', operator: '=' } },
-        { type: 'label_name', value: { data: 'label2', operator: '=' } },
-        { type: 'milestone_title', value: { data: 'New Milestone', operator: '=' } },
-        { type: 'types', value: { data: 'INCIDENT', operator: '=' } },
+        { type: 'author', value: { data: 'root', operator: '=' } },
+        { type: 'assignee', value: { data: 'root', operator: '=' } },
+        { type: 'label', value: { data: 'label', operator: '=' } },
+        { type: 'label', value: { data: 'label&2', operator: '=' } },
+        { type: 'milestone', value: { data: 'New Milestone', operator: '=' } },
+        { type: 'type', value: { data: 'INCIDENT', operator: '=' } },
         { type: 'weight', value: { data: '2', operator: '=' } },
+        { type: 'iteration', value: { data: '3341', operator: '=' } },
+        { type: 'release', value: { data: 'v1.0.0', operator: '=' } },
       ];
       jest.spyOn(urlUtility, 'updateHistory');
       findFilteredSearch().vm.$emit('onFilter', mockFilters);
@@ -122,7 +134,26 @@ describe('BoardFilteredSearch', () => {
         title: '',
         replace: true,
         url:
-          'http://test.host/?author_username=root&label_name[]=label&label_name[]=label2&milestone_title=New+Milestone&types=INCIDENT&weight=2',
+          'http://test.host/?author_username=root&label_name[]=label&label_name[]=label%262&assignee_username=root&milestone_title=New%20Milestone&iteration_id=3341&types=INCIDENT&weight=2&release_tag=v1.0.0',
+      });
+    });
+
+    describe('when assignee is passed a wildcard value', () => {
+      const url = (arg) => `http://test.host/?assignee_id=${arg}`;
+
+      it.each([
+        ['None', url('None')],
+        ['Any', url('Any')],
+      ])('sets the url param %s', (assigneeParam, expected) => {
+        const mockFilters = [{ type: 'assignee', value: { data: assigneeParam, operator: '=' } }];
+        jest.spyOn(urlUtility, 'updateHistory');
+        findFilteredSearch().vm.$emit('onFilter', mockFilters);
+
+        expect(urlUtility.updateHistory).toHaveBeenCalledWith({
+          title: '',
+          replace: true,
+          url: expected,
+        });
       });
     });
   });
@@ -136,8 +167,8 @@ describe('BoardFilteredSearch', () => {
 
     it('passes the correct props to FilterSearchBar', () => {
       expect(findFilteredSearch().props('initialFilterValue')).toEqual([
-        { type: 'author_username', value: { data: 'root', operator: '=' } },
-        { type: 'label_name', value: { data: 'label', operator: '=' } },
+        { type: 'author', value: { data: 'root', operator: '=' } },
+        { type: 'label', value: { data: 'label', operator: '=' } },
       ]);
     });
   });

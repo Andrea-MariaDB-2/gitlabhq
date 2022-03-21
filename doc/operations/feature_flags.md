@@ -6,8 +6,7 @@ info: To determine the technical writer assigned to the Stage/Group associated w
 
 # Feature Flags **(FREE)**
 
-> - [Introduced](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/7433) in GitLab 11.4.
-> - [Moved](https://gitlab.com/gitlab-org/gitlab/-/issues/212318) to GitLab Free in 13.5.
+> [Moved](https://gitlab.com/gitlab-org/gitlab/-/issues/212318) from GitLab Premium to GitLab Free in 13.5.
 
 With Feature Flags, you can deploy your application's new features to production in smaller batches.
 You can toggle a feature on and off to subsets of users, helping you achieve Continuous Delivery.
@@ -38,21 +37,17 @@ with GitLab, so it's up to developers to use a compatible client library and
 
 To create and enable a feature flag:
 
-1. Navigate to your project's **Deployments > Feature Flags**.
-1. Click the **New feature flag** button.
+1. On the top bar, select **Menu > Projects** and find your project.
+1. On the left sidebar, select **Deployments > Feature Flags**.
+1. Select **New feature flag**.
 1. Enter a name that starts with a letter and contains only lowercase letters, digits, underscores (`_`),
    or dashes (`-`), and does not end with a dash (`-`) or underscore (`_`).
-1. Enter a description (optional, 255 characters max).
-1. Enter details about how the flag should be applied:
-   - In GitLab 13.0 and earlier, add **Environment specs**. For each environment,
-     include the **Status** (default enabled) and [**Rollout strategy**](#rollout-strategy-legacy)
-     (defaults to **All users**).
-   - In GitLab 13.1 and later, add Feature Flag [**Strategies**](#feature-flag-strategies).
-     For each strategy, include the **Type** (defaults to [**All users**](#all-users))
+1. Optional. Enter a description (255 characters maximum).
+1. Add Feature Flag [**Strategies**](#feature-flag-strategies) to define how the flag should be applied. For each strategy, include the **Type** (defaults to [**All users**](#all-users))
      and **Environments** (defaults to all environments).
-1. Click **Create feature flag**.
+1. Select **Create feature flag**.
 
-You can change these settings by clicking the **{pencil}** (edit) button
+To change these settings, select **Edit** (**{pencil}**).
 next to any feature flag in the list.
 
 ## Maximum number of feature flags
@@ -80,7 +75,7 @@ You can apply a feature flag strategy across multiple environments, without defi
 the strategy multiple times.
 
 GitLab Feature Flags use [Unleash](https://docs.getunleash.io/) as the feature flag
-engine. In Unleash, there are [strategies](https://docs.getunleash.io/activation_strategy/)
+engine. In Unleash, there are [strategies](https://docs.getunleash.io/user_guide/activation_strategy)
 for granular feature flag controls. GitLab Feature Flags can have multiple strategies,
 and the supported strategies are:
 
@@ -91,12 +86,11 @@ and the supported strategies are:
 
 Strategies can be added to feature flags when [creating a feature flag](#create-a-feature-flag),
 or by editing an existing feature flag after creation by navigating to **Deployments > Feature Flags**
-and clicking **{pencil}** (edit).
+and selecting **Edit** (**{pencil}**).
 
 ### All users
 
-Enables the feature for all users. It uses the [`default`](https://docs.getunleash.io/activation_strategy/#default)
-Unleash activation strategy.
+Enables the feature for all users. It uses the Standard (`default`) Unleash activation [strategy](https://docs.getunleash.io/user_guide/activation_strategy#standard).
 
 ### Percent Rollout
 
@@ -104,8 +98,7 @@ Unleash activation strategy.
 
 Enables the feature for a percentage of page views, with configurable consistency
 of behavior. This consistency is also known as stickiness. It uses the
-[`flexibleRollout`](https://docs.getunleash.io/activation_strategy/#flexiblerollout)
-Unleash activation strategy.
+Gradual Rollout (`flexibleRollout`) Unleash activation [strategy](https://docs.getunleash.io/user_guide/activation_strategy#gradual-rollout).
 
 You can configure the consistency to be based on:
 
@@ -133,7 +126,7 @@ Selecting **Random** provides inconsistent application behavior for individual u
 ### Percent of Users
 
 Enables the feature for a percentage of authenticated users. It uses the Unleash activation strategy
-[`gradualRolloutUserId`](https://docs.getunleash.io/activation_strategy/#gradualrolloutuserid).
+[`gradualRolloutUserId`](https://docs.getunleash.io/user_guide/activation_strategy#gradual-rollout).
 
 For example, set a value of 15% to enable the feature for 15% of authenticated users.
 
@@ -155,8 +148,7 @@ ID for the feature to be enabled. See the [Ruby example](#ruby-application-examp
 > - [Updated](https://gitlab.com/gitlab-org/gitlab/-/issues/34363) to be defined per environment in GitLab 12.6.
 
 Enables the feature for a list of target users. It is implemented
-using the Unleash [`userWithId`](https://docs.getunleash.io/activation_strategy/#userwithid)
-activation strategy.
+using the Unleash UserIDs (`userWithId`) activation [strategy](https://docs.getunleash.io/user_guide/activation_strategy#userids).
 
 Enter user IDs as a comma-separated list of values (for example,
 `user@example.com, user2@example.com`, or `username1,username2,username3`, and so on). Note that
@@ -171,8 +163,7 @@ target users. See the [Ruby example](#ruby-application-example) below.
 > [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/35930) in GitLab 13.1.
 
 Enables the feature for lists of users created [in the Feature Flags UI](#create-a-user-list), or with the [Feature Flag User List API](../api/feature_flag_user_lists.md).
-Similar to [User IDs](#user-ids), it uses the Unleash [`userWithId`](https://docs.getunleash.io/activation_strategy/#userwithid)
-activation strategy.
+Similar to [User IDs](#user-ids), it uses the Unleash UsersIDs (`userWithId`) activation [strategy](https://docs.getunleash.io/user_guide/activation_strategy#userids).
 
 It's not possible to *disable* a feature for members of a user list, but you can achieve the same
 effect by enabling a feature for a user list that doesn't contain the excluded users.
@@ -189,14 +180,15 @@ For example:
 
 To create a user list:
 
-1. In your project, navigate to **Deployments > Feature Flags**.
+1. On the top bar, select **Menu > Projects** and find your project.
+1. On the left sidebar, select **Deployments > Feature Flags**.
 1. Select **View user lists**
 1. Select **New user list**.
 1. Enter a name for the list.
 1. Select **Create**.
 
-You can view a list's User IDs by clicking the **{pencil}** (edit) button next to it.
-When viewing a list, you can rename it by clicking the **Edit** button.
+You can view a list's User IDs by selecting **Edit** (**{pencil}**) next to it.
+When viewing a list, you can rename it by selecting **Edit** (**{pencil}**).
 
 #### Add users to a user list
 
@@ -204,12 +196,13 @@ When viewing a list, you can rename it by clicking the **Edit** button.
 
 To add users to a user list:
 
-1. In your project, navigate to **Deployments > Feature Flags**.
-1. Click on the **{pencil}** (edit) button next to the list you want to add users to.
-1. Click on **Add Users**.
+1. On the top bar, select **Menu > Projects** and find your project.
+1. On the left sidebar, select **Deployments > Feature Flags**.
+1. Select **Edit** (**{pencil}**) next to the list you want to add users to.
+1. Select **Add Users**.
 1. Enter the user IDs as a comma-separated list of values. For example,
    `user@example.com, user2@example.com`, or `username1,username2,username3`, and so on.
-1. Click on **Add**.
+1. Select **Add**.
 
 #### Remove users from a user list
 
@@ -217,59 +210,48 @@ To add users to a user list:
 
 To remove users from a user list:
 
-1. In your project, navigate to **Deployments > Feature Flags**.
-1. Click on the **{pencil}** (edit) button next to the list you want to change.
-1. Click on the **{remove}** (remove) button next to the ID you want to remove.
+1. On the top bar, select **Menu > Projects** and find your project.
+1. On the left sidebar, select **Deployments > Feature Flags**.
+1. Select **Edit** (**{pencil}**) next to the list you want to change.
+1. Select **Remove** (**{remove}**) next to the ID you want to remove.
 
-## Rollout strategy (legacy)
+## Search for Code References **(PREMIUM)**
 
-> - [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/8240) in GitLab 12.2.
-> - [Made read-only](https://gitlab.com/gitlab-org/gitlab/-/issues/220228) in GitLab 13.4.
+> [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/300299) in GitLab 14.4.
 
-In GitLab 13.0 and earlier, the **Rollout strategy** setting affects which users experience
-the feature as enabled. Choose the percentage of users that the feature is enabled
-for. The rollout strategy has no effect if the environment spec is disabled.
+Search your project and find any references of a feature flag in your
+code so that you can clean it up when it's time to remove the feature flag.
 
-It can be set to:
+To search for code references of a feature flag:
 
-- All users
-- [Percent of users](#percent-of-users)
-  - Optionally, you can click the **Include additional user IDs** checkbox and add a list
-    of specific users IDs to enable the feature for.
-- [User IDs](#user-ids)
-
-## Legacy feature flag migration
-
-Legacy feature flags became read-only in GitLab 13.4. GitLab 14.0 removes support for legacy feature
-flags. You must migrate your legacy feature flags to the new version. To do so, follow these steps:
-
-1. Take a screenshot of the legacy flag for tracking.
-1. Delete the flag through the API or UI (you don't need to alter the code).
-1. Create a new feature flag with the same name as the legacy flag you deleted. Make sure the
-   strategies and environments match the deleted flag.
-
-See [this video tutorial](https://www.youtube.com/watch?v=CAJY2IGep7Y) for help with this migration.
+1. On the top bar, select **Menu > Projects** and find your project.
+1. On the left sidebar, select **Deployments > Feature Flags**.
+1. Edit the feature flag you want to remove.
+1. Select **More actions** (**{ellipsis_v}**).
+1. Select **Search code references**.
 
 ## Disable a feature flag for a specific environment
 
 In [GitLab 13.0 and earlier](https://gitlab.com/gitlab-org/gitlab/-/issues/8621),
 to disable a feature flag for a specific environment:
 
-1. Navigate to your project's **Deployments > Feature Flags**.
-1. For the feature flag you want to disable, click the Pencil icon.
+1. On the top bar, select **Menu > Projects** and find your project.
+1. On the left sidebar, select **Deployments > Feature Flags**.
+1. For the feature flag you want to disable, select **Edit** (**{pencil}**).
 1. To disable the flag:
 
    - In GitLab 13.0 and earlier: Slide the Status toggle for the environment. Or, to delete the
-     environment spec, on the right, click the **Remove (X)** icon.
+     environment spec, on the right, select **Remove (X)**.
    - In GitLab 13.1 and later: For each strategy it applies to, under **Environments**, delete the environment.
 
-1. Click **Save changes**.
+1. Select **Save changes**.
 
 ## Disable a feature flag for all environments
 
 To disable a feature flag for all environments:
 
-1. Navigate to your project's **Deployments > Feature Flags**.
+1. On the top bar, select **Menu > Projects** and find your project.
+1. On the left sidebar, select **Deployments > Feature Flags**.
 1. For the feature flag you want to disable, slide the Status toggle to **Disabled**.
 
 The feature flag is displayed on the **Disabled** tab.
@@ -283,8 +265,9 @@ Then prepare your application with a client library.
 
 To get the access credentials that your application needs to communicate with GitLab:
 
-1. Navigate to your project's **Deployments > Feature Flags**.
-1. Click the **Configure** button to view the following:
+1. On the top bar, select **Menu > Projects** and find your project.
+1. On the left sidebar, select **Deployments > Feature Flags**.
+1. Select **Configure** to view the following:
    - **API URL**: URL where the client (application) connects to get a list of feature flags.
    - **Instance ID**: Unique token that authorizes the retrieval of the feature flags.
    - **Application name**: The name of the *environment* the application runs in
@@ -312,7 +295,7 @@ Unleash currently [offers many SDKs for various languages and frameworks](https:
 For API content, see:
 
 - [Feature Flags API](../api/feature_flags.md)
-- [Feature Flag Specs API](../api/feature_flag_specs.md) (Deprecated and [scheduled for removal in GitLab 14.0](https://gitlab.com/gitlab-org/gitlab/-/issues/213369).)
+- [Feature Flag Specs API](../api/feature_flag_specs.md) (Deprecated and [scheduled for removal](https://gitlab.com/gitlab-org/gitlab/-/issues/213369) in GitLab 14.0.)
 - [Feature Flag User Lists API](../api/feature_flag_user_lists.md)
 - [Legacy Feature Flags API](../api/feature_flags_legacy.md)
 
@@ -328,7 +311,7 @@ import (
     "log"
     "net/http"
 
-    "github.com/Unleash/unleash-client-go"
+    "github.com/Unleash/unleash-client-go/v3"
 )
 
 type metricsInterface struct {
@@ -388,6 +371,31 @@ else
 end
 ```
 
+### Unleash Proxy example
+
+As of [Unleash Proxy](https://docs.getunleash.io/sdks/unleash-proxy) version
+0.2, the proxy is compatible with feature flags. To run a Docker container to
+connect to your project's feature flags, run the following command:
+
+```shell
+docker run \
+  -e UNLEASH_PROXY_SECRETS=<secret> \
+  -e UNLEASH_URL=<project feature flags URL> \
+  -e UNLEASH_INSTANCE_ID=<project feature flags instance ID> \
+  -e UNLEASH_APP_NAME=<project environment> \
+  -e UNLEASH_API_TOKEN=<tokenNotUsed> \
+  -p 3000:3000 \
+  unleashorg/unleash-proxy
+```
+
+| Variable                    | Value                                                                                                                                |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `UNLEASH_PROXY_SECRETS`      | Shared secret used to configure an [Unleash Proxy client](https://docs.getunleash.io/sdks/unleash-proxy#how-to-connect-to-the-proxy). |
+| `UNLEASH_URL`         | Your project's API URL. For more details, read [Get access credentials](#get-access-credentials). |
+| `UNLEASH_INSTANCE_ID` | Your project's Instance ID. For more details, read [Get access credentials](#get-access-credentials). |
+| `UNLEASH_APP_NAME`    | The name of the environment the application runs in. For more details, read [Get access credentials](#get-access-credentials). |
+| `UNLEASH_API_TOKEN`   | Required to start the Unleash Proxy, but not used to connect to GitLab. Can be set to any value. |
+
 ## Feature Flag Related Issues **(PREMIUM)**
 
 > - [Introduced](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/36617) in GitLab 13.2.
@@ -399,3 +407,49 @@ click the `+` button and input the issue reference number or the full URL of the
 The issues then appear in the related feature flag and the other way round.
 
 This feature is similar to the [linked issues](../user/project/issues/related_issues.md) feature.
+
+## Performance factors
+
+In general, GitLab Feature Flags can be used in any applications,
+however, if it's a large application, it could require an additional configuration in advance.
+This section explains the performance factors to help your organization to identify
+what's needed to be done before using the feature.
+Please read [How it works](#how-it-works) section before diving into the details.
+
+### Maximum supported clients in application nodes
+
+GitLab accepts client requests as much as possible until it hits the [rate limiting](../security/rate_limits.md).
+At the moment, the Feature Flag API falls into **Unauthenticated traffic (from a given IP address)**
+in the [GitLab.com specific limits](../user/gitlab_com/index.md),
+so it's **500 requests per minute**.
+
+Please note that the polling rate is configurable in SDKs. Provided that all clients are requesting from the same IP:
+
+- Request once per minute ... 500 clients can be supported.
+- Request once per 15 sec ... 125 clients can be supported.
+
+For applications looking for more scalable solution, we recommend to use [Unleash Proxy](#unleash-proxy-example).
+This proxy server sits between the server and clients. It requests to the server as a behalf of the client groups,
+so the nubmer of outbound requests can be greatly reduced.
+
+There is also an [issue](https://gitlab.com/gitlab-org/gitlab/-/issues/295472) to give more
+capacity to the current rate limit.
+
+### Recovering from network errors
+
+In general, [Unleash clients](https://github.com/Unleash/unleash#unleash-sdks) have
+a fall-back mechanism when the server returns an error code.
+For example, `unleash-ruby-client` reads flag data from the local backup so that
+application can keep running in the current state.
+
+Please reads the documentation in a SDK project for more information.
+
+### Self-managed GitLab
+
+Functionality-wise, there are no differences. Both SaaS and self-managed behave the same.
+
+In terms of scalability, it's up to the spec of the GitLab instance.
+For example, GitLab.com runs on HA architecture so that it can handle a lot of requests concurrently,
+however, a self-managed instance runs on a low spec machine can't expect the same result.
+Please see [Reference architectures](../administration/reference_architectures/index.md)
+for more information.

@@ -6,7 +6,7 @@ comments: false
 description: Consolidating groups and projects
 ---
 
-# Consolidating Group and Project
+# Consolidating Groups and Projects
 
 There are numerous features that exist exclusively within groups or
 projects. The boundary between group and project features used to be clear.
@@ -32,7 +32,7 @@ they all live on their own. A few more problems with this approach:
 - Features are coupled to their container. In practice it is not straight
   forward to decouple a feature from its container. The degree of coupling
   varies across features.
-- Naive duplication of features will result in a more complex and fragile code base.
+- Naive duplication of features will result in a more complex and fragile codebase.
 - Generalizing solutions across groups and projects may degrade system performance.
 - The range of features span across many teams, and these changes will need to
   manage development interference.
@@ -127,6 +127,22 @@ The work required to establish `Namespace` as a container for our features is
 tracked under [Consolidate Groups and Projects](https://gitlab.com/groups/gitlab-org/-/epics/6473)
 epic.
 
+## Migrating features to Namespaces
+
+The initial iteration will provide a framework to house features under `Namespaces`. Stage groups will eventually need to migrate their own features and functionality over to `Namespaces`. This may impact these features in unexpected ways. Therefore, to minimize UX debt and maintain product consistency, stage groups will have to consider a number of factors when migrating their features over to `Namespaces`:
+
+1. **Conceptual model**: What are the current and future state conceptual models of these features ([see object modeling for designers](https://hpadkisson.medium.com/object-modeling-for-designers-an-introduction-7871bdcf8baf))? These should be documented in Pajamas (example: [merge requests](https://design.gitlab.com/objects/merge-request)).
+1. **Merge conflicts**: What inconsistencies are there across project, group, and admin levels? How might these be addressed? For an example of how we rationalized this for labels, please see [this issue](https://gitlab.com/gitlab-org/gitlab/-/issues/338820).
+1. **Inheritance & information flow**: How is information inherited across our container hierarchy currently? How might this be impacted if complying with the new [inheritance behavior](https://gitlab.com/gitlab-org/gitlab/-/issues/343316) framework?
+1. **Settings**: Where can settings for this feature be found currently? How will these be impacted by `Namespaces`?
+1. **Access**: Who can access this feature and is that impacted by the new container structure? Are there any role or privacy considerations?
+1. **Tier**: Is there any tier functionality that is differentiated by projects and groups?
+1. **Documentation**: Is the structure and content of documentation impacted by these changes at all?
+1. **Solution proposal**:
+   - Think big: This analysis provides a great opportunity to zoom out and consider the feature UX as a whole. How could you make this feature lovable based on the new structure, inheritance, and capabilities afforded by `Namespaces`? Is there any UI which doesn't comply with Pajamas?
+   - Start small: What are the product changes that need to be made to assist with the migration?
+   - Move fast: Prioritise these solution ideas, document in issues, and create a roadmap for implementation.
+
 ## Who
 
 Proposal:
@@ -151,5 +167,10 @@ DRIs:
 | Product                      | Melissa Ushakov        |
 | Leadership                   | Michelle Gill          |
 | Engineering                  | Imre Farkas            |
+| Design                       | Nick Post              |
 
 <!-- vale gitlab.Spelling = YES -->
+
+## Related topics
+
+- [Workspace developer documentation](../../../development/workspace/index.md)

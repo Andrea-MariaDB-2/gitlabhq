@@ -36,9 +36,11 @@ module API
         optional :operations_access_level, type: String, values: %w(disabled private enabled), desc: 'Operations access level. One of `disabled`, `private` or `enabled`'
         optional :analytics_access_level, type: String, values: %w(disabled private enabled), desc: 'Analytics access level. One of `disabled`, `private` or `enabled`'
         optional :container_registry_access_level, type: String, values: %w(disabled private enabled), desc: 'Controls visibility of the container registry. One of `disabled`, `private` or `enabled`. `private` will make the container registry accessible only to project members (reporter role and above). `enabled` will make the container registry accessible to everyone who has access to the project. `disabled` will disable the container registry'
+        optional :security_and_compliance_access_level, type: String, values: %w(disabled private enabled), desc: 'Security and compliance access level. One of `disabled`, `private` or `enabled`'
 
         optional :emails_disabled, type: Boolean, desc: 'Disable email notifications'
         optional :show_default_award_emojis, type: Boolean, desc: 'Show default award emojis'
+        optional :warn_about_potentially_unwanted_characters, type: Boolean, desc: 'Warn about Potentially Unwanted Characters'
         optional :shared_runners_enabled, type: Boolean, desc: 'Flag indication if shared runners are enabled for that project'
         optional :resolve_outdated_diff_discussions, type: Boolean, desc: 'Automatically resolve merge request diffs discussions on lines changed with a push'
         optional :remove_source_branch_after_merge, type: Boolean, desc: 'Remove the source branch by default after merge'
@@ -60,6 +62,8 @@ module API
         optional :printing_merge_request_link_enabled, type: Boolean, desc: 'Show link to create/view merge request when pushing from the command line'
         optional :merge_method, type: String, values: %w(ff rebase_merge merge), desc: 'The merge method used when merging merge requests'
         optional :suggestion_commit_message, type: String, desc: 'The commit message used to apply merge request suggestions'
+        optional :merge_commit_template, type: String, desc: 'Template used to create merge commit message'
+        optional :squash_commit_template, type: String, desc: 'Template used to create squash commit message'
         optional :initialize_with_readme, type: Boolean, desc: "Initialize a project with a README.md"
         optional :ci_default_git_depth, type: Integer, desc: 'Default number of revisions for shallow cloning'
         optional :auto_devops_enabled, type: Boolean, desc: 'Flag indication if Auto DevOps is enabled'
@@ -68,6 +72,7 @@ module API
         optional :repository_storage, type: String, desc: 'Which storage shard the repository is on. Available only to admins'
         optional :packages_enabled, type: Boolean, desc: 'Enable project packages feature'
         optional :squash_option, type: String, values: %w(never always default_on default_off), desc: 'Squash default for project. One of `never`, `always`, `default_on`, or `default_off`.'
+        optional :mr_default_target_self, Boolean, desc: 'Merge requests of this forked project targets itself by default'
       end
 
       params :optional_project_params_ee do
@@ -114,6 +119,7 @@ module API
       def self.update_params_at_least_one_of
         [
           :allow_merge_on_skipped_pipeline,
+          :analytics_access_level,
           :autoclose_referenced_issues,
           :auto_devops_enabled,
           :auto_devops_deploy_strategy,
@@ -141,6 +147,7 @@ module API
           :name,
           :only_allow_merge_if_all_discussions_are_resolved,
           :only_allow_merge_if_pipeline_succeeds,
+          :operations_access_level,
           :pages_access_level,
           :path,
           :printing_merge_request_link_enabled,
@@ -150,6 +157,7 @@ module API
           :request_access_enabled,
           :resolve_outdated_diff_discussions,
           :restrict_user_defined_variables,
+          :security_and_compliance_access_level,
           :squash_option,
           :shared_runners_enabled,
           :snippets_access_level,
@@ -159,11 +167,14 @@ module API
           :wiki_access_level,
           :avatar,
           :suggestion_commit_message,
+          :merge_commit_template,
+          :squash_commit_template,
           :repository_storage,
           :compliance_framework_setting,
           :packages_enabled,
           :service_desk_enabled,
           :keep_latest_artifact,
+          :mr_default_target_self,
 
           # TODO: remove in API v5, replaced by *_access_level
           :issues_enabled,
@@ -176,6 +187,18 @@ module API
       end
 
       def filter_attributes_using_license!(attrs)
+      end
+
+      def validate_git_import_url!(import_url)
+        return if import_url.blank?
+
+        yield if block_given?
+
+        result = Import::ValidateRemoteGitEndpointService.new(url: import_url).execute # network call
+
+        if result.error?
+          render_api_error!(result.message, 422)
+        end
       end
     end
   end

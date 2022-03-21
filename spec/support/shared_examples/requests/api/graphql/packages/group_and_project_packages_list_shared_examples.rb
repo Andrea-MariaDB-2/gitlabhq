@@ -3,11 +3,11 @@
 RSpec.shared_examples 'group and project packages query' do
   include GraphqlHelpers
 
-  let_it_be(:versionaless_package) { create(:maven_package, project: project1, version: nil) }
-  let_it_be(:maven_package) { create(:maven_package, project: project1, name: 'tab', version: '4.0.0', created_at: 5.days.ago) }
-  let_it_be(:package) { create(:npm_package, project: project1, name: 'uab', version: '5.0.0', created_at: 4.days.ago) }
-  let_it_be(:composer_package) { create(:composer_package, project: project2, name: 'vab', version: '6.0.0', created_at: 3.days.ago) }
-  let_it_be(:debian_package) { create(:debian_package, project: project2, name: 'zab', version: '7.0.0', created_at: 2.days.ago) }
+  let_it_be(:versionless_package) { create(:maven_package, project: project1, version: nil) }
+  let_it_be(:maven_package) { create(:maven_package, project: project1, name: 'bab', version: '6.0.0', created_at: 1.day.ago) }
+  let_it_be(:npm_package) { create(:npm_package, project: project1, name: 'cab', version: '7.0.0', created_at: 4.days.ago) }
+  let_it_be(:composer_package) { create(:composer_package, project: project2, name: 'dab', version: '4.0.0', created_at: 3.days.ago) }
+  let_it_be(:debian_package) { create(:debian_package, project: project2, name: 'aab', version: '5.0.0', created_at: 2.days.ago) }
   let_it_be(:composer_metadatum) do
     create(:composer_metadatum, package: composer_package,
            target_sha: 'afdeh',
@@ -17,13 +17,15 @@ RSpec.shared_examples 'group and project packages query' do
   let(:package_names) { graphql_data_at(resource_type, :packages, :nodes, :name) }
   let(:target_shas) { graphql_data_at(resource_type, :packages, :nodes, :metadata, :target_sha) }
   let(:packages) { graphql_data_at(resource_type, :packages, :nodes) }
+  let(:packages_count) { graphql_data_at(resource_type, :packages, :count) }
 
   let(:fields) do
     <<~QUERY
-    nodes {
-      #{all_graphql_fields_for('packages'.classify, excluded: ['project'])}
-      metadata { #{query_graphql_fragment('ComposerMetadata')} }
-    }
+      count
+      nodes {
+        #{all_graphql_fields_for('packages'.classify, excluded: ['project'])}
+        metadata { #{query_graphql_fragment('ComposerMetadata')} }
+      }
     QUERY
   end
 
@@ -45,7 +47,7 @@ RSpec.shared_examples 'group and project packages query' do
 
     it 'returns packages successfully' do
       expect(package_names).to contain_exactly(
-        package.name,
+        npm_package.name,
         maven_package.name,
         debian_package.name,
         composer_package.name
@@ -53,7 +55,11 @@ RSpec.shared_examples 'group and project packages query' do
     end
 
     it 'deals with metadata' do
-      expect(target_shas).to contain_exactly(composer_metadatum.target_sha)
+      expect(target_shas.compact).to contain_exactly(composer_metadatum.target_sha)
+    end
+
+    it 'returns the count of the packages' do
+      expect(packages_count).to eq(4)
     end
   end
 
@@ -82,7 +88,23 @@ RSpec.shared_examples 'group and project packages query' do
   end
 
   describe 'sorting and pagination' do
-    let_it_be(:ascending_packages) { [maven_package, package, composer_package, debian_package].map { |package| global_id_of(package)} }
+    let_it_be(:packages_order_map) do
+      {
+        TYPE_ASC: [maven_package, npm_package, composer_package, debian_package],
+        TYPE_DESC: [debian_package, composer_package, npm_package, maven_package],
+
+        NAME_ASC: [debian_package, maven_package, npm_package, composer_package],
+        NAME_DESC: [composer_package, npm_package, maven_package, debian_package],
+
+        VERSION_ASC: [composer_package, debian_package, maven_package, npm_package],
+        VERSION_DESC: [npm_package, maven_package, debian_package, composer_package],
+
+        CREATED_ASC: [npm_package, composer_package, debian_package, maven_package],
+        CREATED_DESC: [maven_package, debian_package, composer_package, npm_package]
+      }
+    end
+
+    let(:expected_packages) { sorted_packages.map { |package| global_id_of(package) } }
 
     let(:data_path) { [resource_type, :packages] }
 
@@ -90,22 +112,14 @@ RSpec.shared_examples 'group and project packages query' do
       resource.add_reporter(current_user)
     end
 
-    [:CREATED_ASC, :NAME_ASC, :VERSION_ASC, :TYPE_ASC].each do |order|
+    [:CREATED_ASC, :NAME_ASC, :VERSION_ASC, :TYPE_ASC, :CREATED_DESC, :NAME_DESC, :VERSION_DESC, :TYPE_DESC].each do |order|
       context "#{order}" do
-        it_behaves_like 'sorted paginated query' do
-          let(:sort_param) { order }
-          let(:first_param) { 4 }
-          let(:expected_results) { ascending_packages }
-        end
-      end
-    end
+        let(:sorted_packages) { packages_order_map.fetch(order) }
 
-    [:CREATED_DESC, :NAME_DESC, :VERSION_DESC, :TYPE_DESC].each do |order|
-      context "#{order}" do
         it_behaves_like 'sorted paginated query' do
           let(:sort_param) { order }
           let(:first_param) { 4 }
-          let(:expected_results) { ascending_packages.reverse }
+          let(:all_records) { expected_packages }
         end
       end
     end
@@ -174,7 +188,7 @@ RSpec.shared_examples 'group and project packages query' do
     context 'include_versionless' do
       let(:params) { { include_versionless: true } }
 
-      it { is_expected.to include({ "name" => versionaless_package.name }) }
+      it { is_expected.to include({ "name" => versionless_package.name }) }
     end
   end
 end

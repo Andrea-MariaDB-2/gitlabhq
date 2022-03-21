@@ -1,23 +1,4 @@
-@import 'framework/variables';
-
-img {
-  max-width: 100%;
-  height: auto;
-}
-
-p.details {
-  font-style: italic;
-  color: $gray-500;
-}
-
-.footer > p {
-  font-size: small;
-  color: $gray-500;
-}
-
-pre.commit-message {
-  white-space: pre-wrap;
-}
+@import 'notify_base';
 
 .gl-label-scoped {
   border: 2px solid currentColor;
@@ -37,4 +18,18 @@ pre.commit-message {
 
 .gl-label-text-dark {
   color: $gl-text-color;
+}
+
+.gl-label-text-scoped {
+  padding: 0 5px;
+  color: $gl-text-color;
+}
+
+.content {
+  .markdown-code-block pre.code {
+    padding: $gl-padding-8 $input-horizontal-padding;
+    margin: 0 0 $gl-padding-8;
+    border: 1px solid $gray-100;
+    border-radius: $border-radius-small;
+  }
 }

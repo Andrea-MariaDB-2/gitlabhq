@@ -32,11 +32,20 @@ RSpec.describe ProjectHook do
   end
 
   describe '#rate_limit' do
-    let_it_be(:hook) { create(:project_hook) }
     let_it_be(:plan_limits) { create(:plan_limits, :default_plan, web_hook_calls: 100) }
+    let_it_be(:hook) { create(:project_hook) }
 
     it 'returns the default limit' do
       expect(hook.rate_limit).to be(100)
+    end
+  end
+
+  describe '#parent' do
+    it 'returns the associated project' do
+      project = build(:project)
+      hook = build(:project_hook, project: project)
+
+      expect(hook.parent).to eq(project)
     end
   end
 

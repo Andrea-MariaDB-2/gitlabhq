@@ -7,6 +7,10 @@ RSpec.describe Namespace do
   include GitHelpers
   include ReloadHelpers
 
+  let_it_be(:group_sti_name) { Group.sti_name }
+  let_it_be(:project_sti_name) { Namespaces::ProjectNamespace.sti_name }
+  let_it_be(:user_sti_name) { Namespaces::UserNamespace.sti_name }
+
   let!(:namespace) { create(:namespace, :with_namespace_settings) }
   let(:gitlab_shell) { Gitlab::Shell.new }
   let(:repository_storage) { 'default' }
@@ -19,11 +23,49 @@ RSpec.describe Namespace do
     it { is_expected.to have_one :root_storage_statistics }
     it { is_expected.to have_one :aggregation_schedule }
     it { is_expected.to have_one :namespace_settings }
+    it { is_expected.to have_one(:namespace_statistics) }
     it { is_expected.to have_many :custom_emoji }
     it { is_expected.to have_one :package_setting_relation }
     it { is_expected.to have_one :onboarding_progress }
     it { is_expected.to have_one :admin_note }
     it { is_expected.to have_many :pending_builds }
+    it { is_expected.to have_one :namespace_route }
+    it { is_expected.to have_many :namespace_members }
+
+    describe '#children' do
+      let_it_be(:group) { create(:group) }
+      let_it_be(:subgroup) { create(:group, parent: group) }
+      let_it_be(:project_with_namespace) { create(:project, namespace: group) }
+
+      it 'excludes project namespaces' do
+        expect(project_with_namespace.project_namespace.parent).to eq(group)
+        expect(group.children).to match_array([subgroup])
+      end
+    end
+  end
+
+  shared_examples 'validations called by different namespace types' do |method|
+    using RSpec::Parameterized::TableSyntax
+
+    where(:namespace_type, :call_validation) do
+      :namespace            | true
+      :group                | true
+      :user_namespace       | true
+      :project_namespace    | false
+    end
+
+    with_them do
+      it 'conditionally runs given validation' do
+        namespace = build(namespace_type)
+        if call_validation
+          expect(namespace).to receive(method)
+        else
+          expect(namespace).not_to receive(method)
+        end
+
+        namespace.valid?
+      end
+    end
   end
 
   describe 'validations' do
@@ -36,67 +78,54 @@ RSpec.describe Namespace do
     it { is_expected.to validate_numericality_of(:max_artifacts_size).only_integer.is_greater_than(0) }
 
     context 'validating the parent of a namespace' do
-      context 'when the namespace has no parent' do
-        it 'allows a namespace to have no parent associated with it' do
-          namespace = build(:namespace)
+      using RSpec::Parameterized::TableSyntax
 
-          expect(namespace).to be_valid
-        end
+      # rubocop:disable Lint/BinaryOperatorWithIdenticalOperands
+      where(:parent_type, :child_type, :error) do
+        nil                      | ref(:user_sti_name)      | nil
+        nil                      | ref(:group_sti_name)     | nil
+        nil                      | ref(:project_sti_name)   | 'must be set for a project namespace'
+        ref(:project_sti_name)   | ref(:user_sti_name)      | 'project namespace cannot be the parent of another namespace'
+        ref(:project_sti_name)   | ref(:group_sti_name)     | 'project namespace cannot be the parent of another namespace'
+        ref(:project_sti_name)   | ref(:project_sti_name)   | 'project namespace cannot be the parent of another namespace'
+        ref(:group_sti_name)     | ref(:user_sti_name)      | 'cannot be used for user namespace'
+        ref(:group_sti_name)     | ref(:group_sti_name)     | nil
+        ref(:group_sti_name)     | ref(:project_sti_name)   | nil
+        ref(:user_sti_name)      | ref(:user_sti_name)      | 'cannot be used for user namespace'
+        ref(:user_sti_name)      | ref(:group_sti_name)     | 'user namespace cannot be the parent of another namespace'
+        ref(:user_sti_name)      | ref(:project_sti_name)   | nil
       end
+      # rubocop:enable Lint/BinaryOperatorWithIdenticalOperands
 
-      context 'when the namespace has a parent' do
-        it 'does not allow a namespace to have a group as its parent' do
-          namespace = build(:namespace, parent: build(:group))
+      with_them do
+        it 'validates namespace parent' do
+          parent = build(:namespace, type: parent_type) if parent_type
+          namespace = build(:namespace, type: child_type, parent: parent)
 
-          expect(namespace).not_to be_valid
-          expect(namespace.errors[:parent_id].first).to eq('a user namespace cannot have a parent')
-        end
-
-        it 'does not allow a namespace to have another namespace as its parent' do
-          namespace = build(:namespace, parent: build(:namespace))
-
-          expect(namespace).not_to be_valid
-          expect(namespace.errors[:parent_id].first).to eq('a user namespace cannot have a parent')
-        end
-      end
-
-      context 'when the feature flag `validate_namespace_parent_type` is disabled' do
-        before do
-          stub_feature_flags(validate_namespace_parent_type: false)
-        end
-
-        context 'when the namespace has no parent' do
-          it 'allows a namespace to have no parent associated with it' do
-            namespace = build(:namespace)
-
-            expect(namespace).to be_valid
-          end
-        end
-
-        context 'when the namespace has a parent' do
-          it 'allows a namespace to have a group as its parent' do
-            namespace = build(:namespace, parent: build(:group))
-
-            expect(namespace).to be_valid
-          end
-
-          it 'allows a namespace to have another namespace as its parent' do
-            namespace = build(:namespace, parent: build(:namespace))
-
+          if error
+            expect(namespace).not_to be_valid
+            expect(namespace.errors[:parent_id].first).to eq(error)
+          else
             expect(namespace).to be_valid
           end
         end
       end
     end
 
-    it 'does not allow too deep nesting' do
-      ancestors = (1..21).to_a
-      group = build(:group)
+    describe '#nesting_level_allowed' do
+      context 'for a group' do
+        it 'does not allow too deep nesting' do
+          ancestors = (1..21).to_a
+          group = build(:group)
 
-      allow(group).to receive(:ancestors).and_return(ancestors)
+          allow(group).to receive(:ancestors).and_return(ancestors)
 
-      expect(group).not_to be_valid
-      expect(group.errors[:parent_id].first).to eq('has too deep level of nesting')
+          expect(group).not_to be_valid
+          expect(group.errors[:parent_id].first).to eq('has too deep level of nesting')
+        end
+      end
+
+      it_behaves_like 'validations called by different namespace types', :nesting_level_allowed
     end
 
     describe 'reserved path validation' do
@@ -120,39 +149,135 @@ RSpec.describe Namespace do
       end
 
       context 'top-level group' do
-        let(:group) { build(:group, path: 'tree') }
+        let(:group) { build(:namespace, path: 'tree') }
 
         it { expect(group).to be_valid }
       end
     end
 
+    describe 'path validator' do
+      using RSpec::Parameterized::TableSyntax
+
+      let_it_be(:parent) { create(:namespace) }
+
+      # rubocop:disable Lint/BinaryOperatorWithIdenticalOperands
+      where(:namespace_type, :path, :valid) do
+        ref(:project_sti_name)   | 'j'     | true
+        ref(:project_sti_name)   | 'path.' | true
+        ref(:project_sti_name)   | 'blob'  | false
+        ref(:group_sti_name)     | 'j'     | false
+        ref(:group_sti_name)     | 'path.' | false
+        ref(:group_sti_name)     | 'blob'  | true
+        ref(:user_sti_name)      | 'j'     | false
+        ref(:user_sti_name)      | 'path.' | false
+        ref(:user_sti_name)      | 'blob'  | true
+      end
+      # rubocop:enable Lint/BinaryOperatorWithIdenticalOperands
+
+      with_them do
+        it 'validates namespace path' do
+          parent_namespace = parent if namespace_type == Namespaces::ProjectNamespace.sti_name
+          namespace = build(:namespace, type: namespace_type, parent: parent_namespace, path: path)
+
+          expect(namespace.valid?).to be(valid)
+        end
+      end
+    end
+
     describe '1 char path length' do
-      it 'does not allow to create one' do
-        namespace = build(:namespace, path: 'j')
+      context 'with user namespace' do
+        let(:namespace) { build(:namespace) }
 
-        expect(namespace).not_to be_valid
-        expect(namespace.errors[:path].first).to eq('is too short (minimum is 2 characters)')
+        it 'does not allow to update path to single char' do
+          namespace.save!
+
+          namespace.path = 'j'
+
+          expect(namespace).not_to be_valid
+          expect(namespace.errors[:path].first).to eq('is too short (minimum is 2 characters)')
+        end
+
+        it 'allows updating other attributes for existing record' do
+          namespace.save!
+          namespace.update_attribute(:path, 'j')
+          namespace.reload
+
+          expect(namespace.path).to eq('j')
+
+          namespace.update!(name: 'something new')
+
+          expect(namespace).to be_valid
+          expect(namespace.name).to eq('something new')
+        end
       end
 
-      it 'does not allow to update one' do
-        namespace = create(:namespace)
-        namespace.update(path: 'j')
+      context 'with project namespace' do
+        let(:namespace) { build(:project_namespace) }
 
-        expect(namespace).not_to be_valid
-        expect(namespace.errors[:path].first).to eq('is too short (minimum is 2 characters)')
+        it 'allows to update path to single char' do
+          project = create(:project)
+          namespace = project.project_namespace
+
+          namespace.update!(path: 'j')
+
+          expect(namespace).to be_valid
+        end
       end
+    end
+  end
 
-      it 'allows updating other attributes for existing record' do
-        namespace = build(:namespace, path: 'j', owner: create(:user))
-        namespace.save(validate: false)
-        namespace.reload
+  describe 'handling STI', :aggregate_failures do
+    let(:namespace_type) { nil }
+    let(:parent) { nil }
+    let(:namespace) { Namespace.find(create(:namespace, type: namespace_type, parent: parent).id) }
 
-        expect(namespace.path).to eq('j')
+    context 'creating a Group' do
+      let(:namespace_type) { group_sti_name }
 
-        namespace.update(name: 'something new')
+      it 'is the correct type of namespace' do
+        expect(namespace).to be_a(Group)
+        expect(namespace.kind).to eq('group')
+        expect(namespace.group_namespace?).to be_truthy
+      end
+    end
 
-        expect(namespace).to be_valid
-        expect(namespace.name).to eq('something new')
+    context 'creating a ProjectNamespace' do
+      let(:namespace_type) { project_sti_name }
+      let(:parent) { create(:group) }
+
+      it 'is the correct type of namespace' do
+        expect(Namespace.find(namespace.id)).to be_a(Namespaces::ProjectNamespace)
+        expect(namespace.kind).to eq('project')
+        expect(namespace.project_namespace?).to be_truthy
+      end
+    end
+
+    context 'creating a UserNamespace' do
+      let(:namespace_type) { user_sti_name }
+
+      it 'is the correct type of namespace' do
+        expect(Namespace.find(namespace.id)).to be_a(Namespaces::UserNamespace)
+        expect(namespace.kind).to eq('user')
+        expect(namespace.user_namespace?).to be_truthy
+      end
+    end
+
+    context 'unable to create a Namespace with nil type' do
+      let(:namespace) { nil }
+      let(:namespace_type) { nil }
+
+      it 'raises ActiveRecord::NotNullViolation' do
+        expect { create(:namespace, type: namespace_type, parent: parent) }.to raise_error(ActiveRecord::NotNullViolation)
+      end
+    end
+
+    context 'creating an unknown Namespace type' do
+      let(:namespace_type) { 'nonsense' }
+
+      it 'creates a default Namespace' do
+        expect(Namespace.find(namespace.id)).to be_a(Namespace)
+        expect(namespace.kind).to eq('user')
+        expect(namespace.user_namespace?).to be_truthy
       end
     end
   end
@@ -165,8 +290,8 @@ RSpec.describe Namespace do
 
     describe '.by_parent' do
       it 'includes correct namespaces' do
-        expect(described_class.by_parent(namespace1.id)).to eq([namespace1sub])
-        expect(described_class.by_parent(namespace2.id)).to eq([namespace2sub])
+        expect(described_class.by_parent(namespace1.id)).to match_array([namespace1sub])
+        expect(described_class.by_parent(namespace2.id)).to match_array([namespace2sub])
         expect(described_class.by_parent(nil)).to match_array([namespace, namespace1, namespace2])
       end
     end
@@ -189,6 +314,19 @@ RSpec.describe Namespace do
         expect(described_class.sorted_by_similarity_and_parent_id_desc(namespace2.path)).to eq([namespace2, namespace1, namespace2sub, namespace1sub, namespace])
         expect(described_class.sorted_by_similarity_and_parent_id_desc(namespace2sub.name)).to eq([namespace2sub, namespace1sub, namespace2, namespace1, namespace])
         expect(described_class.sorted_by_similarity_and_parent_id_desc('Namespace')).to eq([namespace2, namespace1, namespace2sub, namespace1sub, namespace])
+      end
+    end
+
+    describe '.without_project_namespaces' do
+      let_it_be(:user_namespace) { create(:user_namespace) }
+      let_it_be(:project) { create(:project) }
+      let_it_be(:project_namespace) { project.project_namespace }
+
+      it 'excludes project namespaces' do
+        expect(project_namespace).not_to be_nil
+        expect(project_namespace.parent).not_to be_nil
+        expect(described_class.all).to include(project_namespace)
+        expect(described_class.without_project_namespaces).to match_array([namespace, namespace1, namespace2, namespace1sub, namespace2sub, user_namespace, project_namespace.parent])
       end
     end
   end
@@ -224,10 +362,70 @@ RSpec.describe Namespace do
     context 'linear' do
       it_behaves_like 'namespace traversal scopes'
     end
+
+    shared_examples 'makes recursive queries' do
+      specify do
+        expect { subject }.to make_queries_matching(/WITH RECURSIVE/)
+      end
+    end
+
+    shared_examples 'does not make recursive queries' do
+      specify do
+        expect { subject }.not_to make_queries_matching(/WITH RECURSIVE/)
+      end
+    end
+
+    describe '.self_and_descendants' do
+      let_it_be(:namespace) { create(:namespace) }
+
+      subject { described_class.where(id: namespace).self_and_descendants.load }
+
+      it_behaves_like 'does not make recursive queries'
+
+      context 'when feature flag :use_traversal_ids is disabled' do
+        before do
+          stub_feature_flags(use_traversal_ids: false)
+        end
+
+        it_behaves_like 'makes recursive queries'
+      end
+
+      context 'when feature flag :use_traversal_ids_for_descendants_scopes is disabled' do
+        before do
+          stub_feature_flags(use_traversal_ids_for_descendants_scopes: false)
+        end
+
+        it_behaves_like 'makes recursive queries'
+      end
+    end
+
+    describe '.self_and_descendant_ids' do
+      let_it_be(:namespace) { create(:namespace) }
+
+      subject { described_class.where(id: namespace).self_and_descendant_ids.load }
+
+      it_behaves_like 'does not make recursive queries'
+
+      context 'when feature flag :use_traversal_ids is disabled' do
+        before do
+          stub_feature_flags(use_traversal_ids: false)
+        end
+
+        it_behaves_like 'makes recursive queries'
+      end
+
+      context 'when feature flag :use_traversal_ids_for_descendants_scopes is disabled' do
+        before do
+          stub_feature_flags(use_traversal_ids_for_descendants_scopes: false)
+        end
+
+        it_behaves_like 'makes recursive queries'
+      end
+    end
   end
 
   context 'traversal_ids on create' do
-    context 'default traversal_ids' do
+    shared_examples 'default traversal_ids' do
       let(:namespace) { build(:namespace) }
 
       before do
@@ -237,6 +435,8 @@ RSpec.describe Namespace do
 
       it { expect(namespace.traversal_ids).to eq [namespace.id] }
     end
+
+    it_behaves_like 'default traversal_ids'
   end
 
   describe "after_commit :expire_child_caches" do
@@ -285,6 +485,12 @@ RSpec.describe Namespace do
         max_artifacts_size: 10
       )
     end
+  end
+
+  describe '#owner_required?' do
+    specify { expect(build(:project_namespace).owner_required?).to be_falsey }
+    specify { expect(build(:group).owner_required?).to be_falsey }
+    specify { expect(build(:namespace).owner_required?).to be_truthy }
   end
 
   describe '#visibility_level_field' do
@@ -356,9 +562,9 @@ RSpec.describe Namespace do
   end
 
   describe '.search' do
-    let_it_be(:first_group) { build(:group, name: 'my first namespace', path: 'old-path').tap(&:save!) }
-    let_it_be(:parent_group) { build(:group, name: 'my parent namespace', path: 'parent-path').tap(&:save!) }
-    let_it_be(:second_group) { build(:group, name: 'my second namespace', path: 'new-path', parent: parent_group).tap(&:save!) }
+    let_it_be(:first_group) { create(:group, name: 'my first namespace', path: 'old-path') }
+    let_it_be(:parent_group) { create(:group, name: 'my parent namespace', path: 'parent-path') }
+    let_it_be(:second_group) { create(:group, name: 'my second namespace', path: 'new-path', parent: parent_group) }
     let_it_be(:project_with_same_path) { create(:project, id: second_group.id, path: first_group.path) }
 
     it 'returns namespaces with a matching name' do
@@ -396,6 +602,25 @@ RSpec.describe Namespace do
     it 'returns namespaces with a matching route path regardless of the casing' do
       expect(described_class.search('PARENT-PATH/NEW-PATH', include_parents: true)).to eq([second_group])
     end
+
+    context 'with project namespaces' do
+      let_it_be(:project) { create(:project, namespace: parent_group, path: 'some-new-path') }
+      let_it_be(:project_namespace) { project.project_namespace }
+
+      it 'does not return project namespace' do
+        search_result = described_class.search('path')
+
+        expect(search_result).not_to include(project_namespace)
+        expect(search_result).to match_array([first_group, parent_group, second_group])
+      end
+
+      it 'does not return project namespace when including parents' do
+        search_result = described_class.search('path', include_parents: true)
+
+        expect(search_result).not_to include(project_namespace)
+        expect(search_result).to match_array([first_group, parent_group, second_group])
+      end
+    end
   end
 
   describe '.with_statistics' do
@@ -405,26 +630,30 @@ RSpec.describe Namespace do
       create(:project,
              namespace: namespace,
              statistics: build(:project_statistics,
-                               namespace:            namespace,
-                               repository_size:      101,
-                               wiki_size:            505,
-                               lfs_objects_size:     202,
-                               build_artifacts_size: 303,
-                               packages_size:        404,
-                               snippets_size:        605))
+                               namespace:               namespace,
+                               repository_size:         101,
+                               wiki_size:               505,
+                               lfs_objects_size:        202,
+                               build_artifacts_size:    303,
+                               pipeline_artifacts_size: 707,
+                               packages_size:           404,
+                               snippets_size:           605,
+                               uploads_size:            808))
     end
 
     let(:project2) do
       create(:project,
              namespace: namespace,
              statistics: build(:project_statistics,
-                               namespace:            namespace,
-                               repository_size:      10,
-                               wiki_size:            50,
-                               lfs_objects_size:     20,
-                               build_artifacts_size: 30,
-                               packages_size:        40,
-                               snippets_size:        60))
+                               namespace:               namespace,
+                               repository_size:         10,
+                               wiki_size:               50,
+                               lfs_objects_size:        20,
+                               build_artifacts_size:    30,
+                               pipeline_artifacts_size: 70,
+                               packages_size:           40,
+                               snippets_size:           60,
+                               uploads_size:            80))
     end
 
     it "sums all project storage counters in the namespace" do
@@ -432,13 +661,15 @@ RSpec.describe Namespace do
       project2
       statistics = described_class.with_statistics.find(namespace.id)
 
-      expect(statistics.storage_size).to eq 2330
+      expect(statistics.storage_size).to eq 3995
       expect(statistics.repository_size).to eq 111
       expect(statistics.wiki_size).to eq 555
       expect(statistics.lfs_objects_size).to eq 222
       expect(statistics.build_artifacts_size).to eq 333
+      expect(statistics.pipeline_artifacts_size).to eq 777
       expect(statistics.packages_size).to eq 444
       expect(statistics.snippets_size).to eq 665
+      expect(statistics.uploads_size).to eq 888
     end
 
     it "correctly handles namespaces without projects" do
@@ -449,8 +680,10 @@ RSpec.describe Namespace do
       expect(statistics.wiki_size).to eq 0
       expect(statistics.lfs_objects_size).to eq 0
       expect(statistics.build_artifacts_size).to eq 0
+      expect(statistics.pipeline_artifacts_size).to eq 0
       expect(statistics.packages_size).to eq 0
       expect(statistics.snippets_size).to eq 0
+      expect(statistics.uploads_size).to eq 0
     end
   end
 
@@ -503,20 +736,6 @@ RSpec.describe Namespace do
     end
   end
 
-  describe '#ancestors_upto' do
-    let(:parent) { create(:group) }
-    let(:child) { create(:group, parent: parent) }
-    let(:child2) { create(:group, parent: child) }
-
-    it 'returns all ancestors when no namespace is given' do
-      expect(child2.ancestors_upto).to contain_exactly(child, parent)
-    end
-
-    it 'includes ancestors upto but excluding the given ancestor' do
-      expect(child2.ancestors_upto(parent)).to contain_exactly(child)
-    end
-  end
-
   describe '#move_dir', :request_store do
     shared_examples "namespace restrictions" do
       context "when any project has container images" do
@@ -550,7 +769,7 @@ RSpec.describe Namespace do
       end
 
       it "moves dir if path changed" do
-        namespace.update(path: namespace.full_path + '_new')
+        namespace.update!(path: namespace.full_path + '_new')
 
         expect(gitlab_shell.repository_exists?(project.repository_storage, "#{namespace.path}/#{project.path}.git")).to be_truthy
       end
@@ -561,7 +780,7 @@ RSpec.describe Namespace do
             expect(namespace).to receive(:write_projects_repository_config).and_raise('foo')
 
             expect do
-              namespace.update(path: namespace.full_path + '_new')
+              namespace.update!(path: namespace.full_path + '_new')
             end.to raise_error('foo')
           end
         end
@@ -578,7 +797,7 @@ RSpec.describe Namespace do
             end
             expect(Gitlab::ErrorTracking).to receive(:should_raise_for_dev?).and_return(false) # like prod
 
-            namespace.update(path: namespace.full_path + '_new')
+            namespace.update!(path: namespace.full_path + '_new')
           end
         end
       end
@@ -808,7 +1027,7 @@ RSpec.describe Namespace do
 
       it "repository directory remains unchanged if path changed" do
         before_disk_path = project.disk_path
-        namespace.update(path: namespace.full_path + '_new')
+        namespace.update!(path: namespace.full_path + '_new')
 
         expect(before_disk_path).to eq(project.disk_path)
         expect(gitlab_shell.repository_exists?(project.repository_storage, "#{project.disk_path}.git")).to be_truthy
@@ -823,7 +1042,7 @@ RSpec.describe Namespace do
       let!(:legacy_project_in_subgroup) { create(:project, :legacy_storage, :repository, namespace: subgroup, name: 'foo3') }
 
       it 'updates project full path in .git/config' do
-        parent.update(path: 'mygroup_new')
+        parent.update!(path: 'mygroup_new')
 
         expect(project_rugged(project_in_parent_group).config['gitlab.fullpath']).to eq "mygroup_new/#{project_in_parent_group.path}"
         expect(project_rugged(hashed_project_in_subgroup).config['gitlab.fullpath']).to eq "mygroup_new/mysubgroup/#{hashed_project_in_subgroup.path}"
@@ -835,7 +1054,7 @@ RSpec.describe Namespace do
         repository_hashed_project_in_subgroup = hashed_project_in_subgroup.project_repository
         repository_legacy_project_in_subgroup = legacy_project_in_subgroup.project_repository
 
-        parent.update(path: 'mygroup_moved')
+        parent.update!(path: 'mygroup_moved')
 
         expect(repository_project_in_parent_group.reload.disk_path).to eq "mygroup_moved/#{project_in_parent_group.path}"
         expect(repository_hashed_project_in_subgroup.reload.disk_path).to eq hashed_project_in_subgroup.disk_path
@@ -869,7 +1088,7 @@ RSpec.describe Namespace do
       it 'renames its dirs when deleted' do
         allow(GitlabShellWorker).to receive(:perform_in)
 
-        namespace.destroy
+        namespace.destroy!
 
         expect(File.exist?(deleted_path_in_dir)).to be(true)
       end
@@ -877,7 +1096,7 @@ RSpec.describe Namespace do
       it 'schedules the namespace for deletion' do
         expect(GitlabShellWorker).to receive(:perform_in).with(5.minutes, :rm_namespace, repository_storage, deleted_path)
 
-        namespace.destroy
+        namespace.destroy!
       end
 
       context 'in sub-groups' do
@@ -891,7 +1110,7 @@ RSpec.describe Namespace do
         it 'renames its dirs when deleted' do
           allow(GitlabShellWorker).to receive(:perform_in)
 
-          child.destroy
+          child.destroy!
 
           expect(File.exist?(deleted_path_in_dir)).to be(true)
         end
@@ -899,7 +1118,7 @@ RSpec.describe Namespace do
         it 'schedules the namespace for deletion' do
           expect(GitlabShellWorker).to receive(:perform_in).with(5.minutes, :rm_namespace, repository_storage, deleted_path)
 
-          child.destroy
+          child.destroy!
         end
       end
     end
@@ -912,7 +1131,7 @@ RSpec.describe Namespace do
 
         expect(File.exist?(path_in_dir)).to be(false)
 
-        namespace.destroy
+        namespace.destroy!
 
         expect(File.exist?(deleted_path_in_dir)).to be(false)
       end
@@ -1077,6 +1296,64 @@ RSpec.describe Namespace do
     end
   end
 
+  describe '#use_traversal_ids_for_ancestors_upto?' do
+    let_it_be(:namespace, reload: true) { create(:namespace) }
+
+    subject { namespace.use_traversal_ids_for_ancestors_upto? }
+
+    context 'when use_traversal_ids_for_ancestors_upto feature flag is true' do
+      before do
+        stub_feature_flags(use_traversal_ids_for_ancestors_upto: true)
+      end
+
+      it { is_expected.to eq true }
+
+      it_behaves_like 'disabled feature flag when traversal_ids is blank'
+    end
+
+    context 'when use_traversal_ids_for_ancestors_upto feature flag is false' do
+      before do
+        stub_feature_flags(use_traversal_ids_for_ancestors_upto: false)
+      end
+
+      it { is_expected.to eq false }
+    end
+
+    context 'when use_traversal_ids? feature flag is false' do
+      before do
+        stub_feature_flags(use_traversal_ids: false)
+      end
+
+      it { is_expected.to eq false }
+    end
+  end
+
+  describe '#use_traversal_ids_for_self_and_hierarchy?' do
+    let_it_be(:namespace, reload: true) { create(:namespace) }
+
+    subject { namespace.use_traversal_ids_for_self_and_hierarchy? }
+
+    it { is_expected.to eq true }
+
+    it_behaves_like 'disabled feature flag when traversal_ids is blank'
+
+    context 'when use_traversal_ids_for_self_and_hierarchy feature flag is false' do
+      before do
+        stub_feature_flags(use_traversal_ids_for_self_and_hierarchy: false)
+      end
+
+      it { is_expected.to eq false }
+    end
+
+    context 'when use_traversal_ids? feature flag is false' do
+      before do
+        stub_feature_flags(use_traversal_ids: false)
+      end
+
+      it { is_expected.to eq false }
+    end
+  end
+
   describe '#users_with_descendants' do
     let(:user_a) { create(:user) }
     let(:user_b) { create(:user) }
@@ -1170,6 +1447,7 @@ RSpec.describe Namespace do
   context 'refreshing project access on updating share_with_group_lock' do
     let(:group) { create(:group, share_with_group_lock: false) }
     let(:project) { create(:project, :private, group: group) }
+    let(:another_project) { create(:project, :private, group: group) }
 
     let_it_be(:shared_with_group_one) { create(:group) }
     let_it_be(:shared_with_group_two) { create(:group) }
@@ -1182,12 +1460,16 @@ RSpec.describe Namespace do
       shared_with_group_one.add_developer(group_one_user)
       shared_with_group_two.add_developer(group_two_user)
       create(:project_group_link, group: shared_with_group_one, project: project)
+      create(:project_group_link, group: shared_with_group_one, project: another_project)
       create(:project_group_link, group: shared_with_group_two, project: project)
     end
 
     it 'calls AuthorizedProjectUpdate::ProjectRecalculateWorker to update project authorizations' do
       expect(AuthorizedProjectUpdate::ProjectRecalculateWorker)
         .to receive(:perform_async).with(project.id).once
+
+      expect(AuthorizedProjectUpdate::ProjectRecalculateWorker)
+        .to receive(:perform_async).with(another_project.id).once
 
       execute_update
     end
@@ -1221,10 +1503,22 @@ RSpec.describe Namespace do
         stub_feature_flags(specialized_worker_for_group_lock_update_auth_recalculation: false)
       end
 
-      it 'refreshes the permissions of the members of the old and new namespace' do
+      it 'updates authorizations leading to users from shared groups losing access', :sidekiq_inline do
         expect { execute_update }
           .to change { group_one_user.authorized_projects.include?(project) }.from(true).to(false)
           .and change { group_two_user.authorized_projects.include?(project) }.from(true).to(false)
+      end
+
+      it 'updates the authorizations in a non-blocking manner' do
+        expect(AuthorizedProjectsWorker).to(
+          receive(:bulk_perform_async)
+            .with([[group_one_user.id]])).once
+
+        expect(AuthorizedProjectsWorker).to(
+          receive(:bulk_perform_async)
+            .with([[group_two_user.id]])).once
+
+        execute_update
       end
     end
   end
@@ -1377,6 +1671,13 @@ RSpec.describe Namespace do
         expect { root_group.root_ancestor }.not_to exceed_query_limit(0)
       end
 
+      it 'returns root_ancestor for nested group with a single query' do
+        nested_group = create(:group, parent: root_group)
+        nested_group.reload
+
+        expect { nested_group.root_ancestor }.not_to exceed_query_limit(1)
+      end
+
       it 'returns the top most ancestor' do
         nested_group = create(:group, parent: root_group)
         deep_nested_group = create(:group, parent: nested_group)
@@ -1414,7 +1715,7 @@ RSpec.describe Namespace do
       it 'returns the path before last save' do
         group = create(:group)
 
-        group.update(parent: nil)
+        group.update!(parent: nil)
 
         expect(group.full_path_before_last_save).to eq(group.path_before_last_save)
       end
@@ -1425,7 +1726,7 @@ RSpec.describe Namespace do
         group = create(:group, parent: nil)
         parent = create(:group)
 
-        group.update(parent: parent)
+        group.update!(parent: parent)
 
         expect(group.full_path_before_last_save).to eq("#{group.path_before_last_save}")
       end
@@ -1436,7 +1737,7 @@ RSpec.describe Namespace do
         parent = create(:group)
         group = create(:group, parent: parent)
 
-        group.update(parent: nil)
+        group.update!(parent: nil)
 
         expect(group.full_path_before_last_save).to eq("#{parent.full_path}/#{group.path}")
       end
@@ -1448,7 +1749,7 @@ RSpec.describe Namespace do
         group = create(:group, parent: parent)
         new_parent = create(:group)
 
-        group.update(parent: new_parent)
+        group.update!(parent: new_parent)
 
         expect(group.full_path_before_last_save).to eq("#{parent.full_path}/#{group.path}")
       end
@@ -1479,8 +1780,8 @@ RSpec.describe Namespace do
     end
   end
 
-  describe '#user?' do
-    subject { namespace.user? }
+  describe '#user_namespace?' do
+    subject { namespace.user_namespace? }
 
     context 'when type is a user' do
       let(:user) { create(:user) }
@@ -1666,10 +1967,10 @@ RSpec.describe Namespace do
     using RSpec::Parameterized::TableSyntax
 
     where(:shared_runners_enabled, :allow_descendants_override_disabled_shared_runners, :shared_runners_setting) do
-      true  | true  | 'enabled'
-      true  | false | 'enabled'
-      false | true  | 'disabled_with_override'
-      false | false | 'disabled_and_unoverridable'
+      true  | true  | Namespace::SR_ENABLED
+      true  | false | Namespace::SR_ENABLED
+      false | true  | Namespace::SR_DISABLED_WITH_OVERRIDE
+      false | false | Namespace::SR_DISABLED_AND_UNOVERRIDABLE
     end
 
     with_them do
@@ -1685,15 +1986,15 @@ RSpec.describe Namespace do
     using RSpec::Parameterized::TableSyntax
 
     where(:shared_runners_enabled, :allow_descendants_override_disabled_shared_runners, :other_setting, :result) do
-      true  | true  | 'enabled'                    | false
-      true  | true  | 'disabled_with_override'     | true
-      true  | true  | 'disabled_and_unoverridable' | true
-      false | true  | 'enabled'                    | false
-      false | true  | 'disabled_with_override'     | false
-      false | true  | 'disabled_and_unoverridable' | true
-      false | false | 'enabled'                    | false
-      false | false | 'disabled_with_override'     | false
-      false | false | 'disabled_and_unoverridable' | false
+      true  | true  | Namespace::SR_ENABLED                    | false
+      true  | true  | Namespace::SR_DISABLED_WITH_OVERRIDE     | true
+      true  | true  | Namespace::SR_DISABLED_AND_UNOVERRIDABLE | true
+      false | true  | Namespace::SR_ENABLED                    | false
+      false | true  | Namespace::SR_DISABLED_WITH_OVERRIDE     | false
+      false | true  | Namespace::SR_DISABLED_AND_UNOVERRIDABLE | true
+      false | false | Namespace::SR_ENABLED                    | false
+      false | false | Namespace::SR_DISABLED_WITH_OVERRIDE     | false
+      false | false | Namespace::SR_DISABLED_AND_UNOVERRIDABLE | false
     end
 
     with_them do
@@ -1715,87 +2016,95 @@ RSpec.describe Namespace do
     end
 
     context 'with a parent' do
-      context 'when parent has shared runners disabled' do
-        let(:parent) { create(:group, :shared_runners_disabled) }
-        let(:group) { build(:group, shared_runners_enabled: true, parent_id: parent.id) }
+      context 'when namespace is a group' do
+        context 'when parent has shared runners disabled' do
+          let(:parent) { create(:group, :shared_runners_disabled) }
+          let(:group) { build(:group, shared_runners_enabled: true, parent_id: parent.id) }
 
-        it 'is invalid' do
-          expect(group).to be_invalid
-          expect(group.errors[:shared_runners_enabled]).to include('cannot be enabled because parent group has shared Runners disabled')
+          it 'is invalid' do
+            expect(group).to be_invalid
+            expect(group.errors[:shared_runners_enabled]).to include('cannot be enabled because parent group has shared Runners disabled')
+          end
         end
-      end
 
-      context 'when parent has shared runners disabled but allows override' do
-        let(:parent) { create(:group, :shared_runners_disabled, :allow_descendants_override_disabled_shared_runners) }
-        let(:group) { build(:group, shared_runners_enabled: true, parent_id: parent.id) }
+        context 'when parent has shared runners disabled but allows override' do
+          let(:parent) { create(:group, :shared_runners_disabled, :allow_descendants_override_disabled_shared_runners) }
+          let(:group) { build(:group, shared_runners_enabled: true, parent_id: parent.id) }
 
-        it 'is valid' do
-          expect(group).to be_valid
+          it 'is valid' do
+            expect(group).to be_valid
+          end
         end
-      end
 
-      context 'when parent has shared runners enabled' do
-        let(:parent) { create(:group, shared_runners_enabled: true) }
-        let(:group) { build(:group, shared_runners_enabled: true, parent_id: parent.id) }
+        context 'when parent has shared runners enabled' do
+          let(:parent) { create(:group, shared_runners_enabled: true) }
+          let(:group) { build(:group, shared_runners_enabled: true, parent_id: parent.id) }
 
-        it 'is valid' do
-          expect(group).to be_valid
+          it 'is valid' do
+            expect(group).to be_valid
+          end
         end
       end
     end
+
+    it_behaves_like 'validations called by different namespace types', :changing_shared_runners_enabled_is_allowed
   end
 
   describe 'validation #changing_allow_descendants_override_disabled_shared_runners_is_allowed' do
-    context 'without a parent' do
-      context 'with shared runners disabled' do
-        let(:namespace) { build(:namespace, :allow_descendants_override_disabled_shared_runners, :shared_runners_disabled) }
+    context 'when namespace is a group' do
+      context 'without a parent' do
+        context 'with shared runners disabled' do
+          let(:namespace) { build(:group, :allow_descendants_override_disabled_shared_runners, :shared_runners_disabled) }
 
-        it 'is valid' do
-          expect(namespace).to be_valid
+          it 'is valid' do
+            expect(namespace).to be_valid
+          end
+        end
+
+        context 'with shared runners enabled' do
+          let(:namespace) { create(:namespace) }
+
+          it 'is invalid' do
+            namespace.allow_descendants_override_disabled_shared_runners = true
+
+            expect(namespace).to be_invalid
+            expect(namespace.errors[:allow_descendants_override_disabled_shared_runners]).to include('cannot be changed if shared runners are enabled')
+          end
         end
       end
 
-      context 'with shared runners enabled' do
-        let(:namespace) { create(:namespace) }
+      context 'with a parent' do
+        context 'when parent does not allow shared runners' do
+          let(:parent) { create(:group, :shared_runners_disabled) }
+          let(:group) { build(:group, :shared_runners_disabled, :allow_descendants_override_disabled_shared_runners, parent_id: parent.id) }
 
-        it 'is invalid' do
-          namespace.allow_descendants_override_disabled_shared_runners = true
+          it 'is invalid' do
+            expect(group).to be_invalid
+            expect(group.errors[:allow_descendants_override_disabled_shared_runners]).to include('cannot be enabled because parent group does not allow it')
+          end
+        end
 
-          expect(namespace).to be_invalid
-          expect(namespace.errors[:allow_descendants_override_disabled_shared_runners]).to include('cannot be changed if shared runners are enabled')
+        context 'when parent allows shared runners and setting to true' do
+          let(:parent) { create(:group, shared_runners_enabled: true) }
+          let(:group) { build(:group, :shared_runners_disabled, :allow_descendants_override_disabled_shared_runners, parent_id: parent.id) }
+
+          it 'is valid' do
+            expect(group).to be_valid
+          end
+        end
+
+        context 'when parent allows shared runners and setting to false' do
+          let(:parent) { create(:group, shared_runners_enabled: true) }
+          let(:group) { build(:group, :shared_runners_disabled, allow_descendants_override_disabled_shared_runners: false, parent_id: parent.id) }
+
+          it 'is valid' do
+            expect(group).to be_valid
+          end
         end
       end
     end
 
-    context 'with a parent' do
-      context 'when parent does not allow shared runners' do
-        let(:parent) { create(:group, :shared_runners_disabled) }
-        let(:group) { build(:group, :shared_runners_disabled, :allow_descendants_override_disabled_shared_runners, parent_id: parent.id) }
-
-        it 'is invalid' do
-          expect(group).to be_invalid
-          expect(group.errors[:allow_descendants_override_disabled_shared_runners]).to include('cannot be enabled because parent group does not allow it')
-        end
-      end
-
-      context 'when parent allows shared runners and setting to true' do
-        let(:parent) { create(:group, shared_runners_enabled: true) }
-        let(:group) { build(:group, :shared_runners_disabled, :allow_descendants_override_disabled_shared_runners, parent_id: parent.id) }
-
-        it 'is valid' do
-          expect(group).to be_valid
-        end
-      end
-
-      context 'when parent allows shared runners and setting to false' do
-        let(:parent) { create(:group, shared_runners_enabled: true) }
-        let(:group) { build(:group, :shared_runners_disabled, allow_descendants_override_disabled_shared_runners: false, parent_id: parent.id) }
-
-        it 'is valid' do
-          expect(group).to be_valid
-        end
-      end
-    end
+    it_behaves_like 'validations called by different namespace types', :changing_allow_descendants_override_disabled_shared_runners_is_allowed
   end
 
   describe '#root?' do
@@ -1835,6 +2144,90 @@ RSpec.describe Namespace do
       end
 
       it { is_expected.to be(true) }
+    end
+  end
+
+  it_behaves_like 'it has loose foreign keys' do
+    let(:factory_name) { :group }
+  end
+
+  context 'Namespaces::SyncEvent' do
+    let!(:namespace) { create(:group) }
+
+    let_it_be(:new_namespace1) { create(:group) }
+    let_it_be(:new_namespace2) { create(:group) }
+
+    context 'when creating the namespace' do
+      it 'creates a namespaces_sync_event record' do
+        expect(namespace.sync_events.count).to eq(1)
+      end
+
+      it 'enqueues ProcessSyncEventsWorker' do
+        expect(Namespaces::ProcessSyncEventsWorker).to receive(:perform_async)
+
+        create(:namespace)
+      end
+    end
+
+    context 'when updating namespace parent_id' do
+      it 'creates a namespaces_sync_event record' do
+        expect do
+          namespace.update!(parent_id: new_namespace1.id)
+        end.to change(Namespaces::SyncEvent, :count).by(1)
+
+        expect(namespace.sync_events.count).to eq(2)
+      end
+
+      it 'enqueues ProcessSyncEventsWorker' do
+        expect(Namespaces::ProcessSyncEventsWorker).to receive(:perform_async)
+
+        namespace.update!(parent_id: new_namespace1.id)
+      end
+    end
+
+    context 'when updating namespace other attribute' do
+      it 'creates a namespaces_sync_event record' do
+        expect do
+          namespace.update!(name: 'hello')
+        end.not_to change(Namespaces::SyncEvent, :count)
+      end
+    end
+
+    context 'in the same transaction' do
+      context 'when updating different parent_id' do
+        it 'creates two namespaces_sync_event records' do
+          expect do
+            Namespace.transaction do
+              namespace.update!(parent_id: new_namespace1.id)
+              namespace.update!(parent_id: new_namespace2.id)
+            end
+          end.to change(Namespaces::SyncEvent, :count).by(2)
+
+          expect(namespace.sync_events.count).to eq(3)
+        end
+      end
+
+      context 'when updating the same parent_id' do
+        it 'creates one namespaces_sync_event record' do
+          expect do
+            Namespace.transaction do
+              namespace.update!(parent_id: new_namespace1.id)
+              namespace.update!(parent_id: new_namespace1.id)
+            end
+          end.to change(Namespaces::SyncEvent, :count).by(1)
+
+          expect(namespace.sync_events.count).to eq(2)
+        end
+      end
+    end
+  end
+
+  describe 'storage_enforcement_date' do
+    let_it_be(:namespace) { create(:group) }
+
+    # Date TBD: https://gitlab.com/gitlab-org/gitlab/-/issues/350632
+    it 'returns false' do
+      expect(namespace.storage_enforcement_date).to be(nil)
     end
   end
 end

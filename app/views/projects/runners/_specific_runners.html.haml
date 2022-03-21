@@ -2,7 +2,7 @@
   = _('Specific runners')
 
 .bs-callout.help-callout
-  - if valid_runner_registrars.include?('project')
+  - if can?(current_user, :register_project_runners, @project)
     = _('These runners are specific to this project.')
     - if params[:ci_runner_templates]
       %hr
@@ -17,7 +17,7 @@
                       group_path: '' }
   - else
     = _('Please contact an admin to register runners.')
-    = link_to _('Learn more.'), help_page_path('user/admin_area/settings/continuous_integration', anchor: 'runner-registration'), target: '_blank', rel: 'noopener noreferrer'
+    = link_to _('Learn more.'), help_page_path('user/admin_area/settings/continuous_integration', anchor: 'prevent-users-from-registering-runners'), target: '_blank', rel: 'noopener noreferrer'
 
 %hr
 

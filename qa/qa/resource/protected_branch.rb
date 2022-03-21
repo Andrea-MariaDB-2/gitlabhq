@@ -61,6 +61,8 @@ module QA
       end
 
       def fabricate_via_api!
+        resource_web_url(api_get)
+      rescue ResourceNotFoundError
         populate_new_branch_if_required
 
         super
@@ -70,12 +72,26 @@ module QA
         self.remove_via_api!(&block)
       end
 
+      # Remove the branch protection after confirming that it exists
+      def remove_via_api!
+        Support::Retrier.retry_until(max_duration: 60, sleep_interval: 1, message: "Waiting for branch #{branch_name} to be protected") do
+          # We confirm it exists before removal because there's no creation event when the default branch is automatically protected by GitLab itself, and there's a slight delay between creating the repo and protecting the default branch
+          exists?
+        end
+
+        super
+      end
+
       def api_get_path
         "/projects/#{project.id}/protected_branches/#{branch_name}"
       end
 
       def api_delete_path
-        "/projects/#{project.id}/protected_branches/#{branch_name}"
+        api_get_path
+      end
+
+      def api_put_path
+        api_get_path
       end
 
       def api_post_path
@@ -105,6 +121,16 @@ module QA
         super
       rescue ResourceURLMissingError
         # this particular resource does not expose a web_url property
+      end
+
+      def set_require_code_owner_approval(require = true)
+        response = patch(Runtime::API::Request.new(api_client, api_put_path).url, { code_owner_approval_required: require })
+        return if response.code == HTTP_STATUS_OK
+
+        raise(
+          ResourceUpdateFailedError,
+          "Could not update code_owner_approval_required to #{require}. Request returned (#{response.code}): `#{response}`."
+        )
       end
 
       class Roles

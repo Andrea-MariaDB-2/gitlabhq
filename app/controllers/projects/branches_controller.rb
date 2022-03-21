@@ -14,6 +14,7 @@ class Projects::BranchesController < Projects::ApplicationController
   before_action :limit_diverging_commit_counts!, only: [:diverging_commit_counts]
 
   feature_category :source_code_management
+  urgency :low, [:index, :diverging_commit_counts, :create, :destroy]
 
   def index
     respond_to do |format|
@@ -33,6 +34,9 @@ class Projects::BranchesController < Projects::ApplicationController
         Gitlab::GitalyClient.allow_n_plus_1_calls do
           render
         end
+      rescue Gitlab::Git::CommandError
+        @gitaly_unavailable = true
+        render status: :service_unavailable
       end
       format.json do
         branches = BranchesFinder.new(@repository, params).execute
@@ -100,8 +104,7 @@ class Projects::BranchesController < Projects::ApplicationController
   # rubocop: enable CodeReuse/ActiveRecord
 
   def destroy
-    @branch_name = Addressable::URI.unescape(params[:id])
-    result = ::Branches::DeleteService.new(project, current_user).execute(@branch_name)
+    result = ::Branches::DeleteService.new(project, current_user).execute(params[:id])
 
     respond_to do |format|
       format.html do
@@ -126,9 +129,26 @@ class Projects::BranchesController < Projects::ApplicationController
   private
 
   def sort_value_for_mode
-    return params[:sort] if params[:sort].present?
+    custom_sort || default_sort
+  end
 
+  def custom_sort
+    sort = params[:sort].presence
+
+    unless sort.in?(supported_sort_options)
+      flash.now[:alert] = _("Unsupported sort value.")
+      sort = nil
+    end
+
+    sort
+  end
+
+  def default_sort
     'stale' == @mode ? sort_value_oldest_updated : sort_value_recently_updated
+  end
+
+  def supported_sort_options
+    [nil, sort_value_name, sort_value_oldest_updated, sort_value_recently_updated]
   end
 
   # It can be expensive to calculate the diverging counts for each

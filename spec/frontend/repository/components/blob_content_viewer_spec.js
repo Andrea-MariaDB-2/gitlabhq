@@ -1,8 +1,9 @@
 import { GlLoadingIcon } from '@gitlab/ui';
-import { shallowMount, mount, createLocalVue } from '@vue/test-utils';
+import { mount, shallowMount } from '@vue/test-utils';
+import Vuex from 'vuex';
+import Vue, { nextTick } from 'vue';
 import axios from 'axios';
 import MockAdapter from 'axios-mock-adapter';
-import { nextTick } from 'vue';
 import VueApollo from 'vue-apollo';
 import createMockApollo from 'helpers/mock_apollo_helper';
 import waitForPromises from 'helpers/wait_for_promises';
@@ -10,180 +11,158 @@ import BlobContent from '~/blob/components/blob_content.vue';
 import BlobHeader from '~/blob/components/blob_header.vue';
 import BlobButtonGroup from '~/repository/components/blob_button_group.vue';
 import BlobContentViewer from '~/repository/components/blob_content_viewer.vue';
-import BlobEdit from '~/repository/components/blob_edit.vue';
-import { loadViewer, viewerProps } from '~/repository/components/blob_viewers';
+import WebIdeLink from '~/vue_shared/components/web_ide_link.vue';
+import ForkSuggestion from '~/repository/components/fork_suggestion.vue';
+import { loadViewer } from '~/repository/components/blob_viewers';
 import DownloadViewer from '~/repository/components/blob_viewers/download_viewer.vue';
 import EmptyViewer from '~/repository/components/blob_viewers/empty_viewer.vue';
-import TextViewer from '~/repository/components/blob_viewers/text_viewer.vue';
+import SourceViewer from '~/vue_shared/components/source_viewer/source_viewer.vue';
 import blobInfoQuery from '~/repository/queries/blob_info.query.graphql';
+import userInfoQuery from '~/repository/queries/user_info.query.graphql';
+import applicationInfoQuery from '~/repository/queries/application_info.query.graphql';
+import CodeIntelligence from '~/code_navigation/components/app.vue';
+import { redirectTo } from '~/lib/utils/url_utility';
+import { isLoggedIn } from '~/lib/utils/common_utils';
+import { extendedWrapper } from 'helpers/vue_test_utils_helper';
+import httpStatusCodes from '~/lib/utils/http_status';
+import {
+  simpleViewerMock,
+  richViewerMock,
+  projectMock,
+  userInfoMock,
+  applicationInfoMock,
+  userPermissionsMock,
+  propsMock,
+  refMock,
+} from '../mock_data';
 
 jest.mock('~/repository/components/blob_viewers');
+jest.mock('~/lib/utils/url_utility');
+jest.mock('~/lib/utils/common_utils');
 
 let wrapper;
 let mockResolver;
+let userInfoMockResolver;
+let applicationInfoMockResolver;
 
-const simpleMockData = {
-  name: 'some_file.js',
-  size: 123,
-  rawSize: 123,
-  rawTextBlob: 'raw content',
-  type: 'text',
-  fileType: 'text',
-  tooLarge: false,
-  path: 'some_file.js',
-  webPath: 'some_file.js',
-  editBlobPath: 'some_file.js/edit',
-  ideEditPath: 'some_file.js/ide/edit',
-  storedExternally: false,
-  rawPath: 'some_file.js',
-  externalStorageUrl: 'some_file.js',
-  replacePath: 'some_file.js/replace',
-  deletePath: 'some_file.js/delete',
-  forkPath: 'some_file.js/fork',
-  simpleViewer: {
-    fileType: 'text',
-    tooLarge: false,
-    type: 'simple',
-    renderError: null,
-  },
-  richViewer: null,
-};
-const richMockData = {
-  ...simpleMockData,
-  richViewer: {
-    fileType: 'markup',
-    tooLarge: false,
-    type: 'rich',
-    renderError: null,
-  },
-};
-
-const projectMockData = {
-  userPermissions: {
-    pushCode: true,
-    downloadCode: true,
-  },
-  repository: {
-    empty: false,
-  },
-};
-
-const localVue = createLocalVue();
 const mockAxios = new MockAdapter(axios);
 
-const createComponentWithApollo = (mockData = {}, inject = {}) => {
-  localVue.use(VueApollo);
+const createMockStore = () =>
+  new Vuex.Store({ actions: { fetchData: jest.fn, setInitialData: jest.fn() } });
 
-  const defaultPushCode = projectMockData.userPermissions.pushCode;
-  const defaultDownloadCode = projectMockData.userPermissions.downloadCode;
-  const defaultEmptyRepo = projectMockData.repository.empty;
+const createComponent = async (mockData = {}, mountFn = shallowMount) => {
+  Vue.use(VueApollo);
+
   const {
-    blobs,
-    emptyRepo = defaultEmptyRepo,
-    canPushCode = defaultPushCode,
-    canDownloadCode = defaultDownloadCode,
-    pathLocks = [],
+    blob = simpleViewerMock,
+    empty = projectMock.repository.empty,
+    pushCode = userPermissionsMock.pushCode,
+    forkProject = userPermissionsMock.forkProject,
+    downloadCode = userPermissionsMock.downloadCode,
+    createMergeRequestIn = userPermissionsMock.createMergeRequestIn,
+    isBinary,
+    inject = {},
+    highlightJs = true,
   } = mockData;
 
+  const project = {
+    ...projectMock,
+    userPermissions: {
+      pushCode,
+      forkProject,
+      downloadCode,
+      createMergeRequestIn,
+    },
+    repository: {
+      empty,
+      blobs: { nodes: [blob] },
+    },
+  };
+
   mockResolver = jest.fn().mockResolvedValue({
-    data: {
-      project: {
-        id: '1234',
-        userPermissions: { pushCode: canPushCode, downloadCode: canDownloadCode },
-        pathLocks: {
-          nodes: pathLocks,
-        },
-        repository: {
-          empty: emptyRepo,
-          blobs: {
-            nodes: [blobs],
-          },
-        },
-      },
-    },
+    data: { isBinary, project },
   });
 
-  const fakeApollo = createMockApollo([[blobInfoQuery, mockResolver]]);
-
-  wrapper = shallowMount(BlobContentViewer, {
-    localVue,
-    apolloProvider: fakeApollo,
-    propsData: {
-      path: 'some_file.js',
-      projectPath: 'some/path',
-    },
-    mixins: [
-      {
-        data: () => ({ ref: 'default-ref' }),
-      },
-    ],
-    provide: {
-      ...inject,
-    },
+  userInfoMockResolver = jest.fn().mockResolvedValue({
+    data: { ...userInfoMock },
   });
+
+  applicationInfoMockResolver = jest.fn().mockResolvedValue({
+    data: { ...applicationInfoMock },
+  });
+
+  const fakeApollo = createMockApollo([
+    [blobInfoQuery, mockResolver],
+    [userInfoQuery, userInfoMockResolver],
+    [applicationInfoQuery, applicationInfoMockResolver],
+  ]);
+
+  wrapper = extendedWrapper(
+    mountFn(BlobContentViewer, {
+      store: createMockStore(),
+      apolloProvider: fakeApollo,
+      propsData: propsMock,
+      mixins: [{ data: () => ({ ref: refMock }) }],
+      provide: {
+        targetBranch: 'test',
+        originalBranch: 'default-ref',
+        ...inject,
+        glFeatures: {
+          highlightJs,
+        },
+      },
+    }),
+  );
+
+  // setData usage is discouraged. See https://gitlab.com/groups/gitlab-org/-/epics/7330 for details
+  // eslint-disable-next-line no-restricted-syntax
+  wrapper.setData({ project, isBinary });
+
+  await waitForPromises();
 };
 
-const createFactory = (mountFn) => (
-  { props = {}, mockData = {}, stubs = {} } = {},
-  loading = false,
-) => {
-  wrapper = mountFn(BlobContentViewer, {
-    propsData: {
-      path: 'some_file.js',
-      projectPath: 'some/path',
-      ...props,
-    },
-    mocks: {
-      $apollo: {
-        queries: {
-          project: {
-            loading,
-            refetch: jest.fn(),
-          },
-        },
-      },
-    },
-    stubs,
-  });
-
-  wrapper.setData(mockData);
+const execImmediately = (callback) => {
+  callback();
 };
-
-const factory = createFactory(shallowMount);
-const fullFactory = createFactory(mount);
 
 describe('Blob content viewer component', () => {
   const findLoadingIcon = () => wrapper.findComponent(GlLoadingIcon);
   const findBlobHeader = () => wrapper.findComponent(BlobHeader);
-  const findBlobEdit = () => wrapper.findComponent(BlobEdit);
+  const findWebIdeLink = () => wrapper.findComponent(WebIdeLink);
   const findBlobContent = () => wrapper.findComponent(BlobContent);
   const findBlobButtonGroup = () => wrapper.findComponent(BlobButtonGroup);
+  const findForkSuggestion = () => wrapper.findComponent(ForkSuggestion);
+  const findCodeIntelligence = () => wrapper.findComponent(CodeIntelligence);
+
+  beforeEach(() => {
+    jest.spyOn(window, 'requestIdleCallback').mockImplementation(execImmediately);
+    isLoggedIn.mockReturnValue(true);
+  });
 
   afterEach(() => {
     wrapper.destroy();
+    mockAxios.reset();
   });
 
   it('renders a GlLoadingIcon component', () => {
-    factory({ mockData: { blobInfo: simpleMockData } }, true);
+    createComponent();
 
     expect(findLoadingIcon().exists()).toBe(true);
   });
 
   describe('simple viewer', () => {
-    beforeEach(() => {
-      factory({ mockData: { blobInfo: simpleMockData } });
-    });
+    it('renders a BlobHeader component', async () => {
+      await createComponent();
 
-    it('renders a BlobHeader component', () => {
       expect(findBlobHeader().props('activeViewerType')).toEqual('simple');
       expect(findBlobHeader().props('hasRenderError')).toEqual(false);
       expect(findBlobHeader().props('hideViewerSwitcher')).toEqual(true);
-      expect(findBlobHeader().props('blob')).toEqual(simpleMockData);
+      expect(findBlobHeader().props('blob')).toEqual(simpleViewerMock);
     });
 
-    it('renders a BlobContent component', () => {
-      expect(findBlobContent().props('loading')).toEqual(false);
-      expect(findBlobContent().props('content')).toEqual('raw content');
+    it('renders a BlobContent component', async () => {
+      await createComponent();
+
       expect(findBlobContent().props('isRawContent')).toBe(true);
       expect(findBlobContent().props('activeViewer')).toEqual({
         fileType: 'text',
@@ -192,25 +171,39 @@ describe('Blob content viewer component', () => {
         renderError: null,
       });
     });
+
+    describe('legacy viewers', () => {
+      it('loads a legacy viewer when a the fileType is text and the highlightJs feature is turned off', async () => {
+        await createComponent({
+          blob: { ...simpleViewerMock, fileType: 'text', highlightJs: false },
+        });
+
+        expect(mockAxios.history.get).toHaveLength(1);
+        expect(mockAxios.history.get[0].url).toEqual('some_file.js?format=json&viewer=simple');
+      });
+
+      it('loads a legacy viewer when a viewer component is not available', async () => {
+        await createComponent({ blob: { ...simpleViewerMock, fileType: 'unknown' } });
+
+        expect(mockAxios.history.get).toHaveLength(1);
+        expect(mockAxios.history.get[0].url).toEqual('some_file.js?format=json&viewer=simple');
+      });
+    });
   });
 
   describe('rich viewer', () => {
-    beforeEach(() => {
-      factory({
-        mockData: { blobInfo: richMockData, activeViewerType: 'rich' },
-      });
-    });
+    it('renders a BlobHeader component', async () => {
+      await createComponent({ blob: richViewerMock });
 
-    it('renders a BlobHeader component', () => {
       expect(findBlobHeader().props('activeViewerType')).toEqual('rich');
       expect(findBlobHeader().props('hasRenderError')).toEqual(false);
       expect(findBlobHeader().props('hideViewerSwitcher')).toEqual(false);
-      expect(findBlobHeader().props('blob')).toEqual(richMockData);
+      expect(findBlobHeader().props('blob')).toEqual(richViewerMock);
     });
 
-    it('renders a BlobContent component', () => {
-      expect(findBlobContent().props('loading')).toEqual(false);
-      expect(findBlobContent().props('content')).toEqual('raw content');
+    it('renders a BlobContent component', async () => {
+      await createComponent({ blob: richViewerMock });
+
       expect(findBlobContent().props('isRawContent')).toBe(true);
       expect(findBlobContent().props('activeViewer')).toEqual({
         fileType: 'markup',
@@ -221,6 +214,8 @@ describe('Blob content viewer component', () => {
     });
 
     it('updates viewer type when viewer changed is clicked', async () => {
+      await createComponent({ blob: richViewerMock });
+
       expect(findBlobContent().props('activeViewer')).toEqual(
         expect.objectContaining({
           type: 'rich',
@@ -241,164 +236,157 @@ describe('Blob content viewer component', () => {
   });
 
   describe('legacy viewers', () => {
-    it('does not load a legacy viewer when a rich viewer is not available', async () => {
-      createComponentWithApollo({ blobs: simpleMockData });
-      await waitForPromises();
-
-      expect(mockAxios.history.get).toHaveLength(0);
-    });
-
-    it('loads a legacy viewer when a rich viewer is available', async () => {
-      createComponentWithApollo({ blobs: richMockData });
-      await waitForPromises();
+    it('loads a legacy viewer when a viewer component is not available', async () => {
+      await createComponent({ blob: { ...richViewerMock, fileType: 'unknown' } });
 
       expect(mockAxios.history.get).toHaveLength(1);
+      expect(mockAxios.history.get[0].url).toEqual('some_file.js?format=json&viewer=rich');
     });
   });
 
   describe('Blob viewer', () => {
     afterEach(() => {
       loadViewer.mockRestore();
-      viewerProps.mockRestore();
     });
 
-    it('does not render a BlobContent component if a Blob viewer is available', () => {
-      loadViewer.mockReturnValueOnce(() => true);
-      factory({ mockData: { blobInfo: richMockData } });
+    it('renders a CodeIntelligence component with the correct props', async () => {
+      loadViewer.mockReturnValue(SourceViewer);
 
+      await createComponent();
+
+      expect(findCodeIntelligence().props()).toMatchObject({
+        codeNavigationPath: simpleViewerMock.codeNavigationPath,
+        blobPath: simpleViewerMock.path,
+        pathPrefix: simpleViewerMock.projectBlobPathRoot,
+      });
+    });
+
+    it('does not load a CodeIntelligence component when no viewers are loaded', async () => {
+      const url = 'some_file.js?format=json&viewer=rich';
+      mockAxios.onGet(url).replyOnce(httpStatusCodes.INTERNAL_SERVER_ERROR);
+      await createComponent({ blob: { ...richViewerMock, fileType: 'unknown' } });
+
+      expect(findCodeIntelligence().exists()).toBe(false);
+    });
+
+    it('does not render a BlobContent component if a Blob viewer is available', async () => {
+      loadViewer.mockReturnValue(() => true);
+      await createComponent({ blob: richViewerMock });
+      await waitForPromises();
       expect(findBlobContent().exists()).toBe(false);
     });
 
     it.each`
-      viewer        | loadViewerReturnValue | viewerPropsReturnValue
-      ${'empty'}    | ${EmptyViewer}        | ${{}}
-      ${'download'} | ${DownloadViewer}     | ${{ filePath: '/some/file/path', fileName: 'test.js', fileSize: 100 }}
-      ${'text'}     | ${TextViewer}         | ${{ content: 'test', fileName: 'test.js', readOnly: true }}
-    `(
-      'renders viewer component for $viewer files',
-      async ({ viewer, loadViewerReturnValue, viewerPropsReturnValue }) => {
-        loadViewer.mockReturnValue(loadViewerReturnValue);
-        viewerProps.mockReturnValue(viewerPropsReturnValue);
+      viewer        | loadViewerReturnValue
+      ${'empty'}    | ${EmptyViewer}
+      ${'download'} | ${DownloadViewer}
+      ${'text'}     | ${SourceViewer}
+    `('renders viewer component for $viewer files', async ({ viewer, loadViewerReturnValue }) => {
+      loadViewer.mockReturnValue(loadViewerReturnValue);
 
-        factory({
-          mockData: {
-            blobInfo: {
-              ...simpleMockData,
-              fileType: null,
-              simpleViewer: {
-                ...simpleMockData.simpleViewer,
-                fileType: viewer,
-              },
-            },
+      createComponent({
+        blob: {
+          ...simpleViewerMock,
+          fileType: 'null',
+          simpleViewer: {
+            ...simpleViewerMock.simpleViewer,
+            fileType: viewer,
           },
-        });
+        },
+      });
 
-        await nextTick();
+      await waitForPromises();
 
-        expect(loadViewer).toHaveBeenCalledWith(viewer);
-        expect(wrapper.findComponent(loadViewerReturnValue).exists()).toBe(true);
-      },
-    );
+      expect(loadViewer).toHaveBeenCalledWith(viewer, false);
+      expect(wrapper.findComponent(loadViewerReturnValue).exists()).toBe(true);
+    });
   });
 
   describe('BlobHeader action slot', () => {
-    const { ideEditPath, editBlobPath } = simpleMockData;
+    const { ideEditPath, editBlobPath } = simpleViewerMock;
 
-    it('renders BlobHeaderEdit buttons in simple viewer', async () => {
-      fullFactory({
-        mockData: { blobInfo: simpleMockData },
-        stubs: {
-          BlobContent: true,
-          BlobReplace: true,
-        },
+    it('renders WebIdeLink button in simple viewer', async () => {
+      await createComponent({ inject: { BlobContent: true, BlobReplace: true } }, mount);
+
+      expect(findWebIdeLink().props()).toMatchObject({
+        editUrl: editBlobPath,
+        webIdeUrl: ideEditPath,
+        showEditButton: true,
+        showGitpodButton: applicationInfoMock.gitpodEnabled,
+        gitpodEnabled: userInfoMock.currentUser.gitpodEnabled,
+        showPipelineEditorButton: true,
+        gitpodUrl: simpleViewerMock.gitpodBlobUrl,
+        pipelineEditorUrl: simpleViewerMock.pipelineEditorPath,
+        userPreferencesGitpodPath: userInfoMock.currentUser.preferencesGitpodPath,
+        userProfileEnableGitpodPath: userInfoMock.currentUser.profileEnableGitpodPath,
       });
+    });
 
-      await nextTick();
+    it('renders WebIdeLink button in rich viewer', async () => {
+      await createComponent({ blob: richViewerMock }, mount);
 
-      expect(findBlobEdit().props()).toMatchObject({
-        editPath: editBlobPath,
-        webIdePath: ideEditPath,
+      expect(findWebIdeLink().props()).toMatchObject({
+        editUrl: editBlobPath,
+        webIdeUrl: ideEditPath,
         showEditButton: true,
       });
     });
 
-    it('renders BlobHeaderEdit button in rich viewer', async () => {
-      fullFactory({
-        mockData: { blobInfo: richMockData },
-        stubs: {
-          BlobContent: true,
-          BlobReplace: true,
-        },
-      });
+    it('renders WebIdeLink button for binary files', async () => {
+      await createComponent({ blob: richViewerMock, isBinary: true }, mount);
 
-      await nextTick();
-
-      expect(findBlobEdit().props()).toMatchObject({
-        editPath: editBlobPath,
-        webIdePath: ideEditPath,
-        showEditButton: true,
-      });
-    });
-
-    it('renders BlobHeaderEdit button for binary files', async () => {
-      fullFactory({
-        mockData: { blobInfo: richMockData, isBinary: true },
-        stubs: {
-          BlobContent: true,
-          BlobReplace: true,
-        },
-      });
-
-      await nextTick();
-
-      expect(findBlobEdit().props()).toMatchObject({
-        editPath: editBlobPath,
-        webIdePath: ideEditPath,
+      expect(findWebIdeLink().props()).toMatchObject({
+        editUrl: editBlobPath,
+        webIdeUrl: ideEditPath,
         showEditButton: false,
       });
     });
 
     describe('blob header binary file', () => {
-      it.each([richMockData, { simpleViewer: { fileType: 'download' } }])(
-        'passes the correct isBinary value when viewing a binary file',
-        async (blobInfo) => {
-          fullFactory({
-            mockData: {
-              blobInfo,
-              isBinary: true,
+      it('passes the correct isBinary value when viewing a binary file', async () => {
+        await createComponent({ blob: richViewerMock, isBinary: true });
+
+        expect(findBlobHeader().props('isBinary')).toBe(true);
+      });
+
+      it('passes the correct header props when viewing a non-text file', async () => {
+        await createComponent(
+          {
+            blob: {
+              ...simpleViewerMock,
+              simpleViewer: {
+                ...simpleViewerMock.simpleViewer,
+                fileType: 'image',
+              },
             },
-            stubs: { BlobContent: true, BlobReplace: true },
-          });
+            isBinary: true,
+          },
+          mount,
+        );
 
-          await nextTick();
-
-          expect(findBlobHeader().props('isBinary')).toBe(true);
-        },
-      );
+        expect(findBlobHeader().props('hideViewerSwitcher')).toBe(true);
+        expect(findBlobHeader().props('isBinary')).toBe(true);
+        expect(findWebIdeLink().props('showEditButton')).toBe(false);
+      });
     });
 
     describe('BlobButtonGroup', () => {
-      const { name, path, replacePath, webPath } = simpleMockData;
+      const { name, path, replacePath, webPath } = simpleViewerMock;
       const {
         userPermissions: { pushCode, downloadCode },
         repository: { empty },
-      } = projectMockData;
+      } = projectMock;
+
+      afterEach(() => {
+        delete gon.current_user_id;
+        delete gon.current_username;
+      });
 
       it('renders component', async () => {
         window.gon.current_user_id = 1;
+        window.gon.current_username = 'root';
 
-        fullFactory({
-          mockData: {
-            blobInfo: simpleMockData,
-            project: { userPermissions: { pushCode, downloadCode }, repository: { empty } },
-          },
-          stubs: {
-            BlobContent: true,
-            BlobButtonGroup: true,
-          },
-        });
-
-        await nextTick();
+        await createComponent({ pushCode, downloadCode, empty }, mount);
 
         expect(findBlobButtonGroup().props()).toMatchObject({
           name,
@@ -412,43 +400,10 @@ describe('Blob content viewer component', () => {
         });
       });
 
-      it.each`
-        canPushCode | canDownloadCode | canLock
-        ${true}     | ${true}         | ${true}
-        ${false}    | ${true}         | ${false}
-        ${true}     | ${false}        | ${false}
-      `('passes the correct lock states', async ({ canPushCode, canDownloadCode, canLock }) => {
-        fullFactory({
-          mockData: {
-            blobInfo: simpleMockData,
-            project: {
-              userPermissions: { pushCode: canPushCode, downloadCode: canDownloadCode },
-              repository: { empty },
-            },
-          },
-          stubs: {
-            BlobContent: true,
-            BlobButtonGroup: true,
-          },
-        });
-
-        await nextTick();
-
-        expect(findBlobButtonGroup().props('canLock')).toBe(canLock);
-      });
-
       it('does not render if not logged in', async () => {
-        window.gon.current_user_id = null;
+        isLoggedIn.mockReturnValueOnce(false);
 
-        fullFactory({
-          mockData: { blobInfo: simpleMockData },
-          stubs: {
-            BlobContent: true,
-            BlobReplace: true,
-          },
-        });
-
-        await nextTick();
+        await createComponent();
 
         expect(findBlobButtonGroup().exists()).toBe(false);
       });
@@ -456,11 +411,21 @@ describe('Blob content viewer component', () => {
   });
 
   describe('blob info query', () => {
-    it('is called with originalBranch value if the prop has a value', async () => {
-      const inject = { originalBranch: 'some-branch' };
-      createComponentWithApollo({ blobs: simpleMockData }, inject);
+    it.each`
+      highlightJs | shouldFetchRawText
+      ${true}     | ${true}
+      ${false}    | ${false}
+    `(
+      'calls blob info query with shouldFetchRawText: $shouldFetchRawText when highlightJs (feature flag): $highlightJs',
+      async ({ highlightJs, shouldFetchRawText }) => {
+        await createComponent({ highlightJs });
 
-      await waitForPromises();
+        expect(mockResolver).toHaveBeenCalledWith(expect.objectContaining({ shouldFetchRawText }));
+      },
+    );
+
+    it('is called with originalBranch value if the prop has a value', async () => {
+      await createComponent({ inject: { originalBranch: 'some-branch' } });
 
       expect(mockResolver).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -470,10 +435,7 @@ describe('Blob content viewer component', () => {
     });
 
     it('is called with ref value if the originalBranch prop has no value', async () => {
-      const inject = { originalBranch: null };
-      createComponentWithApollo({ blobs: simpleMockData }, inject);
-
-      await waitForPromises();
+      await createComponent();
 
       expect(mockResolver).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -481,5 +443,51 @@ describe('Blob content viewer component', () => {
         }),
       );
     });
+  });
+
+  describe('edit blob', () => {
+    beforeEach(() => createComponent({}, mount));
+
+    it('simple edit redirects to the simple editor', () => {
+      findWebIdeLink().vm.$emit('edit', 'simple');
+      expect(redirectTo).toHaveBeenCalledWith(simpleViewerMock.editBlobPath);
+    });
+
+    it('IDE edit redirects to the IDE editor', () => {
+      findWebIdeLink().vm.$emit('edit', 'ide');
+      expect(redirectTo).toHaveBeenCalledWith(simpleViewerMock.ideEditPath);
+    });
+
+    it.each`
+      loggedIn | canModifyBlob | createMergeRequestIn | forkProject | showForkSuggestion
+      ${true}  | ${false}      | ${true}              | ${true}     | ${true}
+      ${false} | ${false}      | ${true}              | ${true}     | ${false}
+      ${true}  | ${true}       | ${false}             | ${true}     | ${false}
+      ${true}  | ${true}       | ${true}              | ${false}    | ${false}
+    `(
+      'shows/hides a fork suggestion according to a set of conditions',
+      async ({
+        loggedIn,
+        canModifyBlob,
+        createMergeRequestIn,
+        forkProject,
+        showForkSuggestion,
+      }) => {
+        isLoggedIn.mockReturnValueOnce(loggedIn);
+        await createComponent(
+          {
+            blob: { ...simpleViewerMock, canModifyBlob },
+            createMergeRequestIn,
+            forkProject,
+          },
+          mount,
+        );
+
+        findWebIdeLink().vm.$emit('edit', 'simple');
+        await nextTick();
+
+        expect(findForkSuggestion().exists()).toBe(showForkSuggestion);
+      },
+    );
   });
 });

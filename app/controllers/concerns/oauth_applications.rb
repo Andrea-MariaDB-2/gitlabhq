@@ -3,6 +3,8 @@
 module OauthApplications
   extend ActiveSupport::Concern
 
+  CREATED_SESSION_KEY = :oauth_applications_created
+
   included do
     before_action :prepare_scopes, only: [:create, :update]
   end
@@ -15,7 +17,25 @@ module OauthApplications
     end
   end
 
+  def set_created_session
+    session[CREATED_SESSION_KEY] = true
+  end
+
+  def get_created_session
+    session.delete(CREATED_SESSION_KEY) || false
+  end
+
   def load_scopes
     @scopes ||= Doorkeeper.configuration.scopes
+  end
+
+  def permitted_params
+    %i{name redirect_uri scopes confidential expire_access_tokens}
+  end
+
+  def application_params
+    params
+      .require(:doorkeeper_application)
+      .permit(*permitted_params)
   end
 end

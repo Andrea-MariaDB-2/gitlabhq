@@ -5,6 +5,13 @@ module Ci
     attr_reader :project, :pipelines, :params, :current_user
 
     ALLOWED_INDEXED_COLUMNS = %w[id status ref updated_at user_id].freeze
+    ALLOWED_SCOPES = {
+      RUNNING: 'running',
+      PENDING: 'pending',
+      FINISHED: 'finished',
+      BRANCHES: 'branches',
+      TAGS: 'tags'
+    }.freeze
 
     def initialize(project, current_user, params = {})
       @project = project
@@ -25,7 +32,6 @@ module Ci
       items = by_status(items)
       items = by_ref(items)
       items = by_sha(items)
-      items = by_name(items)
       items = by_username(items)
       items = by_yaml_errors(items)
       items = by_updated_at(items)
@@ -66,15 +72,15 @@ module Ci
 
     def by_scope(items)
       case params[:scope]
-      when 'running'
+      when ALLOWED_SCOPES[:RUNNING]
         items.running
-      when 'pending'
+      when ALLOWED_SCOPES[:PENDING]
         items.pending
-      when 'finished'
+      when ALLOWED_SCOPES[:FINISHED]
         items.finished
-      when 'branches'
+      when ALLOWED_SCOPES[:BRANCHES]
         from_ids(ids_for_ref(branches))
-      when 'tags'
+      when ALLOWED_SCOPES[:TAGS]
         from_ids(ids_for_ref(tags))
       else
         items
@@ -109,17 +115,6 @@ module Ci
     def by_sha(items)
       if params[:sha].present?
         items.where(sha: params[:sha])
-      else
-        items
-      end
-    end
-    # rubocop: enable CodeReuse/ActiveRecord
-
-    # This method is deprecated and will be removed in 14.3
-    # rubocop: disable CodeReuse/ActiveRecord
-    def by_name(items)
-      if params[:name].present?
-        items.joins(:user).where(users: { name: params[:name] })
       else
         items
       end

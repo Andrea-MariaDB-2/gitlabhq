@@ -55,7 +55,7 @@ RSpec.describe Gitlab::Diff::PositionTracer::LineStrategy, :clean_gitlab_redis_c
   include PositionTracerHelpers
 
   let(:project) { create(:project, :repository) }
-  let(:current_user) { project.owner }
+  let(:current_user) { project.first_owner }
   let(:repository) { project.repository }
   let(:file_name) { "test-file" }
   let(:new_file_name) { "#{file_name}-new" }
@@ -295,8 +295,12 @@ RSpec.describe Gitlab::Diff::PositionTracer::LineStrategy, :clean_gitlab_redis_c
                     new_path: file_name,
                     new_line: 2,
                     line_range: {
-                      "start_line_code" => 1,
-                      "end_line_code"   => 2
+                      "start" => {
+                        "line_code" => 1
+                      },
+                      "end" => {
+                        "line_code" => 2
+                      }
                     }
                   )
                 end
@@ -575,19 +579,30 @@ RSpec.describe Gitlab::Diff::PositionTracer::LineStrategy, :clean_gitlab_redis_c
                     new_path: file_name,
                     new_line: 2,
                     line_range: {
-                      "start_line_code" => 1,
-                      "end_line_code"   => 2
+                      "start" => {
+                        "line_code" => 1
+                      },
+                      "end" => {
+                        "line_code" => 2
+                      }
                     }
                   )
                 end
 
-                it "returns the new position but drops line_range information" do
+                it "returns the new position" do
                   expect_change_position(
                     old_path: file_name,
                     new_path: file_name,
                     old_line: nil,
                     new_line: 2,
-                    line_range: nil
+                    line_range: {
+                      "start" => {
+                        "line_code" => 1
+                      },
+                      "end" => {
+                        "line_code" => 2
+                      }
+                    }
                   )
                 end
               end

@@ -2,13 +2,11 @@
 stage: Secure
 group: Static Analysis
 info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
-type: reference, howto
 ---
 
 # Static Application Security Testing (SAST) **(FREE)**
 
-> - [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/3775) in [GitLab Ultimate](https://about.gitlab.com/pricing/) 10.3.
-> - All open source (OSS) analyzers were moved to GitLab Free in GitLab 13.3.
+> All open source (OSS) analyzers were moved from GitLab Ultimate to GitLab Free in GitLab 13.3.
 
 NOTE:
 The whitepaper ["A Seismic Shift in Application Security"](https://about.gitlab.com/resources/whitepaper-seismic-shift-application-security/)
@@ -16,16 +14,17 @@ explains how 4 of the top 6 attacks were application based. Download it to learn
 organization.
 
 If you're using [GitLab CI/CD](../../../ci/index.md), you can use Static Application Security
-Testing (SAST) to check your source code for known vulnerabilities. When a pipeline completes,
-the results of the SAST analysis are processed and shown in the pipeline's Security tab. If the
-pipeline is associated with a merge request, the SAST analysis is compared with the results of
+Testing (SAST) to check your source code for known vulnerabilities.
+If the pipeline is associated with a merge request, the SAST analysis is compared with the results of
 the target branch's analysis (if available). The results of that comparison are shown in the merge
-request. **(ULTIMATE)** If the pipeline is running from the default branch, the results of the SAST
+request. If the pipeline is running from the default branch, the results of the SAST
 analysis are available in the [security dashboards](../security_dashboard/index.md).
 
 ![SAST results shown in the MR widget](img/sast_results_in_mr_v14_0.png)
 
 The results are sorted by the priority of the vulnerability:
+
+<!-- vale gitlab.SubstitutionWarning = NO -->
 
 1. Critical
 1. High
@@ -33,6 +32,8 @@ The results are sorted by the priority of the vulnerability:
 1. Low
 1. Info
 1. Unknown
+
+<!-- vale gitlab.SubstitutionWarning = YES -->
 
 A pipeline consists of multiple jobs, including SAST and DAST scanning. If any job fails to finish
 for any reason, the security dashboard does not show SAST scanner output. For example, if the SAST
@@ -48,13 +49,15 @@ the analyzer outputs an [exit code](../../../development/integrations/secure.md#
 
 ## Requirements
 
+SAST runs in the `test` stage, which is available by default. If you redefine the stages in the `.gitlab-ci.yml` file, the `test` stage is required.
+
 To run SAST jobs, by default, you need GitLab Runner with the
 [`docker`](https://docs.gitlab.com/runner/executors/docker.html) or
 [`kubernetes`](https://docs.gitlab.com/runner/install/kubernetes.html) executor.
 If you're using the shared runners on GitLab.com, this is enabled by default.
 
 WARNING:
-Our SAST jobs require a Linux container type. Windows containers are not yet supported.
+Our SAST jobs require a Linux/amd64 container type. Windows containers are not yet supported.
 
 WARNING:
 If you use your own runners, make sure the Docker version installed
@@ -71,10 +74,11 @@ You can also [view our language roadmap](https://about.gitlab.com/direction/secu
 | .NET Core                                                                                                                                         | [Security Code Scan](https://security-code-scan.github.io)                                                    | 11.0                                                                                    |
 | .NET Framework                                                                                                                                    | [Security Code Scan](https://security-code-scan.github.io)                                                    | 13.0                                                                                    |
 | Apex (Salesforce)                                                                                                                                 | [PMD](https://pmd.github.io/pmd/index.html)                                                                   | 12.1                                                                                    |
-| C                                                                                                                                            | [Semgrep](https://semgrep.dev)                                                                                | 14.2                                                                                    |
+| C                                                                                                                                                 | [Semgrep](https://semgrep.dev)                                                                                | 14.2                                                                                    |
 | C/C++                                                                                                                                             | [Flawfinder](https://github.com/david-a-wheeler/flawfinder)                                                   | 10.7                                                                                    |
 | Elixir (Phoenix)                                                                                                                                  | [Sobelow](https://github.com/nccgroup/sobelow)                                                                | 11.1                                                                                    |
 | Go                                                                                                                                                | [Gosec](https://github.com/securego/gosec)                                                                    | 10.7                                                                                    |
+| Go                                                                                                                                                | [Semgrep](https://semgrep.dev)                                                                                | 14.4                                                                                    |
 | Groovy ([Ant](https://ant.apache.org/), [Gradle](https://gradle.org/), [Maven](https://maven.apache.org/), and [SBT](https://www.scala-sbt.org/)) | [SpotBugs](https://spotbugs.github.io/) with the     [find-sec-bugs](https://find-sec-bugs.github.io/) plugin | 11.3 (Gradle) & 11.9 (Ant, Maven, SBT)                                                  |
 | Helm Charts                                                                                                                                       | [Kubesec](https://github.com/controlplaneio/kubesec)                                                          | 13.1                                                                                    |
 | Java ([Ant](https://ant.apache.org/), [Gradle](https://gradle.org/), [Maven](https://maven.apache.org/), and [SBT](https://www.scala-sbt.org/))   | [SpotBugs](https://spotbugs.github.io/) with the [find-sec-bugs](https://find-sec-bugs.github.io/) plugin     | 10.6 (Maven), 10.8 (Gradle) & 11.9 (Ant, SBT)                                           |
@@ -140,7 +144,7 @@ as shown in the following table:
 | Capability                                                                             | In Free             | In Ultimate        |
 |:---------------------------------------------------------------------------------------|:--------------------|:-------------------|
 | [Configure SAST Scanners](#configuration)                                              | **{check-circle}**  | **{check-circle}** |
-| [Customize SAST Settings](#customizing-the-sast-settings)                              | **{check-circle}**  | **{check-circle}** |
+| [Customize SAST Settings](#available-cicd-variables)                                   | **{check-circle}**  | **{check-circle}** |
 | View [JSON Report](#reports-json-format)                                               | **{check-circle}**  | **{check-circle}** |
 | Presentation of JSON Report in Merge Request                                           | **{dotted-circle}** | **{check-circle}** |
 | [Address vulnerabilities](../../application_security/vulnerabilities/index.md)         | **{dotted-circle}** | **{check-circle}** |
@@ -164,10 +168,9 @@ To configure SAST for a project you can:
 
 ### Configure SAST manually
 
-For GitLab 11.9 and later, to enable SAST you must [include](../../../ci/yaml/index.md#includetemplate)
+To enable SAST you must [include](../../../ci/yaml/index.md#includetemplate)
 the [`SAST.gitlab-ci.yml` template](https://gitlab.com/gitlab-org/gitlab/-/blob/master/lib/gitlab/ci/templates/Security/SAST.gitlab-ci.yml)
-provided as a part of your GitLab installation. For GitLab versions earlier than 11.9, you
-can copy and use the job as defined that template.
+provided as a part of your GitLab installation.
 
 Add the following to your `.gitlab-ci.yml` file:
 
@@ -180,48 +183,63 @@ The included template creates SAST jobs in your CI/CD pipeline and scans
 your project's source code for possible vulnerabilities.
 
 The results are saved as a
-[SAST report artifact](../../../ci/yaml/index.md#artifactsreportssast)
+[SAST report artifact](../../../ci/yaml/artifacts_reports.md#artifactsreportssast)
 that you can later download and analyze. Due to implementation limitations, we
 always take the latest SAST artifact available.
 
-### Configure SAST in the UI **(ULTIMATE)**
+### Configure SAST in the UI
 
-> - [Introduced](https://gitlab.com/groups/gitlab-org/-/epics/3659) in GitLab Ultimate 13.3.
-> - [Improved](https://gitlab.com/gitlab-org/gitlab/-/issues/232862) in GitLab Ultimate 13.4.
-> - [Improved](https://gitlab.com/groups/gitlab-org/-/epics/3635) in GitLab Ultimate 13.5.
+You can enable and configure SAST in the UI, either with default settings, or with customizations.
+Use the method that best meets your needs.
 
-You can enable and configure SAST with a basic configuration using the **SAST Configuration**
-page:
+- [Configure SAST in the UI with default settings](#configure-sast-in-the-ui-with-default-settings)
+- [Configure SAST in the UI with customizations](#configure-sast-in-the-ui-with-customizations)
 
-1. From the project's home page, go to **Security & Compliance** > **Configuration** in the
-   left sidebar.
-1. If the project does not have a `.gitlab-ci.yml` file, click **Enable** in the Static Application Security Testing (SAST) row, otherwise click **Configure**.
+### Configure SAST in the UI with default settings
+
+> [Introduced](https://about.gitlab.com/releases/2021/02/22/gitlab-13-9-released/#security-configuration-page-for-all-users) in GitLab 13.9
+
+To enable and configure SAST with default settings:
+
+1. On the top bar, select **Menu > Projects** and find your project.
+1. On the left sidebar, select **Security & Compliance** > **Configuration**.
+1. In the SAST section, select `Enable via MR`.
+1. Review the draft MR that enables SAST with the default recommended settings in the
+   `.gitlab-ci.yml` file.
+1. Merge the MR to enable SAST. You should see SAST jobs run in that MR's pipeline.
+
+NOTE:
+The configuration tool works best with no existing `.gitlab-ci.yml` file, or with a minimal
+configuration file. If you have a complex GitLab configuration file it may not be parsed
+successfully, and an error may occur.
+
+### Configure SAST in the UI with customizations **(ULTIMATE)**
+
+> - [Introduced](https://gitlab.com/groups/gitlab-org/-/epics/3659) in GitLab 13.3.
+> - [Improved](https://gitlab.com/gitlab-org/gitlab/-/issues/232862) in GitLab 13.4.
+> - [Improved](https://gitlab.com/groups/gitlab-org/-/epics/3635) in GitLab 13.5.
+
+To enable and configure SAST with customizations:
+
+1. On the top bar, select **Menu > Projects** and find your project.
+1. On the left sidebar, select **Security & Compliance > Configuration**.
+1. If the project does not have a `.gitlab-ci.yml` file, select **Enable** in the Static Application
+   Security Testing (SAST) row, otherwise select **Configure**.
 1. Enter the custom SAST values.
 
-   Custom values are stored in the `.gitlab-ci.yml` file. For CI/CD variables not in the SAST Configuration page, their values are left unchanged. Default values are inherited from the GitLab SAST template.
+   Custom values are stored in the `.gitlab-ci.yml` file. For CI/CD variables not in the SAST
+   Configuration page, their values are left unchanged. Default values are inherited from the GitLab
+   SAST template.
 
-1. Optionally, expand the **SAST analyzers** section, select individual [SAST analyzers](analyzers.md) and enter custom analyzer values.
-1. Click **Create Merge Request**.
+1. Optionally, expand the **SAST analyzers** section, select individual
+   [SAST analyzers](analyzers.md) and enter custom analyzer values.
+1. Select **Create Merge Request**.
 1. Review and merge the merge request.
 
-### Customizing the SAST settings
-
-The SAST settings can be changed through [CI/CD variables](#available-cicd-variables)
-by using the
-[`variables`](../../../ci/yaml/index.md#variables) parameter in `.gitlab-ci.yml`.
-In the following example, we include the SAST template and at the same time we
-set the `SAST_GOSEC_LEVEL` variable to `2`:
-
-```yaml
-include:
-  - template: Security/SAST.gitlab-ci.yml
-
-variables:
-  SAST_GOSEC_LEVEL: 2
-```
-
-Because the template is [evaluated before](../../../ci/yaml/index.md#include)
-the pipeline configuration, the last mention of the variable takes precedence.
+NOTE:
+The configuration tool works best with no existing `.gitlab-ci.yml` file, or with a minimal
+configuration file. If you have a complex GitLab configuration file it may not be parsed
+successfully, and an error may occur.
 
 ### Overriding SAST jobs
 
@@ -250,29 +268,35 @@ versions are pulled, there are certain cases where it can be beneficial to pin
 an analyzer to a specific release. To do so, override the `SAST_ANALYZER_IMAGE_TAG` CI/CD variable
 in the job template directly.
 
-In the example below, we are pinning to a specific patch version of the `spotbugs` analyzer:
+In the example below, we pin to a minor version of the `semgrep` analyzer and a specific patch version of the `brakeman` analyzer:
 
 ```yaml
 include:
   - template: Security/SAST.gitlab-ci.yml
 
-spotbugs-sast:
+semgrep-sast:
   variables:
-    SAST_ANALYZER_IMAGE_TAG: "2.28.1"
+    SAST_ANALYZER_IMAGE_TAG: "2.16"
+
+brakeman-sast:
+  variables:
+    SAST_ANALYZER_IMAGE_TAG: "2.21.1"
 ```
 
 ### Customize rulesets **(ULTIMATE)**
 
-> [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/235382) in GitLab 13.5.
+> - [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/235382) in GitLab 13.5.
+> - [Added](https://gitlab.com/gitlab-org/gitlab/-/issues/339614) support for
+>   passthrough chains. Expanded to include additional passthrough types of `file`, `git`, and `url` in GitLab 14.6.
+> - [Added](https://gitlab.com/gitlab-org/gitlab/-/issues/235359) support for overriding rules in GitLab 14.8.
 
 You can customize the default scanning rules provided by our SAST analyzers.
+Ruleset customization supports the following that can be used
+simultaneously:
 
-Ruleset customization supports two capabilities:
-
-1. Disabling predefined rules (available for all analyzers).
-1. Modifying the default behavior of a given analyzer (only available for `nodejs-scan` and `gosec`).
-
-These capabilities can be used simultaneously.
+- [Disabling predefined rules](index.md#disable-predefined-analyzer-rules). Available for all analyzers.
+- [Overriding predefined rules](index.md#override-predefined-analyzer-rules). Available for all analyzers.
+- Modifying the default behavior of a given analyzer by [synthesizing and passing a custom configuration](index.md#synthesize-a-custom-configuration). Available for only `nodejs-scan`, `gosec`, and `semgrep`.
 
 To customize the default scanning rules, create a file containing custom rules. These rules
 are passed through to the analyzer's underlying scanner tools.
@@ -281,85 +305,363 @@ To create a custom ruleset:
 
 1. Create a `.gitlab` directory at the root of your project, if one doesn't already exist.
 1. Create a custom ruleset file named `sast-ruleset.toml` in the `.gitlab` directory.
-1. In the `sast-ruleset.toml` file, do one of the following:
 
-   - Disable predefined rules belonging to SAST analyzers. In this example, the three disabled rules
-     belong to `eslint` and `sobelow` by matching the corresponding identifiers' `type` and `value`:
+#### Disable predefined analyzer rules
 
-     ```toml
-     [eslint]
-       [[eslint.ruleset]]
-         disable = true
-         [eslint.ruleset.identifier]
-           type = "eslint_rule_id"
-           value = "security/detect-object-injection"
+To disable analyzer rules:
 
-       [[eslint.ruleset]]
-         disable = true
-         [eslint.ruleset.identifier]
-           type = "cwe"
-           value = "185"
+1. Set the `disabled` flag to `true` in the context of a `ruleset` section
 
-     [sobelow]
-       [[sobelow.ruleset]]
-         disable = true
-         [sobelow.ruleset.identifier]
-           type = "sobelow_rule_id"
-           value = "sql_injection"
-     ```
+1. In one or more `ruleset.identifier` sub sections, list the rules that you want disabled. Every `ruleset.identifier` section has:
 
-   - Define a custom analyzer configuration. In this example, customized rules are defined for the
-     `nodejs-scan` scanner:
+- a `type` field, to name the predefined rule identifier that the targeted analyzer uses.
+- a `value` field, to name the rule to be disabled.
 
-     ```toml
-     [nodejs-scan]
-       description = 'custom ruleset for nodejs-scan'
+##### Example: Disable predefined rules of SAST analyzers
 
-       [[nodejs-scan.passthrough]]
-         type  = "raw"
-         value = '''
-     - nodejs-extensions:
-       - .js
+In the following example, the disabled rules are assigned to `eslint`
+and `sobelow` by matching the `type` and `value` of identifiers:
 
-       template-extensions:
-       - .new
-       - .hbs
-       - ''
+```toml
+[eslint]
+  [[eslint.ruleset]]
+    disable = true
+    [eslint.ruleset.identifier]
+      type = "eslint_rule_id"
+      value = "security/detect-object-injection"
 
-       ignore-filenames:
-     - skip.js
+  [[eslint.ruleset]]
+    disable = true
+    [eslint.ruleset.identifier]
+      type = "cwe"
+      value = "185"
 
-       ignore-paths:
-       - __MACOSX
-       - skip_dir
-       - node_modules
+[sobelow]
+  [[sobelow.ruleset]]
+    disable = true
+    [sobelow.ruleset.identifier]
+      type = "sobelow_rule_id"
+      value = "sql_injection"
+```
 
-       ignore-extensions:
-       - .hbs
+Those vulnerabilities containing the provided type and value are now disabled, meaning
+they won't be displayed in Merge Request nor the Vulnerability Report.
 
-       ignore-rules:
-       - regex_injection_dos
-       - pug_jade_template
-       - express_xss
+#### Override predefined analyzer rules
 
-     '''
-     ```
+To override analyzer rules:
 
-   - Provide the name of the file containing a custom analyzer configuration. In this example,
-     customized rules for the `gosec` scanner are contained in the file `gosec-config.json`:
+1. In one or more `ruleset.identifier` subsections, list the rules that you want to override. Every `ruleset.identifier` section has:
 
-     ```toml
-     [gosec]
-       description = 'custom ruleset for gosec'
+   - a `type` field, to name the predefined rule identifier that the targeted analyzer uses.
+   - a `value` field, to name the rule to be overridden.
 
-       [[gosec.passthrough]]
-         type  = "file"
-         value = "gosec-config.json"
-     ```
+1. In the `ruleset.override` context of a `ruleset` section,
+   provide the keys to override. Any combination of keys can be
+   overridden. Valid keys are:
+
+   - description
+   - message
+   - name
+   - severity (valid options are: Critical, High, Medium, Low, Unknown, Info)
+
+##### Example: Override predefined rules of SAST analyzers
+
+Before adding a ruleset, we verify which vulnerability will be overwritten by viewing the [`gl-sast-report.json`](#reports-json-format):
+
+```json
+"identifiers": [
+        {
+          "type": "gosec_rule_id",
+          "name": "Gosec Rule ID G307",
+          "value": "G307"
+        },
+        {
+          "type": "CWE",
+          "name": "CWE-703",
+          "value": "703",
+          "url": "https://cwe.mitre.org/data/definitions/703.html"
+        }
+      ]
+```
+
+In the following example, rules from `gosec` are matched by the `type`
+and `value` of identifiers and then overridden:
+
+```toml
+[gosec]
+  [[gosec.ruleset]]
+    [gosec.ruleset.identifier]
+        type = "CWE"
+        value = "703"
+    [gosec.ruleset.override]
+      severity = "Critical"
+```
+
+If a vulnerability is found with a type `CWE` with a value of `703` then
+the vulnerability severity is overwritten to `Critical`. 
+
+#### Synthesize a custom configuration
+
+To create a custom configuration, you can use passthrough chains.
+
+A passthrough is a single step in a passthrough chain. The passthrough is evaluated
+in a sequence to incrementally build a configuration. The configuration is then
+passed to the target analyzer.
+
+A configuration section for an analyzer has the following
+parameters:
+
+| Parameter     | Explanation |
+| ------------- | ------ |
+| `description` | Description about the analyzer configuration section. |
+| `targetdir`   | The `targetdir` parameter defines the directory where the final configuration is located. If `targetdir` is empty, the analyzer uses a random directory. The maximum size of `targetdir` is 100MB. |
+| `validate`    | If set to `true`, the target files for passthroughs (`raw`, `file` and `url`) are validated. The validation works for `yaml`, `xml`, `json` and `toml` files. The proper validator is identified based on the extension of the target file. By default, `validate` is set to `false`. |
+| `interpolate` | If set to `true`, environment variable interpolation is enabled so that the configuration uses secrets/tokens. We advise using this feature with caution to not leak any secrets. By default, `interpolate` is set to `false`. |
+| `timeout`     | The total `timeout` for the evaluation of a passthrough chain is set to 60 seconds. If `timeout` is not set, the default timeout is 60 seconds. The timeout cannot exceed 300 seconds. |
+
+A configuration section can include one or more passthrough sections. The maximum number of passthrough sections is 20.
+There are several types of passthroughs:
+
+| Type   | Description |
+| ------ | ------ |
+| `file` | Use a file that is already available in the Git repository. |
+| `raw`  | Provide the configuration inline. |
+| `git`  | Pull the configuration from a remote Git repository. |
+| `url`  | Fetch the analyzer configuration through HTTP. |
+
+If multiple passthrough sections are defined in a passthrough chain, their
+position in the chain defines the order in which they are evaluated.
+
+- Passthroughs listed later in the chain sequence have a higher precedence.
+- Passthroughs with a higher precedence overwrite (default) and append data
+  yielded by previous passthroughs. This is useful for cases where you need to
+  use or modify an existing configuration.
+
+Configure a passthrough these parameters:
+
+| Parameter     | Explanation |
+| ------------ | ----------- |
+| `type`       | One of `file`, `raw`, `git` or `url`. |
+| `target`     | The target file that contains the data written by the passthrough evaluation. If no value is provided, a random target file is generated. |
+| `mode`       | `overwrite`: if `target` exists, overwrites the file; `append`: append to file instead. The default is `overwrite`. |
+| `ref`        | This option only applies to the `git` passthrough type and contains the name of the branch or the SHA to be used. |
+| `subdir`     | This option only applies to the `git` passthrough type and can be used to only consider a certain subdirectory of the source Git repository. |
+| `value`      | For the `file` `url` and `git` types, `value` defines the source location of the file/Git repository; for the `raw` type, `value` carries the raw content to be passed through. |
+| `validator`  | Can be used to explicitly invoke validators (`xml`, `yaml`, `json`, `toml`) on the target files after the application of a passthrough. Per default, no validator is set. |
+
+The amount of data generated by a single passthrough is limited to 1MB.
+
+#### Passthrough configuration examples
+
+##### Raw passthrough for nodejs-scan
+
+Define a custom analyzer configuration. In this example, customized rules are
+defined for the `nodejs-scan` scanner:
+
+```toml
+[nodejs-scan]
+  description = 'custom ruleset for nodejs-scan'
+
+  [[nodejs-scan.passthrough]]
+    type  = "raw"
+    value = '''
+- nodejs-extensions:
+  - .js
+
+  template-extensions:
+  - .new
+  - .hbs
+  - ''
+
+  ignore-filenames:
+- skip.js
+
+  ignore-paths:
+  - __MACOSX
+  - skip_dir
+  - node_modules
+
+  ignore-extensions:
+  - .hbs
+
+  ignore-rules:
+  - regex_injection_dos
+  - pug_jade_template
+  - express_xss
+
+'''
+```
+
+##### File passthrough for gosec
+
+Provide the name of the file containing a custom analyzer configuration. In
+this example, customized rules for the `gosec` scanner are contained in the
+file `gosec-config.json`:
+
+```toml
+[gosec]
+  description = 'custom ruleset for gosec'
+
+  [[gosec.passthrough]]
+    type  = "file"
+    value = "gosec-config.json"
+```
+
+##### Passthrough chain for semgrep
+
+In the below example, we generate a custom configuration under the `/sgrules`
+target directory with a total `timeout` of 60 seconds.
+
+Several passthrouh types generate a configuration for the target analyzer:
+
+- Two `git` passthrough sections pull the head of branch
+  `refs/remotes/origin/test` from the `myrules` Git repository, and revision
+  `97f7686` from the `sast-rules` Git repostory. From the `sast-rules` Git
+  repository, only data from the `go` subdirectory is considered.
+  - The `sast-rules` entry has a higher precedence because it appears later in
+    the configuration.
+  - If there is a filename collision between files in both repositories, files
+    from the `sast` repository overwrite files from the `myrules` repository,
+    as `sast-rules` has higher precedence.  
+- The `raw` entry creates a file named `insecure.yml` under `/sgrules`. The
+  full path is `/sgrules/insecure.yml`.
+- The `url` entry fetches a configuration made available through a URL and
+  stores it in the `/sgrules/gosec.yml` file.
+
+Afterwards, semgrep is invoked with the final configuration located under
+`/sgrules`.
+
+```toml
+[semgrep]
+  description = 'semgrep custom rules configuration'
+  targetdir = "/sgrules"
+  timeout = 60
+
+  [[semgrep.passthrough]]
+    type  = "git"
+    value = "https://gitlab.com/user/myrules.git"
+    ref = "refs/remotes/origin/test"
+
+  [[semgrep.passthrough]]
+    type  = "git"
+    value = "https://gitlab.com/gitlab-org/secure/gsoc-sast-vulnerability-rules/playground/sast-rules.git"
+    ref = "97f7686db058e2141c0806a477c1e04835c4f395"
+    subdir = "go"
+
+  [[semgrep.passthrough]]
+    type  = "raw"
+    target = "insecure.yml"
+    value = """
+rules:
+- id: "insecure"
+  patterns:
+  - pattern: "func insecure() {...}"
+  message: |
+    Insecure function insecure detected
+  metadata:
+    cwe: "CWE-200: Exposure of Sensitive Information to an Unauthorized Actor"
+  severity: "ERROR"
+  languages:
+  - "go"
+    """
+
+  [[semgrep.passthrough]]
+    type  = "url"
+    value = "https://semgrep.dev/c/p/gosec"
+    target = "gosec.yml"
+```
+
+##### Interpolation
+
+The code snippet below shows an example configuration that uses an environment
+variable `$GITURL` to access a private repositories with a Git URL. The variable contains
+a username and token in the `value` field (for example `https://user:token@url`).
+It does not explicitly store credentials in the configuration file. To reduce the risk of leaking secrets through created paths and files, use this feature with caution.
+
+```toml
+[semgrep]
+  description = 'semgrep custom rules configuration'
+  targetdir = "/sgrules"
+  interpolate = true
+
+  [[semgrep.passthrough]]
+    type  = "git"
+    value = "$GITURL"
+    ref = "refs/remotes/origin/main"
+```
+
+##### Configure the append mode for passthroughs
+
+To append data to previous passthroughs, use the `append` mode for the
+passthrough types `file`, `url`, and `raw`.
+
+Passthroughs in `override` mode overwrite files
+created when preceding passthroughs in the chain find a naming
+collision. If `mode` is set to `append`, a passthrough appends data to the
+files created by its predecessors instead of overwriting.
+
+In the below semgrep configuration,`/sgrules/insecure.yml` assembles two passthroughs. The rules are:
+
+- `insecure`
+- `secret`
+
+These rules add a search pattern to the analyzer and extends semgrep capabilities.
+
+For passthrough chains we recommend that you enable validation. To enable validation,
+you can either:
+
+- set `validate` to `true`
+
+- set a passthrough `validator` to `xml`, `json`, `yaml`, or `toml`.
+
+```toml
+[semgrep]
+  description = 'semgrep custom rules configuration'
+  targetdir = "/sgrules"
+  validate = true
+
+  [[semgrep.passthrough]]
+    type  = "raw"
+    target = "insecure.yml"
+    value = """
+rules:
+- id: "insecure"
+  patterns:
+  - pattern: "func insecure() {...}"
+  message: |
+    Insecure function insecure detected
+  metadata:
+    cwe: "...
+  severity: "ERROR"
+  languages:
+  - "go"
+"""
+
+  [[semgrep.passthrough]]
+    type  = "raw"
+    mode  = "append"
+    target = "insecure.yml"
+    value = """
+- id: "secret"
+  patterns:
+  - pattern-either:
+    - pattern: "$MASK = \"...\""
+  - metavariable-regex:
+      metavariable: "$MASK"
+      regex: "(password|pass|passwd|pwd|secret|token)"
+  message: |
+    Use of Hard-coded Password
+    cwe: "..."
+  severity: "ERROR"
+  languages:
+  - "go"
+"""
+```
 
 ### False Positive Detection **(ULTIMATE)**
 
-> [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/292686) in GitLab 14.2.
+> Introduced in GitLab 14.2.
 
 Vulnerabilities that have been detected and are false positives will be flagged as false positives in the security dashboard.
 
@@ -371,6 +673,25 @@ repositories and thus require credentials like username and password to download
 Depending on the analyzer, such credentials can be provided to
 it via [custom CI/CD variables](#custom-cicd-variables).
 
+#### Using a CI/CD variable to pass username and password to a private Go repository
+
+If your Go project depends on private modules, see
+[Fetch modules from private projects](../../packages/go_proxy/index.md#fetch-modules-from-private-projects)
+for how to provide authentication over HTTPS.
+
+To specify credentials via `~/.netrc` provide a `before_script` containing the following:
+
+```yaml
+gosec-sast:
+  before_script:
+    - |
+      cat <<EOF > ~/.netrc
+      machine gitlab.com
+      login $CI_DEPLOY_USER
+      password $CI_DEPLOY_PASSWORD
+      EOF
+```
+
 #### Using a CI/CD variable to pass username and password to a private Maven repository
 
 If your private Maven repository requires login credentials,
@@ -380,7 +701,7 @@ Read more on [how to use private Maven repositories](../index.md#using-private-m
 
 ### Enabling Kubesec analyzer
 
-> [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/12752) in GitLab Ultimate 12.6.
+> [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/12752) in GitLab 12.6.
 
 You need to set `SCAN_KUBERNETES_MANIFESTS` to `"true"` to enable the
 Kubesec analyzer. In `.gitlab-ci.yml`, define:
@@ -395,15 +716,33 @@ variables:
 
 ### Pre-compilation
 
-If your project requires custom build configurations, it can be preferable to avoid
-compilation during your SAST execution and instead pass all job artifacts from an
-earlier stage in the pipeline. This is the current strategy when requiring
-a `before_script` execution to prepare your scan job.
+Most GitLab SAST analyzers directly scan your source code without compiling it first.
+However, for technical reasons, some analyzers can only scan compiled code.
 
-To pass your project's dependencies as artifacts, the dependencies must be included
-in the project's working directory and specified using the `artifacts:path` configuration.
-If all dependencies are present, the `COMPILE=false` CI/CD variable can be provided to the
-analyzer and compilation is skipped:
+By default, these analyzers automatically attempt to fetch dependencies and compile your code so it can be scanned.
+Automatic compilation can fail if:
+
+- your project requires custom build configurations.
+- you use language versions that aren't built into the analyzer.
+
+To resolve these issues, you can skip the analyzer's compilation step and directly provide artifacts from an earlier stage in your pipeline instead.
+This strategy is called _pre-compilation_.
+
+Pre-compilation is available for the analyzers that support the `COMPILE` CI/CD variable.
+See [Analyzer settings](#analyzer-settings) for the current list.
+
+To use pre-compilation:
+
+1. Output your project's dependencies to a directory in the project's working directory, then save that directory as an artifact by [setting the `artifacts: paths` configuration](../../../ci/yaml/index.md#artifactspaths).
+1. Provide the `COMPILE: "false"` CI/CD variable to the analyzer to disable automatic compilation.
+1. Add your compilation stage as a dependency for the analyzer job.
+
+To allow the analyzer to recognize the compiled artifacts, you must explicitly specify the path to
+the vendored directory.
+This configuration can vary per analyzer. For Maven projects, you can use `MAVEN_REPO_PATH`.
+See [Analyzer settings](#analyzer-settings) for the complete list of available options.
+
+The following example pre-compiles a Maven project and provides it to the SpotBugs SAST analyzer:
 
 ```yaml
 stages:
@@ -434,14 +773,22 @@ spotbugs-sast:
       sast: gl-sast-report.json
 ```
 
-To allow the analyzer to recognize the compiled artifacts, you must explicitly specify the path to
-the vendored directory. This configuration can vary per analyzer but in the case of Java above, you
-can use `MAVEN_REPO_PATH`. See
-[Analyzer settings](#analyzer-settings) for the complete list of available options.
-
 ### Available CI/CD variables
 
-SAST can be [configured](#customizing-the-sast-settings) using CI/CD variables.
+SAST can be configured using the [`variables`](../../../ci/yaml/index.md#variables) parameter in
+`.gitlab-ci.yml`.
+
+The following example includes the SAST template to override the `SAST_GOSEC_LEVEL`
+variable to `2`. The template is [evaluated before](../../../ci/yaml/index.md#include) the pipeline
+configuration, so the last mention of the variable takes precedence.
+
+```yaml
+include:
+  - template: Security/SAST.gitlab-ci.yml
+
+variables:
+  SAST_GOSEC_LEVEL: 2
+```
 
 #### Logging level
 
@@ -522,20 +869,22 @@ Some analyzers can be customized with CI/CD variables.
 | `SAST_GOSEC_CONFIG`         | Gosec      | **{warning}** **[Removed](https://gitlab.com/gitlab-org/gitlab/-/issues/328301)** in GitLab 14.0 - use custom rulesets instead. Path to configuration for Gosec (optional).                                                                                                                                                                                        |
 | `PHPCS_SECURITY_AUDIT_PHP_EXTENSIONS` | phpcs-security-audit | Comma separated list of additional PHP Extensions.                                                                                                                                                             |
 | `SAST_DISABLE_BABEL`        | NodeJsScan | **{warning}** **[Removed](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/64025)** in GitLab 13.5 |
-| `SAST_SEMGREP_METRICS` | Semgrep | Set to `"false"` to disable sending anonymized scan metrics to [r2c](https://r2c.dev/). Default: `true`. [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/330565) in GitLab 14.0.      |
+| `SAST_SEMGREP_METRICS` | Semgrep | Set to `"false"` to disable sending anonymized scan metrics to [r2c](https://r2c.dev/). Default: `true`. Introduced in GitLab 14.0 from the [confidential issue](../../project/issues/confidential_issues.md) `https://gitlab.com/gitlab-org/gitlab/-/issues/330565`.      |
 
 #### Custom CI/CD variables
 
-> [Introduced](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/18193) in GitLab Ultimate 12.5.
+> [Introduced](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/18193) in GitLab 12.5.
 
 In addition to the aforementioned SAST configuration CI/CD variables,
 all [custom variables](../../../ci/variables/index.md#custom-cicd-variables) are propagated
 to the underlying SAST analyzer images if
 [the SAST vendored template](#configuration) is used.
 
-WARNING:
-Variables having names starting with these prefixes are **not** propagated to the SAST Docker container and/or
-analyzer containers: `DOCKER_`, `CI`, `GITLAB_`, `FF_`, `HOME`, `PWD`, `OLDPWD`, `PATH`, `SHLVL`, `HOSTNAME`.
+NOTE:
+In [GitLab 13.3 and earlier](https://gitlab.com/gitlab-org/gitlab/-/issues/220540),
+variables whose names started with the following prefixes are **not** propagated to either the
+analyzer containers or SAST Docker container: `DOCKER_`, `CI`, `GITLAB_`, `FF_`, `HOME`, `PWD`,
+`OLDPWD`, `PATH`, `SHLVL`, `HOSTNAME`.
 
 ### Experimental features
 
@@ -560,86 +909,18 @@ variables:
 
 ## Reports JSON format
 
-The SAST tool emits a JSON report file. For more information, see the
-[schema for this report](https://gitlab.com/gitlab-org/security-products/security-report-schemas/-/blob/master/dist/sast-report-format.json).
+SAST outputs a report file in JSON format. The report file contains details of all found vulnerabilities.
+To download the report file, you can either:
 
-The JSON report file can be downloaded from the CI pipelines page, or the
-pipelines tab on merge requests by [setting `artifacts: paths`](../../../ci/yaml/index.md#artifactspaths) to `gl-sast-report.json`. For more information see [Downloading artifacts](../../../ci/pipelines/job_artifacts.md).
+- Download the file from the CI/CD pipelines page.
+- In the pipelines tab on merge requests, set [`artifacts: paths`](../../../ci/yaml/index.md#artifactspaths) to `gl-sast-report.json`.
 
-Here's an example SAST report:
+For information, see [Download job artifacts](../../../ci/pipelines/job_artifacts.md#download-job-artifacts).
 
-```json-doc
-{
-  "version": "2.0",
-  "vulnerabilities": [
-    {
-      "id": "9e96e0ab-23da-4d7d-a09e-0acbaa5e83ca",
-      "category": "sast",
-      "name": "Predictable pseudorandom number generator",
-      "message": "Predictable pseudorandom number generator",
-      "description": "The use of java.util.Random is predictable",
-      "severity": "Medium",
-      "confidence": "Medium",
-      "scanner": {
-        "id": "find_sec_bugs",
-        "name": "Find Security Bugs"
-      },
-      "location": {
-        "file": "groovy/src/main/groovy/com/gitlab/security_products/tests/App.groovy",
-        "start_line": 47,
-        "end_line": 47,
-        "class": "com.gitlab.security_products.tests.App",
-        "method": "generateSecretToken2",
-        "dependency": {
-          "package": {}
-        }
-      },
-      "identifiers": [
-        {
-          "type": "find_sec_bugs_type",
-          "name": "Find Security Bugs-PREDICTABLE_RANDOM",
-          "value": "PREDICTABLE_RANDOM",
-          "url": "https://find-sec-bugs.github.io/bugs.htm#PREDICTABLE_RANDOM"
-        },
-        {
-          "type": "cwe",
-          "name": "CWE-330",
-          "value": "330",
-          "url": "https://cwe.mitre.org/data/definitions/330.html"
-        }
-      ]
-    },
-    {
-      "id": "e6dbf91f-4c07-46f7-a365-0169489c27d1",
-      "category": "sast",
-      "message": "Probable insecure usage of temp file/directory.",
-      "severity": "Medium",
-      "confidence": "Medium",
-      "scanner": {
-        "id": "bandit",
-        "name": "Bandit"
-      },
-      "location": {
-        "file": "python/hardcoded/hardcoded-tmp.py",
-        "start_line": 10,
-        "end_line": 10,
-        "dependency": {
-          "package": {}
-        }
-      },
-      "identifiers": [
-        {
-          "type": "bandit_test_id",
-          "name": "Bandit Test ID B108",
-          "value": "B108",
-          "url": "https://docs.openstack.org/bandit/latest/plugins/b108_hardcoded_tmp_directory.html"
-        }
-      ]
-    },
-  ],
-  "remediations": []
-}
-```
+For details of the report file's schema, see
+[SAST report file schema](https://gitlab.com/gitlab-org/security-products/security-report-schemas/-/blob/master/dist/sast-report-format.json).
+
+For an example SAST report file, see [`gl-secret-detection-report.json`](https://gitlab.com/gitlab-org/security-products/analyzers/secrets/-/blob/master/qa/expect/secrets/gl-secret-detection-report.json) example.
 
 ## Running SAST in an offline environment
 
@@ -669,24 +950,24 @@ import the following default SAST analyzer images from `registry.gitlab.com` int
 [local Docker container registry](../../packages/container_registry/index.md):
 
 ```plaintext
-registry.gitlab.com/gitlab-org/security-products/analyzers/bandit:2
-registry.gitlab.com/gitlab-org/security-products/analyzers/brakeman:2
-registry.gitlab.com/gitlab-org/security-products/analyzers/eslint:2
-registry.gitlab.com/gitlab-org/security-products/analyzers/flawfinder:2
-registry.gitlab.com/gitlab-org/security-products/analyzers/gosec:2
-registry.gitlab.com/gitlab-org/security-products/analyzers/kubesec:2
-registry.gitlab.com/gitlab-org/security-products/analyzers/nodejs-scan:2
-registry.gitlab.com/gitlab-org/security-products/analyzers/phpcs-security-audit:2
-registry.gitlab.com/gitlab-org/security-products/analyzers/pmd-apex:2
-registry.gitlab.com/gitlab-org/security-products/analyzers/security-code-scan:2
-registry.gitlab.com/gitlab-org/security-products/analyzers/semgrep:2
-registry.gitlab.com/gitlab-org/security-products/analyzers/sobelow:2
-registry.gitlab.com/gitlab-org/security-products/analyzers/spotbugs:2
+registry.gitlab.com/security-products/sast/bandit:2
+registry.gitlab.com/security-products/sast/brakeman:2
+registry.gitlab.com/security-products/sast/eslint:2
+registry.gitlab.com/security-products/sast/flawfinder:2
+registry.gitlab.com/security-products/sast/gosec:3
+registry.gitlab.com/security-products/sast/kubesec:2
+registry.gitlab.com/security-products/sast/nodejs-scan:2
+registry.gitlab.com/security-products/sast/phpcs-security-audit:2
+registry.gitlab.com/security-products/sast/pmd-apex:2
+registry.gitlab.com/security-products/sast/security-code-scan:2
+registry.gitlab.com/security-products/sast/semgrep:2
+registry.gitlab.com/security-products/sast/sobelow:2
+registry.gitlab.com/security-products/sast/spotbugs:2
 ```
 
 The process for importing Docker images into a local offline Docker registry depends on
 **your network security policy**. Please consult your IT staff to find an accepted and approved
-process by which external resources can be imported or temporarily accessed. These scanners are [periodically updated](../vulnerabilities/index.md#vulnerability-scanner-maintenance)
+process by which external resources can be imported or temporarily accessed. These scanners are [periodically updated](../index.md#vulnerability-scanner-maintenance)
 with new definitions, and you may be able to make occasional updates on your own.
 
 For details on saving and transporting Docker images as a file, see Docker's documentation on
@@ -797,6 +1078,12 @@ For Maven builds, add the following to your `pom.xml` file:
 </properties>
 ```
 
+### SpotBugs Error: `Project couldn't be built`
+
+If your job is failing at the build step with the message "Project couldn't be built", it's most likely because your job is asking SpotBugs to build with a tool that isn't part of its default tools. For a list of the SpotBugs default tools, see [SpotBugs' asdf dependencies](https://gitlab.com/gitlab-org/security-products/analyzers/spotbugs/-/raw/master/config/.tool-versions).
+
+The solution is to use [pre-compilation](#pre-compilation). Pre-compilation ensures the images required by SpotBugs are available in the job's container.
+
 ### Flawfinder encoding error
 
 This occurs when Flawfinder encounters an invalid UTF-8 character. To fix this, convert all source code in your project to UTF-8 character encoding. This can be done with [`cvt2utf`](https://github.com/x1angli/cvt2utf) or [`iconv`](https://www.gnu.org/software/libiconv/documentation/libiconv-1.13/iconv.1.html) either over the entire project or per job using the [`before_script`](../../../ci/yaml/index.md#before_script) feature.
@@ -804,3 +1091,55 @@ This occurs when Flawfinder encounters an invalid UTF-8 character. To fix this, 
 ### Semgrep slowness, unexpected results, or other errors
 
 If Semgrep is slow, reports too many false positives or false negatives, crashes, fails, or is otherwise broken, see the Semgrep docs for [troubleshooting GitLab SAST](https://semgrep.dev/docs/troubleshooting/gitlab-sast/).
+
+### SAST job fails with message `strconv.ParseUint: parsing "0.0": invalid syntax`
+
+Invoking Docker-in-Docker is the likely cause of this error. Docker-in-Docker is:
+
+- Disabled by default in GitLab 13.0 and later.
+- Unsupported from GitLab 13.4 and later.
+
+Several workarounds are available. From GitLab version 13.0 and later, you must not use
+Docker-in-Docker.
+
+#### Workaround 1: Pin analyzer versions (GitLab 12.1 and earlier)
+
+Set the following variables for the SAST job. This pins the analyzer versions to the last known
+working version, allowing SAST with Docker-in-Docker to complete as it did previously:
+
+```yaml
+sast:
+  variables:
+    SAST_DEFAULT_ANALYZERS: ""
+    SAST_ANALYZER_IMAGES: "registry.gitlab.com/gitlab-org/security-products/analyzers/bandit:2.9.6, registry.gitlab.com/gitlab-org/security-products/analyzers/brakeman:2.11.0, registry.gitlab.com/gitlab-org/security-products/analyzers/eslint:2.10.0, registry.gitlab.com/gitlab-org/security-products/analyzers/flawfinder:2.11.1, registry.gitlab.com/gitlab-org/security-products/analyzers/gosec:2.14.0, registry.gitlab.com/gitlab-org/security-products/analyzers/nodejs-scan:2.11.0, registry.gitlab.com/gitlab-org/security-products/analyzers/phpcs-security-audit:2.9.1, registry.gitlab.com/gitlab-org/security-products/analyzers/pmd-apex:2.9.0, registry.gitlab.com/gitlab-org/security-products/analyzers/secrets:3.12.0, registry.gitlab.com/gitlab-org/security-products/analyzers/security-code-scan:2.13.0, registry.gitlab.com/gitlab-org/security-products/analyzers/sobelow:2.8.0, registry.gitlab.com/gitlab-org/security-products/analyzers/spotbugs:2.13.6, registry.gitlab.com/gitlab-org/security-products/analyzers/tslint:2.4.0"
+```
+
+Remove any analyzers you don't need from the `SAST_ANALYZER_IMAGES` list. Keep
+`SAST_DEFAULT_ANALYZERS` set to an empty string `""`.
+
+#### Workaround 2: Disable Docker-in-Docker for SAST and Dependency Scanning (GitLab 12.3 and later)
+
+Disable Docker-in-Docker for SAST. Individual `<analyzer-name>-sast` jobs are created for each
+analyzer that runs in your CI/CD pipeline.
+
+```yaml
+include:
+  - template: SAST.gitlab-ci.yml
+
+variables:
+  SAST_DISABLE_DIND: "true"
+```
+
+#### Workaround 3: Upgrade to GitLab 13.x and use the defaults
+
+From GitLab 13.0, SAST defaults to not using Docker-in-Docker. In GitLab 13.4 and later, SAST using
+Docker-in-Docker is [no longer supported](https://gitlab.com/gitlab-org/gitlab/-/issues/220540).
+If you have this problem on GitLab 13.x and later, you have customized your SAST job to
+use Docker-in-Docker. To resolve this, comment out any customizations you've made to
+your SAST CI job definition and [follow the documentation](index.md#configuration)
+to reconfigure, using the new and improved job definition default values.
+
+```yaml
+include:
+  - template: Security/SAST.gitlab-ci.yml
+```

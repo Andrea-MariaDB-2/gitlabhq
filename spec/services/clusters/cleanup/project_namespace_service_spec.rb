@@ -58,6 +58,19 @@ RSpec.describe Clusters::Cleanup::ProjectNamespaceService do
 
         subject
       end
+
+      context 'when cluster.kubeclient is nil' do
+        let(:kubeclient_instance_double) { nil }
+
+        it 'schedules ::ServiceAccountWorker' do
+          expect(Clusters::Cleanup::ServiceAccountWorker).to receive(:perform_async).with(cluster.id)
+          subject
+        end
+
+        it 'deletes namespaces from database' do
+          expect { subject }.to change { cluster.kubernetes_namespaces.exists? }.from(true).to(false)
+        end
+      end
     end
 
     context 'when cluster has no namespaces' do
@@ -80,6 +93,32 @@ RSpec.describe Clusters::Cleanup::ProjectNamespaceService do
         expect(kubeclient_instance_double).not_to receive(:delete_namespace)
 
         subject
+      end
+    end
+
+    context 'when there is a Kubeclient::HttpError' do
+      let(:kubeclient_instance_double) do
+        instance_double(Gitlab::Kubernetes::KubeClient)
+      end
+
+      ['Unauthorized', 'forbidden', 'Certificate verify Failed'].each do |message|
+        it 'schedules ::ServiceAccountWorker with accepted errors' do
+          allow(kubeclient_instance_double)
+            .to receive(:delete_namespace)
+            .and_raise(Kubeclient::HttpError.new(401, message, nil))
+
+          expect(Clusters::Cleanup::ServiceAccountWorker).to receive(:perform_async).with(cluster.id)
+
+          subject
+        end
+      end
+
+      it 'raises error with unaccepted errors' do
+        allow(kubeclient_instance_double)
+          .to receive(:delete_namespace)
+          .and_raise(Kubeclient::HttpError.new(401, 'unexpected message', nil))
+
+        expect { subject }.to raise_error(Kubeclient::HttpError)
       end
     end
   end

@@ -1,8 +1,17 @@
 # frozen_string_literal: true
 
 class ApplicationRecord < ActiveRecord::Base
-  self.gitlab_schema = :gitlab_main
+  include DatabaseReflection
+  include Transactions
+  include LegacyBulkInsert
+  include CrossDatabaseModification
+  include SensitiveSerializableHash
+
   self.abstract_class = true
+
+  # We should avoid using pluck https://docs.gitlab.com/ee/development/sql.html#plucking-ids
+  # but, if we are going to use it, let's try and limit the number of records
+  MAX_PLUCK = 1_000
 
   alias_method :reset, :reload
 
@@ -52,8 +61,10 @@ class ApplicationRecord < ActiveRecord::Base
   end
 
   # Start a new transaction with a shorter-than-usual statement timeout. This is
-  # currently one third of the default 15-second timeout
-  def self.with_fast_read_statement_timeout(timeout_ms = 5000)
+  # currently one third of the default 15-second timeout with a 500ms buffer
+  # to allow callers gracefully handling the errors to still complete within
+  # the 5s target duration of a low urgency request.
+  def self.with_fast_read_statement_timeout(timeout_ms = 4500)
     ::Gitlab::Database::LoadBalancing::Session.current.fallback_to_replicas_for_ambiguous_queries do
       transaction(requires_new: true) do # rubocop:disable Performance/ActiveRecordSubtransactions
         connection.exec_query("SET LOCAL statement_timeout = #{timeout_ms}")
@@ -91,9 +102,12 @@ class ApplicationRecord < ActiveRecord::Base
     where('EXISTS (?)', query.select(1))
   end
 
+  def self.where_not_exists(query)
+    where('NOT EXISTS (?)', query.select(1))
+  end
+
   def self.declarative_enum(enum_mod)
-    values = enum_mod.definition.transform_values { |v| v[:value] }
-    enum(enum_mod.key => values)
+    enum(enum_mod.key => enum_mod.values)
   end
 
   def self.cached_column_list

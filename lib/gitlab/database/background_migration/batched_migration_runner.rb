@@ -6,12 +6,13 @@ module Gitlab
       class BatchedMigrationRunner
         FailedToFinalize = Class.new(RuntimeError)
 
-        def self.finalize(job_class_name, table_name, column_name, job_arguments)
-          new.finalize(job_class_name, table_name, column_name, job_arguments)
+        def self.finalize(job_class_name, table_name, column_name, job_arguments, connection: ApplicationRecord.connection)
+          new(connection: connection).finalize(job_class_name, table_name, column_name, job_arguments)
         end
 
-        def initialize(migration_wrapper = BatchedMigrationWrapper.new)
+        def initialize(migration_wrapper = BatchedMigrationWrapper.new, connection: ApplicationRecord.connection)
           @migration_wrapper = migration_wrapper
+          @connection = connection
         end
 
         # Runs the next batched_job for a batched_background_migration.
@@ -67,7 +68,7 @@ module Gitlab
             Gitlab::AppLogger.warn "Batched background migration for the given configuration is already finished: #{configuration}"
           else
             migration.finalizing!
-            migration.batched_jobs.pending.each { |job| migration_wrapper.perform(job) }
+            migration.batched_jobs.with_status(:pending).each { |job| migration_wrapper.perform(job) }
 
             run_migration_while(migration, :finalizing)
 
@@ -77,7 +78,7 @@ module Gitlab
 
         private
 
-        attr_reader :migration_wrapper
+        attr_reader :migration_wrapper, :connection
 
         def find_or_create_next_batched_job(active_migration)
           if next_batch_range = find_next_batch_range(active_migration)
@@ -88,14 +89,15 @@ module Gitlab
         end
 
         def find_next_batch_range(active_migration)
-          batching_strategy = active_migration.batch_class.new
+          batching_strategy = active_migration.batch_class.new(connection: connection)
           batch_min_value = active_migration.next_min_value
 
           next_batch_bounds = batching_strategy.next_batch(
             active_migration.table_name,
             active_migration.column_name,
             batch_min_value: batch_min_value,
-            batch_size: active_migration.batch_size)
+            batch_size: active_migration.batch_size,
+            job_arguments: active_migration.job_arguments)
 
           return if next_batch_bounds.nil?
 
@@ -115,7 +117,7 @@ module Gitlab
         def finish_active_migration(active_migration)
           return if active_migration.batched_jobs.active.exists?
 
-          if active_migration.batched_jobs.failed.exists?
+          if active_migration.batched_jobs.with_status(:failed).exists?
             active_migration.failed!
           else
             active_migration.finished!

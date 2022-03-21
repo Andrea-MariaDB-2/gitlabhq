@@ -53,7 +53,7 @@ the issue board feature.
 > - Multiple issue boards per project [moved](https://gitlab.com/gitlab-org/gitlab-foss/-/issues/53811) to GitLab Free in 12.1.
 > - Multiple issue boards per group are available in GitLab Premium.
 
-Multiple issue boards allow for more than one issue board for a given project **(FREE)** or group **(PREMIUM)**.
+Multiple issue boards allow for more than one issue board for a given project in GitLab Free or group in GitLab Premium and higher tiers.
 This is great for large projects with more than one team or when a repository hosts the code of multiple products.
 
 Using the search box at the top of the menu, you can filter the listed boards.
@@ -194,54 +194,30 @@ card includes:
 
 ## Permissions
 
-Users with the [Reporter and higher roles](../permissions.md) can use all the functionality of the
+Users with at least the Reporter role can use all the functionality of the
 issue board feature to create or delete lists. They can also drag issues from one list to another.
 
-## How GitLab orders issues in a list
+## Ordering issues in a list
 
-When visiting a board, issues appear ordered in any list. You're able to change
+When an issue is created, the system assigns a relative order value that is greater than the maximum value
+of that issue's project or root group. This means the issue will be at the bottom of any issue list that
+it appears in.
+
+When you visit a board, issues appear ordered in any list. You're able to change
 that order by dragging the issues. The changed order is saved, so that anybody who visits the same
 board later sees the reordering, with some exceptions.
 
-The first time an issue appears in any board (that is, the first time a user
-loads a board containing that issue), it is ordered in relation to other issues in that list.
-The order is done according to [label priority](labels.md#label-priority).
-
-At this point, that issue is assigned a relative order value by the system,
-with respect to the other issues in the list. Any time
-you drag and reorder the issue, its relative order value changes accordingly.
-
-Also, any time that issue appears in any board, the ordering is done according to
-the updated relative order value. It's only the first
-time an issue appears that it takes from the priority order mentioned above. If a user in your GitLab instance
+Any time you drag and reorder the issue, its relative order value changes accordingly.
+Then, any time that issue appears in any board, the ordering is done according to
+the updated relative order value. If a user in your GitLab instance
 drags issue `A` above issue `B`, the ordering is maintained when these two issues are subsequently
-loaded in any board in the same instance. This could be a different project board or a different group
+loaded in any board in the same instance.
+This could be a different project board or a different group
 board, for example.
 
 This ordering also affects [issue lists](issues/sorting_issue_lists.md).
 Changing the order in an issue board changes the ordering in an issue list,
 and vice versa.
-
-### GraphQL-based issue boards
-
-<!-- This anchor is linked from #blocked-issues as well. -->
-
-> - [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/285074) in GitLab 13.9.
-> - [Deployed behind a feature flag](../feature_flags.md), enabled by default.
-> - [Enabled by default](https://gitlab.com/gitlab-org/gitlab/-/issues/248908) in GitLab 14.1
-> - [Feature flag `graphql_board_lists`](https://gitlab.com/gitlab-org/gitlab/-/issues/248908) removed in GitLab 14.3
-
-There can be
-[risks when disabling released features](../../administration/feature_flags.md#risks-when-disabling-released-features).
-Refer to this feature's version history for more details.
-
-Using GraphQL-based boards gives you these
-additional features:
-
-- [Edit more issue attributes](#edit-an-issue)
-- [View blocked issues](#blocked-issues)
-
-Learn more about the known issues in [epic 5596](https://gitlab.com/groups/gitlab-org/-/epics/5596).
 
 ## GitLab Enterprise features for issue boards
 
@@ -299,7 +275,7 @@ Users on GitLab Free can use a single group issue board.
 
 ### Assignee lists **(PREMIUM)**
 
-> [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/5784) in [GitLab Premium](https://about.gitlab.com/pricing/) 11.0.
+> [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/5784) in GitLab 11.0.
 
 As in a regular list showing all issues with a chosen label, you can add
 an assignee list that shows all issues assigned to a user.
@@ -319,7 +295,7 @@ To remove an assignee list, just as with a label list, click the trash icon.
 
 ### Milestone lists **(PREMIUM)**
 
-> [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/6469) in [GitLab Premium](https://about.gitlab.com/pricing/) 11.2.
+> [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/6469) in GitLab 11.2.
 
 You're also able to create lists of a milestone. These are lists that filter issues by the assigned
 milestone, giving you more freedom and visibility on the issue board. To add a milestone list:
@@ -337,19 +313,13 @@ As in other list types, click the trash icon to remove a list.
 
 ### Iteration lists **(PREMIUM)**
 
-> - [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/250479) in GitLab 13.11.
-> - Enabled on GitLab.com and is ready for production use.
-> - Enabled with `iteration_board_lists` flag for self-managed GitLab and is ready for production use.
->   GitLab administrators can opt to [disable the feature flag](#enable-or-disable-iteration-lists-in-boards).
-
-FLAG:
-On self-managed GitLab, by default this feature is available. To hide the feature, ask an
-administrator to [disable the `iteration_board_lists` flag](../../administration/feature_flags.md).
-On GitLab.com, this feature is available.
+> - [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/250479) in GitLab 13.11 [with a flag](../../administration/feature_flags.md) named `iteration_board_lists`. Enabled by default.
+> - [Generally available](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/75404) in GitLab 14.6. Feature flag `iteration_board_lists` removed.
 
 You're also able to create lists of an iteration.
-These are lists that filter issues by the assigned
-iteration. To add an iteration list:
+These lists filter issues by the assigned iteration.
+
+To add an iteration list:
 
 1. Select **Create list**.
 1. Select **Iteration**.
@@ -363,7 +333,7 @@ to and from a iteration list to manipulate the iteration of the dragged issues.
 
 ### Group issues in swimlanes **(PREMIUM)**
 
-> - Grouping by epic [introduced](https://gitlab.com/groups/gitlab-org/-/epics/3352) in [GitLab Premium](https://about.gitlab.com/pricing/) 13.6.
+> - Grouping by epic [introduced](https://gitlab.com/groups/gitlab-org/-/epics/3352) in GitLab 13.6.
 > - Editing issue titles in the issue sidebar [introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/232745) in GitLab 13.8.
 > - Editing iteration in the issue sidebar [introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/290232) in GitLab 13.9.
 
@@ -386,7 +356,7 @@ appears on the right. There you can see and edit the issue's:
 
 - Title
 - Assignees
-- Epic **(PREMIUM)**
+- [Epic](../group/epics/index.md)
 - Milestone
 - Time tracking value (view only)
 - Due date
@@ -432,12 +402,10 @@ To set a WIP limit for a list:
 > - [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/34723) in GitLab 12.8.
 > - [View blocking issues when hovering over blocked icon](https://gitlab.com/gitlab-org/gitlab/-/issues/210452) in GitLab 13.10.
 
-If an issue is blocked by another issue, an icon appears next to its title to indicate its blocked
+If an issue is [blocked by another issue](issues/related_issues.md#blocking-issues), an icon appears next to its title to indicate its blocked
 status.
 
 When you hover over the blocked icon (**{issue-block}**), a detailed information popover is displayed.
-
-This feature is only supported when using the [GraphQL-based boards](#graphql-based-issue-boards). The feature is enabled by default regardless when you use group issue boards in epic swimlanes mode.
 
 ![Blocked issues](img/issue_boards_blocked_icon_v13_10.png)
 
@@ -460,25 +428,25 @@ If you're not able to do some of the things above, make sure you have the right
 
 ### Edit an issue
 
+> Editing title, iteration, and confidentiality [introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/248908) in GitLab 14.1.
+
 You can edit an issue without leaving the board view.
 To open the right sidebar, select an issue card (not its title).
 
 You can edit the following issue attributes in the right sidebar:
 
 - Assignees
-- [Epic](../group/epics/index.md)
-- Milestone
-- Time tracking value (view only)
-- Due date
-- Labels
-- [Weight](issues/issue_weight.md)
-- Notifications setting
-
-When you use [GraphQL-based boards](#graphql-based-issue-boards), you can also edit the following issue attributes:
-
-- Title
-- [Iteration](../group/iterations/index.md)
 - Confidentiality
+- Due date
+- [Epic](../group/epics/index.md)
+- [Iteration](../group/iterations/index.md)
+- Labels
+- Milestone
+- Notifications setting
+- Title
+- [Weight](issues/issue_weight.md)
+
+Additionally, you can also see the time tracking value.
 
 ### Create a new list
 
@@ -528,6 +496,9 @@ The steps depend on the scope of the list:
 
 ### Filter issues
 
+> - Filtering by iteration [introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/118742) in GitLab 13.6.
+> - Filtering by issue type [introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/268152) in GitLab 14.6.
+
 You can use the filters on top of your issue board to show only
 the results you want. It's similar to the filtering used in the [issue tracker](issues/index.md).
 
@@ -535,13 +506,14 @@ You can filter by the following:
 
 - Assignee
 - Author
-- Epic
-- Iteration ([introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/118742) in GitLab 13.6)
+- [Epic](../group/epics/index.md)
+- [Iteration](../group/iterations/index.md)
 - Label
 - Milestone
 - My Reaction
 - Release
-- Weight
+- Type (issue/incident)
+- [Weight](issues/issue_weight.md)
 
 #### Filtering issues in a group board
 
@@ -564,7 +536,7 @@ changing a label.
 
 A typical workflow of using an issue board would be:
 
-1. You have [created](labels.md#label-management) and [prioritized](labels.md#label-priority)
+1. You [create](labels.md#create-a-label) and [prioritize](labels.md#set-label-priority)
    labels to categorize your issues.
 1. You have a bunch of issues (ideally labeled).
 1. You visit the issue board and start [creating lists](#create-a-new-list) to
@@ -597,7 +569,7 @@ You can move issues and lists by dragging them.
 
 Prerequisites:
 
-- A minimum of [Reporter](../permissions.md#project-members-permissions) access to a project in GitLab.
+- You must have at least the Reporter role for a project in GitLab.
 
 To move an issue, select the issue card and drag it to another position in its current list or
 into a different list. Learn about possible effects in [Dragging issues between lists](#dragging-issues-between-lists).
@@ -623,13 +595,12 @@ and the target list.
 
 > - [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/18954) in GitLab 12.4.
 > - [Placed](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/61955) behind a [feature flag](../feature_flags.md), disabled by default in GitLab 14.0.
-> - Disabled on GitLab.com.
-> - Not recommended for production use.
-> - To use in GitLab self-managed instances, ask a GitLab administrator to [enable it](#enable-or-disable-multi-selecting-issue-cards). **(FREE SELF)**
 
-This in-development feature might not be available for your use. There can be
-[risks when enabling features still in development](../../administration/feature_flags.md#risks-when-enabling-features-still-in-development).
-Refer to this feature's version history for more details.
+FLAG:
+On self-managed GitLab, by default this feature is not available. To make it available, ask an
+administrator to [enable the feature flag](../../administration/feature_flags.md) named `board_multi_select`.
+On GitLab.com, this feature is not available.
+The feature is not ready for production use.
 
 You can select multiple issue cards, then drag the group to another position within the list, or to
 another list. This makes it faster to reorder many issues at once.
@@ -671,41 +642,3 @@ A few things to remember:
 - For performance and visibility reasons, each list shows the first 20 issues
   by default. If you have more than 20 issues, start scrolling down and the next
   20 appear.
-
-### Enable or disable iteration lists in boards **(PREMIUM SELF)**
-
-The iteration list is under development but ready for production use. It is
-deployed behind a feature flag that is **enabled by default**.
-[GitLab administrators with access to the GitLab Rails console](../../administration/feature_flags.md)
-can disable it.
-
-To enable it:
-
-```ruby
-Feature.enable(:iteration_board_lists)
-```
-
-To disable it:
-
-```ruby
-Feature.disable(:iteration_board_lists)
-```
-
-### Enable or disable multi-selecting issue cards **(FREE SELF)**
-
-Multi-selecting issue cards is under development and not ready for production use. It is
-deployed behind a feature flag that is **disabled by default**.
-[GitLab administrators with access to the GitLab Rails console](../../administration/feature_flags.md)
-can enable it.
-
-To enable it:
-
-```ruby
-Feature.enable(:board_multi_select)
-```
-
-To disable it:
-
-```ruby
-Feature.disable(:board_multi_select)
-```

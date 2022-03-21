@@ -8,9 +8,11 @@ class Deployment < ApplicationRecord
   include Importable
   include Gitlab::Utils::StrongMemoize
   include FastDestroyAll
-  include IgnorableColumns
 
-  ignore_column :deployable_id_convert_to_bigint, remove_with: '14.2', remove_after: '2021-08-22'
+  StatusUpdateError = Class.new(StandardError)
+  StatusSyncError = Class.new(StandardError)
+
+  ARCHIVABLE_OFFSET = 50_000
 
   belongs_to :project, required: true
   belongs_to :environment, required: true
@@ -44,21 +46,31 @@ class Deployment < ApplicationRecord
   scope :for_project, -> (project_id) { where(project_id: project_id) }
   scope :for_projects, -> (projects) { where(project: projects) }
 
-  scope :visible, -> { where(status: %i[running success failed canceled]) }
+  scope :visible, -> { where(status: %i[running success failed canceled blocked]) }
   scope :stoppable, -> { where.not(on_stop: nil).where.not(deployable_id: nil).success }
   scope :active, -> { where(status: %i[created running]) }
+  scope :upcoming, -> { where(status: %i[blocked running]) }
   scope :older_than, -> (deployment) { where('deployments.id < ?', deployment.id) }
-  scope :with_deployable, -> { joins('INNER JOIN ci_builds ON ci_builds.id = deployments.deployable_id').preload(:deployable) }
   scope :with_api_entity_associations, -> { preload({ deployable: { runner: [], tags: [], user: [], job_artifacts_archive: [] } }) }
 
   scope :finished_after, ->(date) { where('finished_at >= ?', date) }
   scope :finished_before, ->(date) { where('finished_at < ?', date) }
+
+  scope :ordered, -> { order(finished_at: :desc) }
 
   FINISHED_STATUSES = %i[success failed canceled].freeze
 
   state_machine :status, initial: :created do
     event :run do
       transition created: :running
+    end
+
+    event :block do
+      transition created: :blocked
+    end
+
+    event :unblock do
+      transition blocked: :created
     end
 
     event :succeed do
@@ -99,6 +111,7 @@ class Deployment < ApplicationRecord
       deployment.run_after_commit do
         Deployments::UpdateEnvironmentWorker.perform_async(id)
         Deployments::LinkMergeRequestWorker.perform_async(id)
+        Deployments::ArchiveInProjectWorker.perform_async(deployment.project_id)
       end
     end
 
@@ -112,6 +125,8 @@ class Deployment < ApplicationRecord
       next if transition.loopback?
 
       deployment.run_after_commit do
+        next unless deployment.project.jira_subscription_exists?
+
         ::JiraConnect::SyncDeploymentsWorker.perform_async(id)
       end
     end
@@ -119,6 +134,8 @@ class Deployment < ApplicationRecord
 
   after_create unless: :importing? do |deployment|
     run_after_commit do
+      next unless deployment.project.jira_subscription_exists?
+
       ::JiraConnect::SyncDeploymentsWorker.perform_async(deployment.id)
     end
   end
@@ -129,8 +146,17 @@ class Deployment < ApplicationRecord
     success: 2,
     failed: 3,
     canceled: 4,
-    skipped: 5
+    skipped: 5,
+    blocked: 6
   }
+
+  def self.archivables_in(project, limit:)
+    start_iid = project.deployments.order(iid: :desc).limit(1)
+      .select("(iid - #{ARCHIVABLE_OFFSET}) AS start_iid")
+
+    project.deployments.preload(:environment).where('iid <= (?)', start_iid)
+      .where(archived: false).limit(limit)
+  end
 
   def self.last_for_environment(environment)
     ids = self
@@ -148,6 +174,16 @@ class Deployment < ApplicationRecord
 
   def self.find_successful_deployment!(iid)
     success.find_by!(iid: iid)
+  end
+
+  # It should be used with caution especially on chaining.
+  # Fetching any unbounded or large intermediate dataset could lead to loading too many IDs into memory.
+  # See: https://docs.gitlab.com/ee/development/database/multiple_databases.html#use-disable_joins-for-has_one-or-has_many-through-relations
+  # For safety we default limit to fetch not more than 1000 records.
+  def self.builds(limit = 1000)
+    deployable_ids = where.not(deployable_id: nil).limit(limit).pluck(:deployable_id)
+
+    Ci::Build.where(id: deployable_ids)
   end
 
   class << self
@@ -218,10 +254,10 @@ class Deployment < ApplicationRecord
     end
   end
 
-  def includes_commit?(commit)
-    return false unless commit
+  def includes_commit?(ancestor_sha)
+    return false unless sha
 
-    project.repository.ancestor?(commit.id, sha)
+    project.repository.ancestor?(ancestor_sha, sha)
   end
 
   def update_merge_request_metrics!
@@ -257,10 +293,6 @@ class Deployment < ApplicationRecord
     @stop_action ||= manual_actions.find { |action| action.name == self.on_stop }
   end
 
-  def finished_at
-    read_attribute(:finished_at) || legacy_finished_at
-  end
-
   def deployed_at
     return unless success?
 
@@ -289,7 +321,7 @@ class Deployment < ApplicationRecord
                              "#{id} as deployment_id",
                              "#{environment_id} as environment_id").to_sql
 
-    # We don't use `Gitlab::Database.main.bulk_insert` here so that we don't need to
+    # We don't use `ApplicationRecord.legacy_bulk_insert` here so that we don't need to
     # first pluck lots of IDs into memory.
     #
     # We also ignore any duplicates so this method can be called multiple times
@@ -305,20 +337,24 @@ class Deployment < ApplicationRecord
   # Changes the status of a deployment and triggers the corresponding state
   # machine events.
   def update_status(status)
-    case status
-    when 'running'
-      run
-    when 'success'
-      succeed
-    when 'failed'
-      drop
-    when 'canceled'
-      cancel
-    when 'skipped'
-      skip
-    else
-      raise ArgumentError, "The status #{status.inspect} is invalid"
-    end
+    update_status!(status)
+  rescue StandardError => e
+    Gitlab::ErrorTracking.track_exception(
+      StatusUpdateError.new(e.message), deployment_id: self.id)
+
+    false
+  end
+
+  def sync_status_with(build)
+    return false unless ::Deployment.statuses.include?(build.status)
+    return false if build.created? || build.status == self.status
+
+    update_status!(build.status)
+  rescue StandardError => e
+    Gitlab::ErrorTracking.track_exception(
+      StatusSyncError.new(e.message), deployment_id: self.id, build_id: build.id)
+
+    false
   end
 
   def valid_sha
@@ -346,8 +382,23 @@ class Deployment < ApplicationRecord
 
   private
 
-  def legacy_finished_at
-    self.created_at if success? && !read_attribute(:finished_at)
+  def update_status!(status)
+    case status
+    when 'running'
+      run!
+    when 'success'
+      succeed!
+    when 'failed'
+      drop!
+    when 'canceled'
+      cancel!
+    when 'skipped'
+      skip!
+    when 'blocked'
+      block!
+    else
+      raise ArgumentError, "The status #{status.inspect} is invalid"
+    end
   end
 end
 

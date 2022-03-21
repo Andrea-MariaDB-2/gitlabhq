@@ -59,3 +59,28 @@ To make submodules work correctly in CI/CD jobs:
    variables:
      GIT_SUBMODULE_STRATEGY: recursive
    ```
+
+1. You can provide additional flags to control advanced checkout behavior using
+   [`GIT_SUBMODULE_UPDATE_FLAGS`](runners/configure_runners.md#git-submodule-update-flags).
+
+   ```yaml
+   variables:
+     GIT_SUBMODULE_STRATEGY: recursive
+     GIT_SUBMODULE_UPDATE_FLAGS: --jobs 4
+   ```
+
+If you use the [`CI_JOB_TOKEN`](jobs/ci_job_token.md) to clone a submodule in a
+pipeline job, the user executing the job must be assigned to a role that has
+[permission](../user/permissions.md#gitlab-cicd-permissions) to trigger a pipeline
+in the upstream submodule project.
+
+## Troubleshooting
+
+### Can't find the `.gitmodules` file
+
+The `.gitmodules` file might be hard to find because it is usually a hidden file.
+You can check documentation for your specific OS to learn how to find and display
+hidden files.
+
+If there is no `.gitmodules` file, it's possible the submodule settings are in a
+[gitconfig](https://www.atlassian.com/git/tutorials/setting-up-a-repository/git-config) file.

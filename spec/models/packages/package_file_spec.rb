@@ -2,17 +2,21 @@
 require 'spec_helper'
 
 RSpec.describe Packages::PackageFile, type: :model do
+  using RSpec::Parameterized::TableSyntax
+
   let_it_be(:project) { create(:project) }
   let_it_be(:package_file1) { create(:package_file, :xml, file_name: 'FooBar') }
   let_it_be(:package_file2) { create(:package_file, :xml, file_name: 'ThisIsATest') }
   let_it_be(:package_file3) { create(:package_file, :xml, file_name: 'formatted.zip') }
   let_it_be(:debian_package) { create(:debian_package, project: project) }
 
+  it_behaves_like 'having unique enum values'
+  it_behaves_like 'destructible', factory: :package_file
+
   describe 'relationships' do
     it { is_expected.to belong_to(:package) }
     it { is_expected.to have_one(:conan_file_metadatum) }
     it { is_expected.to have_many(:package_file_build_infos).inverse_of(:package_file) }
-    it { is_expected.to have_many(:pipelines).through(:package_file_build_infos) }
     it { is_expected.to have_one(:debian_file_metadatum).inverse_of(:package_file).class_name('Packages::Debian::FileMetadatum') }
     it { is_expected.to have_one(:helm_file_metadatum).inverse_of(:package_file).class_name('Packages::Helm::FileMetadatum') }
   end
@@ -137,10 +141,111 @@ RSpec.describe Packages::PackageFile, type: :model do
     it 'returns the matching file only for Helm packages' do
       expect(described_class.for_helm_with_channel(project, channel)).to contain_exactly(helm_file2)
     end
+
+    context 'with package files pending destruction' do
+      let_it_be(:package_file_pending_destruction) { create(:helm_package_file, :pending_destruction, package: helm_package2, channel: channel) }
+
+      it 'does not return them' do
+        expect(described_class.for_helm_with_channel(project, channel)).to contain_exactly(helm_file2)
+      end
+    end
   end
 
   describe '.most_recent!' do
     it { expect(described_class.most_recent!).to eq(debian_package.package_files.last) }
+  end
+
+  describe '.most_recent_for' do
+    let_it_be(:package1) { create(:npm_package) }
+    let_it_be(:package2) { create(:npm_package) }
+    let_it_be(:package3) { create(:npm_package) }
+    let_it_be(:package4) { create(:npm_package) }
+
+    let_it_be(:package_file2_2) { create(:package_file, :npm, package: package2) }
+
+    let_it_be(:package_file3_2) { create(:package_file, :npm, package: package3) }
+    let_it_be(:package_file3_3) { create(:package_file, :npm, package: package3) }
+    let_it_be(:package_file3_4) { create(:package_file, :npm, :pending_destruction, package: package3) }
+
+    let_it_be(:package_file4_2) { create(:package_file, :npm, package: package2) }
+    let_it_be(:package_file4_3) { create(:package_file, :npm, package: package2) }
+    let_it_be(:package_file4_4) { create(:package_file, :npm, package: package2) }
+    let_it_be(:package_file4_4) { create(:package_file, :npm, :pending_destruction, package: package2) }
+
+    let(:most_recent_package_file1) { package1.installable_package_files.recent.first }
+    let(:most_recent_package_file2) { package2.installable_package_files.recent.first }
+    let(:most_recent_package_file3) { package3.installable_package_files.recent.first }
+    let(:most_recent_package_file4) { package4.installable_package_files.recent.first }
+
+    subject { described_class.most_recent_for(packages) }
+
+    where(
+      package_input1: [1, nil],
+      package_input2: [2, nil],
+      package_input3: [3, nil],
+      package_input4: [4, nil]
+    )
+
+    with_them do
+      let(:compact_inputs) { [package_input1, package_input2, package_input3, package_input4].compact }
+      let(:packages) do
+        ::Packages::Package.id_in(
+          compact_inputs.map { |pkg_number| public_send("package#{pkg_number}") }
+            .map(&:id)
+        )
+      end
+
+      let(:expected_package_files) { compact_inputs.map { |pkg_number| public_send("most_recent_package_file#{pkg_number}") } }
+
+      it { is_expected.to contain_exactly(*expected_package_files) }
+    end
+
+    context 'extra join and extra where' do
+      let_it_be(:helm_package) { create(:helm_package, without_package_files: true) }
+      let_it_be(:helm_package_file1) { create(:helm_package_file, channel: 'alpha') }
+      let_it_be(:helm_package_file2) { create(:helm_package_file, channel: 'alpha', package: helm_package) }
+      let_it_be(:helm_package_file3) { create(:helm_package_file, channel: 'beta', package: helm_package) }
+      let_it_be(:helm_package_file4) { create(:helm_package_file, channel: 'beta', package: helm_package) }
+
+      let(:extra_join) { :helm_file_metadatum }
+      let(:extra_where) { { packages_helm_file_metadata: { channel: 'alpha' } } }
+
+      subject { described_class.most_recent_for(Packages::Package.id_in(helm_package.id), extra_join: extra_join, extra_where: extra_where) }
+
+      it 'returns the most recent package for the selected channel' do
+        expect(subject).to contain_exactly(helm_package_file2)
+      end
+
+      context 'with package files pending destruction' do
+        let_it_be(:package_file_pending_destruction) { create(:helm_package_file, :pending_destruction, package: helm_package, channel: 'alpha') }
+
+        it 'does not return them' do
+          expect(subject).to contain_exactly(helm_package_file2)
+        end
+      end
+    end
+  end
+
+  describe '#pipelines' do
+    let_it_be_with_refind(:package_file) { create(:package_file) }
+
+    subject { package_file.pipelines }
+
+    context 'package_file without pipeline' do
+      it { is_expected.to be_empty }
+    end
+
+    context 'package_file with pipeline' do
+      let_it_be(:pipeline) { create(:ci_pipeline) }
+      let_it_be(:pipeline2) { create(:ci_pipeline) }
+
+      before do
+        package_file.package_file_build_infos.create!(pipeline: pipeline)
+        package_file.package_file_build_infos.create!(pipeline: pipeline2)
+      end
+
+      it { is_expected.to contain_exactly(pipeline, pipeline2) }
+    end
   end
 
   describe '#update_file_store callback' do
@@ -228,6 +333,27 @@ RSpec.describe Packages::PackageFile, type: :model do
           subject
         end
       end
+    end
+  end
+
+  context 'status scopes' do
+    let_it_be(:package) { create(:package) }
+    let_it_be(:default_package_file) { create(:package_file, package: package) }
+    let_it_be(:pending_destruction_package_file) { create(:package_file, :pending_destruction, package: package) }
+
+    describe '.installable' do
+      subject { package.installable_package_files }
+
+      it 'does not include non-displayable packages', :aggregate_failures do
+        is_expected.to include(default_package_file)
+        is_expected.not_to include(pending_destruction_package_file)
+      end
+    end
+
+    describe '.with_status' do
+      subject { described_class.with_status(:pending_destruction) }
+
+      it { is_expected.to contain_exactly(pending_destruction_package_file) }
     end
   end
 end

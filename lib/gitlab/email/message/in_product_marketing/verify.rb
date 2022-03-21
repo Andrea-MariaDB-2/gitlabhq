@@ -65,6 +65,10 @@ module Gitlab
             ][series]
           end
 
+          def invite_members?
+            user.can?(:admin_group_member, group)
+          end
+
           private
 
           def ci_link

@@ -178,13 +178,13 @@ RSpec.describe Clusters::Cluster, :use_clean_rails_memory_store_caching do
     end
   end
 
-  describe '.with_application_prometheus' do
-    subject { described_class.with_application_prometheus }
+  describe '.with_integration_prometheus' do
+    subject { described_class.with_integration_prometheus }
 
     let!(:cluster) { create(:cluster) }
 
     context 'cluster has prometheus application' do
-      let!(:application) { create(:clusters_applications_prometheus, :installed, cluster: cluster) }
+      let!(:application) { create(:clusters_integrations_prometheus, cluster: cluster) }
 
       it { is_expected.to include(cluster) }
     end
@@ -264,6 +264,16 @@ RSpec.describe Clusters::Cluster, :use_clean_rails_memory_store_caching do
     let!(:cluster) { create(:cluster, :project) }
     let!(:another_cluster) { create(:cluster, :project) }
     let(:namespace_id) { cluster.first_project.namespace_id }
+
+    it { is_expected.to contain_exactly(cluster) }
+  end
+
+  describe '.with_name' do
+    subject { described_class.with_name(name) }
+
+    let(:name) { 'this-cluster' }
+    let!(:cluster) { create(:cluster, :project, name: name) }
+    let!(:another_cluster) { create(:cluster, :project) }
 
     it { is_expected.to contain_exactly(cluster) }
   end
@@ -902,8 +912,8 @@ RSpec.describe Clusters::Cluster, :use_clean_rails_memory_store_caching do
     subject { cluster.kubernetes_namespace_for(environment, deployable: build) }
 
     let(:environment_name) { 'the-environment-name' }
-    let(:environment) { create(:environment, name: environment_name, project: cluster.project, last_deployable: build) }
-    let(:build) { create(:ci_build, environment: environment_name, project: cluster.project) }
+    let(:environment) { create(:environment, name: environment_name, project: cluster.project) }
+    let(:build) { create(:ci_build, environment: environment, project: cluster.project) }
     let(:cluster) { create(:cluster, :project, managed: managed_cluster) }
     let(:managed_cluster) { true }
     let(:default_namespace) { Gitlab::Kubernetes::DefaultNamespace.new(cluster, project: cluster.project).from_environment_slug(environment.slug) }

@@ -5,10 +5,10 @@ info: To determine the technical writer assigned to the Stage/Group associated w
 description: What to include in GitLab documentation pages.
 ---
 
-# Documentation topic types
+# Documentation topic types (CTRT)
 
 At GitLab, we have not traditionally used types for our content. However, we are starting to
-move in this direction, and we now use four primary topic types:
+move in this direction, and we now use four primary topic types (CTRT):
 
 - [Concept](#concept)
 - [Task](#task)
@@ -88,7 +88,7 @@ Create an issue when you want to track bugs or future work.
 
 Prerequisites:
 
-- You must have at least the Developer role for a project.
+- You must have at least the Developer role for the project.
 
 To create an issue:
 
@@ -149,10 +149,12 @@ For the heading:
 
 If you do not put the full error in the title, include it in the body text.
 
+If multiple causes or workarounds exist, consider putting them into a table format.
+
 ## Other types of content
 
 There are other types of content in the GitLab documentation that don't
-classify as one of the four primary [topic types](#documentation-topic-types).
+classify as one of the four primary [topic types](#documentation-topic-types-ctrt).
 These include:
 
 - [Tutorials](#tutorials)
@@ -172,7 +174,7 @@ In general, you might consider using a tutorial when:
 
 Tutorials are learning aids that complement our core documentation.
 They do not introduce new features.
-Always use the primary [topic types](#documentation-topic-types) to document new features.
+Always use the primary [topic types](#documentation-topic-types-ctrt) to document new features.
 
 Tutorials should be in this format:
 
@@ -232,9 +234,21 @@ If you need to add more than one task,
 consider using subsections for each distinct task.
 ```
 
+### Related topics
+
+If inline links are not sufficient, you can create a topic called **Related topics**
+and include a bulleted list of related topics. This topic should be above the Troubleshooting section.
+
+```markdown
+# Related topics
+
+- [Configure your pipeline](link-to-topic)
+- [Trigger a pipeline manually](link-to-topic)
+```
+
 ### Topics and resources pages
 
-This is a page with a list of links that point to important sections
+This page has a list of links that point to important sections
 of documentation for a specific GitLab feature or tool.
 
 We do not encourage the use of these types of pages.

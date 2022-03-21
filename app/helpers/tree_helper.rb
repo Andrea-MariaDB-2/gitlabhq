@@ -81,7 +81,7 @@ module TreeHelper
   end
 
   def commit_in_fork_help
-    _("A new branch will be created in your fork and a new merge request will be started.")
+    _("GitLab will create a branch in your fork and start a merge request.")
   end
 
   def commit_in_single_accessible_branch
@@ -175,6 +175,21 @@ module TreeHelper
     }
   end
 
+  def fork_modal_options(project, ref, path, blob)
+    if show_edit_button?({ blob: blob })
+      fork_path = fork_and_edit_path(project, ref, path)
+      fork_modal_id = "modal-confirm-fork-edit"
+    elsif show_web_ide_button?
+      fork_path = ide_fork_and_edit_path(project, ref, path)
+      fork_modal_id = "modal-confirm-fork-webide"
+    end
+
+    {
+      fork_path: fork_path,
+      fork_modal_id: fork_modal_id
+    }
+  end
+
   def web_ide_button_data(options = {})
     {
       project_path: project_to_use.full_path,
@@ -188,10 +203,15 @@ module TreeHelper
       show_edit_button: show_edit_button?(options),
       show_web_ide_button: show_web_ide_button?,
       show_gitpod_button: show_gitpod_button?,
+      show_pipeline_editor_button: show_pipeline_editor_button?(@project, @path),
 
       web_ide_url: web_ide_url,
       edit_url: edit_url(options),
-      gitpod_url: gitpod_url
+      pipeline_editor_url: project_ci_pipeline_editor_path(@project, branch_name: @ref),
+
+      gitpod_url: gitpod_url,
+      user_preferences_gitpod_path: profile_preferences_path(anchor: 'user_gitpod_enabled'),
+      user_profile_enable_gitpod_path: profile_path(user: { gitpod_enabled: true })
     }
   end
 

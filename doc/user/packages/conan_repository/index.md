@@ -6,8 +6,13 @@ info: To determine the technical writer assigned to the Stage/Group associated w
 
 # Conan packages in the Package Registry **(FREE)**
 
-> - [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/8248) in GitLab Premium 12.6.
-> - [Moved](https://gitlab.com/gitlab-org/gitlab/-/issues/221259) to GitLab Free in 13.3.
+> - [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/8248) in GitLab 12.6.
+> - [Moved](https://gitlab.com/gitlab-org/gitlab/-/issues/221259) from GitLab Premium to GitLab Free in 13.3.
+
+WARNING:
+The Conan package registry for GitLab is under development and isn't ready for production use due to
+limited functionality. This [epic](https://gitlab.com/groups/gitlab-org/-/epics/6816) details the remaining
+work and timelines to make it production ready.
 
 Publish Conan packages in your project's Package Registry. Then install the
 packages whenever you need to use them as a dependency.
@@ -97,6 +102,29 @@ A package with the recipe `Hello/0.1@mycompany/beta` is created.
 
 For more details about creating and managing Conan packages, see the
 [Conan documentation](https://docs.conan.io/en/latest/creating_packages.html).
+
+#### Package without a username and a channel
+
+> - [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/345055) in GitLab 14.6.
+
+Even though they are [recommended](https://docs.conan.io/en/latest/reference/conanfile/attributes.html#user-channel)
+to distinguish your package from a similarly named existing package,
+the username and channel are not mandatory fields for a Conan package.
+
+You can create a package without a username and channel by removing them from
+the `create` command:
+
+```shell
+conan create .
+```
+
+The username _and_ the channel must be blank. If only one of these fields is
+blank, the request is rejected.
+
+NOTE:
+Empty usernames and channels can only be used if you use a [project remote](#add-a-remote-for-your-project).
+If you use an [instance remote](#add-a-remote-for-your-instance), the username
+and the channel must be set.
 
 ## Add the Package Registry as a Conan remote
 
@@ -260,7 +288,8 @@ conan upload Hello/0.1@mycompany/beta --all
 
 ## Publish a Conan package by using CI/CD
 
-> [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/11678) in [GitLab Premium](https://about.gitlab.com/pricing/) 12.7.
+> - [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/11678) in GitLab 12.7.
+> - [Moved](https://gitlab.com/gitlab-org/gitlab/-/issues/221259) from GitLab Premium to GitLab Free in 13.3.
 
 To work with Conan commands in [GitLab CI/CD](../../../ci/index.md), you can
 use `CI_JOB_TOKEN` in place of the personal access token in your commands.
@@ -296,9 +325,6 @@ Install a Conan package from the Package Registry so you can use it as a
 dependency. You can install a package from the scope of your instance or your project.
 If multiple packages have the same recipe, when you install
 a package, the most recently-published package is retrieved.
-
-WARNING:
-Project-level packages [cannot be downloaded currently](https://gitlab.com/gitlab-org/gitlab/-/issues/270129).
 
 Conan packages are often installed as dependencies by using the `conanfile.txt`
 file.
@@ -361,7 +387,7 @@ There are two ways to remove a Conan package from the GitLab Package Registry.
 - From the GitLab user interface:
 
   Go to your project's **Packages & Registries > Package Registry**. Remove the
-  package by clicking the red trash icon.
+  package by selecting **Remove repository** (**{remove}**).
 
 ## Search for Conan packages in the Package Registry
 

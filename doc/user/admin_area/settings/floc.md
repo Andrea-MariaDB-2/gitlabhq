@@ -6,7 +6,7 @@ info: To determine the technical writer assigned to the Stage/Group associated w
 
 # Federated Learning of Cohorts (FLoC) **(FREE SELF)**
 
-> [Introduced](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/60933) in GitLab Free 13.12.
+> [Introduced](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/60933) in GitLab 13.12.
 
 Federated Learning of Cohorts (FLoC) is a new feature of the Chrome browser.
 It works by categorizing users into different cohorts, so that
@@ -23,7 +23,7 @@ Permissions-Policy: interest-cohort=()
 To enable it:
 
 1. On the top bar, select **Menu > Admin**.
-1. In the left sidebar, select **Settings > General**.
+1. On the left sidebar, select **Settings > General**.
 1. Expand **Federated Learning of Cohorts**.
 1. Check the box.
 1. Click **Save changes**.

@@ -1,13 +1,18 @@
 ---
 stage: Create
 group: Source Code
-info: "To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments"
-type: reference, api
+info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
 ---
 
 # Commits API **(FREE)**
 
 This API operates on [repository commits](https://git-scm.com/book/en/v2/Git-Basics-Recording-Changes-to-the-Repository). Read more about [GitLab-specific information](../user/project/repository/index.md#commit-changes-to-a-repository) for commits.
+
+## Responses
+
+In commit responses, `created_at` and `committed_date` are identical.
+However, `committed_date` and `authored_date` are generated from different sources,
+and may not be identical.
 
 ## List repository commits
 
@@ -74,8 +79,6 @@ Example response:
 ```
 
 ## Create a commit with multiple files and actions
-
-> [Introduced](https://gitlab.com/gitlab-org/gitlab-foss/-/merge_requests/6096) in GitLab 8.13.
 
 Create a commit by posting a JSON payload
 
@@ -256,8 +259,6 @@ Example response:
 
 ## Get references a commit is pushed to
 
-> [Introduced](https://gitlab.com/gitlab-org/gitlab-foss/-/merge_requests/15026) in GitLab 10.6
-
 Get all references (from branches or tags) a commit is pushed to.
 The pagination parameters `page` and `per_page` can be used to restrict the list of references.
 
@@ -289,11 +290,9 @@ Example response:
 
 ```
 
-## Cherry pick a commit
+## Cherry-pick a commit
 
-> [Introduced](https://gitlab.com/gitlab-org/gitlab-foss/-/merge_requests/8047) in GitLab 8.15.
-
-Cherry picks a commit to a given branch.
+Cherry-picks a commit to a given branch.
 
 ```plaintext
 POST /projects/:id/repository/commits/:sha/cherry_pick
@@ -366,8 +365,6 @@ dry run.
 
 ## Revert a commit
 
-> [Introduced](https://gitlab.com/gitlab-org/gitlab-foss/-/merge_requests/22919) in GitLab 11.5.
-
 Reverts a commit in a given branch.
 
 ```plaintext
@@ -381,7 +378,7 @@ Parameters:
 | `id`      | integer/string | yes      | The ID or [URL-encoded path of the project](index.md#namespaced-path-encoding) |
 | `sha`     | string         | yes      | Commit SHA to revert                                                            |
 | `branch`  | string         | yes      | Target branch name                                                              |
-| `dry_run` | boolean        | no       | Does not commit any changes. Default is false. [Introduced in GitLab 13.3](https://gitlab.com/gitlab-org/gitlab/-/issues/231032) |
+| `dry_run` | boolean        | no       | Does not commit any changes. Default is false. [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/231032) in GitLab 13.3 |
 
 ```shell
 curl --request POST --header "PRIVATE-TOKEN: <your_access_token>" --form "branch=master" \
@@ -511,9 +508,8 @@ Example response:
 
 Adds a comment to a commit.
 
-In order to post a comment in a particular line of a particular file, you must
-specify the full commit SHA, the `path`, the `line` and `line_type` should be
-`new`.
+To post a comment in a particular line of a particular file, you must specify
+the full commit SHA, the `path`, the `line`, and `line_type` should be `new`.
 
 The comment is added at the end of the last commit if at least one of the
 cases below is valid:
@@ -622,7 +618,7 @@ Example response:
 
 ## Commit status
 
-In GitLab 8.1 and later, this is the new commit status API.
+This is the commit status API for use with GitLab.
 
 ### List the statuses of a commit
 
@@ -750,11 +746,9 @@ Example response:
 }
 ```
 
-## List Merge Requests associated with a commit
+## List merge requests associated with a commit
 
-> [Introduced](https://gitlab.com/gitlab-org/gitlab-foss/-/merge_requests/18004) in GitLab 10.7.
-
-Get a list of Merge Requests related to the specified commit.
+Get a list of merge requests related to the specified commit.
 
 ```plaintext
 GET /projects/:id/repository/commits/:sha/merge_requests

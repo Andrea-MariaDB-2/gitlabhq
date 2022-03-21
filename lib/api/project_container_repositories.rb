@@ -3,6 +3,8 @@
 module API
   class ProjectContainerRepositories < ::API::Base
     include PaginationParams
+    include ::API::Helpers::ContainerRegistryHelpers
+
     helpers ::API::Helpers::PackagesHelpers
 
     REPOSITORY_ENDPOINT_REQUIREMENTS = API::NAMESPACE_OR_PROJECT_REQUIREMENTS.merge(
@@ -121,7 +123,6 @@ module API
       end
       delete ':id/registry/repositories/:repository_id/tags/:tag_name', requirements: REPOSITORY_ENDPOINT_REQUIREMENTS do
         authorize_destroy_container_image!
-        validate_tag!
 
         result = ::Projects::ContainerRepository::DeleteTagsService
           .new(repository.project, current_user, tags: [declared_params[:tag_name]])

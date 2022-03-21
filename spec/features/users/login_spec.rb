@@ -2,9 +2,10 @@
 
 require 'spec_helper'
 
-RSpec.describe 'Login' do
+RSpec.describe 'Login', :clean_gitlab_redis_sessions do
   include TermsHelper
   include UserLoginHelper
+  include SessionHelpers
 
   before do
     stub_authentication_activity_metrics(debug: true)
@@ -27,7 +28,7 @@ RSpec.describe 'Login' do
       expect(user.reset_password_token).not_to be_nil
 
       gitlab_sign_in(user)
-      expect(current_path).to eq root_path
+      expect(page).to have_current_path root_path, ignore_query: true
 
       user.reload
       expect(user.reset_password_token).to be_nil
@@ -45,21 +46,22 @@ RSpec.describe 'Login' do
       user = create(:admin, password_automatically_set: true)
 
       visit root_path
-      expect(current_path).to eq edit_user_password_path
+      expect(page).to have_current_path edit_user_password_path, ignore_query: true
       expect(page).to have_content('Please create a password for your new account.')
 
-      fill_in 'user_password',              with: 'password'
-      fill_in 'user_password_confirmation', with: 'password'
+      fill_in 'user_password',              with: Gitlab::Password.test_default
+      fill_in 'user_password_confirmation', with: Gitlab::Password.test_default
       click_button 'Change your password'
 
-      expect(current_path).to eq new_user_session_path
+      expect(page).to have_current_path new_user_session_path, ignore_query: true
       expect(page).to have_content(I18n.t('devise.passwords.updated_not_active'))
 
       fill_in 'user_login',    with: user.username
-      fill_in 'user_password', with: 'password'
+      fill_in 'user_password', with: Gitlab::Password.test_default
       click_button 'Sign in'
 
-      expect(current_path).to eq root_path
+      expect_single_session_with_authenticated_ttl
+      expect(page).to have_current_path root_path, ignore_query: true
     end
 
     it 'does not show flash messages when login page' do
@@ -82,7 +84,7 @@ RSpec.describe 'Login' do
       expect(page).to have_content('Your account has been blocked.')
     end
 
-    it 'does not update Devise trackable attributes', :clean_gitlab_redis_shared_state do
+    it 'does not update Devise trackable attributes' do
       expect(authentication_metrics)
         .to increment(:user_blocked_counter)
         .and increment(:user_unauthenticated_counter)
@@ -143,7 +145,7 @@ RSpec.describe 'Login' do
         fill_in 'user_email', with: user.email
         click_button 'Resend'
 
-        expect(current_path).to eq users_almost_there_path
+        expect(page).to have_current_path users_almost_there_path, ignore_query: true
       end
     end
   end
@@ -159,13 +161,25 @@ RSpec.describe 'Login' do
       expect(page).to have_content('Invalid login or password.')
     end
 
-    it 'does not update Devise trackable attributes', :clean_gitlab_redis_shared_state do
+    it 'does not update Devise trackable attributes' do
       expect(authentication_metrics)
         .to increment(:user_unauthenticated_counter)
         .and increment(:user_password_invalid_counter)
 
       expect { gitlab_sign_in(User.ghost) }
         .not_to change { User.ghost.reload.sign_in_count }
+    end
+  end
+
+  describe 'with OneTrust authentication' do
+    before do
+      stub_config(extra: { one_trust_id: SecureRandom.uuid })
+    end
+
+    it 'has proper Content-Security-Policy headers' do
+      visit root_path
+
+      expect(response_headers['Content-Security-Policy']).to include('https://cdn.cookielaw.org https://*.onetrust.com')
     end
   end
 
@@ -192,10 +206,11 @@ RSpec.describe 'Login' do
         enter_code(user.current_otp)
 
         expect(page).not_to have_content(I18n.t('devise.failure.already_authenticated'))
+        expect_single_session_with_authenticated_ttl
       end
 
       it 'does not allow sign-in if the user password is updated before entering a one-time code' do
-        user.update!(password: 'new_password')
+        user.update!(password: "new" + Gitlab::Password.test_default)
 
         enter_code(user.current_otp)
 
@@ -210,7 +225,8 @@ RSpec.describe 'Login' do
 
           enter_code(user.current_otp)
 
-          expect(current_path).to eq root_path
+          expect_single_session_with_authenticated_ttl
+          expect(page).to have_current_path root_path, ignore_query: true
         end
 
         it 'persists remember_me value via hidden field' do
@@ -237,7 +253,9 @@ RSpec.describe 'Login' do
           expect(page).to have_content('Invalid two-factor code')
 
           enter_code(user.current_otp)
-          expect(current_path).to eq root_path
+
+          expect_single_session_with_authenticated_ttl
+          expect(page).to have_current_path root_path, ignore_query: true
         end
 
         it 'triggers ActiveSession.cleanup for the user' do
@@ -268,7 +286,7 @@ RSpec.describe 'Login' do
 
             enter_code(codes.sample)
 
-            expect(current_path).to eq root_path
+            expect(page).to have_current_path root_path, ignore_query: true
           end
 
           it 'invalidates the used code' do
@@ -353,8 +371,9 @@ RSpec.describe 'Login' do
 
           sign_in_using_saml!
 
+          expect_single_session_with_authenticated_ttl
           expect(page).not_to have_content('Two-Factor Authentication')
-          expect(current_path).to eq root_path
+          expect(page).to have_current_path root_path, ignore_query: true
         end
       end
 
@@ -371,7 +390,8 @@ RSpec.describe 'Login' do
 
           enter_code(user.current_otp)
 
-          expect(current_path).to eq root_path
+          expect_single_session_with_authenticated_ttl
+          expect(page).to have_current_path root_path, ignore_query: true
         end
       end
 
@@ -391,7 +411,8 @@ RSpec.describe 'Login' do
 
         gitlab_sign_in(user)
 
-        expect(current_path).to eq root_path
+        expect_single_session_with_authenticated_ttl
+        expect(page).to have_current_path root_path, ignore_query: true
         expect(page).not_to have_content(I18n.t('devise.failure.already_authenticated'))
       end
 
@@ -402,6 +423,7 @@ RSpec.describe 'Login' do
         gitlab_sign_in(user)
         visit new_user_session_path
 
+        expect_single_session_with_authenticated_ttl
         expect(page).not_to have_content(I18n.t('devise.failure.already_authenticated'))
       end
 
@@ -415,7 +437,7 @@ RSpec.describe 'Login' do
 
       context 'when the users password is expired' do
         before do
-          user.update!(password_expires_at: Time.parse('2018-05-08 11:29:46 UTC'))
+          user.update!(password_expires_at: Time.zone.parse('2018-05-08 11:29:46 UTC'))
         end
 
         it 'asks for a new password' do
@@ -425,16 +447,16 @@ RSpec.describe 'Login' do
           visit new_user_session_path
 
           fill_in 'user_login', with: user.email
-          fill_in 'user_password', with: '12345678'
+          fill_in 'user_password', with: Gitlab::Password.test_default
           click_button 'Sign in'
 
-          expect(current_path).to eq(new_profile_password_path)
+          expect(page).to have_current_path(new_profile_password_path, ignore_query: true)
         end
       end
     end
 
     context 'with invalid username and password' do
-      let(:user) { create(:user, password: 'not-the-default') }
+      let(:user) { create(:user, password: "not" + Gitlab::Password.test_default) }
 
       it 'blocks invalid login' do
         expect(authentication_metrics)
@@ -443,6 +465,7 @@ RSpec.describe 'Login' do
 
         gitlab_sign_in(user)
 
+        expect_single_session_with_short_ttl
         expect(page).to have_content('Invalid login or password.')
       end
     end
@@ -470,7 +493,7 @@ RSpec.describe 'Login' do
 
             gitlab_sign_in(user)
 
-            expect(current_path).to eq profile_two_factor_auth_path
+            expect(page).to have_current_path profile_two_factor_auth_path, ignore_query: true
             expect(page).to have_content('The global settings require you to enable Two-Factor Authentication for your account. You need to do this before ')
           end
 
@@ -480,9 +503,9 @@ RSpec.describe 'Login' do
 
             gitlab_sign_in(user)
 
-            expect(current_path).to eq profile_two_factor_auth_path
+            expect(page).to have_current_path profile_two_factor_auth_path, ignore_query: true
             click_link 'Configure it later'
-            expect(current_path).to eq root_path
+            expect(page).to have_current_path root_path, ignore_query: true
           end
         end
 
@@ -495,7 +518,7 @@ RSpec.describe 'Login' do
 
             gitlab_sign_in(user)
 
-            expect(current_path).to eq profile_two_factor_auth_path
+            expect(page).to have_current_path profile_two_factor_auth_path, ignore_query: true
             expect(page).to have_content(
               'The global settings require you to enable Two-Factor Authentication for your account.'
             )
@@ -507,7 +530,7 @@ RSpec.describe 'Login' do
 
             gitlab_sign_in(user)
 
-            expect(current_path).to eq profile_two_factor_auth_path
+            expect(page).to have_current_path profile_two_factor_auth_path, ignore_query: true
             expect(page).not_to have_link('Configure it later')
           end
         end
@@ -524,7 +547,7 @@ RSpec.describe 'Login' do
 
           gitlab_sign_in(user)
 
-          expect(current_path).to eq profile_two_factor_auth_path
+          expect(page).to have_current_path profile_two_factor_auth_path, ignore_query: true
           expect(page).to have_content(
             'The global settings require you to enable Two-Factor Authentication for your account.'
           )
@@ -553,7 +576,7 @@ RSpec.describe 'Login' do
 
               gitlab_sign_in(user)
 
-              expect(current_path).to eq profile_two_factor_auth_path
+              expect(page).to have_current_path profile_two_factor_auth_path, ignore_query: true
               expect(page).to have_content(
                 'The group settings for Group 1 and Group 2 require you to enable '\
                 'Two-Factor Authentication for your account. '\
@@ -571,9 +594,9 @@ RSpec.describe 'Login' do
 
             gitlab_sign_in(user)
 
-            expect(current_path).to eq profile_two_factor_auth_path
+            expect(page).to have_current_path profile_two_factor_auth_path, ignore_query: true
             click_link 'Configure it later'
-            expect(current_path).to eq root_path
+            expect(page).to have_current_path root_path, ignore_query: true
           end
         end
 
@@ -586,7 +609,7 @@ RSpec.describe 'Login' do
 
             gitlab_sign_in(user)
 
-            expect(current_path).to eq profile_two_factor_auth_path
+            expect(page).to have_current_path profile_two_factor_auth_path, ignore_query: true
             expect(page).to have_content(
               'The group settings for Group 1 and Group 2 require you to enable ' \
               'Two-Factor Authentication for your account.'
@@ -599,7 +622,7 @@ RSpec.describe 'Login' do
 
             gitlab_sign_in(user)
 
-            expect(current_path).to eq profile_two_factor_auth_path
+            expect(page).to have_current_path profile_two_factor_auth_path, ignore_query: true
             expect(page).not_to have_link('Configure it later')
           end
         end
@@ -616,7 +639,7 @@ RSpec.describe 'Login' do
 
           gitlab_sign_in(user)
 
-          expect(current_path).to eq profile_two_factor_auth_path
+          expect(page).to have_current_path profile_two_factor_auth_path, ignore_query: true
           expect(page).to have_content(
             'The group settings for Group 1 and Group 2 require you to enable ' \
             'Two-Factor Authentication for your account. '\
@@ -730,7 +753,7 @@ RSpec.describe 'Login' do
     end
   end
 
-  context 'when terms are enforced' do
+  context 'when terms are enforced', :js do
     let(:user) { create(:user) }
 
     before do
@@ -744,7 +767,7 @@ RSpec.describe 'Login' do
       visit new_user_session_path
 
       fill_in 'user_login', with: user.email
-      fill_in 'user_password', with: '12345678'
+      fill_in 'user_password', with: Gitlab::Password.test_default
 
       click_button 'Sign in'
 
@@ -752,7 +775,7 @@ RSpec.describe 'Login' do
 
       click_button 'Accept terms'
 
-      expect(current_path).to eq(root_path)
+      expect(page).to have_current_path(root_path, ignore_query: true)
       expect(page).not_to have_content(I18n.t('devise.failure.already_authenticated'))
     end
 
@@ -765,43 +788,45 @@ RSpec.describe 'Login' do
       visit new_user_session_path
 
       fill_in 'user_login', with: user.email
-      fill_in 'user_password', with: '12345678'
+      fill_in 'user_password', with: Gitlab::Password.test_default
 
       click_button 'Sign in'
 
-      expect(current_path).to eq(root_path)
+      expect(page).to have_current_path(root_path, ignore_query: true)
     end
 
     context 'when 2FA is required for the user' do
       before do
+        stub_feature_flags(mr_attention_requests: false)
         group = create(:group, require_two_factor_authentication: true)
         group.add_developer(user)
       end
 
       context 'when the user did not enable 2FA' do
-        it 'asks to set 2FA before asking to accept the terms', :js do
+        it 'asks to set 2FA before asking to accept the terms' do
           expect(authentication_metrics)
             .to increment(:user_authenticated_counter)
 
           visit new_user_session_path
 
           fill_in 'user_login', with: user.email
-          fill_in 'user_password', with: '12345678'
+          fill_in 'user_password', with: Gitlab::Password.test_default
 
           click_button 'Sign in'
 
           expect_to_be_on_terms_page
           click_button 'Accept terms'
 
-          expect(current_path).to eq(profile_two_factor_auth_path)
+          expect(page).to have_current_path(profile_two_factor_auth_path, ignore_query: true)
 
           fill_in 'pin_code', with: user.reload.current_otp
+          fill_in 'current_password', with: user.password
 
           click_button 'Register with two-factor app'
           click_button 'Copy codes'
           click_link 'Proceed'
 
-          expect(current_path).to eq(profile_account_path)
+          expect(page).to have_current_path(profile_account_path, ignore_query: true)
           expect(page).to have_content('You have set up 2FA for your account! If you lose access to your 2FA device, you can use your recovery codes to access your account. Alternatively, if you upload an SSH key, you can use that key to generate additional recovery codes.')
         end
       end
@@ -820,7 +845,7 @@ RSpec.describe 'Login' do
           visit new_user_session_path
 
           fill_in 'user_login', with: user.email
-          fill_in 'user_password', with: '12345678'
+          fill_in 'user_password', with: Gitlab::Password.test_default
           click_button 'Sign in'
 
           fill_in 'user_otp_attempt', with: user.reload.current_otp
@@ -829,14 +854,14 @@ RSpec.describe 'Login' do
           expect_to_be_on_terms_page
           click_button 'Accept terms'
 
-          expect(current_path).to eq(root_path)
+          expect(page).to have_current_path(root_path, ignore_query: true)
         end
       end
     end
 
     context 'when the users password is expired' do
       before do
-        user.update!(password_expires_at: Time.parse('2018-05-08 11:29:46 UTC'))
+        user.update!(password_expires_at: Time.zone.parse('2018-05-08 11:29:46 UTC'))
       end
 
       it 'asks the user to accept the terms before setting a new password' do
@@ -846,16 +871,16 @@ RSpec.describe 'Login' do
         visit new_user_session_path
 
         fill_in 'user_login', with: user.email
-        fill_in 'user_password', with: '12345678'
+        fill_in 'user_password', with: Gitlab::Password.test_default
         click_button 'Sign in'
 
         expect_to_be_on_terms_page
         click_button 'Accept terms'
 
-        expect(current_path).to eq(new_profile_password_path)
+        expect(page).to have_current_path(new_profile_password_path, ignore_query: true)
 
-        fill_in 'user_current_password', with: '12345678'
-        fill_in 'user_password', with: 'new password'
+        fill_in 'user_password', with: Gitlab::Password.test_default
+        fill_in 'user_new_password', with: 'new password'
         fill_in 'user_password_confirmation', with: 'new password'
         click_button 'Set new password'
 
@@ -879,7 +904,7 @@ RSpec.describe 'Login' do
         expect_to_be_on_terms_page
         click_button 'Accept terms'
 
-        expect(current_path).to eq(profile_path)
+        expect(page).to have_current_path(profile_path, ignore_query: true)
 
         fill_in 'Email', with: 'hello@world.com'
 
@@ -907,7 +932,7 @@ RSpec.describe 'Login' do
 
       gitlab_sign_in(user)
 
-      expect(current_path).to eq root_path
+      expect(page).to have_current_path root_path, ignore_query: true
       expect(page).to have_content("Please check your email (#{user.email}) to verify that you own this address and unlock the power of CI/CD.")
     end
 
@@ -920,7 +945,7 @@ RSpec.describe 'Login' do
 
           gitlab_sign_in(user)
 
-          expect(current_path).to eq new_user_session_path
+          expect(page).to have_current_path new_user_session_path, ignore_query: true
           expect(page).to have_content(alert_title)
           expect(page).to have_content(alert_message)
           expect(page).to have_link('Resend confirmation email', href: new_user_confirmation_path)

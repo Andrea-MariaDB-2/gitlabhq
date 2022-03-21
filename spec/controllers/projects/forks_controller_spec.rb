@@ -67,6 +67,18 @@ RSpec.describe Projects::ForksController do
           expect(assigns[:private_forks_count]).to eq(0)
         end
       end
+
+      context 'when unsupported keys are provided' do
+        it 'ignores them' do
+          get :index, params: {
+            namespace_id: project.namespace,
+            project_id: project,
+            user: 'unsupported'
+          }
+
+          expect(assigns[:forks]).to be_present
+        end
+      end
     end
 
     context 'when fork is internal' do
@@ -185,15 +197,6 @@ RSpec.describe Projects::ForksController do
           expect(json_response['namespaces'].length).to eq(2)
           expect(json_response['namespaces'][0]['id']).to eq(user.namespace.id)
           expect(json_response['namespaces'][1]['id']).to eq(group.id)
-        end
-
-        it 'responds with group only when fork_project_form feature flag is disabled' do
-          stub_feature_flags(fork_project_form: false)
-          do_request
-
-          expect(response).to have_gitlab_http_status(:ok)
-          expect(json_response['namespaces'].length).to eq(1)
-          expect(json_response['namespaces'][0]['id']).to eq(group.id)
         end
 
         context 'N+1 queries' do

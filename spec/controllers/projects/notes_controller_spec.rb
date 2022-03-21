@@ -762,9 +762,12 @@ RSpec.describe Projects::NotesController do
       end
     end
 
-    it_behaves_like 'request exceeding rate limit', :clean_gitlab_redis_cache do
-      let(:params) { request_params.except(:format) }
-      let(:request_full_path) { project_notes_path(project) }
+    it_behaves_like 'create notes request exceeding rate limit', :clean_gitlab_redis_cache do
+      let(:current_user) { user }
+
+      def request
+        post :create, params: request_params.except(:format)
+      end
     end
   end
 
@@ -1004,6 +1007,35 @@ RSpec.describe Projects::NotesController do
           end
         end
       end
+    end
+  end
+
+  describe 'GET outdated_line_change' do
+    let(:request_params) do
+      {
+        namespace_id: project.namespace,
+        project_id: project,
+        id: note,
+        format: 'json'
+      }
+    end
+
+    before do
+      service = double
+      allow(service).to receive(:execute).and_return([{ line_text: 'Test' }])
+      allow(MergeRequests::OutdatedDiscussionDiffLinesService).to receive(:new).once.and_return(service)
+
+      sign_in(user)
+      project.add_developer(user)
+    end
+
+    it "successfully renders expected JSON response" do
+      get :outdated_line_change, params: request_params
+
+      expect(response).to have_gitlab_http_status(:ok)
+      expect(json_response).to be_an(Array)
+      expect(json_response.count).to eq(1)
+      expect(json_response.first).to include({ "line_text" => "Test" })
     end
   end
 

@@ -2,12 +2,13 @@
 
 module Backup
   class Builds < Backup::Files
-    attr_reader :progress
-
     def initialize(progress)
-      @progress = progress
+      super(progress, 'builds', Settings.gitlab_ci.builds_path)
+    end
 
-      super('builds', Settings.gitlab_ci.builds_path)
+    override :human_name
+    def human_name
+      _('builds')
     end
   end
 end

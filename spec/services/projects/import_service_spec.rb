@@ -86,6 +86,12 @@ RSpec.describe Projects::ImportService do
       end
 
       context 'with a Github repository' do
+        it 'tracks the start of import' do
+          expect(Gitlab::GithubImport::ParallelImporter).to receive(:track_start_import)
+
+          subject.execute
+        end
+
         it 'succeeds if repository import was scheduled' do
           expect_any_instance_of(Gitlab::GithubImport::ParallelImporter)
             .to receive(:execute)
@@ -193,12 +199,13 @@ RSpec.describe Projects::ImportService do
 
     context 'with valid importer' do
       before do
-        stub_github_omniauth_provider
+        provider = double(:provider).as_null_object
+        stub_omniauth_setting(providers: [provider])
 
         project.import_url = 'https://github.com/vim/vim.git'
         project.import_type = 'github'
 
-        allow(project).to receive(:import_data).and_return(double.as_null_object)
+        allow(project).to receive(:import_data).and_return(double(:import_data).as_null_object)
       end
 
       it 'succeeds if importer succeeds' do
@@ -289,23 +296,6 @@ RSpec.describe Projects::ImportService do
       after do
         subject.execute
       end
-    end
-
-    def stub_github_omniauth_provider
-      provider = OpenStruct.new(
-        'name' => 'github',
-        'app_id' => 'asd123',
-        'app_secret' => 'asd123',
-        'args' => {
-          'client_options' => {
-            'site' => 'https://github.com/api/v3',
-            'authorize_url' => 'https://github.com/login/oauth/authorize',
-            'token_url' => 'https://github.com/login/oauth/access_token'
-          }
-        }
-      )
-
-      stub_omniauth_setting(providers: [provider])
     end
   end
 end

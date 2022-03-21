@@ -1,18 +1,21 @@
 import { GlDrawer } from '@gitlab/ui';
 import { shallowMount } from '@vue/test-utils';
 import { MountingPortal } from 'portal-vue';
+import Vue from 'vue';
 import Vuex from 'vuex';
 import SidebarDropdownWidget from 'ee_else_ce/sidebar/components/sidebar_dropdown_widget.vue';
 import { stubComponent } from 'helpers/stub_component';
 import BoardContentSidebar from '~/boards/components/board_content_sidebar.vue';
-import BoardSidebarLabelsSelect from '~/boards/components/sidebar/board_sidebar_labels_select.vue';
 import BoardSidebarTitle from '~/boards/components/sidebar/board_sidebar_title.vue';
 import { ISSUABLE } from '~/boards/constants';
 import SidebarDateWidget from '~/sidebar/components/date/sidebar_date_widget.vue';
+import SidebarSeverity from '~/sidebar/components/severity/sidebar_severity.vue';
 import SidebarSubscriptionsWidget from '~/sidebar/components/subscriptions/sidebar_subscriptions_widget.vue';
 import SidebarTodoWidget from '~/sidebar/components/todo_toggle/sidebar_todo_widget.vue';
+import SidebarLabelsWidget from '~/vue_shared/components/sidebar/labels_select_widget/labels_select_root.vue';
 import { mockActiveIssue, mockIssue, mockIssueGroupPath, mockIssueProjectPath } from '../mock_data';
 
+Vue.use(Vuex);
 describe('BoardContentSidebar', () => {
   let wrapper;
   let store;
@@ -32,6 +35,7 @@ describe('BoardContentSidebar', () => {
         groupPathForActiveIssue: () => mockIssueGroupPath,
         projectPathForActiveIssue: () => mockIssueProjectPath,
         isSidebarOpen: () => true,
+        isGroupBoard: () => false,
         ...mockGetters,
       },
       actions: mockActions,
@@ -93,7 +97,7 @@ describe('BoardContentSidebar', () => {
   });
 
   it('confirms we render MountingPortal', () => {
-    expect(wrapper.find(MountingPortal).props()).toMatchObject({
+    expect(wrapper.findComponent(MountingPortal).props()).toMatchObject({
       mountTo: '#js-right-sidebar-portal',
       append: true,
       name: 'board-content-sidebar',
@@ -115,8 +119,8 @@ describe('BoardContentSidebar', () => {
     expect(wrapper.findComponent(SidebarTodoWidget).exists()).toBe(true);
   });
 
-  it('renders BoardSidebarLabelsSelect', () => {
-    expect(wrapper.findComponent(BoardSidebarLabelsSelect).exists()).toBe(true);
+  it('renders SidebarLabelsWidget', () => {
+    expect(wrapper.findComponent(SidebarLabelsWidget).exists()).toBe(true);
   });
 
   it('renders BoardSidebarTitle', () => {
@@ -138,6 +142,10 @@ describe('BoardContentSidebar', () => {
     );
   });
 
+  it('does not render SidebarSeverity', () => {
+    expect(wrapper.findComponent(SidebarSeverity).exists()).toBe(false);
+  });
+
   describe('when we emit close', () => {
     let toggleBoardItem;
 
@@ -155,6 +163,19 @@ describe('BoardContentSidebar', () => {
         boardItem: { ...mockActiveIssue, epic: null },
         sidebarType: ISSUABLE,
       });
+    });
+  });
+
+  describe('incident sidebar', () => {
+    beforeEach(() => {
+      createStore({
+        mockGetters: { activeBoardItem: () => ({ ...mockIssue, epic: null, type: 'INCIDENT' }) },
+      });
+      createComponent();
+    });
+
+    it('renders SidebarSeverity', () => {
+      expect(wrapper.findComponent(SidebarSeverity).exists()).toBe(true);
     });
   });
 });

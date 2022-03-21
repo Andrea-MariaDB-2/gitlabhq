@@ -1,6 +1,6 @@
 ---
 stage: Monitor
-group: Monitor
+group: Respond
 info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
 ---
 
@@ -19,20 +19,21 @@ You can create an incident manually or automatically.
 
 ### Create incidents manually
 
-If you have at least Guest [permissions](../../user/permissions.md), to create an
-Incident, you have two options to do this manually.
+> - [Moved](https://gitlab.com/gitlab-org/monitor/monitor/-/issues/24) to GitLab Free in 13.3.
+> - [Permission changed](https://gitlab.com/gitlab-org/gitlab/-/issues/336624) from Guest to Reporter in GitLab 14.5.
+> - Automatic application of the `incident` label [removed](https://gitlab.com/gitlab-org/gitlab/-/issues/290964) in GitLab 14.8.
 
-**From the Incidents List:**
+If you have at least Reporter [permissions](../../user/permissions.md),
+you can create an incident manually from the Incidents List or the Issues List.
 
-> [Moved](https://gitlab.com/gitlab-org/monitor/health/-/issues/24) to GitLab Free in 13.3.
+To create an incident from the Incidents List:
 
-- Navigate to **Monitor > Incidents** and click **Create Incident**.
-- Create a new issue using the `incident` template available when creating it.
-- Create a new issue and assign the `incident` label to it.
+1. Navigate to **Monitor > Incidents** and select **Create Incident**.
+1. Create a new issue using the `incident` template.
 
 ![Incident List Create](img/incident_list_create_v13_3.png)
 
-**From the Issues List:**
+To create an incident from the Issues List:
 
 > [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/230857) in GitLab 13.4.
 
@@ -44,21 +45,19 @@ Incident, you have two options to do this manually.
 
 ![Incident List Create](img/new_incident_create_v13_4.png)
 
-### Create incidents automatically
+### Create incidents automatically **(ULTIMATE)**
 
-> [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/4925) in GitLab Ultimate 11.11.
-
-With Maintainer or higher [permissions](../../user/permissions.md), you can enable
- GitLab to create incident automatically whenever an alert is triggered:
+With at least the Maintainer role, you can enable
+GitLab to create incident automatically whenever an alert is triggered:
 
 1. Navigate to **Settings > Monitor > Incidents** and expand **Incidents**.
 1. Check the **Create an incident** checkbox.
 1. To customize the incident, select an
    [issue template](../../user/project/description_templates.md#create-an-issue-template).
-1. To send [an email notification](paging.md#email-notifications) to users
-   with the [Developer role](../../user/permissions.md), select
+1. To send [an email notification](paging.md#email-notifications-for-alerts) to users
+   with the Developer role, select
    **Send a separate email notification to Developers**. Email notifications are
-   also sent to users with **Maintainer** and **Owner** permissions.
+   also sent to users with the **Maintainer** and **Owner** roles.
 1. Click **Save changes**.
 
 ### Create incidents via the PagerDuty webhook
@@ -69,7 +68,7 @@ You can set up a webhook with PagerDuty to automatically create a GitLab inciden
 for each PagerDuty incident. This configuration requires you to make changes
 in both PagerDuty and GitLab:
 
-1. Sign in as a user with the [Maintainer role](../../user/permissions.md).
+1. Sign in as a user with the Maintainer role.
 1. Navigate to **Settings > Monitor > Incidents** and expand **Incidents**.
 1. Select the **PagerDuty integration** tab:
 
@@ -90,9 +89,9 @@ For users with at least Guest [permissions](../../user/permissions.md), the
 Incident list is available at **Monitor > Incidents**
 in your project's sidebar. The list contains the following metrics:
 
-![Incident List](img/incident_list_v13_5.png)
+![Incident List](img/incident_list_v14_9.png)
 
-- **Status** - To filter incidents by their status, click **Open**, **Closed**,
+- **State** - To filter incidents by their state, select **Open**, **Closed**,
   or **All** above the incident list.
 - **Search** - The Incident list supports a simple free text search, which filters
   on the **Title** and **Incident** fields.
@@ -109,19 +108,26 @@ in your project's sidebar. The list contains the following metrics:
 
 - **Incident** - The description of the incident, which attempts to capture the
   most meaningful data.
+- **Status** - The status of the incident, which can be one of the following values:
+  - **Triggered**
+  - **Acknowledged**
+  - **Resolved**
+
+  In GitLab Premium, this field is also linked to [on-call escalation](paging.md#escalating-an-incident) for the incident.
+
 - **Date created** - How long ago the incident was created. This field uses the
   standard GitLab pattern of `X time ago`, but is supported by a granular date/time
   tooltip depending on the user's locale.
 - **Assignees** - The user assigned to the incident.
 - **Published** - Displays a green check mark (**{check-circle}**) if the incident is published
-  to a [Status Page](status_page.md). **(ULTIMATE)**
+  to a [Status Page](status_page.md).
 
 The Incident list displays incidents sorted by incident created date.
-([Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/229534) to GitLab Free in 13.3.)
+([Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/229534) in GitLab 13.3.)
 To see if a column is sortable, point your mouse at the header. Sortable columns
 display an arrow next to the column name.
 
-Incidents share the [Issues API](../../user/project/issues/index.md).
+Incidents share the [Issues API](../../api/issues.md).
 
 NOTE:
 For a live example of the incident list in action, visit this
@@ -165,18 +171,20 @@ Beneath the highlight bar, GitLab displays a summary that includes the following
 Comments are displayed in threads, but can be displayed chronologically
 [in a timeline view](#timeline-view).
 
-### Metrics
+### Metrics **(PREMIUM)**
 
-> [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/235994) in [GitLab Premium](https://about.gitlab.com/pricing/) 13.8.
+> [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/235994) in GitLab 13.8.
 
 In many cases, incidents are associated to metrics. You can upload screenshots of metric
 charts in the **Metrics** tab:
 
 ![Incident Metrics tab](img/incident_metrics_tab_v13_8.png)
 
-When you upload an image, you can associate it with a URL to the original graph. Users can access the original graph by clicking the image:
+When you upload an image, you can associate the image with text or a link to the original graph.  
 
-![Metric image URL dialog](img/metric_image_url_dialog_v13_8.png)
+![Text link modal](img/incident_metrics_tab_text_link_modal_v14_9.png)
+
+If you add a link, you can access the original graph by clicking the hyperlink above the uploaded image.
 
 ### Alert details
 
@@ -189,7 +197,7 @@ field populated.
 
 ### Timeline view **(PREMIUM)**
 
-> [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/227836) in [GitLab Premium](https://about.gitlab.com/pricing/) 13.5.
+> [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/227836) in GitLab 13.5.
 
 To quickly see the latest updates on an incident, click
 **{comments}** **Turn timeline view on** in the comment bar to display comments
@@ -199,7 +207,7 @@ un-threaded and ordered chronologically, newest to oldest:
 
 ### Service Level Agreement countdown timer **(PREMIUM)**
 
-> [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/241663) in [GitLab Premium](https://about.gitlab.com/pricing/) 13.5.
+> [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/241663) in GitLab 13.5.
 
 You can enable the Service Level Agreement Countdown timer on incidents to track
 the Service Level Agreements (SLAs) you hold with your customers. The timer is
@@ -227,7 +235,7 @@ There are different actions available to help triage and respond to incidents.
 ### Assign incidents
 
 Assign incidents to users that are actively responding. Select **Edit** in the
-right-hand side bar to select or deselect assignees.
+right-hand side bar to select or clear assignees.
 
 ### Associate a milestone
 
@@ -244,6 +252,50 @@ You can also change the severity using the [`/severity` quick action](../../user
 
 Add a to-do for incidents that you want to track in your to-do list. Click the
 **Add a to do** button at the top of the right-hand side bar to add a to-do item.
+
+### Change incident status
+
+> [Introduced](https://gitlab.com/groups/gitlab-org/-/epics/5716) in GitLab 14.9 [with a flag](../../administration/feature_flags.md) named `incident_escalations`. Disabled by default.
+
+FLAG:
+By default this feature is not available. To make it available per project or for your entire
+instance, ask an administrator to [enable the feature flag](../../administration/feature_flags.md)
+named `incident_escalations`.
+
+For users with the Developer role or higher, select **Edit** in the **Status** section of the
+right-hand side bar of an incident, then select a status. **Triggered** is the default status for
+new incidents.
+
+In projects with GitLab Premium, on-call responders can respond to [incident pages](paging.md#escalating-an-incident)
+by changing the status. Setting the status to:
+
+- **Resolved** silences on-call pages for the alert.
+- **Acknowledged** limits on-call pages based on the selected [escalation policy](#change-escalation-policy).
+- **Triggered** from **Resolved** restarts the incident escalating from the beginning.
+
+For [incidents created from alerts](alerts.md#create-an-incident-from-an-alert),
+updating the incident status also updates the alert status.
+
+## Change escalation policy **(PREMIUM)**
+
+> [Introduced](https://gitlab.com/groups/gitlab-org/-/epics/5716) in GitLab 14.9 [with a flag](../../administration/feature_flags.md) named `incident_escalations`. Disabled by default.
+
+FLAG:
+By default this feature is not available. To make it available per project or for your entire
+instance, ask an administrator to [enable the feature flag](../../administration/feature_flags.md)
+named `incident_escalations`.
+
+For users with the Developer role or higher, select **Edit** in the **Escalation policy** section of
+the right-hand side bar of an incident, then select a policy. By default, new incidents do not have
+an escalation policy selected.
+
+Selecting an escalation policy updates the incident status to **Triggered** and begins
+[escalating the incident to on-call responders](paging.md#escalating-an-incident).
+Deselecting an escalation policy halts escalation. Refer to the [incident status](#change-incident-status)
+to manage on-call paging once escalation has begun.
+
+For [incidents created from alerts](alerts.md#create-an-incident-from-an-alert),
+the incident's escalation policy reflects the alert's escalation policy and cannot be changed.
 
 ### Manage incidents from Slack
 
@@ -277,7 +329,7 @@ templates.
 > - [Introduced for Prometheus Integrations](https://gitlab.com/gitlab-org/gitlab/-/issues/13401) in GitLab 12.5.
 > - [Introduced for HTTP Integrations](https://gitlab.com/gitlab-org/gitlab/-/issues/13402) in GitLab 13.4.
 
-With Maintainer or higher [permissions](../../user/permissions.md), you can enable
+With at least the Maintainer role, you can enable
  GitLab to close an incident automatically when a **Recovery Alert** is received:
 
 1. Navigate to **Settings > Monitor > Incidents** and expand **Incidents**.

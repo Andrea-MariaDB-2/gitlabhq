@@ -4,7 +4,7 @@ group: Package
 info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
 ---
 
-# PyPI API
+# PyPI API **(FREE)**
 
 This is the API documentation for [PyPI Packages](../../user/packages/pypi_repository/index.md).
 
@@ -166,8 +166,6 @@ This writes the downloaded file to `simple.html` in the current directory.
 
 ## Upload a package
 
-> Introduced in GitLab 11.3.
-
 Upload a PyPI package:
 
 ```plaintext
@@ -177,6 +175,7 @@ PUT projects/:id/packages/pypi
 | Attribute | Type | Required | Description |
 | --------- | ---- | -------- | ----------- |
 | `id`      | string | yes | The ID or full path of the project. |
+| `requires_python` | string | no | The PyPI required version. |
 
 ```shell
 curl --request PUT \

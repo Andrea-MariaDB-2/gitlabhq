@@ -91,6 +91,8 @@ const Api = {
   projectNotificationSettingsPath: '/api/:version/projects/:id/notification_settings',
   groupNotificationSettingsPath: '/api/:version/groups/:id/notification_settings',
   notificationSettingsPath: '/api/:version/notification_settings',
+  deployKeysPath: '/api/:version/deploy_keys',
+  secureFilesPath: '/api/:version/projects/:project_id/secure_files',
 
   group(groupId, callback = () => {}) {
     const url = Api.buildUrl(Api.groupPath).replace(':id', groupId);
@@ -499,10 +501,10 @@ const Api = {
     return axios.put(url, params);
   },
 
-  applySuggestionBatch(ids) {
+  applySuggestionBatch(ids, message) {
     const url = Api.buildUrl(Api.applySuggestionBatchPath);
 
-    return axios.put(url, { ids });
+    return axios.put(url, { ids, commit_message: message });
   },
 
   commitPipelines(projectId, sha) {
@@ -948,6 +950,19 @@ const Api = {
       .replace(':list_iid', listIid);
 
     return axios.delete(url);
+  },
+
+  deployKeys(params = {}) {
+    const url = Api.buildUrl(this.deployKeysPath);
+
+    return axios.get(url, { params: { per_page: DEFAULT_PER_PAGE, ...params } });
+  },
+
+  // TODO: replace this when GraphQL support has been added https://gitlab.com/gitlab-org/gitlab/-/issues/352184
+  projectSecureFiles(projectId, options = {}) {
+    const url = Api.buildUrl(this.secureFilesPath).replace(':project_id', projectId);
+
+    return axios.get(url, { params: { per_page: DEFAULT_PER_PAGE, ...options } });
   },
 
   async updateNotificationSettings(projectId, groupId, data = {}) {

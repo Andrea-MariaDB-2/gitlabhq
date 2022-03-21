@@ -50,12 +50,6 @@ module Clusters
 
       alias_attribute :ca_pem, :ca_cert
 
-      delegate :enabled?, to: :cluster, allow_nil: true
-      delegate :provided_by_user?, to: :cluster, allow_nil: true
-      delegate :allow_user_defined_namespace?, to: :cluster, allow_nil: true
-
-      alias_method :active?, :enabled?
-
       enum_with_nil authorization_type: {
         unknown_authorization: nil,
         rbac: 1,
@@ -65,6 +59,19 @@ module Clusters
       default_value_for :authorization_type, :rbac
 
       nullify_if_blank :namespace
+
+      def enabled?
+        !!cluster&.enabled?
+      end
+      alias_method :active?, :enabled?
+
+      def provided_by_user?
+        !!cluster&.provided_by_user?
+      end
+
+      def allow_user_defined_namespace?
+        !!cluster&.allow_user_defined_namespace?
+      end
 
       def predefined_variables(project:, environment_name:, kubernetes_namespace: nil)
         Gitlab::Ci::Variables::Collection.new.tap do |variables|
@@ -137,6 +144,14 @@ module Clusters
         kubeclient.patch_ingress(ingress.name, data, namespace)
       end
 
+      def kubeconfig(namespace)
+        to_kubeconfig(
+          url: api_url,
+          namespace: namespace,
+          token: token,
+          ca_pem: ca_pem)
+      end
+
       private
 
       def default_namespace(project, environment_name:)
@@ -152,14 +167,6 @@ module Clusters
           project: project,
           environment_name: environment_name
         ).execute
-      end
-
-      def kubeconfig(namespace)
-        to_kubeconfig(
-          url: api_url,
-          namespace: namespace,
-          token: token,
-          ca_pem: ca_pem)
       end
 
       def read_pods(namespace)

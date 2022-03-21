@@ -28,6 +28,18 @@ RSpec.describe Ci::Stage, :models do
     end
   end
 
+  describe '.by_position' do
+    it 'finds stages by position' do
+      a = create(:ci_stage_entity, position: 1)
+      b = create(:ci_stage_entity, position: 2)
+      c = create(:ci_stage_entity, position: 3)
+
+      expect(described_class.by_position(1)).to contain_exactly(a)
+      expect(described_class.by_position(2)).to contain_exactly(b)
+      expect(described_class.by_position(%w[1 3])).to contain_exactly(a, c)
+    end
+  end
+
   describe '.by_name' do
     it 'finds stages by name' do
       a = create(:ci_stage_entity, name: 'a')
@@ -350,4 +362,11 @@ RSpec.describe Ci::Stage, :models do
   end
 
   it_behaves_like 'manual playable stage', :ci_stage_entity
+
+  context 'loose foreign key on ci_stages.project_id' do
+    it_behaves_like 'cleanup by a loose foreign key' do
+      let!(:parent) { create(:project) }
+      let!(:model) { create(:ci_stage_entity, project: parent) }
+    end
+  end
 end

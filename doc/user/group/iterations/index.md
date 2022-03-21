@@ -7,14 +7,10 @@ info: To determine the technical writer assigned to the Stage/Group associated w
 
 # Iterations **(PREMIUM)**
 
-> - [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/214713) in GitLab 13.1.
-> - Deployed behind a feature flag, disabled by default.
-> - [Enabled by default](https://gitlab.com/gitlab-org/gitlab/-/issues/221047) in GitLab 13.2.
-> - Enabled on GitLab.com.
-> - Can be enabled or disabled per-group.
-> - Recommended for production use.
-> - For GitLab self-managed instances, GitLab administrators can opt to [disable it](#enable-or-disable-iterations). **(PREMIUM ONLY)**
+> - [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/214713) in GitLab 13.1 [with a flag](../../../administration/feature_flags.md) named `group_iterations`. Disabled by default.
+> - [Enabled on self-managed](https://gitlab.com/gitlab-org/gitlab/-/issues/221047) in GitLab 13.2.
 > - Moved to GitLab Premium in 13.9.
+> - [Generally available](https://gitlab.com/gitlab-org/gitlab/-/issues/221047) in GitLab 14.6. [Feature flag `group_iterations`](https://gitlab.com/gitlab-org/gitlab/-/issues/221047) removed.
 
 Iterations are a way to track issues over a period of time. This allows teams
 to track velocity and volatility metrics. Iterations can be used with [milestones](../../project/milestones/index.md)
@@ -38,7 +34,7 @@ In GitLab, iterations are similar to milestones, with a few differences:
 > - Deployed behind a [feature flag](../../feature_flags.md), disabled by default.
 > - Disabled on GitLab.com.
 > - Not recommended for production use.
-> - To use in GitLab self-managed instances, ask a GitLab administrator to [enable it](#enable-or-disable-iteration-cadences). **(PREMIUM SELF)**
+> - To use in GitLab self-managed instances, ask a GitLab administrator to [enable it](#enable-or-disable-iteration-cadences).
 
 This in-development feature might not be available for your use. There can be
 [risks when enabling features still in development](../../../administration/feature_flags.md#risks-when-enabling-features-still-in-development).
@@ -56,7 +52,7 @@ With iteration cadences enabled, you must first
 
 Prerequisites:
 
-- You must have at least the [Developer role](../../permissions.md) for a group.
+- You must have at least the Developer role for a group.
 
 To create an iteration cadence:
 
@@ -69,7 +65,7 @@ To create an iteration cadence:
 
 Prerequisites:
 
-- You must have at least the [Developer role](../../permissions.md) for a group.
+- You must have at least the Developer role for a group.
 
 Deleting an iteration cadence also deletes all iterations within that cadence.
 
@@ -90,7 +86,7 @@ From there you can create a new iteration or select an iteration to get a more d
 
 Prerequisites:
 
-- You must have at least the [Developer role](../../permissions.md) for a group.
+- You must have at least the Developer role for a group.
 
 For manually scheduled iteration cadences, you create and add iterations yourself.
 
@@ -108,9 +104,19 @@ To create an iteration:
 
 Prerequisites:
 
-- You must have at least the [Developer role](../../permissions.md) for a group.
+- You must have at least the Developer role for a group.
 
-To edit an iteration, select the three-dot menu (**{ellipsis_v}**) > **Edit iteration**.
+To edit an iteration, select the three-dot menu (**{ellipsis_v}**) > **Edit**.
+
+## Delete an iteration
+
+> [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/292268) in GitLab 14.3.
+
+Prerequisites:
+
+- You must have at least the Developer role for a group.
+
+To delete an iteration, select the three-dot menu (**{ellipsis_v}**) > **Delete**.
 
 ## Add an issue to an iteration
 
@@ -134,14 +140,42 @@ To view an iteration report, go to the iterations list page and select an iterat
 
 ### Iteration burndown and burnup charts
 
-> - [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/222750) in GitLab 13.5.
+> - [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/222750) in GitLab 13.6.
 > - [Feature flag removed](https://gitlab.com/gitlab-org/gitlab/-/issues/269972) in GitLab 13.7.
+> - Scoped burnup and burndown charts in subgroups and projects [introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/326029) in GitLab 14.9.
 
 The iteration report includes [burndown and burnup charts](../../project/milestones/burndown_and_burnup_charts.md),
 similar to how they appear when viewing a [milestone](../../project/milestones/index.md).
 
 Burndown charts help track completion progress of total scope, and burnup charts track the daily
 total count and weight of issues added to and completed in a given timebox.
+
+#### Iteration charts scoped to subgroups or projects
+
+> [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/326029) in GitLab 14.9.
+
+You can view burndown and burnup charts for iterations created for a group in any of its
+subgroups or projects.
+When you do this, the charts only count the issues that belong to the subgroup or project.
+
+For example, suppose a group has two projects named `Project 1` and `Project 2`.
+Each project has a single issue assigned to the same iteration from the group.
+
+An iteration report generated for the group shows issue counts for all the group's projects:
+
+- Completed: 0 of 2
+- Incomplete: 0 of 2
+- Unstarted: 2 of 2
+- Burndown chart total issues: 2
+- Burnup chart total issues: 2
+
+An iteration report generated for `Project 1` shows only issues that belong to this project:
+
+- Completed: 0 of 1
+- Incomplete: 0 of 1
+- Unstarted: 1 of 1
+- Burndown chart total issues: 1
+- Burnup chart total issues: 1
 
 ### Group issues by label
 
@@ -159,31 +193,7 @@ To group issues by label:
 1. Select the **Filter by label** dropdown.
 1. Select the labels you want to group by in the labels dropdown.
    You can also search for labels by typing in the search input.
-1. Select or tap outside of the label dropdown. The page is now grouped by the selected labels.
-
-## Enable or disable iterations **(PREMIUM SELF)**
-
-GitLab Iterations feature is deployed with a feature flag that is **enabled by default**.
-[GitLab administrators with access to the GitLab Rails console](../../../administration/feature_flags.md)
-can disable it for your instance. `:group_iterations` can be enabled or disabled per-group.
-
-To enable it:
-
-```ruby
-# Instance-wide
-Feature.enable(:group_iterations)
-# or by group
-Feature.enable(:group_iterations, Group.find(<group ID>))
-```
-
-To disable it:
-
-```ruby
-# Instance-wide
-Feature.disable(:group_iterations)
-# or by group
-Feature.disable(:group_iterations, Group.find(<group ID>))
-```
+1. Select any area outside the label dropdown list. The page is now grouped by the selected labels.
 
 ### Enable or disable iteration cadences **(PREMIUM SELF)**
 

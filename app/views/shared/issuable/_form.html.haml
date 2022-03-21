@@ -9,7 +9,6 @@
   = render 'shared/global_alert',
     variant: :danger,
     dismissible: false,
-    is_contained: true,
     alert_class: 'gl-mb-5' do
     .gl-alert-body
       Someone edited the #{issuable.class.model_name.human.downcase} the same time you did.
@@ -20,7 +19,9 @@
 = render 'shared/issuable/form/branch_chooser', issuable: issuable, form: form
 
 .form-group.row
-  = form.label :title, class: 'col-form-label col-sm-2'
+  = form.label :title, class: 'col-form-label col-sm-2' do
+    = _('Title')
+    %i{ aria: { hidden: true } }= '*'
 
   = render 'shared/issuable/form/title', issuable: issuable, form: form, has_wip_commits: commits && commits.detect(&:work_in_progress?)
 #js-suggestions{ data: { project_path: @project.full_path } }
@@ -64,9 +65,9 @@
       for this project.
 
   - if issuable.new_record?
-    = form.submit "Create #{issuable.class.model_name.human.downcase}", class: 'gl-button btn btn-confirm gl-mr-2', data: { qa_selector: 'issuable_create_button' }
+    = form.submit "#{_('Create')} #{issuable.class.model_name.human.downcase}", class: 'gl-button btn btn-confirm gl-mr-2', data: { qa_selector: 'issuable_create_button', track_experiment: 'promote_mr_approvals_in_free', track_action: 'click_button', track_label: 'submit_mr', track_value: 0 }
   - else
-    = form.submit _('Save changes'), class: 'gl-button btn btn-confirm gl-mr-2'
+    = form.submit _('Save changes'), class: 'gl-button btn btn-confirm gl-mr-2', data: { track_experiment: 'promote_mr_approvals_in_free', track_action: 'click_button', track_label: 'submit_mr', track_value: 0 }
 
   - if issuable.new_record?
     = link_to _('Cancel'), polymorphic_path([@project, issuable.class]), class: 'btn gl-button btn-default'
@@ -74,8 +75,6 @@
     = link_to _('Cancel'), polymorphic_path([@project, issuable]), class: 'gl-button btn btn-default'
     - if can?(current_user, :"destroy_#{issuable.to_ability_name}", @project)
       = link_to 'Delete', polymorphic_path([@project, issuable], params: { destroy_confirm: true }), data: { confirm: _('%{issuableType} will be removed! Are you sure?') % { issuableType: issuable.human_class_name } }, method: :delete, class: 'btn gl-button btn-danger btn-danger-secondary gl-float-right'
-
-= render_if_exists 'shared/issuable/remove_approver'
 
 - if issuable.respond_to?(:issue_type)
   = form.hidden_field :issue_type

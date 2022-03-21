@@ -93,6 +93,7 @@ $gray-darker: #4f4f4f;
 $gray-darkest: #c4c4c4;
 
 $black: #fff;
+$black-normal: $gray-900;
 $white: #333;
 $white-light: #2b2b2b;
 $white-normal: #333;
@@ -187,6 +188,12 @@ body.gl-dark {
   --purple-900: #{$purple-900};
   --purple-950: #{$purple-950};
 
+  --dark-icon-color-purple-1: #524a68;
+  --dark-icon-color-purple-2: #715bae;
+  --dark-icon-color-purple-3: #9a79f7;
+  --dark-icon-color-orange-1: #665349;
+  --dark-icon-color-orange-2: #b37a5d;
+
   --gl-text-color: #{$gray-900};
   --border-color: #{$border-color};
 
@@ -202,7 +209,8 @@ body.gl-dark {
     &.btn-info,
     &.btn-success,
     &.btn-danger,
-    &.btn-warning {
+    &.btn-warning,
+    &.btn-confirm {
       &-tertiary {
         mix-blend-mode: screen;
       }
@@ -257,48 +265,10 @@ $line-removed-dark: $red-200;
 $well-expand-item: $gray-200;
 $well-inner-border: $gray-200;
 
-// Misc component overrides that should live elsewhere
-.gl-label {
-  filter: brightness(0.9) contrast(1.1);
-
-  // This applies to the gl-label markups
-  // rendered and cached in the backend (labels_helper.rb)
-  &.gl-label-scoped {
-    .gl-label-text-scoped,
-    .gl-label-close {
-      color: $gray-900;
-    }
-  }
-}
-
-// white-ish text for light labels
-.gl-label-text-light.gl-label-text-light {
-  color: $gray-900;
-}
-
-// This applies to "gl-labels" from "gitlab-ui"
-.gl-label.gl-label-scoped.gl-label-text-dark,
-.gl-label.gl-label-scoped.gl-label-text-light {
-  .gl-label-text-scoped,
-  .gl-label-close {
-    color: $gray-900;
-  }
-}
-
-// duplicated class as the original .atwho-view style is added later
-.atwho-view.atwho-view {
-  background-color: $white;
-  color: $gray-900;
-  border-color: $gray-800;
-}
-
-.nav-sidebar {
-  li.active {
-    box-shadow: none;
-  }
-
-  .sidebar-sub-level-items.fly-out-list {
-    box-shadow: none;
-    border: 1px solid $border-color;
-  }
-}
+$calendar-activity-colors: (
+  #303030,
+  #333861,
+  #4a5593,
+  #6172c5,
+  #788ff7
+);

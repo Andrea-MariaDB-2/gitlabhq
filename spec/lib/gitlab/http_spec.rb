@@ -28,13 +28,55 @@ RSpec.describe Gitlab::HTTP do
   end
 
   context 'when reading the response is too slow' do
+    before(:all) do
+      # Override Net::HTTP to add a delay between sending each response chunk
+      mocked_http = Class.new(Net::HTTP) do
+        def request(*)
+          super do |response|
+            response.instance_eval do
+              def read_body(*)
+                @body.each do |fragment|
+                  sleep 0.002.seconds
+
+                  yield fragment if block_given?
+                end
+              end
+            end
+
+            yield response if block_given?
+
+            response
+          end
+        end
+      end
+
+      @original_net_http = Net.send(:remove_const, :HTTP)
+      @webmock_net_http = WebMock::HttpLibAdapters::NetHttpAdapter.instance_variable_get('@webMockNetHTTP')
+
+      Net.send(:const_set, :HTTP, mocked_http)
+      WebMock::HttpLibAdapters::NetHttpAdapter.instance_variable_set('@webMockNetHTTP', mocked_http)
+
+      # Reload Gitlab::NetHttpAdapter
+      Gitlab.send(:remove_const, :NetHttpAdapter)
+      load "#{Rails.root}/lib/gitlab/net_http_adapter.rb"
+    end
+
     before do
       stub_const("#{described_class}::DEFAULT_READ_TOTAL_TIMEOUT", 0.001.seconds)
 
       WebMock.stub_request(:post, /.*/).to_return do |request|
-        sleep 0.002.seconds
-        { body: 'I\'m slow', status: 200 }
+        { body: %w(a b), status: 200 }
       end
+    end
+
+    after(:all) do
+      Net.send(:remove_const, :HTTP)
+      Net.send(:const_set, :HTTP, @original_net_http)
+      WebMock::HttpLibAdapters::NetHttpAdapter.instance_variable_set('@webMockNetHTTP', @webmock_net_http)
+
+      # Reload Gitlab::NetHttpAdapter
+      Gitlab.send(:remove_const, :NetHttpAdapter)
+      load "#{Rails.root}/lib/gitlab/net_http_adapter.rb"
     end
 
     let(:options) { {} }
@@ -51,7 +93,7 @@ RSpec.describe Gitlab::HTTP do
       end
 
       it 'still calls the block' do
-        expect { |b| described_class.post('http://example.org', **options, &b) }.to yield_with_args
+        expect { |b| described_class.post('http://example.org', **options, &b) }.to yield_successive_args('a', 'b')
       end
     end
 

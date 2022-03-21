@@ -15,13 +15,13 @@ module Ci
 
     ARCHIVE_TRACES_IN = 2.minutes.freeze
 
-    # rubocop: disable CodeReuse/ActiveRecord
     def perform(build_id)
-      Ci::Build.find_by(id: build_id).try do |build|
-        process_build(build)
-      end
+      return unless build = Ci::Build.find_by_id(build_id)
+      return unless build.project
+      return if build.project.pending_delete?
+
+      process_build(build)
     end
-    # rubocop: enable CodeReuse/ActiveRecord
 
     private
 
@@ -39,8 +39,9 @@ module Ci
       # We execute these async as these are independent operations.
       BuildHooksWorker.perform_async(build.id)
       ChatNotificationWorker.perform_async(build.id) if build.pipeline.chat?
+      build.track_deployment_usage
 
-      if build.failed?
+      if build.failed? && !build.auto_retry_expected?
         ::Ci::MergeRequests::AddTodoWhenBuildFailsWorker.perform_async(build.id)
       end
 

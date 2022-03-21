@@ -2,7 +2,7 @@
 
 module AlertManagement
   module Alerts
-    class UpdateService
+    class UpdateService < ::BaseProjectService
       include Gitlab::Utils::StrongMemoize
 
       # @param alert [AlertManagement::Alert]
@@ -10,10 +10,11 @@ module AlertManagement
       # @param params [Hash] Attributes of the alert
       def initialize(alert, current_user, params)
         @alert = alert
-        @current_user = current_user
-        @params = params
         @param_errors = []
         @status = params.delete(:status)
+        @status_change_reason = params.delete(:status_change_reason)
+
+        super(project: alert.project, current_user: current_user, params: params)
       end
 
       def execute
@@ -36,7 +37,7 @@ module AlertManagement
 
       private
 
-      attr_reader :alert, :current_user, :params, :param_errors, :status
+      attr_reader :alert, :param_errors, :status, :status_change_reason
 
       def allowed?
         current_user&.can?(:update_alert_management_alert, alert)
@@ -109,7 +110,7 @@ module AlertManagement
       end
 
       def add_assignee_system_note(old_assignees)
-        SystemNoteService.change_issuable_assignees(alert, alert.project, current_user, old_assignees)
+        SystemNoteService.change_issuable_assignees(alert, project, current_user, old_assignees)
       end
 
       # ------ Status-related behavior -------
@@ -129,14 +130,35 @@ module AlertManagement
       def handle_status_change
         add_status_change_system_note
         resolve_todos if alert.resolved?
+        sync_to_incident if should_sync_to_incident?
       end
 
       def add_status_change_system_note
-        SystemNoteService.change_alert_status(alert, current_user)
+        SystemNoteService.change_alert_status(alert, current_user, status_change_reason)
       end
 
       def resolve_todos
         todo_service.resolve_todos_for_target(alert, current_user)
+      end
+
+      def sync_to_incident
+        ::Issues::UpdateService.new(
+          project: project,
+          current_user: current_user,
+          params: {
+            escalation_status: {
+              status: status,
+              status_change_reason: " by changing the status of #{alert.to_reference(project)}"
+            }
+          }
+        ).execute(alert.issue)
+      end
+
+      def should_sync_to_incident?
+        alert.issue &&
+          alert.issue.supports_escalation? &&
+          alert.issue.escalation_status &&
+          alert.issue.escalation_status.status != alert.status
       end
 
       def filter_duplicate
@@ -154,7 +176,7 @@ module AlertManagement
 
       def open_alerts
         strong_memoize(:open_alerts) do
-          AlertManagement::Alert.for_fingerprint(alert.project, alert.fingerprint).open
+          AlertManagement::Alert.for_fingerprint(project, alert.fingerprint).open
         end
       end
 
@@ -166,7 +188,7 @@ module AlertManagement
 
       def open_alert_url_params
         open_alert = open_alerts.first
-        alert_path = Gitlab::Routing.url_helpers.details_project_alert_management_path(alert.project, open_alert)
+        alert_path = Gitlab::Routing.url_helpers.details_project_alert_management_path(project, open_alert)
 
         {
           link_start: '<a href="%{url}">'.html_safe % { url: alert_path },

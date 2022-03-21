@@ -21,8 +21,9 @@ class ApplicationController < ActionController::Base
   include Impersonation
   include Gitlab::Logging::CloudflareHelper
   include Gitlab::Utils::StrongMemoize
-  include ::Gitlab::WithFeatureCategory
+  include ::Gitlab::EndpointAttributes
   include FlocOptOut
+  include CheckRateLimit
 
   before_action :authenticate_user!, except: [:route_not_found]
   before_action :enforce_terms!, if: :should_enforce_terms?
@@ -42,6 +43,7 @@ class ApplicationController < ActionController::Base
   # Make sure the `auth_user` is memoized so it can be logged, we do this after
   # all other before filters that could have set the user.
   before_action :auth_user
+  before_action :limit_session_time, if: -> { !current_user }
 
   prepend_around_action :set_current_context
 
@@ -51,7 +53,7 @@ class ApplicationController < ActionController::Base
   around_action :set_current_admin
 
   after_action :set_page_title_header, if: :json_request?
-  after_action :limit_session_time, if: -> { !current_user }
+  after_action :ensure_authenticated_session_time, if: -> { current_user }
 
   protect_from_forgery with: :exception, prepend: true
 
@@ -62,11 +64,12 @@ class ApplicationController < ActionController::Base
     :bitbucket_import_enabled?, :bitbucket_import_configured?,
     :bitbucket_server_import_enabled?, :fogbugz_import_enabled?,
     :git_import_enabled?, :gitlab_project_import_enabled?,
-    :manifest_import_enabled?, :phabricator_import_enabled?
+    :manifest_import_enabled?, :phabricator_import_enabled?,
+    :masked_page_url
 
-  # Adds `no-store` to the DEFAULT_CACHE_CONTROL, to prevent security
-  # concerns due to caching private data.
-  DEFAULT_GITLAB_CACHE_CONTROL = "#{ActionDispatch::Http::Cache::Response::DEFAULT_CACHE_CONTROL}, no-store"
+  def self.endpoint_id_for_action(action_name)
+    "#{self.name}##{action_name}"
+  end
 
   rescue_from Encoding::CompatibilityError do |exception|
     log_exception(exception)
@@ -102,6 +105,21 @@ class ApplicationController < ActionController::Base
     head :forbidden, retry_after: Gitlab::Auth::UniqueIpsLimiter.config.unique_ips_limit_time_window
   end
 
+  rescue_from RateLimitedService::RateLimitedError do |e|
+    e.log_request(request, current_user)
+    response.headers.merge!(e.headers)
+    render plain: e.message, status: :too_many_requests
+  end
+
+  content_security_policy do |p|
+    next if p.directives.blank?
+    next unless Gitlab::CurrentSettings.snowplow_enabled? && !Gitlab::CurrentSettings.snowplow_collector_hostname.blank?
+
+    default_connect_src = p.directives['connect-src'] || p.directives['default-src']
+    connect_src_values = Array.wrap(default_connect_src) | [Gitlab::CurrentSettings.snowplow_collector_hostname]
+    p.connect_src(*connect_src_values)
+  end
+
   def redirect_back_or_default(default: root_path, options: {})
     redirect_back(fallback_location: default, **options)
   end
@@ -129,6 +147,14 @@ class ApplicationController < ActionController::Base
     end
   end
 
+  def feature_category
+    self.class.feature_category_for_action(action_name).to_s
+  end
+
+  def urgency
+    self.class.urgency_for_action(action_name)
+  end
+
   protected
 
   def workhorse_excluded_content_types
@@ -143,7 +169,8 @@ class ApplicationController < ActionController::Base
 
     payload[Labkit::Correlation::CorrelationId::LOG_KEY] = Labkit::Correlation::CorrelationId.current_id
     payload[:metadata] = @current_context
-
+    payload[:request_urgency] = urgency&.name
+    payload[:target_duration_s] = urgency&.duration
     logged_user = auth_user
     if logged_user.present?
       payload[:user_id] = logged_user.try(:id)
@@ -219,19 +246,19 @@ class ApplicationController < ActionController::Base
   end
 
   def git_not_found!
-    render "errors/git_not_found.html", layout: "errors", status: :not_found
+    render template: "errors/git_not_found", formats: :html, layout: "errors", status: :not_found
   end
 
   def render_403
     respond_to do |format|
-      format.html { render "errors/access_denied", layout: "errors", status: :forbidden }
+      format.html { render template: "errors/access_denied", formats: :html, layout: "errors", status: :forbidden }
       format.any { head :forbidden }
     end
   end
 
   def render_404
     respond_to do |format|
-      format.html { render "errors/not_found", layout: "errors", status: :not_found }
+      format.html { render template: "errors/not_found", formats: :html, layout: "errors", status: :not_found }
       # Prevent the Rails CSRF protector from thinking a missing .js file is a JavaScript file
       format.js { render json: '', status: :not_found, content_type: 'application/json' }
       format.any { head :not_found }
@@ -255,17 +282,14 @@ class ApplicationController < ActionController::Base
   end
 
   def default_headers
-    headers['X-Frame-Options'] = 'DENY'
+    headers['X-Frame-Options'] = 'SAMEORIGIN'
     headers['X-XSS-Protection'] = '1; mode=block'
     headers['X-UA-Compatible'] = 'IE=edge'
     headers['X-Content-Type-Options'] = 'nosniff'
   end
 
   def default_cache_headers
-    if current_user
-      headers['Cache-Control'] = default_cache_control
-      headers['Pragma'] = 'no-cache' # HTTP 1.0 compatibility
-    end
+    headers['Pragma'] = 'no-cache' # HTTP 1.0 compatibility
   end
 
   def stream_csv_headers(csv_filename)
@@ -274,14 +298,6 @@ class ApplicationController < ActionController::Base
 
     headers['Content-Type'] = 'text/csv; charset=utf-8; header=present'
     headers['Content-Disposition'] = "attachment; filename=\"#{csv_filename}\""
-  end
-
-  def default_cache_control
-    if request.xhr?
-      ActionDispatch::Http::Cache::Response::DEFAULT_CACHE_CONTROL
-    else
-      DEFAULT_GITLAB_CACHE_CONTROL
-    end
   end
 
   def validate_user_service_ticket!
@@ -455,7 +471,7 @@ class ApplicationController < ActionController::Base
       user: -> { context_user },
       project: -> { @project if @project&.persisted? },
       namespace: -> { @group if @group&.persisted? },
-      caller_id: caller_id,
+      caller_id: self.class.endpoint_id_for_action(action_name),
       remote_ip: request.ip,
       feature_category: feature_category
     )
@@ -539,14 +555,6 @@ class ApplicationController < ActionController::Base
   # `auth_user` again would also trigger the Warden callbacks again
   def context_user
     auth_user if strong_memoized?(:auth_user)
-  end
-
-  def caller_id
-    "#{self.class.name}##{action_name}"
-  end
-
-  def feature_category
-    self.class.feature_category_for_action(action_name).to_s
   end
 
   def required_signup_info

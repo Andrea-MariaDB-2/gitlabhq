@@ -73,6 +73,46 @@ RSpec.describe Explore::ProjectsController do
           expect(assigns(:projects)).to eq [project1, project2]
         end
       end
+
+      context 'projects aimed for deletion' do
+        let(:project1) { create(:project, :public, updated_at: 3.days.ago) }
+        let(:project2) { create(:project, :public, updated_at: 1.day.ago) }
+        let(:aimed_for_deletion_project) { create(:project, :public, :archived, updated_at: 2.days.ago, marked_for_deletion_at: 2.days.ago) }
+
+        before do
+          create(:trending_project, project: project1)
+          create(:trending_project, project: project2)
+          create(:trending_project, project: aimed_for_deletion_project)
+        end
+
+        it 'does not list projects aimed for deletion' do
+          get :trending
+
+          expect(assigns(:projects)).to eq [project2, project1]
+        end
+      end
+    end
+
+    describe 'GET #topic' do
+      context 'when topic does not exist' do
+        it 'renders a 404 error' do
+          get :topic, params: { topic_name: 'topic1' }
+
+          expect(response).to have_gitlab_http_status(:not_found)
+        end
+      end
+      context 'when topic exists' do
+        before do
+          create(:topic, name: 'topic1')
+        end
+
+        it 'renders the template' do
+          get :topic, params: { topic_name: 'topic1' }
+
+          expect(response).to have_gitlab_http_status(:ok)
+          expect(response).to render_template('topic')
+        end
+      end
     end
   end
 
@@ -200,6 +240,24 @@ RSpec.describe Explore::ProjectsController do
         let(:sorting_param) { 'created_asc' }
       end
     end
+
+    describe 'GET #index' do
+      let(:controller_action) { :index }
+      let(:params_with_name) { { name: 'some project' } }
+
+      context 'when disable_anonymous_project_search is enabled' do
+        before do
+          stub_feature_flags(disable_anonymous_project_search: true)
+        end
+
+        it 'does not show a flash message' do
+          sign_in(create(:user))
+          get controller_action, params: params_with_name
+
+          expect(flash.now[:notice]).to be_nil
+        end
+      end
+    end
   end
 
   context 'when user is not signed in' do
@@ -227,6 +285,51 @@ RSpec.describe Explore::ProjectsController do
         get :index
 
         expect(response).to redirect_to new_user_session_path
+      end
+    end
+
+    describe 'GET #index' do
+      let(:controller_action) { :index }
+      let(:params_with_name) { { name: 'some project' } }
+
+      context 'when disable_anonymous_project_search is enabled' do
+        before do
+          stub_feature_flags(disable_anonymous_project_search: true)
+        end
+
+        it 'shows a flash message' do
+          get controller_action, params: params_with_name
+
+          expect(flash.now[:notice]).to eq('You must sign in to search for specific projects.')
+        end
+
+        context 'when search param is not given' do
+          it 'does not show a flash message' do
+            get controller_action
+
+            expect(flash.now[:notice]).to be_nil
+          end
+        end
+
+        context 'when format is not HTML' do
+          it 'does not show a flash message' do
+            get controller_action, params: params_with_name.merge(format: :atom)
+
+            expect(flash.now[:notice]).to be_nil
+          end
+        end
+      end
+
+      context 'when disable_anonymous_project_search is disabled' do
+        before do
+          stub_feature_flags(disable_anonymous_project_search: false)
+        end
+
+        it 'does not show a flash message' do
+          get controller_action, params: params_with_name
+
+          expect(flash.now[:notice]).to be_nil
+        end
       end
     end
   end

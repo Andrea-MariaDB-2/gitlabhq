@@ -1,7 +1,7 @@
 import { shallowMount } from '@vue/test-utils';
 
 import { EDITOR_READY_EVENT } from '~/editor/constants';
-import { SourceEditorExtension } from '~/editor/extensions/source_editor_extension_base';
+import { SOURCE_EDITOR_DEBOUNCE } from '~/pipeline_editor/constants';
 import TextEditor from '~/pipeline_editor/components/editor/text_editor.vue';
 import {
   mockCiConfigPath,
@@ -18,19 +18,12 @@ describe('Pipeline Editor | Text editor component', () => {
   let editorReadyListener;
   let mockUse;
   let mockRegisterCiSchema;
+  let mockEditorInstance;
+  let editorInstanceDetail;
 
   const MockSourceEditor = {
     template: '<div/>',
-    props: ['value', 'fileName'],
-    mounted() {
-      this.$emit(EDITOR_READY_EVENT);
-    },
-    methods: {
-      getEditor: () => ({
-        use: mockUse,
-        registerCiSchema: mockRegisterCiSchema,
-      }),
-    },
+    props: ['value', 'fileName', 'editorOptions', 'debounceValue'],
   };
 
   const createComponent = (glFeatures = {}, mountFn = shallowMount) => {
@@ -60,7 +53,18 @@ describe('Pipeline Editor | Text editor component', () => {
   const findEditor = () => wrapper.findComponent(MockSourceEditor);
 
   beforeEach(() => {
-    SourceEditorExtension.deferRerender = jest.fn();
+    editorReadyListener = jest.fn();
+    mockUse = jest.fn();
+    mockRegisterCiSchema = jest.fn();
+    mockEditorInstance = {
+      use: mockUse,
+      registerCiSchema: mockRegisterCiSchema,
+    };
+    editorInstanceDetail = {
+      detail: {
+        instance: mockEditorInstance,
+      },
+    };
   });
 
   afterEach(() => {
@@ -72,10 +76,6 @@ describe('Pipeline Editor | Text editor component', () => {
 
   describe('template', () => {
     beforeEach(() => {
-      editorReadyListener = jest.fn();
-      mockUse = jest.fn();
-      mockRegisterCiSchema = jest.fn();
-
       createComponent();
     });
 
@@ -91,8 +91,16 @@ describe('Pipeline Editor | Text editor component', () => {
       expect(findEditor().props('fileName')).toBe(mockCiConfigPath);
     });
 
+    it('passes down editor configs options', () => {
+      expect(findEditor().props('editorOptions')).toEqual({ quickSuggestions: true });
+    });
+
+    it('passes down editor debounce value', () => {
+      expect(findEditor().props('debounceValue')).toBe(SOURCE_EDITOR_DEBOUNCE);
+    });
+
     it('bubbles up events', () => {
-      findEditor().vm.$emit(EDITOR_READY_EVENT);
+      findEditor().vm.$emit(EDITOR_READY_EVENT, editorInstanceDetail);
 
       expect(editorReadyListener).toHaveBeenCalled();
     });
@@ -102,28 +110,19 @@ describe('Pipeline Editor | Text editor component', () => {
     describe('when `schema_linting` feature flag is on', () => {
       beforeEach(() => {
         createComponent({ schemaLinting: true });
-        // Since the editor will have already mounted, the event will have fired.
-        // To ensure we properly test this, we clear the mock and re-remit the event.
-        mockRegisterCiSchema.mockClear();
-        mockUse.mockClear();
-        findEditor().vm.$emit(EDITOR_READY_EVENT);
+        findEditor().vm.$emit(EDITOR_READY_EVENT, editorInstanceDetail);
       });
 
       it('configures editor with syntax highlight', () => {
         expect(mockUse).toHaveBeenCalledTimes(1);
         expect(mockRegisterCiSchema).toHaveBeenCalledTimes(1);
-        expect(mockRegisterCiSchema).toHaveBeenCalledWith({
-          projectNamespace: mockProjectNamespace,
-          projectPath: mockProjectPath,
-          ref: mockCommitSha,
-        });
       });
     });
 
     describe('when `schema_linting` feature flag is off', () => {
       beforeEach(() => {
         createComponent();
-        findEditor().vm.$emit(EDITOR_READY_EVENT);
+        findEditor().vm.$emit(EDITOR_READY_EVENT, editorInstanceDetail);
       });
 
       it('does not call the register CI schema function', () => {

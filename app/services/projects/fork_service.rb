@@ -61,12 +61,15 @@ module Projects
         # initializing the project, as that would cause a foreign key constraint
         # exception.
         relations_block:           -> (project) { build_fork_network_member(project) },
-        skip_disk_validation:      skip_disk_validation
+        skip_disk_validation:      skip_disk_validation,
+        external_authorization_classification_label: @project.external_authorization_classification_label
       }
 
       if @project.avatar.present? && @project.avatar.image?
         new_params[:avatar] = @project.avatar
       end
+
+      new_params[:mr_default_target_self] = target_mr_default_target_self unless target_mr_default_target_self.nil?
 
       new_params.merge!(@project.object_pool_params)
 
@@ -125,6 +128,10 @@ module Projects
       target_level = [target_level, Gitlab::VisibilityLevel.level_value(params[:visibility])].min if params.key?(:visibility)
 
       Gitlab::VisibilityLevel.closest_allowed_level(target_level)
+    end
+
+    def target_mr_default_target_self
+      @target_mr_default_target_self ||= params[:mr_default_target_self]
     end
   end
 end

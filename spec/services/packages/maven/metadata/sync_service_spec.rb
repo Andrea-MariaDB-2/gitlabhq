@@ -9,6 +9,7 @@ RSpec.describe ::Packages::Maven::Metadata::SyncService do
   let_it_be(:user) { create(:user) }
   let_it_be_with_reload(:versionless_package_for_versions) { create(:maven_package, name: 'test', version: nil, project: project) }
   let_it_be_with_reload(:metadata_file_for_versions) { create(:package_file, :xml, package: versionless_package_for_versions) }
+  let_it_be(:package_file_pending_destruction) { create(:package_file, :pending_destruction, package: versionless_package_for_versions, file_name: Packages::Maven::Metadata.filename) }
 
   let(:service) { described_class.new(container: project, current_user: user, params: { package_name: versionless_package_for_versions.name }) }
 

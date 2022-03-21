@@ -1,0 +1,7 @@
+query getEnvironmentFolder($environment: NestedLocalEnvironment, $scope: String) {
+  folder(environment: $environment, scope: $scope) @client {
+    availableCount
+    environments
+    stoppedCount
+  }
+}

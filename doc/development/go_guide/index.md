@@ -7,7 +7,7 @@ info: To determine the technical writer assigned to the Stage/Group associated w
 # Go standards and style guidelines
 
 This document describes various guidelines and best practices for GitLab
-projects using the [Go language](https://golang.org).
+projects using the [Go language](https://go.dev/).
 
 ## Overview
 
@@ -22,6 +22,16 @@ This page aims to define and organize our Go guidelines, based on our various
 experiences. Several projects were started with different standards and they
 can still have specifics. They are described in their respective
 `README.md` or `PROCESS.md` files.
+
+## Go language versions
+
+The Go upgrade documentation [provides an overview](go_upgrade.md#overview)
+of how GitLab manages and ships Go binary support.
+
+If a GitLab component requires a newer version of Go, please
+follow the [upgrade process](go_upgrade.md#updating-go-version) to ensure no customer, team, or component is adversely impacted.
+
+Sometimes, individual projects must also [manage builds with multiple versions of Go](go_upgrade.md#supporting-multiple-go-versions).
 
 ## Dependency Management
 
@@ -65,7 +75,7 @@ Remember to run
 [SAST](../../user/application_security/sast/index.md) and [Dependency Scanning](../../user/application_security/dependency_scanning/index.md)
 **(ULTIMATE)** on your project (or at least the
 [`gosec` analyzer](https://gitlab.com/gitlab-org/security-products/analyzers/gosec)),
-and to follow our [Security requirements](../code_review.md#security-requirements).
+and to follow our [Security requirements](../code_review.md#security).
 
 Web servers can take advantages of middlewares like [Secure](https://github.com/unrolled/secure).
 
@@ -93,7 +103,7 @@ projects:
 - Use `goimports` before committing.
   [`goimports`](https://pkg.go.dev/golang.org/x/tools/cmd/goimports)
   is a tool that automatically formats Go source code using
-  [`Gofmt`](https://golang.org/cmd/gofmt/), in addition to formatting import lines,
+  [`Gofmt`](https://pkg.go.dev/cmd/gofmt), in addition to formatting import lines,
   adding missing ones and removing unreferenced ones.
 
   Most editors/IDEs allow you to run commands before/after saving a file, you can set it
@@ -186,7 +196,7 @@ deploy a new pod, migrating the data automatically.
 ### Testing frameworks
 
 We should not use any specific library or framework for testing, as the
-[standard library](https://golang.org/pkg/) provides already everything to get
+[standard library](https://pkg.go.dev/std) provides already everything to get
 started. If there is a need for more sophisticated testing tools, the following
 external dependencies might be worth considering in case we decide to use a specific
 library or framework:
@@ -196,7 +206,7 @@ library or framework:
 
 ### Subtests
 
-Use [subtests](https://blog.golang.org/subtests) whenever possible to improve
+Use [subtests](https://go.dev/blog/subtests) whenever possible to improve
 code readability and test output.
 
 ### Better output in tests
@@ -269,7 +279,7 @@ to make the test output easily readable.
 ### Benchmarks
 
 Programs handling a lot of IO or complex operations should always include
-[benchmarks](https://golang.org/pkg/testing/#hdr-Benchmarks), to ensure
+[benchmarks](https://pkg.go.dev/testing#hdr-Benchmarks), to ensure
 performance consistency over time.
 
 ## Error handling
@@ -319,7 +329,7 @@ A few things to keep in mind when adding context:
 
 ### References for working with errors
 
-- [Go 1.13 errors](https://blog.golang.org/go1.13-errors).
+- [Go 1.13 errors](https://go.dev/blog/go1.13-errors).
 - [Programing with
   errors](https://peter.bourgon.org/blog/2019/09/11/programming-with-errors.html).
 - [Don't just check errors, handle them
@@ -354,8 +364,7 @@ JSON format, as all our infrastructure assumes that. When using
 [Logrus](https://github.com/sirupsen/logrus) you can turn on structured
 logging simply by using the build in [JSON
 formatter](https://github.com/sirupsen/logrus#formatters). This follows the
-same logging type we use in our [Ruby
-applications](../logging.md#use-structured-json-logging).
+same logging type we use in our [Ruby applications](../logging.md#use-structured-json-logging).
 
 #### How to use Logrus
 
@@ -417,70 +426,6 @@ Generated Docker images should have the program at their `Entrypoint` to create
 portable commands. That way, anyone can run the image, and without parameters
 it displays its help message (if `cli` has been used).
 
-## Distributing Go binaries
-
-With the exception of [GitLab Runner](https://gitlab.com/gitlab-org/gitlab-runner),
-which publishes its own binaries, our Go binaries are created by projects
-managed by the [Distribution group](https://about.gitlab.com/handbook/product/categories/#distribution-group).
-
-The [Omnibus GitLab](https://gitlab.com/gitlab-org/omnibus-gitlab) project creates a
-single, monolithic operating system package containing all the binaries, while
-the [Cloud-Native GitLab (CNG)](https://gitlab.com/gitlab-org/build/CNG) project
-publishes a set of Docker images and Helm charts to glue them together.
-
-Both approaches use the same version of Go for all projects, so it's important
-to ensure all our Go-using projects have at least one Go version in common in
-their test matrices. You can check the version of Go currently being used by
-[Omnibus](https://gitlab.com/gitlab-org/gitlab-omnibus-builder/blob/master/docker/Dockerfile_debian_10#L59),
-and the version being used for [CNG](https://gitlab.com/gitlab-org/build/cng/blob/master/ci_files/variables.yml#L12).
-
-### Updating Go version
-
-We should always use a [supported version](https://golang.org/doc/devel/release#policy)
-of Go, that is, one of the three most recent minor releases, and should always use
-the most recent patch-level for that version, as it may contain security fixes.
-
-Changing the version affects every project being compiled, so it's important to
-ensure that all projects have been updated to test against the new Go version
-before changing the package builders to use it. Despite [Go's compatibility promise](https://golang.org/doc/go1compat),
-changes between minor versions can expose bugs or cause problems in our projects.
-
-Once you've picked a new Go version to use, the steps to update Omnibus and CNG
-are:
-
-- [Create a merge request in the CNG project](https://gitlab.com/gitlab-org/build/CNG/-/edit/master/ci_files/variables.yml?branch_name=update-go-version),
-  update the `GO_VERSION` in `ci_files/variables.yml`.
-- [Create a merge request in the `gitlab-omnibus-builder` project](https://gitlab.com/gitlab-org/gitlab-omnibus-builder/-/edit/master/docker/VERSIONS?branch_name=update-go-version),
-  update the `GO_VERSION` in `docker/VERSIONS`.
-- Tag a new release of `gitlab-omnibus-builder` containing the change.
-- [Create a merge request in the `omnibus-gitlab` project](https://gitlab.com/gitlab-org/omnibus-gitlab/edit/master/.gitlab-ci.yml?branch_name=update-gitlab-omnibus-builder-version),
-  update the `BUILDER_IMAGE_REVISION` to match the newly-created tag.
-
-To reduce unnecessary differences between two distribution methods, Omnibus and
-CNG **should always use the same Go version**.
-
-### Supporting multiple Go versions
-
-Individual Golang-projects need to support multiple Go versions for the following reasons:
-
-1. When a new Go release is out, we should start integrating it into the CI pipelines to verify compatibility with the new compiler.
-1. We must support the [Omnibus official Go version](#updating-go-version), which may be behind the latest minor release.
-1. When Omnibus switches Go version, we still may need to support the old one for security backports.
-
-These 3 requirements may easily be satisfied by keeping support for the 3 latest minor versions of Go.
-
-It's ok to drop support for the oldest Go version and support only 2 latest releases,
-if this is enough to support backports to the last 3 GitLab minor releases.
-
-Example:
-
-In case we want to drop support for `go 1.11` in GitLab `12.10`, we need to verify which Go versions we are using in `12.9`, `12.8`, and `12.7`.
-
-We do not consider the active milestone, `12.10`, because a backport for `12.7` is required in case of a critical security release.
-
-1. If both [Omnibus and CNG](#updating-go-version) were using Go `1.12` in GitLab `12.7` and later, then we safely drop support for `1.11`.
-1. If Omnibus or CNG were using `1.11` in GitLab `12.7`, then we still need to keep support for Go `1.11` for easier backporting of security fixes.
-
 ## Secure Team standards and style guidelines
 
 The following are some style guidelines that are specific to the Secure Team.
@@ -490,7 +435,7 @@ The following are some style guidelines that are specific to the Secure Team.
 Use `goimports -local gitlab.com/gitlab-org` before committing.
 [`goimports`](https://pkg.go.dev/golang.org/x/tools/cmd/goimports)
 is a tool that automatically formats Go source code using
-[`Gofmt`](https://golang.org/cmd/gofmt/), in addition to formatting import lines,
+[`Gofmt`](https://pkg.go.dev/cmd/gofmt), in addition to formatting import lines,
 adding missing ones and removing unreferenced ones.
 By using the `-local gitlab.com/gitlab-org` option, `goimports` groups locally referenced
 packages separately from external ones. See
@@ -504,6 +449,78 @@ up to run `goimports -local gitlab.com/gitlab-org` so that it's applied to every
 The conventional Secure [analyzer](https://gitlab.com/gitlab-org/security-products/analyzers/) has a [`convert` function](https://gitlab.com/gitlab-org/security-products/analyzers/command/-/blob/main/convert.go#L15-17) that converts SAST/DAST scanner reports into [GitLab Security Reports](https://gitlab.com/gitlab-org/security-products/security-report-schemas). When writing tests for the `convert` function, we should make use of [test fixtures](https://dave.cheney.net/2016/05/10/test-fixtures-in-go) using a `testdata` directory at the root of the analyzer's repository. The `testdata` directory should contain two subdirectories: `expect` and `reports`. The `reports` directory should contain sample SAST/DAST scanner reports which are passed into the `convert` function during the test setup. The `expect` directory should contain the expected GitLab Security Report that the `convert` returns. See Secret Detection for an [example](https://gitlab.com/gitlab-org/security-products/analyzers/secrets/-/blob/160424589ef1eed7b91b59484e019095bc7233bd/convert_test.go#L13-66).
 
 If the scanner report is small, less than 35 lines, then feel free to [inline the report](https://gitlab.com/gitlab-org/security-products/analyzers/sobelow/-/blob/8bd2428a/convert/convert_test.go#L13-77) rather than use a `testdata` directory.
+
+#### Test Diffs
+
+The [go-cmp](https://github.com/google/go-cmp) package should be used when comparing large structs in tests. It makes it possible to output a specific diff where the two structs differ, rather than seeing the whole of both structs printed out in the test logs. Here is a small example:
+
+```golang
+package main
+
+import (
+  "reflect"
+  "testing"
+
+  "github.com/google/go-cmp/cmp"
+)
+
+type Foo struct {
+  Desc  Bar
+  Point Baz
+}
+
+type Bar struct {
+  A string
+  B string
+}
+
+type Baz struct {
+  X int
+  Y int
+}
+
+func TestHelloWorld(t *testing.T) {
+  want := Foo{
+    Desc:  Bar{A: "a", B: "b"},
+    Point: Baz{X: 1, Y: 2},
+  }
+
+  got := Foo{
+    Desc:  Bar{A: "a", B: "b"},
+    Point: Baz{X: 2, Y: 2},
+  }
+
+  t.Log("reflect comparison:")
+  if !reflect.DeepEqual(got, want) {
+    t.Errorf("Wrong result. want:\n%v\nGot:\n%v", want, got)
+  }
+
+  t.Log("cmp comparison:")
+  if diff := cmp.Diff(want, got); diff != "" {
+    t.Errorf("Wrong result. (-want +got):\n%s", diff)
+  }
+}
+```
+
+The output demonstrates why `go-cmp` is far superior when comparing large structs. Even though you could spot the difference with this small difference, it quickly gets unwieldy as the data grows.
+
+```plaintext
+  main_test.go:36: reflect comparison:
+  main_test.go:38: Wrong result. want:
+      {{a b} {1 2}}
+      Got:
+      {{a b} {2 2}}
+  main_test.go:41: cmp comparison:
+  main_test.go:43: Wrong result. (-want +got):
+        main.Foo{
+              Desc: {A: "a", B: "b"},
+              Point: main.Baz{
+      -               X: 1,
+      +               X: 2,
+                      Y: 2,
+              },
+        }
+```
 
 ---
 

@@ -4,7 +4,12 @@ group: Configure
 info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
 ---
 
-# Crossplane configuration **(FREE)**
+# Crossplane configuration (DEPRECATED) **(FREE)**
+
+> [Deprecated](https://gitlab.com/groups/gitlab-org/configure/-/epics/8) in GitLab 14.5.
+
+WARNING:
+This feature was [deprecated](https://gitlab.com/groups/gitlab-org/configure/-/epics/8) in GitLab 14.5.
 
 After [installing](applications.md#install-crossplane-using-gitlab-cicd) Crossplane, you must configure it for use.
 The process of configuring Crossplane includes:
@@ -75,7 +80,7 @@ provided can manage resources in the `database.crossplane.io` API group:
 
 ## Configure Crossplane with a cloud provider
 
-See [Configure Your Cloud Provider Account](https://crossplane.github.io/docs/v0.4/cloud-providers.html)
+See [Configure Your Cloud Provider Account](https://crossplane.github.io/docs/v1.6/)
 to configure the installed cloud provider stack with a user account.
 
 The Secret, and the Provider resource referencing the Secret, must be

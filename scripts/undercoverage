@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+
+bundle exec undercover -c "${1:-$(git merge-base origin/master HEAD)}"

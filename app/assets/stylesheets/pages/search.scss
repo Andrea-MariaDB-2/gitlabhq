@@ -37,6 +37,25 @@ input[type='checkbox']:hover {
     0 0 0 1px lighten($dropdown-input-focus-shadow, 20%);
 }
 
+.header-search {
+  width: 320px;
+
+  input,
+  svg {
+    transition: border-color ease-in-out $default-transition-duration,
+      background-color ease-in-out $default-transition-duration;
+  }
+}
+
+.header-search-dropdown-menu {
+  max-height: $dropdown-max-height;
+  top: $header-height;
+}
+
+.header-search-dropdown-content {
+  max-height: $dropdown-max-height;
+}
+
 .search {
   margin: 0 8px;
 
@@ -233,7 +252,8 @@ input[type='checkbox']:hover {
 
   .btn-search,
   .btn-success,
-  .dropdown-menu-toggle {
+  .dropdown-menu-toggle,
+  .gl-new-dropdown {
     width: 100%;
     margin-top: 5px;
 
@@ -251,7 +271,8 @@ input[type='checkbox']:hover {
     }
   }
 
-  .dropdown-menu-toggle {
+  .dropdown-menu-toggle,
+  .gl-new-dropdown {
     @include media-breakpoint-up(sm) {
       width: 180px;
       margin-top: 0;
@@ -302,12 +323,58 @@ input[type='checkbox']:hover {
   }
 }
 
-// Disable webkit input icons, link to solution: https://stackoverflow.com/questions/9421551/how-do-i-remove-all-default-webkit-search-field-styling
-/* stylelint-disable property-no-vendor-prefix */
-input[type='search']::-webkit-search-decoration,
-input[type='search']::-webkit-search-cancel-button,
-input[type='search']::-webkit-search-results-button,
-input[type='search']::-webkit-search-results-decoration {
-  -webkit-appearance: none;
+// This overrides parts of the Project File View CSS
+// We leverage most of the styling but broke off
+// from how we were doing it in `shared/file_highlight`
+#search-blob-content {
+  .line_holder {
+    pre {
+      padding: 0; // This overrides the existing style that will add space between each line.
+    }
+
+    svg {
+      float: none; // We have more than one icon on this implementation and don't want to float them.
+      margin: 0; // We will manage the margin with GitLab UI utility classes
+    }
+
+    .line-numbers {
+      padding: 0; // This overrides the existing style that will add space between each line.
+      min-width: 6.5rem; // Ensure our numbers fit
+
+      .diff-line-num {
+        a {
+          transition: none; // There will be a hover transition from theme, blue, darkened
+        }
+      }
+    }
+
+    &:hover {
+      svg {
+        visibility: visible; // We want to show the icons when the any part of the line is hovered
+      }
+    }
+
+    // The icons only appear on hover
+    // So on mobile we can hide them and retake the space for the code blob
+    @include media-breakpoint-down(sm) {
+      svg {
+        display: none;
+      }
+
+      .line-numbers {
+        min-width: 4rem;
+      }
+    }
+  }
 }
-/* stylelint-enable */
+
+// Disable Webkit's search input styles
+input[type='search'] {
+  /* stylelint-disable-next-line property-no-vendor-prefix */
+  -webkit-appearance: textfield;
+
+  &::-webkit-search-cancel-button,
+  &::-webkit-search-results-button {
+    @include gl-display-none;
+  }
+}

@@ -7,13 +7,17 @@ class JiraConnect::SubscriptionsController < JiraConnect::ApplicationController
     next if p.directives.blank?
 
     # rubocop: disable Lint/PercentStringArray
-    script_src_values = Array.wrap(p.directives['script-src']) | %w('self' https://connect-cdn.atl-paas.net https://unpkg.com/jquery@3.3.1/)
-    style_src_values = Array.wrap(p.directives['style-src']) | %w('self' 'unsafe-inline' https://unpkg.com/@atlaskit/)
+    script_src_values = Array.wrap(p.directives['script-src']) | %w('self' https://connect-cdn.atl-paas.net)
+    style_src_values = Array.wrap(p.directives['style-src']) | %w('self' 'unsafe-inline')
     # rubocop: enable Lint/PercentStringArray
 
     p.frame_ancestors :self, 'https://*.atlassian.net'
     p.script_src(*script_src_values)
     p.style_src(*style_src_values)
+  end
+
+  before_action do
+    push_frontend_feature_flag(:jira_connect_oauth, @user, default_enabled: :yaml)
   end
 
   before_action :allow_rendering_in_iframe, only: :index

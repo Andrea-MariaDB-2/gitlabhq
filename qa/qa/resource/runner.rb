@@ -19,7 +19,7 @@ module QA
       end
 
       def image
-        @image || 'gitlab/gitlab-runner:alpine'
+        @image || 'registry.gitlab.com/gitlab-org/gitlab-runner:alpine'
       end
 
       def executor
@@ -47,9 +47,8 @@ module QA
 
       def remove_via_api!
         runners = project.runners(tag_list: @tags)
-        unless runners && !runners.empty?
-          raise "Project #{project.path_with_namespace} has no runners#{" with tags #{@tags}." if @tags&.any?}"
-        end
+
+        return if runners.blank?
 
         this_runner = runners.find { |runner| runner[:description] == name }
         unless this_runner

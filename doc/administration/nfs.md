@@ -12,6 +12,8 @@ recommended for performance reasons.
 
 For data objects such as LFS, Uploads, Artifacts, and so on, an [Object Storage service](object_storage.md)
 is recommended over NFS where possible, due to better performance.
+When eliminating the usage of NFS, there are [additional steps you need to take](object_storage.md#other-alternatives-to-file-system-storage)
+in addition to moving to Object Storage.
 
 File system performance can impact overall GitLab performance, especially for
 actions that read or write to Git repositories. For steps you can use to test
@@ -20,12 +22,44 @@ file system performance, see
 
 ## Gitaly and NFS deprecation
 
+Starting with GitLab version 14.0, support for NFS to store Git repository data is deprecated. Technical customer support and engineering support is available for the 14.x releases. Engineering is fixing bugs and security vulnerabilities consistent with our [release and maintenance policy](../policy/maintenance.md#security-releases).
+
+Upon the release of GitLab 15.0 (tentatively May 22nd, 2022) technical and engineering support for using NFS to store Git repository data will be officially at end-of-life. There will be no product changes or troubleshooting provided via Engineering, Security or Paid Support channels after the release date of 15.0, regardless of your GitLab version.
+
+Until the release of 15.0, for customers running 14.x releases, we continue to help with Git related tickets from customers running one or more Gitaly servers with its data stored on NFS. Examples may include:
+
+- Performance issues or timeouts accessing Git data
+- Commits or branches vanish
+- GitLab intermittently returns the wrong Git data (such as reporting that a repository has no branches)
+
+Assistance is limited to activities like:
+
+- Verifying developers' workflow uses features like protected branches
+- Reviewing GitLab event data from the database to advise if it looks like a force push over-wrote branches
+- Verifying that NFS client mount options match our [documented recommendations](#mount-options)
+- Analyzing the GitLab Workhorse and Rails logs, and determining that `500` errors being seen in the environment are caused by slow responses from Gitaly
+
+GitLab support is unable to continue with the investigation if:
+
+- The date of the request is on or after the release of GitLab version 15.0, and
+- Support Engineers and Management determine that all reasonable non-NFS root causes have been exhausted
+
+If the issue is reproducible, or if it happens intermittently but regularly, GitLab Support can investigate providing the issue reproduces without the use of NFS. In order to reproduce without NFS, the affected repositories should be migrated to a different Gitaly shard, such as Gitaly cluster or a standalone Gitaly VM, backed with block storage.
+
+### Why remove NFS for Git repository data
+
+{:.no-toc}
+
+NFS is not well-suited to a workload consisting of many small files, like Git repositories. NFS does provide a number of configuration options designed to improve performance. However, over time, a number of these mount options have proven to result in inconsistencies across multiple nodes mounting the NFS volume, up to and including data loss. Addressing these inconsistencies consume extraordinary development and support engineer time that hamper our ability to develop [Gitaly Cluster](gitaly/praefect.md), our purpose-built solution to addressing the deficiencies of NFS in this environment.
+
+Please note that Gitaly Cluster provides highly-available Git repository storage. If this is not a requirement, single-node Gitaly backed by block storage is a suitable substitute.
+
 Engineering support for NFS for Git repositories is deprecated. Technical support is planned to be
 unavailable from GitLab 15.0. No further enhancements are planned for this feature.
 
 Read:
 
-- The [Gitaly and NFS deprecation notice](gitaly/index.md#nfs-deprecation-notice).
+- [Moving beyond NFS](gitaly/index.md#moving-beyond-nfs).
 - About the [correct mount options to use](#upgrade-to-gitaly-cluster-or-disable-caching-if-experiencing-data-loss).
 
 ## Known kernel version incompatibilities
@@ -58,6 +92,27 @@ is moved to NFS.
 
 We are investigating the use of
 [fast lookup as the default](https://gitlab.com/groups/gitlab-org/-/epics/3104).
+
+## Improving NFS performance with GitLab
+
+NFS performance with GitLab can in some cases be improved with
+[direct Git access](gitaly/index.md#direct-access-to-git-in-gitlab) using
+[Rugged](https://github.com/libgit2/rugged).
+
+From GitLab 12.1, GitLab automatically detects if Rugged can and should be used per storage.
+If you previously enabled Rugged using the feature flag and you want to use automatic detection instead,
+you must unset the feature flag:
+
+```shell
+sudo gitlab-rake gitlab:features:unset_rugged
+```
+
+If the Rugged feature flag is explicitly set to either `true` or `false`, GitLab uses the value explicitly set.
+
+From GitLab 12.7, Rugged is only automatically enabled for use with Puma
+if the [Puma thread count is set to `1`](../install/requirements.md#puma-settings).
+
+To use Rugged with a Puma thread count of more than `1`, enable Rugged using the [feature flag](../development/gitaly.md#legacy-rugged-code).
 
 ## NFS server
 
@@ -131,32 +186,6 @@ You may not need to disable NFS server delegation if you know you are using a ve
 the Linux kernel that has been fixed. That said, GitLab still encourages instance
 administrators to keep NFS server delegation disabled.
 
-### Improving NFS performance with GitLab
-
-NFS performance with GitLab can in some cases be improved with
-[direct Git access](gitaly/index.md#direct-access-to-git-in-gitlab) using
-[Rugged](https://github.com/libgit2/rugged).
-
-NOTE:
-From GitLab 12.1, it automatically detects if Rugged can and should be used per storage.
-
-If you previously enabled Rugged using the feature flag, you need to unset the feature flag by using:
-
-```shell
-sudo gitlab-rake gitlab:features:unset_rugged
-```
-
-If the Rugged feature flag is explicitly set to either `true` or `false`, GitLab uses the value explicitly set.
-
-#### Improving NFS performance with Puma
-
-NOTE:
-From GitLab 12.7, Rugged is not automatically enabled if Puma thread count is greater than `1`.
-
-If you want to use Rugged with Puma, [set Puma thread count to `1`](https://docs.gitlab.com/omnibus/settings/puma.html#puma-settings).
-
-If you want to use Rugged with Puma thread count more than `1`, Rugged can be enabled using the [feature flag](../development/gitaly.md#legacy-rugged-code).
-
 ## NFS client
 
 The `nfs-common` provides NFS functionality without installing server components which
@@ -198,7 +227,7 @@ Note there are several options that you should consider using:
 It's recommended that you use `hard` in your mount options, unless you have a specific
 reason to use `soft`.
 
-On GitLab.com, we use `soft` because there were times when we had NFS servers
+When GitLab.com used NFS, we used `soft` because there were times when we had NFS servers
 reboot and `soft` improved availability, but everyone's infrastructure is different.
 If your NFS is provided by on-premise storage arrays with redundant controllers,
 for example, you shouldn't need to worry about NFS server availability.
@@ -217,7 +246,7 @@ use the `hard` option, because (from the man page):
 > use the soft option only when client responsiveness is more important than data integrity
 
 Other vendors make similar recommendations, including
-[SAP](http://wiki.scn.sap.com/wiki/x/PARnFQ) and NetApp's
+[System Applications and Products in Data Processing (SAP)](http://wiki.scn.sap.com/wiki/x/PARnFQ) and NetApp's
 [knowledge base](https://kb.netapp.com/Advice_and_Troubleshooting/Data_Storage_Software/ONTAP_OS/What_are_the_differences_between_hard_mount_and_soft_mount),
 they highlight that if the NFS client driver caches data, `soft` means there is no certainty if
 writes by GitLab are actually on disk.
@@ -351,7 +380,7 @@ Any `Operation not permitted` errors means you should investigate your NFS serve
 If the traffic between your NFS server and NFS client(s) is subject to port filtering
 by a firewall, then you need to reconfigure that firewall to allow NFS communication.
 
-[This guide from TDLP](https://tldp.org/HOWTO/NFS-HOWTO/security.html#FIREWALLS)
+[This guide from The Linux Documentation Project (TDLP)](https://tldp.org/HOWTO/NFS-HOWTO/security.html#FIREWALLS)
 covers the basics of using NFS in a firewalled environment. Additionally, we encourage you to
 search for and review the specific documentation for your operating system or distribution and your firewall software.
 
@@ -370,8 +399,8 @@ sudo ufw allow from <client_ip_address> to any port nfs
 ### Upgrade to Gitaly Cluster or disable caching if experiencing data loss
 
 WARNING:
-Engineering support for NFS for Git repositories is deprecated. Read the
-[Gitaly and NFS deprecation notice](gitaly/index.md#nfs-deprecation-notice).
+Engineering support for NFS for Git repositories is deprecated. Read about
+[moving beyond NFS](gitaly/index.md#moving-beyond-nfs).
 
 Customers and users have reported data loss on high-traffic repositories when using NFS for Git repositories.
 For example, we have seen:
@@ -409,7 +438,7 @@ the file system access GitLab requires. Workloads where many small files are wri
 a serialized manner, like `git`, are not well suited to cloud-based file systems.
 
 If you do choose to use these, avoid storing GitLab log files (for example, those in `/var/log/gitlab`)
-there because this will also affect performance. We recommend that the log files be
+there because this also affects performance. We recommend that the log files be
 stored on a local volume.
 
 For more details on the experience of using a cloud-based file systems with GitLab,
@@ -418,12 +447,12 @@ see this [Commit Brooklyn 2019 video](https://youtu.be/K6OS8WodRBQ?t=313).
 ### Avoid using CephFS and GlusterFS
 
 GitLab strongly recommends against using CephFS and GlusterFS.
-These distributed file systems are not well-suited for the GitLab input/output access patterns because Git uses many small files and access times and file locking times to propagate will make Git activity very slow.
+These distributed file systems are not well-suited for the GitLab input/output access patterns because Git uses many small files and access times and file locking times to propagate makes Git activity very slow.
 
 ### Avoid using PostgreSQL with NFS
 
 GitLab strongly recommends against running your PostgreSQL database
-across NFS. The GitLab support team will not be able to assist on performance issues related to
+across NFS. The GitLab support team is not able to assist on performance issues related to
 this configuration.
 
 Additionally, this configuration is specifically warned against in the

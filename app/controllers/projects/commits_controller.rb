@@ -6,6 +6,8 @@ class Projects::CommitsController < Projects::ApplicationController
   include ExtractsPath
   include RendersCommits
 
+  COMMITS_DEFAULT_LIMIT = 40
+
   prepend_before_action(only: [:show]) { authenticate_sessionless_user!(:rss) }
   around_action :allow_gitaly_ref_name_caching
   before_action :require_non_empty_project
@@ -15,6 +17,7 @@ class Projects::CommitsController < Projects::ApplicationController
   before_action :set_commits, except: :commits_root
 
   feature_category :source_code_management
+  urgency :low, [:signatures, :show]
 
   def commits_root
     redirect_to project_commits_path(@project, @project.default_branch)
@@ -27,7 +30,7 @@ class Projects::CommitsController < Projects::ApplicationController
 
     respond_to do |format|
       format.html
-      format.atom { render layout: 'xml.atom' }
+      format.atom { render layout: 'xml' }
 
       format.json do
         pager_json(
@@ -63,10 +66,12 @@ class Projects::CommitsController < Projects::ApplicationController
 
   def set_commits
     render_404 unless @path.empty? || request.format == :atom || @repository.blob_at(@commit.id, @path) || @repository.tree(@commit.id, @path).entries.present?
-    @limit = (params[:limit] || 40).to_i
-    @offset = (params[:offset] || 0).to_i
-    search = params[:search]
-    author = params[:author]
+
+    limit = permitted_params[:limit].to_i
+    @limit = limit > 0 ? limit : COMMITS_DEFAULT_LIMIT # limit can only ever be a positive number
+    @offset = (permitted_params[:offset] || 0).to_i
+    search = permitted_params[:search]
+    author = permitted_params[:author]
 
     @commits =
       if search.present?
@@ -81,5 +86,9 @@ class Projects::CommitsController < Projects::ApplicationController
 
     @commits = @commits.with_latest_pipeline(@ref)
     @commits = set_commits_for_rendering(@commits)
+  end
+
+  def permitted_params
+    params.permit(:limit, :offset, :search, :author)
   end
 end

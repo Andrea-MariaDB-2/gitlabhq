@@ -1,8 +1,7 @@
 ---
 stage: Verify
-group: Testing
+group: Pipeline Insights
 info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
-type: reference, howto
 ---
 
 # Test coverage visualization **(FREE)**
@@ -24,11 +23,12 @@ Collecting the coverage information is done via GitLab CI/CD's
 [artifacts reports feature](../../../ci/yaml/index.md#artifactsreports).
 You can specify one or more coverage reports to collect, including wildcard paths.
 GitLab then takes the coverage information in all the files and combines it
-together.
+together. Coverage files are parsed in a background job so there can be a delay
+between pipeline completion and the visualization loading on the page.
 
 For the coverage analysis to work, you have to provide a properly formatted
 [Cobertura XML](https://cobertura.github.io/cobertura/) report to
-[`artifacts:reports:cobertura`](../../../ci/yaml/index.md#artifactsreportscobertura).
+[`artifacts:reports:cobertura`](../../../ci/yaml/artifacts_reports.md#artifactsreportscobertura-deprecated).
 This format was originally developed for Java, but most coverage analysis frameworks
 for other languages have plugins to add support for it, like:
 
@@ -39,6 +39,7 @@ Other coverage analysis frameworks support the format out of the box, for exampl
 
 - [Istanbul](https://istanbul.js.org/docs/advanced/alternative-reporters/#cobertura) (JavaScript)
 - [Coverage.py](https://coverage.readthedocs.io/en/coverage-5.0.4/cmd.html#xml-reporting) (Python)
+- [PHPUnit](https://github.com/sebastianbergmann/phpunit-documentation-english/blob/master/src/textui.rst#command-line-options) (PHP)
 
 Once configured, if you create a merge request that triggers a pipeline which collects
 coverage reports, the coverage is shown in the diff view. This includes reports
@@ -51,9 +52,21 @@ from any job in any stage in the pipeline. The coverage displays for each line:
 Hovering over the coverage bar provides further information, such as the number
 of times the line was checked by tests.
 
-NOTE:
+Uploading a test coverage report does not enable:
+
+- [Test coverage results in merge requests](../../../ci/pipelines/settings.md#merge-request-test-coverage-results).
+- [Code coverage history](../../../ci/pipelines/settings.md#view-code-coverage-history).
+
+You must configure these separately.
+
+### Limits
+
 A limit of 100 `<source>` nodes for Cobertura format XML files applies. If your Cobertura report exceeds
 100 nodes, there can be mismatches or no matches in the merge request diff view.
+
+A single Cobertura XML file can be no more than 10MiB. For large projects, split the Cobertura XML into
+smaller files. See [this issue](https://gitlab.com/gitlab-org/gitlab/-/issues/328772) for more details.
+When submitting many files, it can take a few minutes for coverage to show on a merge request.
 
 ### Artifact expiration
 
@@ -127,6 +140,9 @@ The `source` is ignored if the path does not follow this pattern. The parser ass
 
 ## Example test coverage configurations
 
+This section provides test coverage configuration examples for different programming languages. You can also see a working example in
+the [`coverage-report`](https://gitlab.com/gitlab-org/ci-sample-projects/coverage-report/) demonstration project.
+
 ### JavaScript example
 
 The following [`.gitlab-ci.yml`](../../../ci/yaml/index.md) example uses [Mocha](https://mochajs.org/)
@@ -176,8 +192,6 @@ coverage-jdk11:
     # convert report from jacoco to cobertura, using relative project path
     - python /opt/cover2cover.py target/site/jacoco/jacoco.xml $CI_PROJECT_DIR/src/main/java/ > target/site/cobertura.xml
   needs: ["test-jdk11"]
-  dependencies:
-    - test-jdk11
   artifacts:
     reports:
       cobertura: target/site/cobertura.xml
@@ -214,8 +228,6 @@ coverage-jdk11:
     # convert report from jacoco to cobertura, using relative project path
     - python /opt/cover2cover.py build/jacoco/jacoco.xml $CI_PROJECT_DIR/src/main/java/ > build/cobertura.xml
   needs: ["test-jdk11"]
-  dependencies:
-    - test-jdk11
   artifacts:
     reports:
       cobertura: build/cobertura.xml
@@ -234,12 +246,49 @@ run tests:
   image: python:3
   script:
     - pip install pytest pytest-cov
-    - pytest --cov=src/ tests.py
+    - coverage run -m pytest
+    - coverage report
     - coverage xml
   artifacts:
     reports:
       cobertura: coverage.xml
 ```
+
+### PHP example
+
+The following [`.gitlab-ci.yml`](../../../ci/yaml/index.md) example for PHP uses [PHPUnit](https://phpunit.readthedocs.io/)
+to collect test coverage data and generate the report.
+
+With a minimal [`phpunit.xml`](https://phpunit.readthedocs.io/en/9.5/configuration.html) file (you may reference
+[this example repository](https://gitlab.com/yookoala/code-coverage-visualization-with-php/)), you can run the test and
+generate the coverage xml:
+
+```yaml
+run tests:
+  stage: test
+  image: php:latest
+  variables:
+    XDEBUG_MODE: coverage
+  before_script:
+    - apt-get update && apt-get -yq install git unzip zip libzip-dev zlib1g-dev
+    - docker-php-ext-install zip
+    - pecl install xdebug && docker-php-ext-enable xdebug
+    - php -r "copy('https://getcomposer.org/installer', 'composer-setup.php');"
+    - php composer-setup.php --install-dir=/usr/local/bin --filename=composer
+    - composer install
+    - composer require --dev phpunit/phpunit phpunit/php-code-coverage
+  script:
+    - php ./vendor/bin/phpunit --coverage-text --coverage-cobertura=coverage.cobertura.xml
+  artifacts:
+    reports:
+      cobertura: coverage.cobertura.xml
+```
+
+[Codeception](https://codeception.com/), through PHPUnit, also supports generating Cobertura report with
+[`run`](https://codeception.com/docs/reference/Commands#run). The path for the generated file
+depends on the `--coverage-cobertura` option and [`paths`](https://codeception.com/docs/reference/Configuration#paths)
+configuration for the [unit test suite](https://codeception.com/docs/05-UnitTests). Configure `.gitlab-ci.yml`
+to find Cobertura in the appropriate path.
 
 ### C/C++ example
 
@@ -268,4 +317,63 @@ run tests:
     expire_in: 2 days
     reports:
       cobertura: build/coverage.xml
+```
+
+### Go example
+
+The following [`.gitlab-ci.yml`](../../../ci/yaml/index.md) example for Go uses:
+
+- [`go test`](https://go.dev/doc/tutorial/add-a-test) to run tests.
+- [`gocover-cobertura`](https://github.com/t-yuki/gocover-cobertura) to convert Go's coverage profile into the Cobertura XML format.
+
+This example assumes that [Go modules](https://go.dev/ref/mod) are being used.
+Using Go modules causes paths within the coverage profile to be prefixed with your
+project's module identifier, which can be found in the `go.mod` file. This
+prefix must be removed for GitLab to parse the Cobertura XML file correctly. You can use the following `sed` command to remove the prefix:
+
+```shell
+sed -i 's;filename=\"<YOUR_MODULE_ID>/;filename=\";g' coverage.xml
+```
+
+Replace the `gitlab.com/my-group/my-project` placeholder in the following example with your own module identifier to make it work.
+
+```yaml
+run tests:
+  stage: test
+  image: golang:1.17
+  script:
+    - go install
+    - go test . -coverprofile=coverage.txt -covermode count
+    - go run github.com/t-yuki/gocover-cobertura < coverage.txt > coverage.xml
+    - sed -i 's;filename=\"gitlab.com/my-group/my-project/;filename=\";g' coverage.xml
+  artifacts:
+    reports:
+      cobertura: coverage.xml
+```
+
+### Ruby example
+
+The following [`.gitlab-ci.yml`](../../../ci/yaml/index.md) example for Ruby uses
+
+- [`rspec`](https://rspec.info/) to run tests.
+- [`simplecov`](https://github.com/simplecov-ruby/simplecov) and [`simplecov-cobertura`](https://github.com/dashingrocket/simplecov-cobertura)
+  to record the coverage profile and create a report in the Cobertura XML format.
+
+This example assumes:
+
+- That [`bundler`](https://bundler.io/) is being used for dependency management.
+  The `rspec`, `simplecov` and `simplecov-cobertura` gems have been added to your `Gemfile`.
+- The `CoberturaFormatter` has been added to your `SimpleCov.formatters`
+  configuration within the `spec_helper.rb` file.
+
+```yaml
+run tests:
+  stage: test
+  image: ruby:3.1
+  script:
+    - bundle install
+    - bundle exec rspec
+  artifacts:
+    reports:
+      cobertura: coverage/coverage.xml
 ```

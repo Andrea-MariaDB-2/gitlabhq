@@ -53,6 +53,7 @@ RSpec.describe 'Pipeline', :js do
                                      pipeline: pipeline,
                                      name: 'jenkins',
                                      stage: 'external',
+                                     ref: 'master',
                                      target_url: 'http://gitlab.com/status')
     end
   end
@@ -476,7 +477,7 @@ RSpec.describe 'Pipeline', :js do
 
       it 'redirects to pipeline overview page', :sidekiq_inline do
         expect(page).to have_content('The pipeline has been deleted')
-        expect(current_path).to eq(project_pipelines_path(project))
+        expect(page).to have_current_path(project_pipelines_path(project), ignore_query: true)
       end
     end
 
@@ -714,7 +715,7 @@ RSpec.describe 'Pipeline', :js do
         let(:schedule) do
           create(:ci_pipeline_schedule,
             project: project,
-            owner: project.owner,
+            owner: project.first_owner,
             description: 'blocked user schedule'
           ).tap do |schedule|
             schedule.update_column(:next_run_at, 1.minute.ago)
@@ -935,7 +936,7 @@ RSpec.describe 'Pipeline', :js do
       expect(page).to have_content(build_external.id)
       expect(page).to have_content('Retry')
       expect(page).to have_content('Cancel running')
-      expect(page).to have_link('Play')
+      expect(page).to have_button('Play')
     end
 
     it 'shows jobs tab pane as active' do
@@ -963,7 +964,7 @@ RSpec.describe 'Pipeline', :js do
 
       context 'when retrying' do
         before do
-          find('[data-testid="retryPipeline"]').click
+          find('[data-testid="retry"]', match: :first).click
         end
 
         it 'does not show a "Retry" button', :sidekiq_might_not_need_inline do
@@ -988,8 +989,10 @@ RSpec.describe 'Pipeline', :js do
 
     context 'playing manual job' do
       before do
-        within '.pipeline-holder' do
-          click_link('Play')
+        within '[data-testid="jobs-tab-table"]' do
+          click_button('Play')
+
+          wait_for_requests
         end
       end
 
@@ -998,22 +1001,14 @@ RSpec.describe 'Pipeline', :js do
 
     context 'when user unschedules a delayed job' do
       before do
-        within '.pipeline-holder' do
-          click_link('Unschedule')
+        within '[data-testid="jobs-tab-table"]' do
+          click_button('Unschedule')
         end
       end
 
       it 'unschedules the delayed job and shows play button as a manual job' do
-        expect(page).to have_content('Trigger this manual action')
-      end
-    end
-
-    context 'failed jobs' do
-      it 'displays a tooltip with the failure reason' do
-        page.within('.ci-table') do
-          failed_job_link = page.find('.ci-failed')
-          expect(failed_job_link[:title]).to eq('Failed - (unknown failure)')
-        end
+        expect(page).to have_button('Play')
+        expect(page).not_to have_button('Unschedule')
       end
     end
   end
@@ -1129,7 +1124,7 @@ RSpec.describe 'Pipeline', :js do
       it 'displays the pipeline graph' do
         subject
 
-        expect(current_path).to eq(pipeline_path(pipeline))
+        expect(page).to have_current_path(pipeline_path(pipeline), ignore_query: true)
         expect(page).not_to have_content('Failed Jobs')
         expect(page).to have_selector('.js-pipeline-graph')
       end
@@ -1314,7 +1309,7 @@ RSpec.describe 'Pipeline', :js do
 
       it 'contains badge that indicates detached merge request pipeline' do
         page.within(all('.well-segment')[1]) do
-          expect(page).to have_content 'detached'
+          expect(page).to have_content 'merge request'
         end
       end
     end

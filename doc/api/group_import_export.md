@@ -4,7 +4,7 @@ group: Import
 info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
 ---
 
-# Group Import/Export API
+# Group import/export API **(FREE)**
 
 > [Introduced](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/20353) in GitLab 12.8.
 
@@ -57,8 +57,12 @@ GET /groups/:id/export/download
 | `id`      | integer/string | yes      | ID of the group owned by the authenticated user |
 
 ```shell
-curl --header "PRIVATE-TOKEN: <your_access_token>" --remote-header-name \
-     --remote-name "https://gitlab.example.com/api/v4/groups/1/export/download"
+group=1
+token=secret
+curl --request GET\
+     --header "PRIVATE-TOKEN: ${token}" \
+     --output download_group_${group}.tar.gz \
+     "https://gitlab.example.com/api/v4/groups/${group}/export/download"
 ```
 
 ```shell

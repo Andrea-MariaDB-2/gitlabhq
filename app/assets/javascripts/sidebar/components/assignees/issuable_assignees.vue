@@ -32,6 +32,11 @@ export default {
       return this.users.length === 0;
     },
   },
+  methods: {
+    toggleAttentionRequested(data) {
+      this.$emit('toggle-attention-requested', data);
+    },
+  },
 };
 </script>
 
@@ -39,7 +44,7 @@ export default {
   <div class="gl-display-flex gl-flex-direction-column issuable-assignees">
     <div
       v-if="emptyUsers"
-      class="gl-display-flex gl-align-items-center gl-text-gray-500 gl-mt-2 hide-collapsed"
+      class="gl-display-flex gl-align-items-center gl-text-gray-500 hide-collapsed"
       data-testid="none"
     >
       <span> {{ __('None') }}</span>
@@ -60,7 +65,8 @@ export default {
       v-else
       :users="users"
       :issuable-type="issuableType"
-      class="gl-text-gray-800 gl-mt-2 hide-collapsed"
+      class="gl-text-gray-800 hide-collapsed"
+      @toggle-attention-requested="toggleAttentionRequested"
     />
   </div>
 </template>

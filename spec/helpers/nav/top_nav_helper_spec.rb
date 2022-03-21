@@ -3,8 +3,6 @@
 require 'spec_helper'
 
 RSpec.describe Nav::TopNavHelper do
-  include ActionView::Helpers::UrlHelper
-
   let_it_be(:user) { build_stubbed(:user) }
   let_it_be(:admin) { build_stubbed(:user, :admin) }
   let_it_be(:external_user) { build_stubbed(:user, :external, can_create_group: false) }
@@ -20,7 +18,6 @@ RSpec.describe Nav::TopNavHelper do
     let(:current_group) { nil }
     let(:with_current_settings_admin_mode) { false }
     let(:with_header_link_admin_mode) { false }
-    let(:with_sherlock_enabled) { false }
     let(:with_projects) { false }
     let(:with_groups) { false }
     let(:with_milestones) { false }
@@ -34,7 +31,6 @@ RSpec.describe Nav::TopNavHelper do
     before do
       allow(Gitlab::CurrentSettings).to receive(:admin_mode) { with_current_settings_admin_mode }
       allow(helper).to receive(:header_link?).with(:admin_mode) { with_header_link_admin_mode }
-      allow(Gitlab::Sherlock).to receive(:enabled?) { with_sherlock_enabled }
 
       # Defaulting all `dashboard_nav_link?` calls to false ensures the EE-specific behavior
       # is not enabled in this CE spec
@@ -142,7 +138,7 @@ RSpec.describe Nav::TopNavHelper do
           expected_primary = ::Gitlab::Nav::TopNavMenuItem.build(
             css_class: 'qa-projects-dropdown',
             data: {
-              track_event: 'click_dropdown',
+              track_action: 'click_dropdown',
               track_label: 'projects_dropdown'
             },
             icon: 'project',
@@ -188,6 +184,11 @@ RSpec.describe Nav::TopNavHelper do
                 href: '/explore',
                 id: 'explore',
                 title: 'Explore projects'
+              ),
+              ::Gitlab::Nav::TopNavMenuItem.build(
+                href: '/explore/projects/topics',
+                id: 'topics',
+                title: 'Explore topics'
               )
             ]
             expect(projects_view[:linksPrimary]).to eq(expected_links_primary)
@@ -248,7 +249,7 @@ RSpec.describe Nav::TopNavHelper do
           expected_primary = ::Gitlab::Nav::TopNavMenuItem.build(
             css_class: 'qa-groups-dropdown',
             data: {
-              track_event: 'click_dropdown',
+              track_action: 'click_dropdown',
               track_label: 'groups_dropdown'
             },
             icon: 'group',
@@ -427,27 +428,6 @@ RSpec.describe Nav::TopNavHelper do
             css_class: 'dashboard-shortcuts-activity'
           )
           expect(subject[:shortcuts]).to eq([expected_shortcuts])
-        end
-      end
-
-      context 'when sherlock is enabled' do
-        let(:with_sherlock_enabled) { true }
-
-        before do
-          # Note: We have to mock the sherlock route because the route is conditional on
-          # sherlock being enabled, but it parsed at Rails load time and can't be overridden
-          # in a spec.
-          allow(helper).to receive(:sherlock_transactions_path) { '/fake_sherlock_path' }
-        end
-
-        it 'has sherlock as last :secondary item' do
-          expected_sherlock_item = ::Gitlab::Nav::TopNavMenuItem.build(
-            id: 'sherlock',
-            title: 'Sherlock Transactions',
-            icon: 'admin',
-            href: '/fake_sherlock_path'
-          )
-          expect(subject[:secondary].last).to eq(expected_sherlock_item)
         end
       end
     end

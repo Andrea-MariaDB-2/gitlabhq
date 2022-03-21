@@ -6,7 +6,7 @@ module Gitlab
       module Security
         class Report
           attr_reader :created_at, :type, :pipeline, :findings, :scanners, :identifiers
-          attr_accessor :scan, :scanned_resources, :errors, :analyzer, :version
+          attr_accessor :scan, :scanned_resources, :errors, :analyzer, :version, :schema_validation_status, :warnings
 
           delegate :project_id, to: :pipeline
 
@@ -19,6 +19,7 @@ module Gitlab
             @identifiers = {}
             @scanned_resources = []
             @errors = []
+            @warnings = []
           end
 
           def commit_sha
@@ -27,6 +28,10 @@ module Gitlab
 
           def add_error(type, message = 'An unexpected error happened!')
             errors << { type: type, message: message }
+          end
+
+          def add_warning(type, message)
+            warnings << { type: type, message: message }
           end
 
           def errored?
@@ -51,7 +56,7 @@ module Gitlab
 
           def replace_with!(other)
             instance_variables.each do |ivar|
-              instance_variable_set(ivar, other.public_send(ivar.to_s[1..-1])) # rubocop:disable GitlabSecurity/PublicSend
+              instance_variable_set(ivar, other.public_send(ivar.to_s[1..])) # rubocop:disable GitlabSecurity/PublicSend
             end
           end
 
@@ -68,6 +73,10 @@ module Gitlab
             return -1 unless other.primary_scanner
 
             primary_scanner <=> other.primary_scanner
+          end
+
+          def has_signatures?
+            findings.any?(&:has_signatures?)
           end
         end
       end

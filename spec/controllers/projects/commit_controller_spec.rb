@@ -183,6 +183,18 @@ RSpec.describe Projects::CommitController do
       expect(assigns(:tags)).to eq([])
       expect(assigns(:tags_limit_exceeded)).to be_truthy
     end
+
+    context 'when commit is not found' do
+      it 'responds with 404' do
+        get(:branches, params: {
+          namespace_id: project.namespace,
+          project_id: project,
+          id: '11111111111111111111111111111111111111'
+        })
+
+        expect(response).to be_not_found
+      end
+    end
   end
 
   describe 'POST revert' do
@@ -193,6 +205,21 @@ RSpec.describe Projects::CommitController do
               namespace_id: project.namespace,
               project_id: project,
               id: commit.id
+            })
+
+        expect(response).not_to be_successful
+        expect(response).to have_gitlab_http_status(:not_found)
+      end
+    end
+
+    context 'when the revert commit is missing' do
+      it 'renders the 404 page' do
+        post(:revert,
+            params: {
+              namespace_id: project.namespace,
+              project_id: project,
+              start_branch: 'master',
+              id: '1234567890'
             })
 
         expect(response).not_to be_successful
@@ -250,6 +277,21 @@ RSpec.describe Projects::CommitController do
               namespace_id: project.namespace,
               project_id: project,
               id: master_pickable_commit.id
+            })
+
+        expect(response).not_to be_successful
+        expect(response).to have_gitlab_http_status(:not_found)
+      end
+    end
+
+    context 'when the cherry-pick commit is missing' do
+      it 'renders the 404 page' do
+        post(:cherry_pick,
+            params: {
+              namespace_id: project.namespace,
+              project_id: project,
+              start_branch: 'master',
+              id: '1234567890'
             })
 
         expect(response).not_to be_successful

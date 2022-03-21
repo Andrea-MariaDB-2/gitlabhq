@@ -1,13 +1,13 @@
 import { GlButton } from '@gitlab/ui';
-import { shallowMount, createLocalVue } from '@vue/test-utils';
+import { shallowMount } from '@vue/test-utils';
+import Vue from 'vue';
 import Vuex from 'vuex';
 import { createMockDirective, getBinding } from 'helpers/vue_mock_directive';
 import { modalData } from 'jest/members/mock_data';
 import RemoveMemberButton from '~/members/components/action_buttons/remove_member_button.vue';
 import { MEMBER_TYPES } from '~/members/constants';
 
-const localVue = createLocalVue();
-localVue.use(Vuex);
+Vue.use(Vuex);
 
 describe('RemoveMemberButton', () => {
   let wrapper;
@@ -33,7 +33,6 @@ describe('RemoveMemberButton', () => {
 
   const createComponent = (propsData = {}, state) => {
     wrapper = shallowMount(RemoveMemberButton, {
-      localVue,
       store: createStore(state),
       provide: {
         namespace: MEMBER_TYPES.user,
@@ -45,7 +44,7 @@ describe('RemoveMemberButton', () => {
         title: 'Remove member',
         isAccessRequest: true,
         isInvite: true,
-        oncallSchedules: { name: 'user', schedules: [] },
+        userDeletionObstacles: { name: 'user', obstacles: [] },
         ...propsData,
       },
       directives: {
@@ -53,6 +52,8 @@ describe('RemoveMemberButton', () => {
       },
     });
   };
+
+  const findButton = () => wrapper.findComponent(GlButton);
 
   beforeEach(() => {
     createComponent();
@@ -66,7 +67,6 @@ describe('RemoveMemberButton', () => {
     expect(wrapper.attributes()).toMatchObject({
       'aria-label': 'Remove member',
       title: 'Remove member',
-      icon: 'remove',
     });
   });
 
@@ -75,8 +75,22 @@ describe('RemoveMemberButton', () => {
   });
 
   it('calls Vuex action to show `remove member` modal when clicked', () => {
-    wrapper.findComponent(GlButton).vm.$emit('click');
+    findButton().vm.$emit('click');
 
     expect(actions.showRemoveMemberModal).toHaveBeenCalledWith(expect.any(Object), modalData);
+  });
+
+  describe('button optional properties', () => {
+    it('has default value for category and text', () => {
+      createComponent();
+      expect(findButton().props('category')).toBe('secondary');
+      expect(findButton().text()).toBe('');
+    });
+
+    it('allow changing value of button category and text', () => {
+      createComponent({ buttonCategory: 'primary', buttonText: 'Decline request' });
+      expect(findButton().props('category')).toBe('primary');
+      expect(findButton().text()).toBe('Decline request');
+    });
   });
 });

@@ -13,8 +13,6 @@ RSpec.describe Nav::NewDropdownHelper do
     let(:with_can_create_project) { false }
     let(:with_can_create_group) { false }
     let(:with_can_create_snippet) { false }
-    let(:with_invite_members_experiment) { false }
-    let(:with_invite_members_experiment_enabled) { false }
 
     let(:subject) { helper.new_dropdown_view_model(project: current_project, group: current_group) }
 
@@ -28,11 +26,6 @@ RSpec.describe Nav::NewDropdownHelper do
     end
 
     before do
-      allow(::Gitlab::Experimentation).to receive(:active?).with(:invite_members_new_dropdown) { with_invite_members_experiment }
-      allow(helper).to receive(:experiment_enabled?).with(:invite_members_new_dropdown) { with_invite_members_experiment_enabled }
-      allow(helper).to receive(:tracking_label) { 'test_tracking_label' }
-      allow(helper).to receive(:experiment_tracking_category_and_group) { |x| x }
-
       allow(helper).to receive(:current_user) { current_user }
       allow(helper).to receive(:can?) { false }
 
@@ -42,37 +35,22 @@ RSpec.describe Nav::NewDropdownHelper do
     end
 
     shared_examples 'invite member link shared example' do
-      it 'shows invite member link' do
+      it 'shows invite member link with emoji' do
         expect(subject[:menu_sections]).to eq(
           expected_menu_section(
             title: expected_title,
             menu_item: ::Gitlab::Nav::TopNavMenuItem.build(
               id: 'invite',
               title: 'Invite members',
+              emoji: 'shaking_hands',
               href: expected_href,
               data: {
-                track_event: 'click_link',
-                track_label: 'test_tracking_label',
-                track_property: :invite_members_new_dropdown
+                track_action: 'click_link_invite_members',
+                track_label: 'plus_menu_dropdown'
               }
             )
           )
         )
-      end
-
-      context 'with experiment enabled' do
-        let(:with_invite_members_experiment_enabled) { true }
-
-        it 'shows emoji with invite member link' do
-          expect(subject[:menu_sections]).to match(
-            expected_menu_section(
-              title: expected_title,
-              menu_item: a_hash_including(
-                emoji: 'shaking_hands'
-              )
-            )
-          )
-        end
       end
     end
 
@@ -104,7 +82,7 @@ RSpec.describe Nav::NewDropdownHelper do
                 id: 'general_new_project',
                 title: 'New project/repository',
                 href: '/projects/new',
-                data: { track_event: 'click_link_new_project', track_label: 'plus_menu_dropdown', qa_selector: 'global_new_project_link' }
+                data: { track_action: 'click_link_new_project', track_label: 'plus_menu_dropdown', qa_selector: 'global_new_project_link' }
               )
             )
           )
@@ -122,7 +100,7 @@ RSpec.describe Nav::NewDropdownHelper do
                 id: 'general_new_group',
                 title: 'New group',
                 href: '/groups/new',
-                data: { track_event: 'click_link_new_group', track_label: 'plus_menu_dropdown' }
+                data: { track_action: 'click_link_new_group', track_label: 'plus_menu_dropdown' }
               )
             )
           )
@@ -140,7 +118,7 @@ RSpec.describe Nav::NewDropdownHelper do
                 id: 'general_new_snippet',
                 title: 'New snippet',
                 href: '/-/snippets/new',
-                data: { track_event: 'click_link_new_snippet_parent', track_label: 'plus_menu_dropdown', qa_selector: 'global_new_snippet_link' }
+                data: { track_action: 'click_link_new_snippet_parent', track_label: 'plus_menu_dropdown', qa_selector: 'global_new_snippet_link' }
               )
             )
           )
@@ -178,7 +156,7 @@ RSpec.describe Nav::NewDropdownHelper do
                 id: 'new_project',
                 title: 'New project/repository',
                 href: "/projects/new?namespace_id=#{group.id}",
-                data: { track_event: 'click_link_new_project_group', track_label: 'plus_menu_dropdown' }
+                data: { track_action: 'click_link_new_project_group', track_label: 'plus_menu_dropdown' }
               )
             )
           )
@@ -196,7 +174,7 @@ RSpec.describe Nav::NewDropdownHelper do
                 id: 'new_subgroup',
                 title: 'New subgroup',
                 href: "/groups/new?parent_id=#{group.id}",
-                data: { track_event: 'click_link_new_subgroup', track_label: 'plus_menu_dropdown' }
+                data: { track_action: 'click_link_new_subgroup', track_label: 'plus_menu_dropdown' }
               )
             )
           )
@@ -245,7 +223,7 @@ RSpec.describe Nav::NewDropdownHelper do
                 id: 'new_issue',
                 title: 'New issue',
                 href: "/#{project.path_with_namespace}/-/issues/new",
-                data: { track_event: 'click_link_new_issue', track_label: 'plus_menu_dropdown', qa_selector: 'new_issue_link' }
+                data: { track_action: 'click_link_new_issue', track_label: 'plus_menu_dropdown', qa_selector: 'new_issue_link' }
               )
             )
           )
@@ -263,7 +241,7 @@ RSpec.describe Nav::NewDropdownHelper do
                 id: 'new_mr',
                 title: 'New merge request',
                 href: "/#{merge_project.path_with_namespace}/-/merge_requests/new",
-                data: { track_event: 'click_link_new_mr', track_label: 'plus_menu_dropdown' }
+                data: { track_action: 'click_link_new_mr', track_label: 'plus_menu_dropdown' }
               )
             )
           )
@@ -281,7 +259,7 @@ RSpec.describe Nav::NewDropdownHelper do
                 id: 'new_snippet',
                 title: 'New snippet',
                 href: "/#{project.path_with_namespace}/-/snippets/new",
-                data: { track_event: 'click_link_new_snippet_project', track_label: 'plus_menu_dropdown' }
+                data: { track_action: 'click_link_new_snippet_project', track_label: 'plus_menu_dropdown' }
               )
             )
           )

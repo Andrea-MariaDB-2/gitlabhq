@@ -6,10 +6,6 @@ import PipelineEditorEmptyState from '~/pipeline_editor/components/ui/pipeline_e
 describe('Pipeline editor empty state', () => {
   let wrapper;
   const defaultProvide = {
-    glFeatures: {
-      pipelineEditorBranchSwitcher: true,
-      pipelineEditorEmptyStateAction: false,
-    },
     emptyStateIllustrationPath: 'my/svg/path',
   };
 
@@ -52,24 +48,6 @@ describe('Pipeline editor empty state', () => {
       expect(findFileNav().exists()).toBe(true);
     });
 
-    describe('with feature flag off', () => {
-      it('does not renders a CTA button', () => {
-        expect(findConfirmButton().exists()).toBe(false);
-      });
-    });
-  });
-
-  describe('with feature flag on', () => {
-    beforeEach(() => {
-      createComponent({
-        provide: {
-          glFeatures: {
-            pipelineEditorEmptyStateAction: true,
-          },
-        },
-      });
-    });
-
     it('renders a CTA button', () => {
       expect(findConfirmButton().exists()).toBe(true);
       expect(findConfirmButton().text()).toBe(wrapper.vm.$options.i18n.btnText);
@@ -81,18 +59,6 @@ describe('Pipeline editor empty state', () => {
 
       await findConfirmButton().vm.$emit('click');
       expect(wrapper.emitted(expectedEvent)).toHaveLength(1);
-    });
-
-    describe('with branch switcher feature flag OFF', () => {
-      it('does not render the file nav', () => {
-        createComponent({
-          provide: {
-            glFeatures: { pipelineEditorBranchSwitcher: false },
-          },
-        });
-
-        expect(findFileNav().exists()).toBe(false);
-      });
     });
   });
 });

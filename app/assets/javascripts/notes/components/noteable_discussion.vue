@@ -5,6 +5,8 @@ import DraftNote from '~/batch_comments/components/draft_note.vue';
 import createFlash from '~/flash';
 import { clearDraft, getDiscussionReplyKey } from '~/lib/utils/autosave';
 import { isLoggedIn } from '~/lib/utils/common_utils';
+import { confirmAction } from '~/lib/utils/confirm_via_gl_modal/confirm_via_gl_modal';
+import { ignoreWhilePending } from '~/lib/utils/ignore_while_pending';
 import { s__, __ } from '~/locale';
 import diffLineNoteFormMixin from '~/notes/mixins/diff_line_note_form';
 import TimelineEntryItem from '~/vue_shared/components/notes/timeline_entry_item.vue';
@@ -65,6 +67,11 @@ export default {
       type: String,
       required: false,
       default: '',
+    },
+    isOverviewTab: {
+      type: Boolean,
+      required: false,
+      default: false,
     },
   },
   data() {
@@ -165,12 +172,13 @@ export default {
         this.expandDiscussion({ discussionId: this.discussion.id });
       }
     },
-    cancelReplyForm(shouldConfirm, isDirty) {
+    cancelReplyForm: ignoreWhilePending(async function cancelReplyForm(shouldConfirm, isDirty) {
       if (shouldConfirm && isDirty) {
         const msg = s__('Notes|Are you sure you want to cancel creating this comment?');
 
-        // eslint-disable-next-line no-alert
-        if (!window.confirm(msg)) {
+        const confirmed = await confirmAction(msg);
+
+        if (!confirmed) {
           return;
         }
       }
@@ -181,7 +189,7 @@ export default {
 
       this.isReplying = false;
       clearDraft(this.autosaveKey);
-    },
+    }),
     saveReply(noteText, form, callback) {
       if (!noteText) {
         this.cancelReplyForm();
@@ -218,16 +226,19 @@ export default {
         })
         .catch((err) => {
           this.removePlaceholderNotes();
-          const msg = __(
-            'Your comment could not be submitted! Please check your network connection and try again.',
-          );
-          createFlash({
-            message: msg,
-            parent: this.$el,
-          });
+          this.handleSaveError(err); // The 'err' parameter is being used in JH, don't remove it
           this.$refs.noteForm.note = noteText;
           callback(err);
         });
+    },
+    handleSaveError() {
+      const msg = __(
+        'Your comment could not be submitted! Please check your network connection and try again.',
+      );
+      createFlash({
+        message: msg,
+        parent: this.$el,
+      });
     },
     deleteNoteHandler(note) {
       this.$emit('noteDeleted', this.discussion, note);
@@ -263,6 +274,7 @@ export default {
               :is-expanded="isExpanded"
               :line="line"
               :should-group-replies="shouldGroupReplies"
+              :is-overview-tab="isOverviewTab"
               @startReplying="showReplyForm"
               @deleteNote="deleteNoteHandler"
             >
@@ -274,6 +286,7 @@ export default {
                   v-if="showDraft(discussion.reply_id)"
                   :key="`draft_${discussion.id}`"
                   :draft="draftForDiscussion(discussion.reply_id)"
+                  :line="line"
                 />
                 <div
                   v-else-if="canShowReplyActions && showReplies"

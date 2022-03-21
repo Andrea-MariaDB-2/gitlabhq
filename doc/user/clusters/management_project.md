@@ -4,9 +4,15 @@ group: Configure
 info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
 ---
 
-# Cluster management project **(FREE)**
+# Cluster management project (DEPRECATED) **(FREE)**
 
-> [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/32810) in GitLab 12.5
+> - [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/32810) in GitLab 12.5.
+> - [Deprecated](https://gitlab.com/groups/gitlab-org/configure/-/epics/8) in GitLab 14.5.
+
+WARNING:
+The cluster management project was [deprecated](https://gitlab.com/groups/gitlab-org/configure/-/epics/8) in GitLab 14.5.
+To manage cluster applications, use the [GitLab agent](agent/index.md)
+with the [Cluster Management Project Template](management_project_template.md).
 
 A project can be designated as the management project for a cluster.
 A management project can be used to run deployment jobs with
@@ -32,17 +38,19 @@ Management projects are restricted to the following:
   group (or descendants) as the cluster's group.
 - For instance-level clusters, there are no such restrictions.
 
-## Usage
+## How to create and configure a cluster management project
 
-To use a cluster management project for a cluster:
+To use a cluster management project to manage your cluster:
 
-1. Select the project.
-1. Configure your pipelines.
-1. Set an environment scope.
+1. Create a new project to serve as the cluster management project
+for your cluster.
+1. [Associate the cluster with the management project](#associate-the-cluster-management-project-with-the-cluster).
+1. [Configure your cluster's pipelines](#configuring-your-pipeline).
+1. [Set the environment scope](#setting-the-environment-scope).
 
-### Selecting a cluster management project
+### Associate the cluster management project with the cluster
 
-To select a cluster management project to use:
+To associate a cluster management project with your cluster:
 
 1. Navigate to the appropriate configuration page. For a:
    - [Project-level cluster](../project/clusters/index.md), go to your project's
@@ -50,10 +58,9 @@ To select a cluster management project to use:
    - [Group-level cluster](../group/clusters/index.md), go to your group's **Kubernetes**
      page.
    - [Instance-level cluster](../instance/clusters/index.md), on the top bar, select **Menu > Admin > Kubernetes**.
-1. Select the project using **Cluster management project field** in the **Advanced settings**
-   section.
-
-![Selecting a cluster management project under Advanced settings](img/advanced-settings-cluster-management-project-v12_5.png)
+1. Expand **Advanced settings**.
+1. From the **Cluster management project** dropdown, select the cluster management project
+you created in the previous step.
 
 ### Configuring your pipeline
 

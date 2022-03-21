@@ -7,13 +7,17 @@ module Gitlab
         # This strategy takes a lock before scheduling the job in a queue and
         # removes the lock after the job has executed preventing a new job to be queued
         # while a job is still executing.
-        class UntilExecuted < Base
-          include DeduplicatesWhenScheduling
+        class UntilExecuted < DeduplicatesWhenScheduling
+          override :perform
+          def perform(job)
+            super
 
-          def perform(_job)
             yield
 
+            should_reschedule = duplicate_job.should_reschedule?
+            # Deleting before rescheduling to make sure we don't deduplicate again.
             duplicate_job.delete!
+            duplicate_job.reschedule if should_reschedule
           end
         end
       end

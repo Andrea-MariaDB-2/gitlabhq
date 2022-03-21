@@ -6,6 +6,7 @@ class GroupMember < Member
   include CreatedAtFilterable
 
   SOURCE_TYPE = 'Namespace'
+  SOURCE_TYPE_FORMAT = /\ANamespace\z/.freeze
 
   belongs_to :group, foreign_key: 'source_id'
   alias_attribute :namespace_id, :source_id
@@ -13,13 +14,11 @@ class GroupMember < Member
 
   # Make sure group member points only to group as it source
   default_value_for :source_type, SOURCE_TYPE
-  validates :source_type, format: { with: /\ANamespace\z/ }
-  validates :access_level, presence: true
-  validate :access_level_inclusion
+  validates :source_type, format: { with: SOURCE_TYPE_FORMAT }
 
   default_scope { where(source_type: SOURCE_TYPE) } # rubocop:disable Cop/DefaultScope
 
-  scope :of_groups, ->(groups) { where(source_id: groups.select(:id)) }
+  scope :of_groups, ->(groups) { where(source_id: groups&.select(:id)) }
   scope :of_ldap_type, -> { where(ldap: true) }
   scope :count_users_by_group_id, -> { group(:source_id).count }
   scope :with_user, -> (user) { where(user: user) }
@@ -43,15 +42,17 @@ class GroupMember < Member
 
   # Because source_type is `Namespace`...
   def real_source_type
-    'Group'
+    Group.sti_name
   end
 
   def notifiable_options
     { group: group }
   end
 
+  private
+
   override :refresh_member_authorized_projects
-  def refresh_member_authorized_projects
+  def refresh_member_authorized_projects(blocking:)
     # Here, `destroyed_by_association` will be present if the
     # GroupMember is being destroyed due to the `dependent: :destroy`
     # callback on Group. In this case, there is no need to refresh the
@@ -61,14 +62,6 @@ class GroupMember < Member
     return if destroyed_by_association.present?
 
     super
-  end
-
-  private
-
-  def access_level_inclusion
-    return if access_level.in?(Gitlab::Access.all_values)
-
-    errors.add(:access_level, "is not included in the list")
   end
 
   def send_invite

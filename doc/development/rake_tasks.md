@@ -128,7 +128,6 @@ In order to run the test you can use the following commands:
 - `bin/rake spec:unit` to run only the unit tests
 - `bin/rake spec:integration` to run only the integration tests
 - `bin/rake spec:system` to run only the system tests
-- `bin/rake karma` to run the Karma test suite
 
 `bin/rake spec` takes significant time to pass.
 Instead of running the full test suite locally, you can save a lot of time by running
@@ -189,6 +188,27 @@ Alternatively you can use the following on each spec run,
 bundle exec spring rspec some_spec.rb
 ```
 
+## Generate initial RuboCop TODO list
+
+One way to generate the initial list is to run the Rake task `rubocop:todo:generate`:
+
+```shell
+bundle exec rake rubocop:todo:generate
+```
+
+To generate TODO list for specific RuboCop rules, pass them comma-seperated as
+argument to the Rake task:
+
+```shell
+bundle exec rake 'rubocop:todo:generate[Gitlab/NamespacedClass,Lint/Syntax]'
+bundle exec rake rubocop:todo:generate\[Gitlab/NamespacedClass,Lint/Syntax\]
+```
+
+Some shells require brackets to be escaped or quoted.
+
+See [Resolving RuboCop exceptions](contributing/style_guides.md#resolving-rubocop-exceptions)
+on how to proceed from here.
+
 ## Compile Frontend Assets
 
 You shouldn't ever need to compile frontend assets manually in development, but
@@ -209,14 +229,14 @@ To update the Emoji aliases file (used for Emoji autocomplete), run the
 following:
 
 ```shell
-bundle exec rake gemojione:aliases
+bundle exec rake tanuki_emoji:aliases
 ```
 
 To update the Emoji digests file (used for Emoji autocomplete), run the
 following:
 
 ```shell
-bundle exec rake gemojione:digests
+bundle exec rake tanuki_emoji:digests
 ```
 
 This updates the file `fixtures/emojis/digests.json` based on the currently
@@ -225,7 +245,7 @@ available Emoji.
 To generate a sprite file containing all the Emoji, run:
 
 ```shell
-bundle exec rake gemojione:sprite
+bundle exec rake tanuki_emoji:sprite
 ```
 
 If new emoji are added, the sprite sheet may change size. To compensate for

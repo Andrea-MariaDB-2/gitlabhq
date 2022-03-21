@@ -6,9 +6,6 @@ module Ci
     include Ci::HasStatus
     include Gitlab::OptimisticLocking
     include Presentable
-    include IgnorableColumns
-
-    ignore_column :id_convert_to_bigint, remove_with: '14.2', remove_after: '2021-08-22'
 
     enum status: Ci::HasStatus::STATUSES_ENUM
 
@@ -25,6 +22,7 @@ module Ci
     scope :ordered, -> { order(position: :asc) }
     scope :in_pipelines, ->(pipelines) { where(pipeline: pipelines) }
     scope :by_name, ->(names) { where(name: names) }
+    scope :by_position, ->(positions) { where(position: positions) }
 
     with_options unless: :importing? do
       validates :project, presence: true

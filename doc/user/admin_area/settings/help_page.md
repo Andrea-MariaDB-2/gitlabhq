@@ -68,12 +68,9 @@ You can specify a custom URL to which users are directed when they:
 
 ## Redirect `/help` pages
 
-> [Introduced](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/43157) in GitLab 13.5.
-
-FLAG:
-On self-managed GitLab, by default this feature is not available. To make it available, ask an administrator to
-[enable the `:help_page_documentation_redirect` flag](../../../administration/feature_flags.md).
-On GitLab.com, this feature is available but can be configured by GitLab.com administrators only.
+> - [Introduced](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/43157) in GitLab 13.5.
+> - [Feature flag `help_page_documentation_redirect`](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/71737) removed in GitLab 14.4.
+> - [Generally available](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/71737) in GitLab 14.4.
 
 The `/help` URL of a GitLab instance displays a basic version of the documentation sourced from the
 [`doc` directory](https://gitlab.com/gitlab-org/gitlab/-/tree/master/doc) of GitLab. `/help` links
@@ -85,7 +82,7 @@ You can redirect these `/help` links to either:
 - A destination that meets [necessary requirements](#destination-requirements).
 
 1. On the top bar, select **Menu > Admin**.
-1. In the left sidebar, select **Settings > Preferences**.
+1. On the left sidebar, select **Settings > Preferences**.
 1. Expand **Sign-in and Help page**.
 1. In the **Documentation pages URL** field, enter the URL.
 1. Select **Save changes**.

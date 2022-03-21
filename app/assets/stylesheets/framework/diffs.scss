@@ -34,7 +34,7 @@
     @media (min-width: map-get($grid-breakpoints, md)) {
       // The `+11` is to ensure the file header border shows when scrolled -
       // the bottom of the compare-versions header and the top of the file header
-      $mr-file-header-top: $mr-version-controls-height + $header-height + $mr-tabs-height + 11;
+      $mr-file-header-top: calc(#{$mr-version-controls-height} + #{$header-height} + #{$mr-tabs-height} + 11px);
 
       position: -webkit-sticky;
       position: sticky;
@@ -42,11 +42,11 @@
       z-index: 120;
 
       .with-system-header & {
-        top: $mr-file-header-top + $system-header-height;
+        top: calc(#{$mr-file-header-top} + #{$system-header-height});
       }
 
       .with-system-header.with-performance-bar & {
-        top: $mr-file-header-top + $system-header-height + $performance-bar-height;
+        top: calc(#{$mr-file-header-top} + #{$system-header-height} + #{$performance-bar-height});
       }
 
       &::before {
@@ -61,22 +61,22 @@
       }
 
       .with-performance-bar & {
-        top: $mr-file-header-top + $performance-bar-height;
+        top: calc(#{$mr-file-header-top} + #{$performance-bar-height});
       }
 
       &.is-commit {
-        top: $header-height + $commit-stat-summary-height;
+        top: calc(#{$header-height} + #{$commit-stat-summary-height});
 
         .with-performance-bar & {
-          top: $header-height + $commit-stat-summary-height + $performance-bar-height;
+          top: calc(#{$header-height} + #{$commit-stat-summary-height} + #{$performance-bar-height});
         }
       }
 
       &.is-compare {
-        top: $header-height + $compare-branches-sticky-header-height;
+        top: calc(#{$header-height} + #{$compare-branches-sticky-header-height});
 
         .with-performance-bar & {
-          top: $performance-bar-height + $header-height + $compare-branches-sticky-header-height;
+          top: calc(#{$performance-bar-height} + #{$header-height} + #{$compare-branches-sticky-header-height});
         }
       }
     }
@@ -99,17 +99,17 @@
 
     .with-performance-bar &.conflict .file-title,
     .with-performance-bar &.conflict .file-title-flex-parent {
-      top: $header-height + $performance-bar-height;
+      top: calc(#{$header-height} + #{$performance-bar-height});
     }
 
     .with-system-header &.conflict .file-title,
     .with-system-header &.conflict .file-title-flex-parent {
-      top: $header-height + $system-header-height;
+      top: calc(#{$header-height} + #{$system-header-height});
     }
 
     .with-system-header.with-performance-bar &.conflict .file-title,
     .with-system-header.with-performance-bar &.conflict .file-title-flex-parent {
-      top: $header-height + $performance-bar-height + $system-header-height;
+      top: calc(#{$header-height} + #{$performance-bar-height} + #{$system-header-height});
     }
   }
 
@@ -582,6 +582,25 @@ table.code {
   }
 }
 
+.diff-expansion-cell {
+  flex: 1 1;
+  min-width: max-content;
+}
+
+.diff-expansion-cell-middle {
+  flex: 0 1 max-content;
+}
+
+@media only screen and (min-width: $breakpoint-xl) {
+  .diff-expansion-cell-start {
+    text-align: right;
+  }
+
+  .diff-expansion-cell-end {
+    text-align: left;
+  }
+}
+
 // Merge request diff grid layout
 .diff-grid {
   .diff-td {
@@ -601,6 +620,14 @@ table.code {
     // Zero width column is a placeholder for the EE inline code quality diff
     // see ee/.../diffs.scss for more details
     grid-template-columns: 50px 8px 0 1fr;
+  }
+
+  .diff-grid-3-col {
+    grid-template-columns: 50px 1fr !important;
+  }
+
+  &.inline-diff-view .diff-grid-3-col {
+    grid-template-columns: 50px 50px 1fr !important;
   }
 
   .diff-grid-comments {
@@ -680,26 +707,6 @@ table.code {
 
 .merge-request-details .file-content.image_file img {
   max-height: 50vh;
-}
-
-.diff-stats-summary-toggler {
-  padding: 0;
-  background-color: transparent;
-  border: 0;
-  color: $blue-600;
-  font-weight: $gl-font-weight-bold;
-
-  &:hover,
-  &:focus {
-    outline: none;
-    color: $blue-800;
-  }
-
-  .caret-icon {
-    position: relative;
-    top: 2px;
-    left: -1px;
-  }
 }
 
 // Mobile
@@ -845,44 +852,37 @@ table.code {
       top: $header-height;
 
       .with-performance-bar & {
-        top: $header-height + $performance-bar-height;
+        top: calc(#{$header-height} + #{$performance-bar-height});
       }
     }
   }
 }
 
 .diff-files-changed {
+  background-color: $body-bg;
+
   .inline-parallel-buttons {
-    position: relative;
+    @include gl-relative;
     z-index: 1;
   }
 
-  .commit-stat-summary {
-    @include media-breakpoint-up(sm) {
-      background-color: $white;
-    }
-  }
-
   @include media-breakpoint-up(sm) {
-    position: -webkit-sticky;
-    position: sticky;
-    top: $header-height + $mr-tabs-height;
-    background-color: $white;
+    @include gl-sticky;
+    top: calc(#{$header-height} + #{$mr-tabs-height});
     z-index: 200;
 
     .with-performance-bar & {
-      top: $header-height + $mr-tabs-height + $performance-bar-height;
+      top: calc(#{$header-height} + #{$mr-tabs-height} + #{$performance-bar-height});
     }
 
     &.is-stuck {
-      padding-top: 0;
-      padding-bottom: 0;
+      @include gl-py-0;
       border-top: 1px solid $white-dark;
       border-bottom: 1px solid $white-dark;
 
       .diff-stats-additions-deletions-expanded,
       .inline-parallel-buttons {
-        display: none !important;
+        @include gl-display-none;
       }
     }
   }
@@ -890,11 +890,12 @@ table.code {
   @include media-breakpoint-up(lg) {
     &.is-stuck {
       .diff-stats-additions-deletions-collapsed {
-        display: block !important;
+        @include gl-display-block;
       }
     }
   }
 }
+
 
 .diff-file-changes {
   max-width: 560px;
@@ -1034,6 +1035,27 @@ table.code {
   }
 }
 
+// Notes tweaks for the Changes tab ONLY
+.diff-tr {
+  .timeline-discussion-body {
+    clear: left;
+
+    .note-body {
+      margin-top: 0 !important;
+    }
+  }
+
+  .timeline-entry img.avatar {
+    margin-top: -2px;
+    margin-right: $gl-padding-8;
+  }
+
+  // tiny adjustment to vertical align with the note header text
+  .discussion-collapsible .timeline-icon {
+    padding-top: 2px;
+  }
+}
+
 .files:not([data-can-create-note]) .frame {
   cursor: auto;
 }
@@ -1070,24 +1092,6 @@ table.code {
   }
 }
 
-.frame .badge.badge-pill,
-.image-diff-avatar-link .badge.badge-pill,
-.user-avatar-link .badge.badge-pill,
-.notes > .badge.badge-pill {
-  position: absolute;
-  background-color: $blue-400;
-  color: $white;
-  border: $white 1px solid;
-  min-height: $gl-padding;
-  padding: 5px 8px;
-  border-radius: 12px;
-
-  &:focus {
-    outline: none;
-  }
-}
-
-.frame .badge.badge-pill,
 .frame .image-comment-badge,
 .frame .comment-indicator {
   // Center align badges on the frame
@@ -1119,11 +1123,6 @@ table.code {
   }
 }
 
-.notes > .badge.badge-pill {
-  display: none;
-  left: -13px;
-}
-
 .discussion-notes {
   min-height: 35px;
 
@@ -1132,17 +1131,21 @@ table.code {
     min-height: 25px;
   }
 
+  .diff-notes-expand {
+    display: none;
+  }
+
   &.collapsed {
     background-color: $white;
+
+    .diff-notes-expand {
+      display: initial;
+    }
 
     .diff-notes-collapse,
     .note,
     .discussion-reply-holder {
       display: none;
-    }
-
-    .notes > .badge.badge-pill {
-      display: block;
     }
   }
 }
@@ -1152,7 +1155,7 @@ table.code {
 }
 
 .discussion-collapsible {
-  margin: 0 $gl-padding $gl-padding 71px;
+  margin: 0 $gl-padding $gl-padding;
 
   .notes {
     border-radius: $border-radius-default;
@@ -1189,7 +1192,7 @@ table.code {
   }
 }
 
-@media (max-width: map-get($grid-breakpoints, md)-1) {
+@media (max-width: map-get($grid-breakpoints, lg)-1) {
   .diffs .files {
     @include fixed-width-container;
     flex-direction: column;

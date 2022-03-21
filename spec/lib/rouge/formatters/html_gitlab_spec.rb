@@ -4,7 +4,7 @@ require 'spec_helper'
 
 RSpec.describe Rouge::Formatters::HTMLGitlab do
   describe '#format' do
-    subject { described_class.format(tokens, options) }
+    subject { described_class.format(tokens, **options) }
 
     let(:lang) { 'ruby' }
     let(:lexer) { Rouge::Lexer.find_fancy(lang) }
@@ -34,6 +34,27 @@ RSpec.describe Rouge::Formatters::HTMLGitlab do
         code = %q{<span id="LC10" class="line" lang="ruby"><span class="k">def</span> <span class="nf">hello</span></span>}
 
         is_expected.to eq(code)
+      end
+    end
+
+    context 'when unicode control characters are used' do
+      let(:lang) { 'javascript' }
+      let(:tokens) { lexer.lex(code, continue: false) }
+      let(:code) do
+        <<~JS
+          #!/usr/bin/env node
+
+          var accessLevel = "user";
+          if (accessLevel != "user‮ ⁦// Check if admin⁩ ⁦") {
+              console.log("You are an admin.");
+          }
+        JS
+      end
+
+      it 'highlights the control characters' do
+        message = "Potentially unwanted character detected: Unicode BiDi Control"
+
+        is_expected.to include(%{<span class="unicode-bidi has-tooltip" data-toggle="tooltip" title="#{message}">}).exactly(4).times
       end
     end
   end

@@ -4,14 +4,25 @@ module Gitlab
   module Database
     module MigrationHelpers
       include Migrations::BackgroundMigrationHelpers
+      include Migrations::BatchedBackgroundMigrationHelpers
       include DynamicModelHelpers
       include RenameTableHelpers
       include AsyncIndexes::MigrationHelpers
 
+      def define_batchable_model(table_name, connection: self.connection)
+        super(table_name, connection: connection)
+      end
+
+      def each_batch(table_name, connection: self.connection, **kwargs)
+        super(table_name, connection: connection, **kwargs)
+      end
+
+      def each_batch_range(table_name, connection: self.connection, **kwargs)
+        super(table_name, connection: connection, **kwargs)
+      end
+
       # https://www.postgresql.org/docs/current/sql-syntax-lexical.html#SQL-SYNTAX-IDENTIFIERS
       MAX_IDENTIFIER_NAME_LENGTH = 63
-
-      PERMITTED_TIMESTAMP_COLUMNS = %i[created_at updated_at deleted_at].to_set.freeze
       DEFAULT_TIMESTAMP_COLUMNS = %i[created_at updated_at].freeze
 
       # Adds `created_at` and `updated_at` columns with timezone information.
@@ -28,33 +39,23 @@ module Gitlab
       #  :default - The default value for the column.
       #  :null - When set to `true` the column will allow NULL values.
       #        The default is to not allow NULL values.
-      #  :columns - the column names to create. Must be one
-      #             of `Gitlab::Database::MigrationHelpers::PERMITTED_TIMESTAMP_COLUMNS`.
+      #  :columns - the column names to create. Must end with `_at`.
       #             Default value: `DEFAULT_TIMESTAMP_COLUMNS`
       #
       # All options are optional.
       def add_timestamps_with_timezone(table_name, options = {})
-        options[:null] = false if options[:null].nil?
         columns = options.fetch(:columns, DEFAULT_TIMESTAMP_COLUMNS)
-        default_value = options[:default]
-
-        validate_not_in_transaction!(:add_timestamps_with_timezone, 'with default value') if default_value
 
         columns.each do |column_name|
           validate_timestamp_column_name!(column_name)
 
-          # If default value is presented, use `add_column_with_default` method instead.
-          if default_value
-            add_column_with_default(
-              table_name,
-              column_name,
-              :datetime_with_timezone,
-              default: default_value,
-              allow_null: options[:null]
-            )
-          else
-            add_column(table_name, column_name, :datetime_with_timezone, **options)
-          end
+          add_column(
+            table_name,
+            column_name,
+            :datetime_with_timezone,
+            default: options[:default],
+            null: options[:null] || false
+          )
         end
       end
 
@@ -73,6 +74,7 @@ module Gitlab
         end
       end
 
+      # @deprecated Use `create_table` in V2 instead
       #
       # Creates a new table, optionally allowing the caller to add check constraints to the table.
       # Aside from that addition, this method should behave identically to Rails' `create_table` method.
@@ -146,8 +148,18 @@ module Gitlab
         options = options.merge({ algorithm: :concurrently })
 
         if index_exists?(table_name, column_name, **options)
-          Gitlab::AppLogger.warn "Index not created because it already exists (this may be due to an aborted migration or similar): table_name: #{table_name}, column_name: #{column_name}"
-          return
+          name = options[:name] || index_name(table_name, column_name)
+          _, schema = table_name.to_s.split('.').reverse
+
+          if index_invalid?(name, schema: schema)
+            say "Index being recreated because the existing version was INVALID: table_name: #{table_name}, column_name: #{column_name}"
+
+            remove_concurrent_index_by_name(table_name, name)
+          else
+            say "Index not created because it already exists (this may be due to an aborted migration or similar): table_name: #{table_name}, column_name: #{column_name}"
+
+            return
+          end
         end
 
         disable_statement_timeout do
@@ -156,6 +168,23 @@ module Gitlab
 
         # We created this index. Now let's remove the queuing entry for async creation in case it's still there.
         unprepare_async_index(table_name, column_name, **options)
+      end
+
+      def index_invalid?(index_name, schema: nil)
+        index_name = connection.quote(index_name)
+        schema = connection.quote(schema) if schema
+        schema ||= 'current_schema()'
+
+        connection.select_value(<<~SQL)
+          select not i.indisvalid
+          from pg_class c
+          inner join pg_index i
+            on c.oid = i.indexrelid
+          inner join pg_namespace n
+            on n.oid = c.relnamespace
+          where n.nspname = #{schema}
+            and c.relname = #{index_name}
+        SQL
       end
 
       # Removes an existed index, concurrently
@@ -380,6 +409,8 @@ module Gitlab
       # The timings can be controlled via the +timing_configuration+ parameter.
       # If the lock was not acquired within the retry period, a last attempt is made without using +lock_timeout+.
       #
+      # Note this helper uses subtransactions when run inside an already open transaction.
+      #
       # ==== Examples
       #   # Invoking without parameters
       #   with_lock_retries do
@@ -410,8 +441,10 @@ module Gitlab
       def with_lock_retries(*args, **kwargs, &block)
         raise_on_exhaustion = !!kwargs.delete(:raise_on_exhaustion)
         merged_args = {
+          connection: connection,
           klass: self.class,
-          logger: Gitlab::BackgroundMigration::Logger
+          logger: Gitlab::BackgroundMigration::Logger,
+          allow_savepoints: true
         }.merge(kwargs)
 
         Gitlab::Database::WithLockRetries.new(**merged_args)
@@ -600,17 +633,17 @@ module Gitlab
       # new_column - The name of the new column.
       # trigger_name - The name of the trigger to use (optional).
       def install_rename_triggers(table, old, new, trigger_name: nil)
-        Gitlab::Database::UnidirectionalCopyTrigger.on_table(table).create(old, new, trigger_name: trigger_name)
+        Gitlab::Database::UnidirectionalCopyTrigger.on_table(table, connection: connection).create(old, new, trigger_name: trigger_name)
       end
 
       # Removes the triggers used for renaming a column concurrently.
       def remove_rename_triggers(table, trigger)
-        Gitlab::Database::UnidirectionalCopyTrigger.on_table(table).drop(trigger)
+        Gitlab::Database::UnidirectionalCopyTrigger.on_table(table, connection: connection).drop(trigger)
       end
 
       # Returns the (base) name to use for triggers when renaming columns.
       def rename_trigger_name(table, old, new)
-        Gitlab::Database::UnidirectionalCopyTrigger.on_table(table).name(old, new)
+        Gitlab::Database::UnidirectionalCopyTrigger.on_table(table, connection: connection).name(old, new)
       end
 
       # Changes the type of a column concurrently.
@@ -758,186 +791,6 @@ module Gitlab
         install_rename_triggers(table, old, new)
       end
 
-      # Changes the column type of a table using a background migration.
-      #
-      # Because this method uses a background migration it's more suitable for
-      # large tables. For small tables it's better to use
-      # `change_column_type_concurrently` since it can complete its work in a
-      # much shorter amount of time and doesn't rely on Sidekiq.
-      #
-      # Example usage:
-      #
-      #     class Issue < ActiveRecord::Base
-      #       self.table_name = 'issues'
-      #
-      #       include EachBatch
-      #
-      #       def self.to_migrate
-      #         where('closed_at IS NOT NULL')
-      #       end
-      #     end
-      #
-      #     change_column_type_using_background_migration(
-      #       Issue.to_migrate,
-      #       :closed_at,
-      #       :datetime_with_timezone
-      #     )
-      #
-      # Reverting a migration like this is done exactly the same way, just with
-      # a different type to migrate to (e.g. `:datetime` in the above example).
-      #
-      # relation - An ActiveRecord relation to use for scheduling jobs and
-      #            figuring out what table we're modifying. This relation _must_
-      #            have the EachBatch module included.
-      #
-      # column - The name of the column for which the type will be changed.
-      #
-      # new_type - The new type of the column.
-      #
-      # batch_size - The number of rows to schedule in a single background
-      #              migration.
-      #
-      # interval - The time interval between every background migration.
-      def change_column_type_using_background_migration(
-        relation,
-        column,
-        new_type,
-        batch_size: 10_000,
-        interval: 10.minutes
-      )
-
-        unless relation.model < EachBatch
-          raise TypeError, 'The relation must include the EachBatch module'
-        end
-
-        temp_column = "#{column}_for_type_change"
-        table = relation.table_name
-        max_index = 0
-
-        add_column(table, temp_column, new_type)
-        install_rename_triggers(table, column, temp_column)
-
-        # Schedule the jobs that will copy the data from the old column to the
-        # new one. Rows with NULL values in our source column are skipped since
-        # the target column is already NULL at this point.
-        relation.where.not(column => nil).each_batch(of: batch_size) do |batch, index|
-          start_id, end_id = batch.pluck('MIN(id), MAX(id)').first
-          max_index = index
-
-          migrate_in(
-            index * interval,
-            'CopyColumn',
-            [table, column, temp_column, start_id, end_id]
-          )
-        end
-
-        # Schedule the renaming of the column to happen (initially) 1 hour after
-        # the last batch finished.
-        migrate_in(
-          (max_index * interval) + 1.hour,
-          'CleanupConcurrentTypeChange',
-          [table, column, temp_column]
-        )
-
-        if perform_background_migration_inline?
-          # To ensure the schema is up to date immediately we perform the
-          # migration inline in dev / test environments.
-          Gitlab::BackgroundMigration.steal('CopyColumn')
-          Gitlab::BackgroundMigration.steal('CleanupConcurrentTypeChange')
-        end
-      end
-
-      # Renames a column using a background migration.
-      #
-      # Because this method uses a background migration it's more suitable for
-      # large tables. For small tables it's better to use
-      # `rename_column_concurrently` since it can complete its work in a much
-      # shorter amount of time and doesn't rely on Sidekiq.
-      #
-      # Example usage:
-      #
-      #     rename_column_using_background_migration(
-      #       :users,
-      #       :feed_token,
-      #       :rss_token
-      #     )
-      #
-      # table - The name of the database table containing the column.
-      #
-      # old - The old column name.
-      #
-      # new - The new column name.
-      #
-      # type - The type of the new column. If no type is given the old column's
-      #        type is used.
-      #
-      # batch_size - The number of rows to schedule in a single background
-      #              migration.
-      #
-      # interval - The time interval between every background migration.
-      def rename_column_using_background_migration(
-        table,
-        old_column,
-        new_column,
-        type: nil,
-        batch_size: 10_000,
-        interval: 10.minutes
-      )
-
-        check_trigger_permissions!(table)
-
-        old_col = column_for(table, old_column)
-        new_type = type || old_col.type
-        max_index = 0
-
-        add_column(table, new_column, new_type,
-                   limit: old_col.limit,
-                   precision: old_col.precision,
-                   scale: old_col.scale)
-
-        # We set the default value _after_ adding the column so we don't end up
-        # updating any existing data with the default value. This isn't
-        # necessary since we copy over old values further down.
-        change_column_default(table, new_column, old_col.default) if old_col.default
-
-        install_rename_triggers(table, old_column, new_column)
-
-        model = Class.new(ActiveRecord::Base) do
-          self.table_name = table
-
-          include ::EachBatch
-        end
-
-        # Schedule the jobs that will copy the data from the old column to the
-        # new one. Rows with NULL values in our source column are skipped since
-        # the target column is already NULL at this point.
-        model.where.not(old_column => nil).each_batch(of: batch_size) do |batch, index|
-          start_id, end_id = batch.pluck('MIN(id), MAX(id)').first
-          max_index = index
-
-          migrate_in(
-            index * interval,
-            'CopyColumn',
-            [table, old_column, new_column, start_id, end_id]
-          )
-        end
-
-        # Schedule the renaming of the column to happen (initially) 1 hour after
-        # the last batch finished.
-        migrate_in(
-          (max_index * interval) + 1.hour,
-          'CleanupConcurrentRename',
-          [table, old_column, new_column]
-        )
-
-        if perform_background_migration_inline?
-          # To ensure the schema is up to date immediately we perform the
-          # migration inline in dev / test environments.
-          Gitlab::BackgroundMigration.steal('CopyColumn')
-          Gitlab::BackgroundMigration.steal('CleanupConcurrentRename')
-        end
-      end
-
       def convert_to_bigint_column(column)
         "#{column}_convert_to_bigint"
       end
@@ -968,42 +821,7 @@ module Gitlab
       # columns - The name, or array of names, of the column(s) that we want to convert to bigint.
       # primary_key - The name of the primary key column (most often :id)
       def initialize_conversion_of_integer_to_bigint(table, columns, primary_key: :id)
-        unless table_exists?(table)
-          raise "Table #{table} does not exist"
-        end
-
-        unless column_exists?(table, primary_key)
-          raise "Column #{primary_key} does not exist on #{table}"
-        end
-
-        columns = Array.wrap(columns)
-        columns.each do |column|
-          next if column_exists?(table, column)
-
-          raise ArgumentError, "Column #{column} does not exist on #{table}"
-        end
-
-        check_trigger_permissions!(table)
-
-        conversions = columns.to_h { |column| [column, convert_to_bigint_column(column)] }
-
-        with_lock_retries do
-          conversions.each do |(source_column, temporary_name)|
-            column = column_for(table, source_column)
-
-            if (column.name.to_s == primary_key.to_s) || !column.null
-              # If the column to be converted is either a PK or is defined as NOT NULL,
-              # set it to `NOT NULL DEFAULT 0` and we'll copy paste the correct values bellow
-              # That way, we skip the expensive validation step required to add
-              #  a NOT NULL constraint at the end of the process
-              add_column(table, temporary_name, :bigint, default: column.default || 0, null: false)
-            else
-              add_column(table, temporary_name, :bigint, default: column.default)
-            end
-          end
-
-          install_rename_triggers(table, conversions.keys, conversions.values)
-        end
+        create_temporary_columns_and_triggers(table, columns, primary_key: primary_key, data_type: :bigint)
       end
 
       # Reverts `initialize_conversion_of_integer_to_bigint`
@@ -1018,6 +836,17 @@ module Gitlab
         remove_rename_triggers(table, trigger_name)
 
         temporary_columns.each { |column| remove_column(table, column) }
+      end
+      alias_method :cleanup_conversion_of_integer_to_bigint, :revert_initialize_conversion_of_integer_to_bigint
+
+      # Reverts `cleanup_conversion_of_integer_to_bigint`
+      #
+      # table - The name of the database table containing the columns
+      # columns - The name, or array of names, of the column(s) that we have converted to bigint.
+      # primary_key - The name of the primary key column (most often :id)
+
+      def restore_conversion_of_integer_to_bigint(table, columns, primary_key: :id)
+        create_temporary_columns_and_triggers(table, columns, primary_key: primary_key, data_type: :int)
       end
 
       # Backfills the new columns used in an integer-to-bigint conversion using background migrations.
@@ -1238,9 +1067,18 @@ module Gitlab
         Arel::Nodes::SqlLiteral.new(replace.to_sql)
       end
 
-      def remove_foreign_key_if_exists(...)
-        if foreign_key_exists?(...)
-          remove_foreign_key(...)
+      def remove_foreign_key_if_exists(source, target = nil, **kwargs)
+        reverse_lock_order = kwargs.delete(:reverse_lock_order)
+        return unless foreign_key_exists?(source, target, **kwargs)
+
+        if target && reverse_lock_order && transaction_open?
+          execute("LOCK TABLE #{target}, #{source} IN ACCESS EXCLUSIVE MODE")
+        end
+
+        if target
+          remove_foreign_key(source, target, **kwargs)
+        else
+          remove_foreign_key(source, **kwargs)
         end
       end
 
@@ -1265,8 +1103,8 @@ module Gitlab
 
       def check_trigger_permissions!(table)
         unless Grant.create_and_execute_trigger?(table)
-          dbname = Database.main.database_name
-          user = Database.main.username
+          dbname = ApplicationRecord.database.database_name
+          user = ApplicationRecord.database.username
 
           raise <<-EOF
 Your database user is not allowed to create, drop, or execute triggers on the
@@ -1400,13 +1238,11 @@ into similar problems in the future (e.g. when new tables are created).
       # validate - Whether to validate the constraint in this call
       #
       def add_check_constraint(table, check, constraint_name, validate: true)
-        validate_check_constraint_name!(constraint_name)
-
         # Transactions would result in ALTER TABLE locks being held for the
         # duration of the transaction, defeating the purpose of this method.
-        if transaction_open?
-          raise 'add_check_constraint can not be run inside a transaction'
-        end
+        validate_not_in_transaction!(:add_check_constraint)
+
+        validate_check_constraint_name!(constraint_name)
 
         if check_constraint_exists?(table, constraint_name)
           warning_message = <<~MESSAGE
@@ -1451,6 +1287,10 @@ into similar problems in the future (e.g. when new tables are created).
       end
 
       def remove_check_constraint(table, constraint_name)
+        # This is technically not necessary, but aligned with add_check_constraint
+        # and allows us to continue use with_lock_retries here
+        validate_not_in_transaction!(:remove_check_constraint)
+
         validate_check_constraint_name!(constraint_name)
 
         # DROP CONSTRAINT requires an EXCLUSIVE lock
@@ -1586,8 +1426,8 @@ into similar problems in the future (e.g. when new tables are created).
       def create_extension(extension)
         execute('CREATE EXTENSION IF NOT EXISTS %s' % extension)
       rescue ActiveRecord::StatementInvalid => e
-        dbname = Database.main.database_name
-        user = Database.main.username
+        dbname = ApplicationRecord.database.database_name
+        user = ApplicationRecord.database.username
 
         warn(<<~MSG) if e.to_s =~ /permission denied/
           GitLab requires the PostgreSQL extension '#{extension}' installed in database '#{dbname}', but
@@ -1614,8 +1454,8 @@ into similar problems in the future (e.g. when new tables are created).
       def drop_extension(extension)
         execute('DROP EXTENSION IF EXISTS %s' % extension)
       rescue ActiveRecord::StatementInvalid => e
-        dbname = Database.main.database_name
-        user = Database.main.username
+        dbname = ApplicationRecord.database.database_name
+        user = ApplicationRecord.database.username
 
         warn(<<~MSG) if e.to_s =~ /permission denied/
           This migration attempts to drop the PostgreSQL extension '#{extension}'
@@ -1648,6 +1488,45 @@ into similar problems in the future (e.g. when new tables are created).
       end
 
       private
+
+      def create_temporary_columns_and_triggers(table, columns, primary_key: :id, data_type: :bigint)
+        unless table_exists?(table)
+          raise "Table #{table} does not exist"
+        end
+
+        unless column_exists?(table, primary_key)
+          raise "Column #{primary_key} does not exist on #{table}"
+        end
+
+        columns = Array.wrap(columns)
+        columns.each do |column|
+          next if column_exists?(table, column)
+
+          raise ArgumentError, "Column #{column} does not exist on #{table}"
+        end
+
+        check_trigger_permissions!(table)
+
+        conversions = columns.to_h { |column| [column, convert_to_bigint_column(column)] }
+
+        with_lock_retries do
+          conversions.each do |(source_column, temporary_name)|
+            column = column_for(table, source_column)
+
+            if (column.name.to_s == primary_key.to_s) || !column.null
+              # If the column to be converted is either a PK or is defined as NOT NULL,
+              # set it to `NOT NULL DEFAULT 0` and we'll copy paste the correct values bellow
+              # That way, we skip the expensive validation step required to add
+              #  a NOT NULL constraint at the end of the process
+              add_column(table, temporary_name, data_type, default: column.default || 0, null: false)
+            else
+              add_column(table, temporary_name, data_type, default: column.default)
+            end
+          end
+
+          install_rename_triggers(table, conversions.keys, conversions.values)
+        end
+      end
 
       def validate_check_constraint_name!(constraint_name)
         if constraint_name.to_s.length > MAX_IDENTIFIER_NAME_LENGTH
@@ -1770,11 +1649,11 @@ into similar problems in the future (e.g. when new tables are created).
       end
 
       def validate_timestamp_column_name!(column_name)
-        return if PERMITTED_TIMESTAMP_COLUMNS.member?(column_name)
+        return if column_name.to_s.end_with?('_at')
 
         raise <<~MESSAGE
           Illegal timestamp column name! Got #{column_name}.
-          Must be one of: #{PERMITTED_TIMESTAMP_COLUMNS.to_a}
+          Must end with `_at`}
         MESSAGE
       end
 

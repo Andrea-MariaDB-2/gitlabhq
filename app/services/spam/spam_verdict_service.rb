@@ -39,21 +39,24 @@ module Spam
       return ALLOW unless valid_results.any?
 
       # Favour the most restrictive result.
-      final_verdict = valid_results.min_by { |v| SUPPORTED_VERDICTS[v][:priority] }
+      verdict = valid_results.min_by { |v| SUPPORTED_VERDICTS[v][:priority] }
+
+      # The target can override the verdict via the `allow_possible_spam` feature flag
+      verdict = OVERRIDE_VIA_ALLOW_POSSIBLE_SPAM if override_via_allow_possible_spam?(verdict: verdict)
 
       logger.info(class: self.class.name,
                   akismet_verdict: akismet_verdict,
                   spam_check_verdict: original_spamcheck_result,
                   extra_attributes: spamcheck_attribs,
                   spam_check_rtt: external_spam_check_round_trip_time.real,
-                  final_verdict: final_verdict,
+                  final_verdict: verdict,
                   username: user.username,
                   user_id: user.id,
                   target_type: target.class.to_s,
                   project_id: target.project_id
                  )
 
-      final_verdict
+      verdict
     end
 
     private
@@ -73,24 +76,26 @@ module Spam
 
       begin
         result, attribs, _error = spamcheck_client.issue_spam?(spam_issue: target, user: user, context: context)
-        return [nil, attribs] unless result
-
         # @TODO log if error is not nil https://gitlab.com/gitlab-org/gitlab/-/issues/329545
 
-        return [result, attribs] if result == NOOP || attribs["monitorMode"] == "true"
+        return [nil, attribs] unless result
 
-        # Duplicate logic with Akismet logic in #akismet_verdict
-        if Gitlab::Recaptcha.enabled? && result != ALLOW
-          [CONDITIONAL_ALLOW, attribs]
-        else
-          [result, attribs]
-        end
+        [result, attribs]
+
       rescue StandardError => e
         Gitlab::ErrorTracking.log_exception(e)
 
         # Default to ALLOW if any errors occur
         [ALLOW, attribs, true]
       end
+    end
+
+    def override_via_allow_possible_spam?(verdict:)
+      # If the verdict is already going to allow (because current verdict's priority value is greater
+      # than the override verdict's priority value), then we don't need to override it.
+      return false if SUPPORTED_VERDICTS[verdict][:priority] > SUPPORTED_VERDICTS[OVERRIDE_VIA_ALLOW_POSSIBLE_SPAM][:priority]
+
+      target.allow_possible_spam?
     end
 
     def spamcheck_client

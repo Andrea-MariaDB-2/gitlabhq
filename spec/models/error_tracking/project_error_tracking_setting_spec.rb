@@ -79,6 +79,46 @@ RSpec.describe ErrorTracking::ProjectErrorTrackingSetting do
     end
   end
 
+  describe 'Callbacks' do
+    describe 'after_save :create_client_key!' do
+      subject { build(:project_error_tracking_setting, :integrated, project: project) }
+
+      context 'no client key yet' do
+        it 'creates a new client key' do
+          expect { subject.save! }.to change { ErrorTracking::ClientKey.count }.by(1)
+        end
+
+        context 'sentry backend' do
+          before do
+            subject.integrated = false
+          end
+
+          it 'does not create a new client key' do
+            expect { subject.save! }.not_to change { ErrorTracking::ClientKey.count }
+          end
+        end
+
+        context 'feature disabled' do
+          before do
+            subject.enabled = false
+          end
+
+          it 'does not create a new client key' do
+            expect { subject.save! }.not_to change { ErrorTracking::ClientKey.count }
+          end
+        end
+      end
+
+      context 'client key already exists' do
+        let!(:client_key) { create(:error_tracking_client_key, project: project) }
+
+        it 'does not create a new client key' do
+          expect { subject.save! }.not_to change { ErrorTracking::ClientKey.count }
+        end
+      end
+    end
+  end
+
   describe '.extract_sentry_external_url' do
     subject { described_class.extract_sentry_external_url(sentry_url) }
 
@@ -478,21 +518,45 @@ RSpec.describe ErrorTracking::ProjectErrorTrackingSetting do
   describe '#sentry_enabled' do
     using RSpec::Parameterized::TableSyntax
 
-    where(:enabled, :integrated, :feature_flag, :sentry_enabled) do
-      true  | false | false | true
-      true  | true  | false | true
-      true  | true  | true  | false
-      false | false | false | false
+    where(:enabled, :integrated, :sentry_enabled) do
+      true  | false | true
+      true  | true  | false
+      true  | true  | false
+      false | false | false
     end
 
     with_them do
       before do
         subject.enabled = enabled
         subject.integrated = integrated
-        stub_feature_flags(integrated_error_tracking: feature_flag)
       end
 
       it { expect(subject.sentry_enabled).to eq(sentry_enabled) }
     end
+  end
+
+  describe '#integrated_enabled?' do
+    using RSpec::Parameterized::TableSyntax
+
+    where(:enabled, :integrated, :integrated_enabled) do
+      true   | false | false
+      false  | true  | false
+      true   | true  | true
+    end
+
+    with_them do
+      before do
+        subject.enabled = enabled
+        subject.integrated = integrated
+      end
+
+      it { expect(subject.integrated_enabled?).to eq(integrated_enabled) }
+    end
+  end
+
+  describe '#gitlab_dsn' do
+    let!(:client_key) { create(:error_tracking_client_key, project: project) }
+
+    it { expect(subject.gitlab_dsn).to eq(client_key.sentry_dsn) }
   end
 end

@@ -43,8 +43,10 @@ module Namespaces
 
       included do
         before_update :lock_both_roots, if: -> { sync_traversal_ids? && parent_id_changed? }
-        after_create :sync_traversal_ids, if: -> { sync_traversal_ids? }
         after_update :sync_traversal_ids, if: -> { sync_traversal_ids? && saved_change_to_parent_id? }
+        # This uses rails internal before_commit API to sync traversal_ids on namespace create, right before transaction is committed.
+        # This helps reduce the time during which the root namespace record is locked to ensure updated traversal_ids are valid
+        before_commit :sync_traversal_ids, on: [:create], if: -> { sync_traversal_ids? }
       end
 
       def sync_traversal_ids?
@@ -57,9 +59,23 @@ module Namespaces
         traversal_ids.present?
       end
 
+      def use_traversal_ids_for_self_and_hierarchy?
+        return false unless use_traversal_ids?
+        return false unless Feature.enabled?(:use_traversal_ids_for_self_and_hierarchy, root_ancestor, default_enabled: :yaml)
+
+        traversal_ids.present?
+      end
+
       def use_traversal_ids_for_ancestors?
         return false unless use_traversal_ids?
         return false unless Feature.enabled?(:use_traversal_ids_for_ancestors, root_ancestor, default_enabled: :yaml)
+
+        traversal_ids.present?
+      end
+
+      def use_traversal_ids_for_ancestors_upto?
+        return false unless use_traversal_ids?
+        return false unless Feature.enabled?(:use_traversal_ids_for_ancestors_upto, root_ancestor, default_enabled: :yaml)
 
         traversal_ids.present?
       end
@@ -74,7 +90,7 @@ module Namespaces
         return super unless use_traversal_ids_for_root_ancestor?
 
         strong_memoize(:root_ancestor) do
-          if parent.nil?
+          if parent_id.nil?
             self
           else
             Namespace.find_by(id: traversal_ids.first)
@@ -100,6 +116,12 @@ module Namespaces
         self_and_descendants.where.not(id: id)
       end
 
+      def self_and_hierarchy
+        return super unless use_traversal_ids_for_self_and_hierarchy?
+
+        self_and_descendants.or(ancestors)
+      end
+
       def ancestors(hierarchy_order: nil)
         return super unless use_traversal_ids_for_ancestors?
 
@@ -112,6 +134,35 @@ module Namespaces
         return super unless use_traversal_ids_for_ancestors?
 
         hierarchy_order == :desc ? traversal_ids[0..-2] : traversal_ids[0..-2].reverse
+      end
+
+      # Returns all ancestors upto but excluding the top.
+      # When no top is given, all ancestors are returned.
+      # When top is not found, returns all ancestors.
+      #
+      # This copies the behavior of the recursive method. We will deprecate
+      # this behavior soon.
+      def ancestors_upto(top = nil, hierarchy_order: nil)
+        return super unless use_traversal_ids_for_ancestors_upto?
+
+        # We can't use a default value in the method definition above because
+        # we need to preserve those specific parameters for super.
+        hierarchy_order ||= :desc
+
+        # Get all ancestor IDs inclusively between top and our parent.
+        top_index = top ? traversal_ids.find_index(top.id) : 0
+        ids = traversal_ids[top_index...-1]
+        ids_string = ids.map { |id| Integer(id) }.join(',')
+
+        # WITH ORDINALITY lets us order the result to match traversal_ids order.
+        from_sql = <<~SQL
+          unnest(ARRAY[#{ids_string}]::bigint[]) WITH ORDINALITY AS ancestors(id, ord)
+          INNER JOIN namespaces ON namespaces.id = ancestors.id
+        SQL
+
+        self.class
+          .from(Arel.sql(from_sql))
+          .order('ancestors.ord': hierarchy_order)
       end
 
       def self_and_ancestors(hierarchy_order: nil)
@@ -161,14 +212,14 @@ module Namespaces
       def lineage(top: nil, bottom: nil, hierarchy_order: nil)
         raise UnboundedSearch, 'Must bound search by either top or bottom' unless top || bottom
 
-        skope = self.class.without_sti_condition
+        skope = self.class
 
         if top
           skope = skope.where("traversal_ids @> ('{?}')", top.id)
         end
 
         if bottom
-          skope = skope.where(id: bottom.traversal_ids[0..-1])
+          skope = skope.where(id: bottom.traversal_ids)
         end
 
         # The original `with_depth` attribute in ObjectHierarchy increments as you
@@ -181,7 +232,6 @@ module Namespaces
           # standard SELECT to avoid mismatched attribute errors when trying to
           # chain future ActiveRelation commands, and retain the ordering.
           skope = self.class
-            .without_sti_condition
             .from(skope, self.class.table_name)
             .select(skope.arel_table[Arel.star])
             .order(depth: hierarchy_order)

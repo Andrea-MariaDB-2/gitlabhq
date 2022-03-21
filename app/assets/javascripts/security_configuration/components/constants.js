@@ -3,6 +3,7 @@ import { __, s__ } from '~/locale';
 
 import {
   REPORT_TYPE_SAST,
+  REPORT_TYPE_SAST_IAC,
   REPORT_TYPE_DAST,
   REPORT_TYPE_DAST_PROFILES,
   REPORT_TYPE_SECRET_DETECTION,
@@ -10,15 +11,20 @@ import {
   REPORT_TYPE_CONTAINER_SCANNING,
   REPORT_TYPE_CLUSTER_IMAGE_SCANNING,
   REPORT_TYPE_COVERAGE_FUZZING,
+  REPORT_TYPE_CORPUS_MANAGEMENT,
   REPORT_TYPE_API_FUZZING,
   REPORT_TYPE_LICENSE_COMPLIANCE,
 } from '~/vue_shared/security_reports/constants';
 
+import kontraLogo from 'images/vulnerability/kontra-logo.svg';
+import scwLogo from 'images/vulnerability/scw-logo.svg';
 import configureSastMutation from '../graphql/configure_sast.mutation.graphql';
+import configureSastIacMutation from '../graphql/configure_iac.mutation.graphql';
 import configureSecretDetectionMutation from '../graphql/configure_secret_detection.mutation.graphql';
 
 /**
  * Translations & helpPagePaths for Security Configuration Page
+ * Make sure to add new scanner translations to the SCANNER_NAMES_MAP below.
  */
 
 export const SAST_NAME = __('Static Application Security Testing (SAST)');
@@ -28,6 +34,19 @@ export const SAST_HELP_PATH = helpPagePath('user/application_security/sast/index
 export const SAST_CONFIG_HELP_PATH = helpPagePath('user/application_security/sast/index', {
   anchor: 'configuration',
 });
+
+export const SAST_IAC_NAME = __('Infrastructure as Code (IaC) Scanning');
+export const SAST_IAC_SHORT_NAME = s__('ciReport|IaC Scanning');
+export const SAST_IAC_DESCRIPTION = __(
+  'Analyze your infrastructure as code configuration files for known vulnerabilities.',
+);
+export const SAST_IAC_HELP_PATH = helpPagePath('user/application_security/iac_scanning/index');
+export const SAST_IAC_CONFIG_HELP_PATH = helpPagePath(
+  'user/application_security/iac_scanning/index',
+  {
+    anchor: 'configuration',
+  },
+);
 
 export const DAST_NAME = __('Dynamic Application Security Testing (DAST)');
 export const DAST_SHORT_NAME = s__('ciReport|DAST');
@@ -104,6 +123,12 @@ export const COVERAGE_FUZZING_CONFIG_HELP_PATH = helpPagePath(
   { anchor: 'configuration' },
 );
 
+export const CORPUS_MANAGEMENT_NAME = __('Corpus Management');
+export const CORPUS_MANAGEMENT_DESCRIPTION = s__(
+  'SecurityConfiguration|Manage corpus files used as seed inputs with coverage-guided fuzzing.',
+);
+export const CORPUS_MANAGEMENT_CONFIG_TEXT = s__('SecurityConfiguration|Manage corpus');
+
 export const API_FUZZING_NAME = __('API Fuzzing');
 export const API_FUZZING_DESCRIPTION = __('Find bugs in your code with API fuzzing.');
 export const API_FUZZING_HELP_PATH = helpPagePath('user/application_security/api_fuzzing/index');
@@ -116,6 +141,18 @@ export const LICENSE_COMPLIANCE_HELP_PATH = helpPagePath(
   'user/compliance/license_compliance/index',
 );
 
+export const SCANNER_NAMES_MAP = {
+  SAST: SAST_SHORT_NAME,
+  SAST_IAC: SAST_IAC_NAME,
+  DAST: DAST_SHORT_NAME,
+  API_FUZZING: API_FUZZING_NAME,
+  CONTAINER_SCANNING: CONTAINER_SCANNING_NAME,
+  CLUSTER_IMAGE_SCANNING: CLUSTER_IMAGE_SCANNING_NAME,
+  COVERAGE_FUZZING: COVERAGE_FUZZING_NAME,
+  SECRET_DETECTION: SECRET_DETECTION_NAME,
+  DEPENDENCY_SCANNING: DEPENDENCY_SCANNING_NAME,
+};
+
 export const securityFeatures = [
   {
     name: SAST_NAME,
@@ -124,15 +161,14 @@ export const securityFeatures = [
     helpPath: SAST_HELP_PATH,
     configurationHelpPath: SAST_CONFIG_HELP_PATH,
     type: REPORT_TYPE_SAST,
-    // This field is currently hardcoded because SAST is always available.
-    // It will eventually come from the Backend, the progress is tracked in
-    // https://gitlab.com/gitlab-org/gitlab/-/issues/331622
-    available: true,
-
-    // This field is currently hardcoded because SAST can always be enabled via MR
-    // It will eventually come from the Backend, the progress is tracked in
-    // https://gitlab.com/gitlab-org/gitlab/-/issues/331621
-    canEnableByMergeRequest: true,
+  },
+  {
+    name: SAST_IAC_NAME,
+    shortName: SAST_IAC_SHORT_NAME,
+    description: SAST_IAC_DESCRIPTION,
+    helpPath: SAST_IAC_HELP_PATH,
+    configurationHelpPath: SAST_IAC_CONFIG_HELP_PATH,
+    type: REPORT_TYPE_SAST_IAC,
   },
   {
     name: DAST_NAME,
@@ -154,10 +190,6 @@ export const securityFeatures = [
     helpPath: DEPENDENCY_SCANNING_HELP_PATH,
     configurationHelpPath: DEPENDENCY_SCANNING_CONFIG_HELP_PATH,
     type: REPORT_TYPE_DEPENDENCY_SCANNING,
-
-    // This field will eventually come from the backend, the progress is
-    // tracked in https://gitlab.com/gitlab-org/gitlab/-/issues/331621
-    canEnableByMergeRequest: true,
   },
   {
     name: CONTAINER_SCANNING_NAME,
@@ -179,16 +211,6 @@ export const securityFeatures = [
     helpPath: SECRET_DETECTION_HELP_PATH,
     configurationHelpPath: SECRET_DETECTION_CONFIG_HELP_PATH,
     type: REPORT_TYPE_SECRET_DETECTION,
-
-    // This field is currently hardcoded because Secret Detection is always
-    // available.  It will eventually come from the Backend, the progress is
-    // tracked in https://gitlab.com/gitlab-org/gitlab/-/issues/333113
-    available: true,
-
-    // This field is currently hardcoded because SAST can always be enabled via MR
-    // It will eventually come from the Backend, the progress is tracked in
-    // https://gitlab.com/gitlab-org/gitlab/-/issues/331621
-    canEnableByMergeRequest: true,
   },
   {
     name: API_FUZZING_NAME,
@@ -202,6 +224,12 @@ export const securityFeatures = [
     helpPath: COVERAGE_FUZZING_HELP_PATH,
     configurationHelpPath: COVERAGE_FUZZING_CONFIG_HELP_PATH,
     type: REPORT_TYPE_COVERAGE_FUZZING,
+    secondary: {
+      type: REPORT_TYPE_CORPUS_MANAGEMENT,
+      name: CORPUS_MANAGEMENT_NAME,
+      description: CORPUS_MANAGEMENT_DESCRIPTION,
+      configurationText: CORPUS_MANAGEMENT_CONFIG_TEXT,
+    },
   },
 ];
 
@@ -227,6 +255,17 @@ export const featureToMutationMap = {
       },
     }),
   },
+  [REPORT_TYPE_SAST_IAC]: {
+    mutationId: 'configureSastIac',
+    getMutationPayload: (projectPath) => ({
+      mutation: configureSastIacMutation,
+      variables: {
+        input: {
+          projectPath,
+        },
+      },
+    }),
+  },
   [REPORT_TYPE_SECRET_DETECTION]: {
     mutationId: 'configureSecretDetection',
     getMutationPayload: (projectPath) => ({
@@ -242,3 +281,21 @@ export const featureToMutationMap = {
 
 export const AUTO_DEVOPS_ENABLED_ALERT_DISMISSED_STORAGE_KEY =
   'security_configuration_auto_devops_enabled_dismissed_projects';
+
+// Fetch the svg path from the GraphQL query once this issue is resolved
+// https://gitlab.com/gitlab-org/gitlab/-/issues/346899
+export const TEMP_PROVIDER_LOGOS = {
+  Kontra: {
+    svg: kontraLogo,
+  },
+  [__('Secure Code Warrior')]: {
+    svg: scwLogo,
+  },
+};
+
+// Use the `url` field from the GraphQL query once this issue is resolved
+// https://gitlab.com/gitlab-org/gitlab/-/issues/356129
+export const TEMP_PROVIDER_URLS = {
+  Kontra: 'https://application.security/',
+  [__('Secure Code Warrior')]: 'https://www.securecodewarrior.com/',
+};

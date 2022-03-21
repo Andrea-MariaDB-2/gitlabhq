@@ -3,7 +3,9 @@
 module Gitlab
   module Database
     module BackgroundMigration
-      class BatchedJob < ActiveRecord::Base # rubocop:disable Rails/ApplicationRecord
+      SplitAndRetryError = Class.new(StandardError)
+
+      class BatchedJob < SharedModel
         include EachBatch
         include FromUnion
 
@@ -11,25 +13,70 @@ module Gitlab
 
         MAX_ATTEMPTS = 3
         STUCK_JOBS_TIMEOUT = 1.hour.freeze
+        TIMEOUT_EXCEPTIONS = [ActiveRecord::StatementTimeout, ActiveRecord::ConnectionTimeoutError,
+                              ActiveRecord::AdapterTimeout, ActiveRecord::LockWaitTimeout].freeze
 
         belongs_to :batched_migration, foreign_key: :batched_background_migration_id
+        has_many :batched_job_transition_logs, foreign_key: :batched_background_migration_job_id
 
-        scope :active, -> { where(status: [:pending, :running]) }
+        scope :active, -> { with_statuses(:pending, :running) }
         scope :stuck, -> { active.where('updated_at <= ?', STUCK_JOBS_TIMEOUT.ago) }
-        scope :retriable, -> {
-          failed_jobs = where(status: :failed).where('attempts < ?', MAX_ATTEMPTS)
+        scope :retriable, -> { from_union([with_status(:failed).where('attempts < ?', MAX_ATTEMPTS), self.stuck]) }
+        scope :except_succeeded, -> { without_status(:succeeded) }
+        scope :successful_in_execution_order, -> { where.not(finished_at: nil).with_status(:succeeded).order(:finished_at) }
+        scope :with_preloads, -> { preload(:batched_migration) }
 
-          from_union([failed_jobs, self.stuck])
-        }
+        state_machine :status, initial: :pending do
+          state :pending, value: 0
+          state :running, value: 1
+          state :failed, value: 2
+          state :succeeded, value: 3
 
-        enum status: {
-          pending: 0,
-          running: 1,
-          failed: 2,
-          succeeded: 3
-        }
+          event :succeed do
+            transition any => :succeeded
+          end
 
-        scope :successful_in_execution_order, -> { where.not(finished_at: nil).succeeded.order(:finished_at) }
+          event :failure do
+            transition any => :failed
+          end
+
+          event :run do
+            transition any => :running
+          end
+
+          before_transition any => [:failed, :succeeded] do |job|
+            job.finished_at = Time.current
+          end
+
+          before_transition any => :running do |job|
+            job.attempts += 1
+            job.started_at = Time.current
+            job.finished_at = nil
+            job.metrics = {}
+          end
+
+          after_transition any => :failed do |job, transition|
+            error_hash = transition.args.find { |arg| arg[:error].present? }
+
+            exception = error_hash&.fetch(:error)
+
+            job.split_and_retry! if job.can_split?(exception)
+          rescue SplitAndRetryError => error
+            Gitlab::AppLogger.error(message: error.message, batched_job_id: job.id)
+          end
+
+          after_transition do |job, transition|
+            error_hash = transition.args.find { |arg| arg[:error].present? }
+
+            exception = error_hash&.fetch(:error)
+
+            job.batched_job_transition_logs.create(previous_status: transition.from, next_status: transition.to, exception_class: exception&.class, exception_message: exception&.message)
+
+            Gitlab::ErrorTracking.track_exception(exception, batched_job_id: job.id) if exception
+
+            Gitlab::AppLogger.info(message: 'BatchedJob transition', batched_job_id: job.id, previous_state: transition.from_name, new_state: transition.to_name)
+          end
+        end
 
         delegate :job_class, :table_name, :column_name, :job_arguments,
           to: :batched_migration, prefix: :migration
@@ -46,20 +93,25 @@ module Gitlab
           duration.to_f / batched_migration.interval
         end
 
+        def can_split?(exception)
+          attempts >= MAX_ATTEMPTS && TIMEOUT_EXCEPTIONS.include?(exception&.class) && batch_size > sub_batch_size
+        end
+
         def split_and_retry!
           with_lock do
-            raise 'Only failed jobs can be split' unless failed?
+            raise SplitAndRetryError, 'Only failed jobs can be split' unless failed?
 
             new_batch_size = batch_size / 2
 
-            raise 'Job cannot be split further' if new_batch_size < 1
+            raise SplitAndRetryError, 'Job cannot be split further' if new_batch_size < 1
 
-            batching_strategy = batched_migration.batch_class.new
+            batching_strategy = batched_migration.batch_class.new(connection: self.class.connection)
             next_batch_bounds = batching_strategy.next_batch(
               batched_migration.table_name,
               batched_migration.column_name,
               batch_min_value: min_value,
-              batch_size: new_batch_size
+              batch_size: new_batch_size,
+              job_arguments: batched_migration.job_arguments
             )
             midpoint = next_batch_bounds.last
 

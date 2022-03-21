@@ -4,66 +4,44 @@ group: unassigned
 info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
 ---
 
-# Documentation process
+# How to update GitLab documentation
 
-The process for creating and maintaining GitLab product documentation allows
-anyone to contribute a merge request or create an issue for GitLab
-documentation.
-
-Documentation updates relating to new features or feature enhancements must
-use the [feature workflow process](https://about.gitlab.com/handbook/engineering/ux/technical-writing/workflow/#for-a-product-change) described in the GitLab Handbook.
-
-## Who updates the docs?
-
-*Anyone* can contribute! You can create a merge request for documentation when:
+Anyone can contribute to the GitLab documentation! You can create a merge request for documentation when:
 
 - You find errors or other room for improvement in existing documentation.
 - You have an idea for all-new documentation that would help a GitLab user or administrator to
   accomplish their work with GitLab.
 
-## Documentation labels
-
-Regardless of the type of issue or merge request, certain labels are required when documentation
-is added or updated. The following are added by the issue or merge request author:
-
-- An appropriate [type label](../contributing/issue_workflow.md#type-labels).
-- The [stage label](../contributing/issue_workflow.md#stage-labels) and
-  [group label](../contributing/issue_workflow.md#group-labels). For example, `~devops::create` and
-  `~group::source code`.
-- The `~documentation` [specialization label](../contributing/issue_workflow.md#specialization-labels).
-
-The following are also added by members of the Technical Writing team:
-
-- A documentation [scoped label](../../user/project/labels.md#scoped-labels) with the
-  `docs::` prefix. For example, `~docs::improvement`.
-- The `~Technical Writing` [team label](../contributing/issue_workflow.md#team-labels).
-
-Documentation changes that are not associated with the release of a new or updated feature
-do not take the `~feature` label, but still need the `~documentation` label.
-
-They may include:
-
-- Documentation created or updated to improve accuracy, completeness, ease of use, or any reason
-  other than a [feature change](https://about.gitlab.com/handbook/engineering/ux/technical-writing/workflow/#for-a-product-change).
-- Addressing gaps in existing documentation, or making improvements to existing documentation.
-- Work on special projects related to the documentation.
+If you are working on a feature or enhancement, use the
+[feature workflow process described in the GitLab Handbook](https://about.gitlab.com/handbook/engineering/ux/technical-writing/workflow/#for-a-product-change).
 
 ## How to update the docs
 
-To update GitLab documentation:
+If you are not a GitLab team member, or do not have the Developer role for the GitLab repository, to update GitLab documentation:
 
-1. Either:
-   - Click the **Edit this Page** link at the bottom of any page on <https://docs.gitlab.com>.
-   - Navigate to one of the repositories and documentation paths listed on the
-     [GitLab Documentation guidelines](index.md) page.
-1. Follow the described standards and processes listed on the page, including:
-   - The [Structure and template](structure.md) page.
-   - The [Style Guide](styleguide/index.md).
-   - The [Markdown Guide](https://about.gitlab.com/handbook/markdown-guide/).
-1. Follow the [Merge Request Guidelines](../contributing/merge_request_workflow.md#merge-request-guidelines).
+1. Select an issue you'd like to work on.
+   - You don't need an issue to open a merge request.
+   - For a Hackathon, in the issue, in a comment, mention the person who opened the issue and ask for the issue to be assigned to you.
+     To be fair to other contributors, if you see someone has already asked to work on the issue, choose another issue.
+     If you are looking for issues to work on and don't see any that suit you, you can always fix [Vale](testing.md#vale) issues.
+1. Go to the [GitLab repository](https://gitlab.com/gitlab-org/gitlab).
+1. In the top-right, select **Fork**. Forking makes a copy of the repository on GitLab.com.
+1. In your fork, find the documentation page by going to the `\doc` directory.
+1. If you know Git, make your changes and open a merge request.
+   If not, follow these steps:
+   1. In the top right, select **Edit**, make the changes, and **Save**.
+   1. From the left menu, select **Merge requests**.
+   1. For the source branch, select your fork and branch. If you did not create a branch, select `master`.
+      For the target branch, select the [GitLab repository](https://gitlab.com/gitlab-org/gitlab) `master` branch.
+   1. For the commit message, use 3-5 words, start with a capital letter, and do not end with a period.
+   1. Select **Commit changes**. A merge request opens.
+   1. Select the **Documentation** template. In the description, write a brief summary of the changes and link to the related issue, if there is one.
 
-NOTE:
-Work in a fork if you do not have the Developer role in the GitLab project.
+If you need help while working on the page, view:
+
+- The [Style Guide](styleguide/index.md).
+- The [Word list](styleguide/word_list.md)
+- The [Markdown Guide](https://about.gitlab.com/handbook/markdown-guide/).
 
 ### Ask for help
 
@@ -83,9 +61,25 @@ To identify someone who can help you:
 
 If you are a member of the GitLab Slack workspace, you can request help in `#docs`.
 
+## Documentation labels
+
+When you author an issue or merge request, you must add these labels:
+
+- A [type label](../contributing/issue_workflow.md#type-labels).
+- A [stage label](../contributing/issue_workflow.md#stage-labels) and [group label](../contributing/issue_workflow.md#group-labels).
+  For example, `~devops::create` and `~group::source code`.
+- A `~documentation` [specialization label](../contributing/issue_workflow.md#specialization-labels).
+
+A member of the Technical Writing team adds these labels:
+
+- A [documentation scoped label](../../user/project/labels.md#scoped-labels) with the
+  `docs::` prefix. For example, `~docs::improvement`.
+- The [`~Technical Writing` team label](../contributing/issue_workflow.md#team-labels).
+- A type label: either `~"type::feature"` or `~"type::maintenance"`.
+
 ### Reviewing and merging
 
-Anyone with the [Maintainer role](../../user/permissions.md) to the relevant GitLab project can
+Anyone with the Maintainer role to the relevant GitLab project can
 merge documentation changes. Maintainers must make a good-faith effort to ensure that the content:
 
 - Is clear and sufficiently easy for the intended audience to navigate and understand.
@@ -99,7 +93,7 @@ The process involves the following:
 - Primary Reviewer. Review by a [code reviewer](https://about.gitlab.com/handbook/engineering/projects/)
   or other appropriate colleague to confirm accuracy, clarity, and completeness. This can be skipped
   for minor fixes without substantive content changes.
-- Technical Writer (Optional). If not completed for a merge request prior to merging, must be scheduled
+- Technical Writer (Optional). If not completed for a merge request before merging, must be scheduled
   post-merge. Schedule post-merge reviews only if an urgent merge is required. To request a:
   - Pre-merge review, assign the Technical Writer listed for the applicable
     [DevOps stage group](https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments).
@@ -111,7 +105,7 @@ The process involves the following:
   - Ensure the appropriate labels are applied, including any required to pick a merge request into
     a release.
   - Ensure that, if there has not been a Technical Writer review completed or scheduled, they
-    [create the required issue](https://gitlab.com/gitlab-org/gitlab/-/issues/new?issuable_template=Doc%20Review), assign to the Technical Writer of the given stage group,
+    [create the required issue](https://gitlab.com/gitlab-org/gitlab/-/issues/new?issuable_template=Doc%20Review), assign it to the Technical Writer of the given stage group,
     and link it from the merge request.
 
 The process is reflected in the **Documentation**
@@ -130,10 +124,10 @@ immediately after merge by the developer or maintainer. For this,
 create an issue using the [Doc Review description template](https://gitlab.com/gitlab-org/gitlab/-/issues/new?issuable_template=Doc%20Review)
 and link to it from the merged merge request that introduced the documentation change.
 
-Circumstances where a regular pre-merge Technical Writer review might be skipped include:
+Circumstances in which a regular pre-merge Technical Writer review might be skipped include:
 
-- There is a short amount of time left before the milestone release. If there are less than three days
-  remaining, seek a post-merge review and ping the writer via Slack to ensure the review is
+- There is a short amount of time left before the milestone release. If fewer than three
+ days are remaining, seek a post-merge review and ping the writer via Slack to ensure the review is
   completed as soon as possible.
 - The size of the change is small and you have a high degree of confidence
   that early users of the feature (for example, GitLab.com users) can easily
@@ -156,15 +150,15 @@ Remember:
 
 Ensure the following if skipping an initial Technical Writer review:
 
-- That [product badges](styleguide/index.md#product-tier-badges) are applied.
-- That the GitLab [version](styleguide/index.md#gitlab-versions) that
-  introduced the feature has been included.
-- That changes to headings don't affect in-app hyperlinks.
+- [Product badges](styleguide/index.md#product-tier-badges) are applied.
+- The GitLab [version](styleguide/index.md#gitlab-versions) that
+  introduced the feature is included.
+- Changes to headings don't affect in-app hyperlinks.
 - Specific [user permissions](../../user/permissions.md) are documented.
-- That new documents are linked from higher-level indexes, for discoverability.
-- Style guide is followed:
-  - For [directories and files](styleguide/index.md#work-with-directories-and-files).
+- New documents are linked from higher-level indexes, for discoverability.
+- The style guide is followed:
+  - For [directories and files](site_architecture/folder_structure.md).
   - For [images](styleguide/index.md#images).
 
 Merge requests that change the location of documentation must always be reviewed by a Technical
-Writer prior to merging.
+Writer before merging.

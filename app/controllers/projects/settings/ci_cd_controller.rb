@@ -9,10 +9,10 @@ module Projects
 
       layout 'project_settings'
       before_action :authorize_admin_pipeline!
+      before_action :check_builds_available!
       before_action :define_variables
       before_action do
         push_frontend_feature_flag(:ajax_new_deploy_token, @project)
-        push_frontend_feature_flag(:ci_scoped_job_token, @project, default_enabled: :yaml)
       end
 
       helper_method :highlight_badge
@@ -24,6 +24,15 @@ module Projects
           @triggers_json = ::Ci::TriggerSerializer.new.represent(
             @project.triggers, current_user: current_user, project: @project
           ).to_json
+        end
+
+        if current_user.ci_owned_runners_cross_joins_fix_enabled?
+          render
+        else
+          # @assignable_runners is using ci_owned_runners
+          ::Gitlab::Database.allow_cross_joins_across_databases(url: 'https://gitlab.com/gitlab-org/gitlab/-/issues/336436') do
+            render
+          end
         end
       end
 
@@ -55,7 +64,7 @@ module Projects
       end
 
       def reset_registration_token
-        @project.reset_runners_token!
+        ::Ci::Runners::ResetRegistrationTokenService.new(@project, current_user).execute
 
         flash[:toast] = _("New runners registration token has been generated!")
         redirect_to namespace_project_settings_ci_cd_path
@@ -99,8 +108,7 @@ module Projects
         CreatePipelineWorker.perform_async(project.id, current_user.id, project.default_branch, :web, ignore_skip_ci: true, save_on_errors: false)
         # rubocop:enable CodeReuse/Worker
 
-        pipelines_link_start = '<a href="%{url}">'.html_safe % { url: project_pipelines_path(@project) }
-        flash[:toast] = _("A new Auto DevOps pipeline has been created, go to %{pipelines_link_start}Pipelines page%{pipelines_link_end} for details") % { pipelines_link_start: pipelines_link_start, pipelines_link_end: "</a>".html_safe }
+        flash[:toast] = _("A new Auto DevOps pipeline has been created, go to the Pipelines page for details")
       end
 
       def define_variables
@@ -152,6 +160,8 @@ module Projects
         @badges.map! do |badge|
           badge.new(@project, @ref).metadata
         end
+
+        @badges.append(Gitlab::Ci::Badge::Release::LatestRelease.new(@project, current_user).metadata)
       end
 
       def define_auto_devops_variables

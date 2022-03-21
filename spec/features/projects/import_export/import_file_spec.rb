@@ -10,12 +10,11 @@ RSpec.describe 'Import/Export - project import integration test', :js do
   let(:export_path) { "#{Dir.tmpdir}/import_file_spec" }
 
   before do
-    stub_feature_flags(paginatable_namespace_drop_down_for_project_creation: false)
     stub_uploads_object_storage(FileUploader)
     allow_next_instance_of(Gitlab::ImportExport) do |instance|
       allow(instance).to receive(:storage_path).and_return(export_path)
     end
-    gitlab_sign_in(user)
+    sign_in(user)
   end
 
   after do
@@ -31,7 +30,7 @@ RSpec.describe 'Import/Export - project import integration test', :js do
 
     it 'user imports an exported project successfully', :sidekiq_might_not_need_inline do
       visit new_project_path
-      click_import_project
+      click_link 'Import project'
       click_link 'GitLab export'
 
       fill_in :name, with: 'Test Project Name', visible: true
@@ -42,7 +41,7 @@ RSpec.describe 'Import/Export - project import integration test', :js do
 
       project = Project.last
       expect(project).not_to be_nil
-      expect(page).to have_content("Project 'test-project-path' is being imported")
+      expect(page).to have_content("Project 'Test Project Name' is being imported")
     end
 
     it 'invalid project' do
@@ -50,7 +49,7 @@ RSpec.describe 'Import/Export - project import integration test', :js do
 
       visit new_project_path
 
-      click_import_project
+      click_link 'Import project'
       click_link 'GitLab export'
       fill_in :name, with: project.name, visible: true
       attach_file('file', file)
@@ -60,9 +59,5 @@ RSpec.describe 'Import/Export - project import integration test', :js do
         expect(page).to have_content('Project could not be imported')
       end
     end
-  end
-
-  def click_import_project
-    find('[data-qa-panel-name="import_project"]').click # rubocop:disable QA/SelectorUsage
   end
 end

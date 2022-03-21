@@ -16,7 +16,7 @@ Watch a video on [Using GitLab CI/CD pipelines with GitHub repositories](https:/
 
 NOTE:
 Because of [GitHub limitations](https://gitlab.com/gitlab-org/gitlab/-/issues/9147),
-[GitHub OAuth](../../integration/github.md#enabling-github-oauth)
+[GitHub OAuth](../../integration/github.md#enable-github-oauth-in-gitlab)
 cannot be used to authenticate with GitHub as an external CI/CD repository.
 
 ## Connect with Personal Access Token
@@ -29,7 +29,7 @@ repositories:
 
 1. In GitHub, create a token:
    1. Open <https://github.com/settings/tokens/new>.
-   1. Create a **Personal Access Token**. 
+   1. Create a **Personal Access Token**.
    1. Enter a **Token description** and update the scope to allow
       `repo` and `admin:repo_hook` so that GitLab can access your project,
       update commit statuses, and create a web hook to notify GitLab of new commits.
@@ -45,7 +45,7 @@ repositories:
 GitLab:
 
 1. Imports the project.
-1. Enables [Pull Mirroring](../../user/project/repository/repository_mirroring.md#pull-from-a-remote-repository).
+1. Enables [Pull Mirroring](../../user/project/repository/mirror/pull.md).
 1. Enables [GitHub project integration](../../user/project/integrations/github.md).
 1. Creates a web hook on GitHub to notify GitLab of new commits.
 
@@ -57,7 +57,7 @@ To manually enable GitLab CI/CD for your repository:
 
 1. In GitHub, create a token:
    1. Open <https://github.com/settings/tokens/new>.
-   1. Create a **Personal Access Token**. 
+   1. Create a **Personal Access Token**.
    1. Enter a **Token description** and update the scope to allow
       `repo` so that GitLab can access your project and update commit statuses.
 1. In GitLab, create a project:

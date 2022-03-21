@@ -3,15 +3,19 @@ import { GlDrawer } from '@gitlab/ui';
 import { MountingPortal } from 'portal-vue';
 import { mapState, mapActions, mapGetters } from 'vuex';
 import SidebarDropdownWidget from 'ee_else_ce/sidebar/components/sidebar_dropdown_widget.vue';
-import BoardSidebarLabelsSelect from '~/boards/components/sidebar/board_sidebar_labels_select.vue';
+import { __, sprintf } from '~/locale';
 import BoardSidebarTimeTracker from '~/boards/components/sidebar/board_sidebar_time_tracker.vue';
 import BoardSidebarTitle from '~/boards/components/sidebar/board_sidebar_title.vue';
-import { ISSUABLE } from '~/boards/constants';
+import { ISSUABLE, INCIDENT } from '~/boards/constants';
+import { getIdFromGraphQLId } from '~/graphql_shared/utils';
 import SidebarAssigneesWidget from '~/sidebar/components/assignees/sidebar_assignees_widget.vue';
 import SidebarConfidentialityWidget from '~/sidebar/components/confidential/sidebar_confidentiality_widget.vue';
 import SidebarDateWidget from '~/sidebar/components/date/sidebar_date_widget.vue';
+import SidebarSeverity from '~/sidebar/components/severity/sidebar_severity.vue';
 import SidebarSubscriptionsWidget from '~/sidebar/components/subscriptions/sidebar_subscriptions_widget.vue';
 import SidebarTodoWidget from '~/sidebar/components/todo_toggle/sidebar_todo_widget.vue';
+import SidebarLabelsWidget from '~/vue_shared/components/sidebar/labels_select_widget/labels_select_root.vue';
+import { LabelType } from '~/vue_shared/components/sidebar/labels_select_widget/constants';
 import glFeatureFlagMixin from '~/vue_shared/mixins/gl_feature_flags_mixin';
 
 export default {
@@ -22,10 +26,11 @@ export default {
     SidebarDateWidget,
     SidebarConfidentialityWidget,
     BoardSidebarTimeTracker,
-    BoardSidebarLabelsSelect,
+    SidebarLabelsWidget,
     SidebarSubscriptionsWidget,
     SidebarDropdownWidget,
     SidebarTodoWidget,
+    SidebarSeverity,
     MountingPortal,
     SidebarWeightWidget: () =>
       import('ee_component/sidebar/components/weight/sidebar_weight_widget.vue'),
@@ -46,10 +51,17 @@ export default {
     weightFeatureAvailable: {
       default: false,
     },
+    allowLabelEdit: {
+      default: false,
+    },
+    labelsFilterBasePath: {
+      default: '',
+    },
   },
   inheritAttrs: false,
   computed: {
     ...mapGetters([
+      'isGroupBoard',
       'isSidebarOpen',
       'activeBoardItem',
       'groupPathForActiveIssue',
@@ -59,11 +71,38 @@ export default {
     isIssuableSidebar() {
       return this.sidebarType === ISSUABLE;
     },
+    isIncidentSidebar() {
+      return this.activeBoardItem.type === INCIDENT;
+    },
     showSidebar() {
       return this.isIssuableSidebar && this.isSidebarOpen;
     },
+    sidebarTitle() {
+      return this.isIncidentSidebar ? __('Incident details') : __('Issue details');
+    },
     fullPath() {
       return this.activeBoardItem?.referencePath?.split('#')[0] || '';
+    },
+    createLabelTitle() {
+      return sprintf(__('Create %{workspace} label'), {
+        workspace: this.isGroupBoard ? 'group' : 'project',
+      });
+    },
+    manageLabelTitle() {
+      return sprintf(__('Manage %{workspace} labels'), {
+        workspace: this.isGroupBoard ? 'group' : 'project',
+      });
+    },
+    attrWorkspacePath() {
+      return this.isGroupBoard ? this.groupPathForActiveIssue : this.projectPathForActiveIssue;
+    },
+    labelType() {
+      return this.isGroupBoard ? LabelType.group : LabelType.project;
+    },
+    labelsFilterPath() {
+      return this.isGroupBoard
+        ? this.labelsFilterBasePath.replace(':project_path', this.projectPathForActiveIssue)
+        : this.labelsFilterBasePath;
     },
   },
   methods: {
@@ -71,10 +110,26 @@ export default {
       'toggleBoardItem',
       'setAssignees',
       'setActiveItemConfidential',
+      'setActiveBoardItemLabels',
       'setActiveItemWeight',
     ]),
     handleClose() {
       this.toggleBoardItem({ boardItem: this.activeBoardItem, sidebarType: this.sidebarType });
+    },
+    handleUpdateSelectedLabels({ labels, id }) {
+      this.setActiveBoardItemLabels({
+        id,
+        projectPath: this.projectPathForActiveIssue,
+        labelIds: labels.map((label) => getIdFromGraphQLId(label.id)),
+        labels,
+      });
+    },
+    handleLabelRemove(removeLabelId) {
+      this.setActiveBoardItemLabels({
+        iid: this.activeBoardItem.iid,
+        projectPath: this.projectPathForActiveIssue,
+        removeLabelIds: [removeLabelId],
+      });
     },
   },
 };
@@ -91,12 +146,12 @@ export default {
       @close="handleClose"
     >
       <template #title>
-        <h2 class="gl-my-0 gl-font-size-h2 gl-line-height-24">{{ __('Issue details') }}</h2>
+        <h2 class="gl-my-0 gl-font-size-h2 gl-line-height-24">{{ sidebarTitle }}</h2>
       </template>
       <template #header>
         <sidebar-todo-widget
           class="gl-mt-3"
-          :issuable-id="activeBoardItem.fullId"
+          :issuable-id="activeBoardItem.id"
           :issuable-iid="activeBoardItem.iid"
           :full-path="fullPath"
           :issuable-type="issuableType"
@@ -112,7 +167,7 @@ export default {
           @assignees-updated="setAssignees"
         />
         <sidebar-dropdown-widget
-          v-if="epicFeatureAvailable"
+          v-if="epicFeatureAvailable && !isIncidentSidebar"
           :iid="activeBoardItem.iid"
           issuable-attribute="epic"
           :workspace-path="projectPathForActiveIssue"
@@ -129,40 +184,50 @@ export default {
             :issuable-type="issuableType"
             data-testid="sidebar-milestones"
           />
-          <template v-if="!glFeatures.iterationCadences">
-            <sidebar-dropdown-widget
-              v-if="iterationFeatureAvailable"
-              :iid="activeBoardItem.iid"
-              issuable-attribute="iteration"
-              :workspace-path="projectPathForActiveIssue"
-              :attr-workspace-path="groupPathForActiveIssue"
-              :issuable-type="issuableType"
-              class="gl-mt-5"
-              data-testid="iteration-edit"
-            />
-          </template>
-          <template v-else>
-            <iteration-sidebar-dropdown-widget
-              v-if="iterationFeatureAvailable"
-              :iid="activeBoardItem.iid"
-              :workspace-path="projectPathForActiveIssue"
-              :attr-workspace-path="groupPathForActiveIssue"
-              :issuable-type="issuableType"
-              class="gl-mt-5"
-              data-testid="iteration-edit"
-            />
-          </template>
+          <iteration-sidebar-dropdown-widget
+            v-if="iterationFeatureAvailable && !isIncidentSidebar"
+            :iid="activeBoardItem.iid"
+            :workspace-path="projectPathForActiveIssue"
+            :attr-workspace-path="groupPathForActiveIssue"
+            :issuable-type="issuableType"
+            class="gl-mt-5"
+            data-testid="iteration-edit"
+          />
         </div>
-        <board-sidebar-time-tracker class="swimlanes-sidebar-time-tracker" />
+        <board-sidebar-time-tracker />
         <sidebar-date-widget
           :iid="activeBoardItem.iid"
           :full-path="fullPath"
           :issuable-type="issuableType"
           data-testid="sidebar-due-date"
         />
-        <board-sidebar-labels-select class="block labels" />
+        <sidebar-labels-widget
+          class="block labels"
+          :iid="activeBoardItem.iid"
+          :full-path="projectPathForActiveIssue"
+          :allow-label-remove="allowLabelEdit"
+          :allow-multiselect="true"
+          :footer-create-label-title="createLabelTitle"
+          :footer-manage-label-title="manageLabelTitle"
+          :labels-create-title="createLabelTitle"
+          :labels-filter-base-path="labelsFilterPath"
+          :attr-workspace-path="attrWorkspacePath"
+          workspace-type="project"
+          :issuable-type="issuableType"
+          :label-create-type="labelType"
+          @onLabelRemove="handleLabelRemove"
+          @updateSelectedLabels="handleUpdateSelectedLabels"
+        >
+          {{ __('None') }}
+        </sidebar-labels-widget>
+        <sidebar-severity
+          v-if="isIncidentSidebar"
+          :iid="activeBoardItem.iid"
+          :project-path="fullPath"
+          :initial-severity="activeBoardItem.severity"
+        />
         <sidebar-weight-widget
-          v-if="weightFeatureAvailable"
+          v-if="weightFeatureAvailable && !isIncidentSidebar"
           :iid="activeBoardItem.iid"
           :full-path="fullPath"
           :issuable-type="issuableType"

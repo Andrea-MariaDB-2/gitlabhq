@@ -1,9 +1,15 @@
 <script>
-import { GlPopover, GlButton, GlTooltipDirective } from '@gitlab/ui';
+import { GlPopover, GlButton, GlTooltipDirective, GlTabs, GlTab } from '@gitlab/ui';
 import $ from 'jquery';
-import { keysFor, BOLD_TEXT, ITALIC_TEXT, LINK_TEXT } from '~/behaviors/shortcuts/keybindings';
+import {
+  keysFor,
+  BOLD_TEXT,
+  ITALIC_TEXT,
+  STRIKETHROUGH_TEXT,
+  LINK_TEXT,
+} from '~/behaviors/shortcuts/keybindings';
 import { getSelectedFragment } from '~/lib/utils/common_utils';
-import { s__ } from '~/locale';
+import { s__, __ } from '~/locale';
 import { CopyAsGFM } from '../../../behaviors/markdown/copy_as_gfm';
 import ToolbarButton from './toolbar_button.vue';
 
@@ -12,6 +18,8 @@ export default {
     ToolbarButton,
     GlPopover,
     GlButton,
+    GlTabs,
+    GlTab,
   },
   directives: {
     GlTooltip: GlTooltipDirective,
@@ -40,6 +48,11 @@ export default {
       type: Number,
       required: false,
       default: 0,
+    },
+    enablePreview: {
+      type: Boolean,
+      required: false,
+      default: true,
     },
   },
   data() {
@@ -142,138 +155,161 @@ export default {
   shortcuts: {
     bold: keysFor(BOLD_TEXT),
     italic: keysFor(ITALIC_TEXT),
+    strikethrough: keysFor(STRIKETHROUGH_TEXT),
     link: keysFor(LINK_TEXT),
+  },
+  i18n: {
+    writeTabTitle: __('Write'),
+    previewTabTitle: __('Preview'),
   },
 };
 </script>
 
 <template>
   <div class="md-header">
-    <ul class="nav-links clearfix">
-      <li :class="{ active: !previewMarkdown }" class="md-header-tab">
-        <button class="js-write-link" type="button" @click="writeMarkdownTab($event)">
-          {{ __('Write') }}
-        </button>
-      </li>
-      <li :class="{ active: previewMarkdown }" class="md-header-tab">
-        <button
-          class="js-preview-link js-md-preview-button"
-          type="button"
-          @click="previewMarkdownTab($event)"
+    <gl-tabs content-class="gl-display-none">
+      <gl-tab
+        title-link-class="gl-pt-3 gl-px-3 js-md-write-button"
+        :title="$options.i18n.writeTabTitle"
+        :active="!previewMarkdown"
+        data-testid="write-tab"
+        @click="writeMarkdownTab($event)"
+      />
+      <gl-tab
+        v-if="enablePreview"
+        title-link-class="gl-pt-3 gl-px-3 js-md-preview-button"
+        :title="$options.i18n.previewTabTitle"
+        :active="previewMarkdown"
+        data-testid="preview-tab"
+        @click="previewMarkdownTab($event)"
+      />
+
+      <template #tabs-end>
+        <div
+          data-testid="md-header-toolbar"
+          :class="{ 'gl-display-none': previewMarkdown }"
+          class="md-header-toolbar gl-ml-auto gl-pb-3 gl-justify-content-center"
         >
-          {{ __('Preview') }}
-        </button>
-      </li>
-      <li :class="{ active: !previewMarkdown }" class="md-header-toolbar">
-        <toolbar-button
-          tag="**"
-          :button-title="
-            sprintf(s__('MarkdownEditor|Add bold text (%{modifierKey}B)'), { modifierKey })
-          "
-          :shortcuts="$options.shortcuts.bold"
-          icon="bold"
-        />
-        <toolbar-button
-          tag="_"
-          :button-title="
-            sprintf(s__('MarkdownEditor|Add italic text (%{modifierKey}I)'), { modifierKey })
-          "
-          :shortcuts="$options.shortcuts.italic"
-          icon="italic"
-        />
-        <toolbar-button
-          :prepend="true"
-          :tag="tag"
-          :button-title="__('Insert a quote')"
-          icon="quote"
-          @click="handleQuote"
-        />
-        <template v-if="canSuggest">
           <toolbar-button
-            ref="suggestButton"
-            :tag="mdSuggestion"
-            :prepend="true"
-            :button-title="__('Insert suggestion')"
-            :cursor-offset="4"
-            :tag-content="lineContent"
-            icon="doc-code"
-            data-qa-selector="suggestion_button"
-            class="js-suggestion-btn"
-            @click="handleSuggestDismissed"
+            tag="**"
+            :button-title="
+              sprintf(s__('MarkdownEditor|Add bold text (%{modifierKey}B)'), { modifierKey })
+            "
+            :shortcuts="$options.shortcuts.bold"
+            icon="bold"
           />
-          <gl-popover
-            v-if="suggestPopoverVisible"
-            :target="$refs.suggestButton.$el"
-            :css-classes="['diff-suggest-popover']"
-            placement="bottom"
-            :show="suggestPopoverVisible"
-          >
-            <strong>{{ __('New! Suggest changes directly') }}</strong>
-            <p class="mb-2">
-              {{
-                __(
-                  'Suggest code changes which can be immediately applied in one click. Try it out!',
-                )
-              }}
-            </p>
-            <gl-button
-              variant="info"
-              category="primary"
-              size="small"
+          <toolbar-button
+            tag="_"
+            :button-title="
+              sprintf(s__('MarkdownEditor|Add italic text (%{modifierKey}I)'), { modifierKey })
+            "
+            :shortcuts="$options.shortcuts.italic"
+            icon="italic"
+          />
+          <toolbar-button
+            tag="~~"
+            :button-title="
+              sprintf(s__('MarkdownEditor|Add strikethrough text (%{modifierKey}⇧X)'), {
+                modifierKey,
+              })
+            "
+            :shortcuts="$options.shortcuts.strikethrough"
+            icon="strikethrough"
+          />
+          <toolbar-button
+            :prepend="true"
+            :tag="tag"
+            :button-title="__('Insert a quote')"
+            icon="quote"
+            @click="handleQuote"
+          />
+          <template v-if="canSuggest">
+            <toolbar-button
+              ref="suggestButton"
+              :tag="mdSuggestion"
+              :prepend="true"
+              :button-title="__('Insert suggestion')"
+              :cursor-offset="4"
+              :tag-content="lineContent"
+              icon="doc-code"
+              data-qa-selector="suggestion_button"
+              class="js-suggestion-btn"
               @click="handleSuggestDismissed"
+            />
+            <gl-popover
+              v-if="suggestPopoverVisible"
+              :target="$refs.suggestButton.$el"
+              :css-classes="['diff-suggest-popover']"
+              placement="bottom"
+              :show="suggestPopoverVisible"
             >
-              {{ __('Got it') }}
-            </gl-button>
-          </gl-popover>
-        </template>
-        <toolbar-button tag="`" tag-block="```" :button-title="__('Insert code')" icon="code" />
-        <toolbar-button
-          tag="[{text}](url)"
-          tag-select="url"
-          :button-title="
-            sprintf(s__('MarkdownEditor|Add a link (%{modifierKey}K)'), { modifierKey })
-          "
-          :shortcuts="$options.shortcuts.link"
-          icon="link"
-        />
-        <toolbar-button
-          :prepend="true"
-          tag="- "
-          :button-title="__('Add a bullet list')"
-          icon="list-bulleted"
-        />
-        <toolbar-button
-          :prepend="true"
-          tag="1. "
-          :button-title="__('Add a numbered list')"
-          icon="list-numbered"
-        />
-        <toolbar-button
-          :prepend="true"
-          tag="- [ ] "
-          :button-title="__('Add a task list')"
-          icon="list-task"
-        />
-        <toolbar-button
-          :tag="mdCollapsibleSection"
-          :prepend="true"
-          tag-select="Click to expand"
-          :button-title="__('Add a collapsible section')"
-          icon="details-block"
-        />
-        <toolbar-button
-          :tag="mdTable"
-          :prepend="true"
-          :button-title="__('Add a table')"
-          icon="table"
-        />
-        <toolbar-button
-          class="js-zen-enter"
-          :prepend="true"
-          :button-title="__('Go full screen')"
-          icon="maximize"
-        />
-      </li>
-    </ul>
+              <strong>{{ __('New! Suggest changes directly') }}</strong>
+              <p class="mb-2">
+                {{
+                  __(
+                    'Suggest code changes which can be immediately applied in one click. Try it out!',
+                  )
+                }}
+              </p>
+              <gl-button
+                variant="info"
+                category="primary"
+                size="small"
+                @click="handleSuggestDismissed"
+              >
+                {{ __('Got it') }}
+              </gl-button>
+            </gl-popover>
+          </template>
+          <toolbar-button tag="`" tag-block="```" :button-title="__('Insert code')" icon="code" />
+          <toolbar-button
+            tag="[{text}](url)"
+            tag-select="url"
+            :button-title="
+              sprintf(s__('MarkdownEditor|Add a link (%{modifierKey}K)'), { modifierKey })
+            "
+            :shortcuts="$options.shortcuts.link"
+            icon="link"
+          />
+          <toolbar-button
+            :prepend="true"
+            tag="- "
+            :button-title="__('Add a bullet list')"
+            icon="list-bulleted"
+          />
+          <toolbar-button
+            :prepend="true"
+            tag="1. "
+            :button-title="__('Add a numbered list')"
+            icon="list-numbered"
+          />
+          <toolbar-button
+            :prepend="true"
+            tag="- [ ] "
+            :button-title="__('Add a task list')"
+            icon="list-task"
+          />
+          <toolbar-button
+            :tag="mdCollapsibleSection"
+            :prepend="true"
+            tag-select="Click to expand"
+            :button-title="__('Add a collapsible section')"
+            icon="details-block"
+          />
+          <toolbar-button
+            :tag="mdTable"
+            :prepend="true"
+            :button-title="__('Add a table')"
+            icon="table"
+          />
+          <toolbar-button
+            class="js-zen-enter"
+            :prepend="true"
+            :button-title="__('Go full screen')"
+            icon="maximize"
+          />
+        </div>
+      </template>
+    </gl-tabs>
   </div>
 </template>

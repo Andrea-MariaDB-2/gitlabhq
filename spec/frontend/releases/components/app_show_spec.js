@@ -1,8 +1,9 @@
 import { shallowMount } from '@vue/test-utils';
 import Vue from 'vue';
 import VueApollo from 'vue-apollo';
-import { getJSONFixture } from 'helpers/fixtures';
+import oneReleaseQueryResponse from 'test_fixtures/graphql/releases/graphql/queries/one_release.query.graphql.json';
 import createMockApollo from 'helpers/mock_apollo_helper';
+import waitForPromises from 'helpers/wait_for_promises';
 import createFlash from '~/flash';
 import ReleaseShowApp from '~/releases/components/app_show.vue';
 import ReleaseBlock from '~/releases/components/release_block.vue';
@@ -10,10 +11,6 @@ import ReleaseSkeletonLoader from '~/releases/components/release_skeleton_loader
 import oneReleaseQuery from '~/releases/graphql/queries/one_release.query.graphql';
 
 jest.mock('~/flash');
-
-const oneReleaseQueryResponse = getJSONFixture(
-  'graphql/releases/graphql/queries/one_release.query.graphql.json',
-);
 
 Vue.use(VueApollo);
 
@@ -62,7 +59,6 @@ describe('Release show component', () => {
 
   const expectFlashWithMessage = (message) => {
     it(`shows a flash message that reads "${message}"`, () => {
-      expect(createFlash).toHaveBeenCalledTimes(1);
       expect(createFlash).toHaveBeenCalledWith({
         message,
         captureError: true,
@@ -116,12 +112,13 @@ describe('Release show component', () => {
   });
 
   describe('when the component has successfully loaded the release', () => {
-    beforeEach(() => {
+    beforeEach(async () => {
       const apolloProvider = createMockApollo([
         [oneReleaseQuery, jest.fn().mockResolvedValueOnce(oneReleaseQueryResponse)],
       ]);
 
       createComponent({ apolloProvider });
+      await waitForPromises();
     });
 
     expectNoLoadingIndicator();
@@ -130,12 +127,13 @@ describe('Release show component', () => {
   });
 
   describe('when the request succeeded, but the returned "project" key was null', () => {
-    beforeEach(() => {
+    beforeEach(async () => {
       const apolloProvider = createMockApollo([
         [oneReleaseQuery, jest.fn().mockResolvedValueOnce({ data: { project: null } })],
       ]);
 
       createComponent({ apolloProvider });
+      await waitForPromises();
     });
 
     expectNoLoadingIndicator();
@@ -144,7 +142,7 @@ describe('Release show component', () => {
   });
 
   describe('when the request succeeded, but the returned "project.release" key was null', () => {
-    beforeEach(() => {
+    beforeEach(async () => {
       const apolloProvider = createMockApollo([
         [
           oneReleaseQuery,
@@ -153,6 +151,7 @@ describe('Release show component', () => {
       ]);
 
       createComponent({ apolloProvider });
+      await waitForPromises();
     });
 
     expectNoLoadingIndicator();
@@ -161,12 +160,13 @@ describe('Release show component', () => {
   });
 
   describe('when an error occurs while loading the release', () => {
-    beforeEach(() => {
+    beforeEach(async () => {
       const apolloProvider = createMockApollo([
         [oneReleaseQuery, jest.fn().mockRejectedValueOnce('An error occurred!')],
       ]);
 
       createComponent({ apolloProvider });
+      await waitForPromises();
     });
 
     expectNoLoadingIndicator();

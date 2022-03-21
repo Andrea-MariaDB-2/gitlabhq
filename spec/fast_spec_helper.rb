@@ -7,7 +7,7 @@ if $".include?(File.expand_path('spec_helper.rb', __dir__))
   return
 end
 
-require 'bundler/setup'
+require_relative '../config/bundler_setup'
 
 ENV['GITLAB_ENV'] = 'test'
 ENV['IN_MEMORY_APPLICATION_SETTINGS'] = 'true'
@@ -17,6 +17,9 @@ require_relative '../config/initializers/0_inject_enterprise_edition_module'
 require_relative '../config/settings'
 require_relative 'support/rspec'
 require 'active_support/all'
+
+require_relative 'simplecov_env'
+SimpleCovEnv.start!
 
 unless ActiveSupport::Dependencies.autoload_paths.frozen?
   ActiveSupport::Dependencies.autoload_paths << 'lib'

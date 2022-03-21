@@ -18,6 +18,7 @@ RSpec.describe 'Comments on personal snippets', :js do
   end
 
   before do
+    stub_feature_flags(bootstrap_confirmation_modals: false)
     sign_in user
     visit snippet_path(snippet)
 
@@ -70,8 +71,8 @@ RSpec.describe 'Comments on personal snippets', :js do
   context 'when submitting a note' do
     it 'shows a valid form' do
       is_expected.to have_css('.js-main-target-form', visible: true, count: 1)
-      expect(find('.js-main-target-form .js-comment-button').value)
-        .to eq('Comment')
+      expect(find('.js-main-target-form .js-comment-button button', match: :first))
+        .to have_content('Comment')
 
       page.within('.js-main-target-form') do
         expect(page).not_to have_link('Cancel')

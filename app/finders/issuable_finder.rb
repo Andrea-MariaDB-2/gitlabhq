@@ -35,16 +35,18 @@
 #     updated_before: datetime
 #     attempt_group_search_optimizations: boolean
 #     attempt_project_search_optimizations: boolean
+#     crm_contact_id: integer
+#     crm_organization_id: integer
 #
 class IssuableFinder
   prepend FinderWithCrossProjectAccess
   include FinderMethods
   include CreatedAtFilter
   include Gitlab::Utils::StrongMemoize
-  prepend OptimizedIssuableLabelFilter
 
   requires_cross_project_access unless: -> { params.project? }
 
+  FULL_TEXT_SEARCH_TERM_REGEX = /\A[\p{ASCII}|\p{Latin}]+\z/.freeze
   NEGATABLE_PARAMS_HELPER_KEYS = %i[project_id scope status include_subgroups].freeze
 
   attr_accessor :current_user, :params
@@ -60,6 +62,8 @@ class IssuableFinder
       assignee_username
       author_id
       author_username
+      crm_contact_id
+      crm_organization_id
       label_name
       milestone_title
       release_tag
@@ -139,7 +143,9 @@ class IssuableFinder
     items = by_milestone(items)
     items = by_release(items)
     items = by_label(items)
-    by_my_reaction_emoji(items)
+    items = by_my_reaction_emoji(items)
+    items = by_crm_contact(items)
+    by_crm_organization(items)
   end
 
   def should_filter_negated_args?
@@ -149,7 +155,6 @@ class IssuableFinder
 
   # Negates all params found in `negatable_params`
   def filter_negated_items(items)
-    items = by_negated_label(items)
     items = by_negated_milestone(items)
     items = by_negated_release(items)
     items = by_negated_my_reaction_emoji(items)
@@ -172,29 +177,19 @@ class IssuableFinder
     count_params = params.merge(state: nil, sort: nil, force_cte: true)
     finder = self.class.new(current_user, count_params)
 
+    state_counts = finder
+      .execute
+      .reorder(nil)
+      .group(:state_id)
+      .count
+
     counts = Hash.new(0)
 
-    # Searching by label includes a GROUP BY in the query, but ours will be last
-    # because it is added last. Searching by multiple labels also includes a row
-    # per issuable, so we have to count those in Ruby - which is bad, but still
-    # better than performing multiple queries.
-    #
-    # This does not apply when we are using a CTE for the search, as the labels
-    # GROUP BY is inside the subquery in that case, so we set labels_count to 1.
-    #
-    # Groups and projects have separate feature flags to suggest the use
-    # of a CTE. The CTE will not be used if the sort doesn't support it,
-    # but will always be used for the counts here as we ignore sorting
-    # anyway.
-    labels_count = params.label_names.any? ? params.label_names.count : 1
-    labels_count = 1 if use_cte_for_search?
-
-    finder.execute.reorder(nil).group(:state_id).count.each do |key, value|
-      counts[count_key(key)] += value / labels_count
+    state_counts.each do |key, value|
+      counts[count_key(key)] += value
     end
 
     counts[:all] = counts.values.sum
-
     counts.with_indifferent_access
   end
   # rubocop: enable CodeReuse/ActiveRecord
@@ -206,8 +201,7 @@ class IssuableFinder
   def use_cte_for_search?
     strong_memoize(:use_cte_for_search) do
       next false unless search
-      # Only simple unsorted & simple sorts can use CTE
-      next false if params[:sort].present? && !params[:sort].in?(klass.simple_sorts.keys)
+      next false unless default_or_simple_sort?
 
       attempt_group_search_optimizations? || attempt_project_search_optimizations?
     end
@@ -254,6 +248,10 @@ class IssuableFinder
 
   def init_collection
     klass.all
+  end
+
+  def default_or_simple_sort?
+    params[:sort].blank? || params[:sort].to_s.in?(klass.simple_sorts.keys)
   end
 
   def attempt_group_search_optimizations?
@@ -332,6 +330,9 @@ class IssuableFinder
   def by_search(items)
     return items unless search
     return items if items.is_a?(ActiveRecord::NullRelation)
+    return items if Feature.enabled?(:disable_anonymous_search, type: :ops) && current_user.nil?
+
+    return items.pg_full_text_search(search) if use_full_text_search?
 
     if use_cte_for_search?
       cte = Gitlab::SQL::CTE.new(klass.table_name, items)
@@ -342,6 +343,13 @@ class IssuableFinder
     items.full_search(search, matched_columns: params[:in], use_minimum_char_limit: !use_cte_for_search?)
   end
   # rubocop: enable CodeReuse/ActiveRecord
+
+  def use_full_text_search?
+    params[:in].blank? &&
+      klass.try(:pg_full_text_searchable_columns).present? &&
+      params[:search] =~ FULL_TEXT_SEARCH_TERM_REGEX &&
+      Feature.enabled?(:issues_full_text_search, params.project || params.group, default_enabled: :yaml)
+  end
 
   # rubocop: disable CodeReuse/ActiveRecord
   def by_iids(items)
@@ -359,7 +367,7 @@ class IssuableFinder
   def sort(items)
     # Ensure we always have an explicit sort order (instead of inheriting
     # multiple orders when combining ActiveRecord::Relation objects).
-    params[:sort] ? items.sort_by_attribute(params[:sort], excluded_labels: params.label_names) : items.reorder(id: :desc)
+    params[:sort] ? items.sort_by_attribute(params[:sort], excluded_labels: label_filter.label_names_excluded_from_priority_sort) : items.reorder(id: :desc)
   end
   # rubocop: enable CodeReuse/ActiveRecord
 
@@ -379,6 +387,20 @@ class IssuableFinder
       Issuables::AssigneeFilter.new(
         params: original_params,
         or_filters_enabled: or_filters_enabled?
+      )
+    end
+  end
+
+  def by_label(items)
+    label_filter.filter(items)
+  end
+
+  def label_filter
+    strong_memoize(:label_filter) do
+      Issuables::LabelFilter.new(
+        params: original_params,
+        project: params.project,
+        group: params.group
       )
     end
   end
@@ -435,24 +457,6 @@ class IssuableFinder
     items.without_particular_release(not_params[:release_tag], not_params[:project_id])
   end
 
-  def by_label(items)
-    return items unless params.labels?
-
-    if params.filter_by_no_label?
-      items.without_label
-    elsif params.filter_by_any_label?
-      items.any_label(params[:sort])
-    else
-      items.with_label(params.label_names, params[:sort])
-    end
-  end
-
-  def by_negated_label(items)
-    return items unless not_params.labels?
-
-    items.without_particular_labels(not_params.label_names)
-  end
-
   def by_my_reaction_emoji(items)
     return items unless params[:my_reaction_emoji] && current_user
 
@@ -473,6 +477,14 @@ class IssuableFinder
 
   def by_non_archived(items)
     params[:non_archived].present? ? items.non_archived : items
+  end
+
+  def by_crm_contact(items)
+    Issuables::CrmContactFilter.new(params: original_params).filter(items)
+  end
+
+  def by_crm_organization(items)
+    Issuables::CrmOrganizationFilter.new(params: original_params).filter(items)
   end
 
   def or_filters_enabled?

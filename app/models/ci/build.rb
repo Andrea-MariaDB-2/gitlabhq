@@ -10,7 +10,9 @@ module Ci
     include Presentable
     include Importable
     include Ci::HasRef
-    include IgnorableColumns
+    include HasDeploymentName
+
+    extend ::Gitlab::Utils::Override
 
     BuildArchivedError = Class.new(StandardError)
 
@@ -35,6 +37,8 @@ module Ci
     DEGRADATION_THRESHOLD_VARIABLE_NAME = 'DEGRADATION_THRESHOLD'
     RUNNERS_STATUS_CACHE_EXPIRATION = 1.minute
 
+    DEPLOYMENT_NAMES = %w[deploy release rollout].freeze
+
     has_one :deployment, as: :deployable, class_name: 'Deployment'
     has_one :pending_state, class_name: 'Ci::BuildPendingState', inverse_of: :build
     has_one :queuing_entry, class_name: 'Ci::PendingBuild', foreign_key: :build_id
@@ -42,6 +46,10 @@ module Ci
     has_many :trace_chunks, class_name: 'Ci::BuildTraceChunk', foreign_key: :build_id, inverse_of: :build
     has_many :report_results, class_name: 'Ci::BuildReportResult', inverse_of: :build
 
+    # Projects::DestroyService destroys Ci::Pipelines, which use_fast_destroy on :job_artifacts
+    # before we delete builds. By doing this, the relation should be empty and not fire any
+    # DELETE queries when the Ci::Build is destroyed. The next step is to remove `dependent: :destroy`.
+    # Details: https://gitlab.com/gitlab-org/gitlab/-/issues/24644#note_689472685
     has_many :job_artifacts, class_name: 'Ci::JobArtifact', foreign_key: :job_id, dependent: :destroy, inverse_of: :job # rubocop:disable Cop/ActiveRecordDependent
     has_many :job_variables, class_name: 'Ci::JobVariable', foreign_key: :job_id
     has_many :sourced_pipelines, class_name: 'Ci::Sources::Pipeline', foreign_key: :source_job_id
@@ -55,6 +63,8 @@ module Ci
     has_one :runner_session, class_name: 'Ci::BuildRunnerSession', validate: true, inverse_of: :build
     has_one :trace_metadata, class_name: 'Ci::BuildTraceMetadata', inverse_of: :build
 
+    has_many :terraform_state_versions, class_name: 'Terraform::StateVersion', inverse_of: :build, foreign_key: :ci_build_id
+
     accepts_nested_attributes_for :runner_session, update_only: true
     accepts_nested_attributes_for :job_variables
 
@@ -62,10 +72,8 @@ module Ci
     delegate :terminal_specification, to: :runner_session, allow_nil: true
     delegate :service_specification, to: :runner_session, allow_nil: true
     delegate :gitlab_deploy_token, to: :project
+    delegate :harbor_integration, to: :project
     delegate :trigger_short_token, to: :trigger_request, allow_nil: true
-
-    ignore_columns :id_convert_to_bigint, remove_with: '14.1', remove_after: '2021-07-22'
-    ignore_columns :stage_id_convert_to_bigint, remove_with: '14.1', remove_after: '2021-07-22'
 
     ##
     # Since Gitlab 11.5, deployments records started being created right after
@@ -162,6 +170,7 @@ module Ci
 
     scope :with_artifacts_not_expired, -> { with_downloadable_artifacts.where('artifacts_expire_at IS NULL OR artifacts_expire_at > ?', Time.current) }
     scope :with_expired_artifacts, -> { with_downloadable_artifacts.where('artifacts_expire_at < ?', Time.current) }
+    scope :with_pipeline_locked_artifacts, -> { joins(:pipeline).where('pipeline.locked': Ci::Pipeline.lockeds[:artifacts_locked]) }
     scope :last_month, -> { where('created_at > ?', Date.today - 1.month) }
     scope :manual_actions, -> { where(when: :manual, status: COMPLETED_STATUSES + %i[manual]) }
     scope :scheduled_actions, -> { where(when: :delayed, status: COMPLETED_STATUSES + %i[scheduled]) }
@@ -169,8 +178,7 @@ module Ci
     scope :with_live_trace, -> { where('EXISTS (?)', Ci::BuildTraceChunk.where('ci_builds.id = ci_build_trace_chunks.build_id').select(1)) }
     scope :with_stale_live_trace, -> { with_live_trace.finished_before(12.hours.ago) }
     scope :finished_before, -> (date) { finished.where('finished_at < ?', date) }
-
-    scope :with_secure_reports_from_options, -> (job_type) { where('options like :job_type', job_type: "%:artifacts:%:reports:%:#{job_type}:%") }
+    scope :license_management_jobs, -> { where(name: %i(license_management license_scanning)) } # handle license rename https://gitlab.com/gitlab-org/gitlab/issues/8911
 
     scope :with_secure_reports_from_config_options, -> (job_types) do
       joins(:metadata).where("ci_builds_metadata.config_options -> 'artifacts' -> 'reports' ?| array[:job_types]", job_types: job_types)
@@ -187,14 +195,11 @@ module Ci
     scope :without_coverage, -> { where(coverage: nil) }
     scope :with_coverage_regex, -> { where.not(coverage_regex: nil) }
 
-    scope :for_project, -> (project_id) { where(project_id: project_id) }
-
     acts_as_taggable
 
     add_authentication_token_field :token, encrypted: :required
 
     before_save :ensure_token
-    before_destroy { unscoped_project }
 
     after_save :stick_build_if_status_changed
 
@@ -268,6 +273,10 @@ module Ci
         !build.any_unmet_prerequisites? # If false is returned, it stops the transition
       end
 
+      before_transition on: :enqueue do |build|
+        !build.waiting_for_deployment_approval? # If false is returned, it stops the transition
+      end
+
       after_transition created: :scheduled do |build|
         build.run_after_commit do
           Ci::BuildScheduleWorker.perform_at(build.scheduled_at, build.id)
@@ -286,6 +295,7 @@ module Ci
 
         build.run_after_commit do
           BuildQueueWorker.perform_async(id)
+          BuildHooksWorker.perform_async(id)
         end
       end
 
@@ -310,10 +320,6 @@ module Ci
       end
 
       after_transition pending: :running do |build|
-        Gitlab::Database.allow_cross_database_modification_within_transaction(url: 'https://gitlab.com/gitlab-org/gitlab/-/issues/338867') do
-          build.deployment&.run
-        end
-
         build.run_after_commit do
           build.pipeline.persistent_ref.create
 
@@ -334,29 +340,10 @@ module Ci
       end
 
       after_transition any => [:success] do |build|
-        Gitlab::Database.allow_cross_database_modification_within_transaction(url: 'https://gitlab.com/gitlab-org/gitlab/-/issues/338867') do
-          build.deployment&.succeed
-        end
-
         build.run_after_commit do
           BuildSuccessWorker.perform_async(id)
           PagesWorker.perform_async(:deploy, id) if build.pages_generator?
         end
-      end
-
-      after_transition any => [:failed] do |build|
-        next unless build.project
-        next unless build.deployment
-
-        begin
-          Gitlab::Database.allow_cross_database_modification_within_transaction(url: 'https://gitlab.com/gitlab-org/gitlab/-/issues/338867') do
-            build.deployment.drop!
-          end
-        rescue StandardError => e
-          Gitlab::ErrorTracking.track_and_raise_for_dev_exception(e, build_id: build.id)
-        end
-
-        true
       end
 
       after_transition any => [:failed] do |build|
@@ -371,13 +358,15 @@ module Ci
         end
       end
 
-      after_transition any => [:skipped, :canceled] do |build, transition|
-        Gitlab::Database.allow_cross_database_modification_within_transaction(url: 'https://gitlab.com/gitlab-org/gitlab/-/issues/338867') do
-          if transition.to_name == :skipped
-            build.deployment&.skip
-          else
-            build.deployment&.cancel
-          end
+      # Synchronize Deployment Status
+      # Please note that the data integirty is not assured because we can't use
+      # a database transaction due to DB decomposition.
+      after_transition do |build, transition|
+        next if transition.loopback?
+        next unless build.project
+
+        build.run_after_commit do
+          build.deployment&.sync_status_with(build)
         end
       end
     end
@@ -413,6 +402,10 @@ module Ci
       auto_retry.allowed?
     end
 
+    def auto_retry_expected?
+      failed? && auto_retry_allowed?
+    end
+
     def detailed_status(current_user)
       Gitlab::Ci::Status::Build::Factory
         .new(self.present, current_user)
@@ -436,6 +429,10 @@ module Ci
       true
     end
 
+    def save_tags
+      super unless Thread.current['ci_bulk_insert_tags']
+    end
+
     def archived?
       return true if degenerated?
 
@@ -444,7 +441,11 @@ module Ci
     end
 
     def playable?
-      action? && !archived? && (manual? || scheduled? || retryable?)
+      action? && !archived? && (manual? || scheduled? || retryable?) && !waiting_for_deployment_approval?
+    end
+
+    def waiting_for_deployment_approval?
+      manual? && starts_environment? && deployment&.blocked?
     end
 
     def schedulable?
@@ -472,7 +473,7 @@ module Ci
     end
 
     def retryable?
-      return false if retried? || archived?
+      return false if retried? || archived? || deployment_rejected?
 
       success? || failed? || canceled?
     end
@@ -561,7 +562,6 @@ module Ci
           .concat(persisted_variables)
           .concat(dependency_proxy_variables)
           .concat(job_jwt_variables)
-          .concat(kubernetes_variables)
           .concat(scoped_variables)
           .concat(job_variables)
           .concat(persisted_environment_variables)
@@ -584,6 +584,7 @@ module Ci
           .append(key: 'CI_REGISTRY_PASSWORD', value: token.to_s, public: false, masked: true)
           .append(key: 'CI_REPOSITORY_URL', value: repo_url.to_s, public: false)
           .concat(deploy_token_variables)
+          .concat(harbor_variables)
       end
     end
 
@@ -618,6 +619,12 @@ module Ci
         variables.append(key: 'CI_DEPENDENCY_PROXY_USER', value: ::Gitlab::Auth::CI_JOB_USER)
         variables.append(key: 'CI_DEPENDENCY_PROXY_PASSWORD', value: token.to_s, public: false, masked: true)
       end
+    end
+
+    def harbor_variables
+      return [] unless harbor_integration.try(:activated?)
+
+      Gitlab::Ci::Variables::Collection.new(harbor_integration.ci_variables)
     end
 
     def features
@@ -724,6 +731,10 @@ module Ci
       update_column(:trace, nil)
     end
 
+    def ensure_trace_metadata!
+      Ci::BuildTraceMetadata.find_or_upsert_for!(id)
+    end
+
     def artifacts_expose_as
       options.dig(:artifacts, :expose_as)
     end
@@ -738,6 +749,14 @@ module Ci
 
     def valid_token?(token)
       self.token && ActiveSupport::SecurityUtils.secure_compare(token, self.token)
+    end
+
+    # acts_as_taggable uses this method create/remove tags with contexts
+    # defined by taggings and to get those contexts it executes a query.
+    # We don't use any other contexts except `tags`, so we don't need it.
+    override :custom_contexts
+    def custom_contexts
+      []
     end
 
     def tag_list
@@ -1025,9 +1044,18 @@ module Ci
 
     # Consider this object to have a structural integrity problems
     def doom!
-      update_columns(
-        status: :failed,
-        failure_reason: :data_integrity_failure)
+      transaction do
+        update_columns(status: :failed, failure_reason: :data_integrity_failure)
+        all_queuing_entries.delete_all
+        all_runtime_metadata.delete_all
+      end
+
+      Gitlab::AppLogger.info(
+        message: 'Build doomed',
+        class: self.class.name,
+        build_id: id,
+        pipeline_id: pipeline_id,
+        project_id: project_id)
     end
 
     def degradation_threshold
@@ -1057,10 +1085,7 @@ module Ci
     end
 
     def drop_with_exit_code!(failure_reason, exit_code)
-      transaction do
-        conditionally_allow_failure!(exit_code)
-        drop!(failure_reason)
-      end
+      drop!(::Gitlab::Ci::Build::Status::Reason.new(self, failure_reason, exit_code))
     end
 
     def exit_codes_defined?
@@ -1069,6 +1094,10 @@ module Ci
 
     def create_queuing_entry!
       ::Ci::PendingBuild.upsert_from_build!(self)
+    end
+
+    def create_runtime_metadata!
+      ::Ci::RunningBuild.upsert_shared_runner_build!(self)
     end
 
     ##
@@ -1089,6 +1118,27 @@ module Ci
       runner&.instance_type?
     end
 
+    def job_variables_attributes
+      strong_memoize(:job_variables_attributes) do
+        job_variables.internal_source.map do |variable|
+          variable.attributes.except('id', 'job_id', 'encrypted_value', 'encrypted_value_iv').tap do |attrs|
+            attrs[:value] = variable.value
+          end
+        end
+      end
+    end
+
+    def allowed_to_fail_with_code?(exit_code)
+      options
+        .dig(:allow_failure_criteria, :exit_codes)
+        .to_a
+        .include?(exit_code)
+    end
+
+    def track_deployment_usage
+      Gitlab::Utils::UsageData.track_usage_event('ci_users_executing_deployment_job', user_id) if user_id.present? && count_user_deployment?
+    end
+
     protected
 
     def run_status_commit_hooks!
@@ -1103,7 +1153,7 @@ module Ci
       return unless saved_change_to_status?
       return unless running?
 
-      ::Gitlab::Database::LoadBalancing::Sticking.stick(:build, id)
+      self.class.sticking.stick(:build, id)
     end
 
     def status_commit_hooks
@@ -1149,10 +1199,6 @@ module Ci
       self.update(erased_by: user, erased_at: Time.current, artifacts_expire_at: nil)
     end
 
-    def unscoped_project
-      @unscoped_project ||= Project.unscoped.find_by(id: project_id)
-    end
-
     def environment_url
       options&.dig(:environment, :url) || persisted_environment&.external_url
     end
@@ -1174,29 +1220,13 @@ module Ci
         break variables unless Feature.enabled?(:ci_job_jwt, project, default_enabled: true)
 
         jwt = Gitlab::Ci::Jwt.for_build(self)
+        jwt_v2 = Gitlab::Ci::JwtV2.for_build(self)
         variables.append(key: 'CI_JOB_JWT', value: jwt, public: false, masked: true)
+        variables.append(key: 'CI_JOB_JWT_V1', value: jwt, public: false, masked: true)
+        variables.append(key: 'CI_JOB_JWT_V2', value: jwt_v2, public: false, masked: true)
       rescue OpenSSL::PKey::RSAError, Gitlab::Ci::Jwt::NoSigningKeyError => e
         Gitlab::ErrorTracking.track_exception(e)
       end
-    end
-
-    def kubernetes_variables
-      [] # Overridden in EE
-    end
-
-    def conditionally_allow_failure!(exit_code)
-      return unless exit_code
-
-      if allowed_to_fail_with_code?(exit_code)
-        update_columns(allow_failure: true)
-      end
-    end
-
-    def allowed_to_fail_with_code?(exit_code)
-      options
-        .dig(:allow_failure_criteria, :exit_codes)
-        .to_a
-        .include?(exit_code)
     end
 
     def cache_for_online_runners(&block)

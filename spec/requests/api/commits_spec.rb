@@ -5,6 +5,7 @@ require 'mime/types'
 
 RSpec.describe API::Commits do
   include ProjectForksHelper
+  include SessionHelpers
 
   let(:user) { create(:user) }
   let(:guest) { create(:user).tap { |u| project.add_guest(u) } }
@@ -126,6 +127,15 @@ RSpec.describe API::Commits do
         it_behaves_like 'project commits'
       end
 
+      context 'when repository does not exist' do
+        let(:project) { create(:project, creator: user, path: 'my.project') }
+
+        it_behaves_like '404 response' do
+          let(:request) { get api(route, current_user) }
+          let(:message) { '404 Repository Not Found' }
+        end
+      end
+
       context "path optional parameter" do
         it "returns project commits matching provided path parameter" do
           path = 'files/ruby/popen.rb'
@@ -226,6 +236,12 @@ RSpec.describe API::Commits do
             expect(json_response.first['id']).to eq(commit.id)
             expect(response.headers['X-Page']).to eq('3')
           end
+        end
+
+        context 'when per_page is 0' do
+          let(:per_page) { 0 }
+
+          it_behaves_like '400 response'
         end
       end
 
@@ -377,15 +393,8 @@ RSpec.describe API::Commits do
       end
 
       context 'when using warden' do
-        it 'increments usage counters', :clean_gitlab_redis_shared_state do
-          session_id = Rack::Session::SessionId.new('6919a6f1bb119dd7396fadc38fd18d0d')
-          session_hash = { 'warden.user.user.key' => [[user.id], user.encrypted_password[0, 29]] }
-
-          Gitlab::Redis::SharedState.with do |redis|
-            redis.set("session:gitlab:#{session_id.private_id}", Marshal.dump(session_hash))
-          end
-
-          cookies[Gitlab::Application.config.session_options[:key]] = session_id.public_id
+        it 'increments usage counters', :clean_gitlab_redis_sessions do
+          stub_session('warden.user.user.key' => [[user.id], user.encrypted_password[0, 29]])
 
           expect(::Gitlab::UsageDataCounters::WebIdeCounter).to receive(:increment_commits_count)
           expect(::Gitlab::UsageDataCounters::EditorUniqueCounter).to receive(:track_web_ide_edit_action)
@@ -1056,9 +1065,7 @@ RSpec.describe API::Commits do
 
     shared_examples_for 'ref with pipeline' do
       let!(:pipeline) do
-        project
-          .ci_pipelines
-          .create!(source: :push, ref: 'master', sha: commit.sha, protected: false)
+        create(:ci_empty_pipeline, project: project, status: :created, source: :push, ref: 'master', sha: commit.sha, protected: false)
       end
 
       it 'includes status as "created" and a last_pipeline object' do
@@ -1090,9 +1097,7 @@ RSpec.describe API::Commits do
 
     shared_examples_for 'ref with unaccessible pipeline' do
       let!(:pipeline) do
-        project
-          .ci_pipelines
-          .create!(source: :push, ref: 'master', sha: commit.sha, protected: false)
+        create(:ci_empty_pipeline, project: project, status: :created, source: :push, ref: 'master', sha: commit.sha, protected: false)
       end
 
       it 'does not include last_pipeline' do

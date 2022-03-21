@@ -3,7 +3,7 @@
 require 'spec_helper'
 
 RSpec.describe Ci::PipelineSchedule do
-  let_it_be(:project) { create_default(:project) }
+  let_it_be_with_reload(:project) { create_default(:project) }
 
   subject { build(:ci_pipeline_schedule) }
 
@@ -21,6 +21,11 @@ RSpec.describe Ci::PipelineSchedule do
 
   it_behaves_like 'includes Limitable concern' do
     subject { build(:ci_pipeline_schedule, project: project) }
+  end
+
+  it_behaves_like 'cleanup by a loose foreign key' do
+    let!(:parent) { create(:user) }
+    let!(:model) { create(:ci_pipeline_schedule, owner: parent) }
   end
 
   describe 'validations' do
@@ -107,31 +112,24 @@ RSpec.describe Ci::PipelineSchedule do
   describe '#set_next_run_at' do
     using RSpec::Parameterized::TableSyntax
 
-    where(:worker_cron, :schedule_cron, :plan_limit, :ff_enabled, :now, :result) do
-      '0 1 2 3 *'   | '0 1 * * *'   | nil                                          | true  | Time.zone.local(2021, 3, 2, 1, 0)    | Time.zone.local(2022, 3, 2, 1, 0)
-      '0 1 2 3 *'   | '0 1 * * *'   | (1.day.in_minutes / 1.hour.in_minutes).to_i  | true  | Time.zone.local(2021, 3, 2, 1, 0)    | Time.zone.local(2022, 3, 2, 1, 0)
-      '0 1 2 3 *'   | '0 1 * * *'   | (1.day.in_minutes / 1.hour.in_minutes).to_i  | false | Time.zone.local(2021, 3, 2, 1, 0)    | Time.zone.local(2022, 3, 2, 1, 0)
-      '*/5 * * * *' | '*/1 * * * *' | nil                                          | true  | Time.zone.local(2021, 5, 27, 11, 0)  | Time.zone.local(2021, 5, 27, 11, 5)
-      '*/5 * * * *' | '*/1 * * * *' | (1.day.in_minutes / 1.hour.in_minutes).to_i  | true  | Time.zone.local(2021, 5, 27, 11, 0)  | Time.zone.local(2021, 5, 27, 12, 0)
-      '*/5 * * * *' | '*/1 * * * *' | (1.day.in_minutes / 1.hour.in_minutes).to_i  | false | Time.zone.local(2021, 5, 27, 11, 0)  | Time.zone.local(2021, 5, 27, 11, 5)
-      '*/5 * * * *' | '*/1 * * * *' | (1.day.in_minutes / 10).to_i                 | true  | Time.zone.local(2021, 5, 27, 11, 0)  | Time.zone.local(2021, 5, 27, 11, 10)
-      '*/5 * * * *' | '*/1 * * * *' | 200                                          | true  | Time.zone.local(2021, 5, 27, 11, 0)  | Time.zone.local(2021, 5, 27, 11, 10)
-      '*/5 * * * *' | '*/1 * * * *' | 200                                          | false | Time.zone.local(2021, 5, 27, 11, 0)  | Time.zone.local(2021, 5, 27, 11, 5)
-      '*/5 * * * *' | '0 * * * *'   | nil                                          | true  | Time.zone.local(2021, 5, 27, 11, 0)  | Time.zone.local(2021, 5, 27, 12, 5)
-      '*/5 * * * *' | '0 * * * *'   | (1.day.in_minutes / 10).to_i                 | true  | Time.zone.local(2021, 5, 27, 11, 0)  | Time.zone.local(2021, 5, 27, 12, 0)
-      '*/5 * * * *' | '0 * * * *'   | (1.day.in_minutes / 10).to_i                 | false | Time.zone.local(2021, 5, 27, 11, 0)  | Time.zone.local(2021, 5, 27, 12, 5)
-      '*/5 * * * *' | '0 * * * *'   | (1.day.in_minutes / 1.hour.in_minutes).to_i  | true  | Time.zone.local(2021, 5, 27, 11, 0)  | Time.zone.local(2021, 5, 27, 12, 0)
-      '*/5 * * * *' | '0 * * * *'   | (1.day.in_minutes / 2.hours.in_minutes).to_i | true  | Time.zone.local(2021, 5, 27, 11, 0)  | Time.zone.local(2021, 5, 27, 12, 5)
-      '*/5 * * * *' | '0 1 * * *'   | (1.day.in_minutes / 1.hour.in_minutes).to_i  | true  | Time.zone.local(2021, 5, 27, 1, 0)   | Time.zone.local(2021, 5, 28, 1, 0)
-      '*/5 * * * *' | '0 1 * * *'   | (1.day.in_minutes / 10).to_i                 | true  | Time.zone.local(2021, 5, 27, 1, 0)   | Time.zone.local(2021, 5, 28, 1, 0)
-      '*/5 * * * *' | '0 1 * * *'   | (1.day.in_minutes / 8).to_i                  | true  | Time.zone.local(2021, 5, 27, 1, 0)   | Time.zone.local(2021, 5, 28, 1, 0)
-      '*/5 * * * *' | '0 1 1 * *'   | (1.day.in_minutes / 1.hour.in_minutes).to_i  | true  | Time.zone.local(2021, 5, 1, 1, 0)    | Time.zone.local(2021, 6, 1, 1, 0)
-      '*/9 * * * *' | '0 1 1 * *'   | (1.day.in_minutes / 1.hour.in_minutes).to_i  | true  | Time.zone.local(2021, 5, 1, 1, 9)    | Time.zone.local(2021, 6, 1, 1, 0)
-      '*/9 * * * *' | '0 1 1 * *'   | (1.day.in_minutes / 1.hour.in_minutes).to_i  | false | Time.zone.local(2021, 5, 1, 1, 9)    | Time.zone.local(2021, 6, 1, 1, 9)
-      '*/5 * * * *' | '59 14 * * *' | (1.day.in_minutes / 1.hour.in_minutes).to_i  | true  | Time.zone.local(2021, 5, 1, 15, 0)   | Time.zone.local(2021, 5, 2, 15, 0)
-      '*/5 * * * *' | '59 14 * * *' | (1.day.in_minutes / 1.hour.in_minutes).to_i  | false | Time.zone.local(2021, 5, 1, 15, 0)   | Time.zone.local(2021, 5, 2, 15, 0)
-      '*/5 * * * *' | '45 21 1 2 *' | (1.day.in_minutes / 5).to_i                  | true  | Time.zone.local(2021, 2, 1, 21, 45)  | Time.zone.local(2022, 2, 1, 21, 45)
-      '*/5 * * * *' | '45 21 1 2 *' | (1.day.in_minutes / 5).to_i                  | false | Time.zone.local(2021, 2, 1, 21, 45)  | Time.zone.local(2022, 2, 1, 21, 50)
+    where(:worker_cron, :schedule_cron, :plan_limit, :now, :result) do
+      '0 1 2 3 *'   | '0 1 * * *'   | nil                                          | Time.zone.local(2021, 3, 2, 1, 0)    | Time.zone.local(2022, 3, 2, 1, 0)
+      '0 1 2 3 *'   | '0 1 * * *'   | (1.day.in_minutes / 1.hour.in_minutes).to_i  | Time.zone.local(2021, 3, 2, 1, 0)    | Time.zone.local(2022, 3, 2, 1, 0)
+      '*/5 * * * *' | '*/1 * * * *' | nil                                          | Time.zone.local(2021, 5, 27, 11, 0)  | Time.zone.local(2021, 5, 27, 11, 5)
+      '*/5 * * * *' | '*/1 * * * *' | (1.day.in_minutes / 1.hour.in_minutes).to_i  | Time.zone.local(2021, 5, 27, 11, 0)  | Time.zone.local(2021, 5, 27, 12, 0)
+      '*/5 * * * *' | '*/1 * * * *' | (1.day.in_minutes / 10).to_i                 | Time.zone.local(2021, 5, 27, 11, 0)  | Time.zone.local(2021, 5, 27, 11, 10)
+      '*/5 * * * *' | '*/1 * * * *' | 200                                          | Time.zone.local(2021, 5, 27, 11, 0)  | Time.zone.local(2021, 5, 27, 11, 10)
+      '*/5 * * * *' | '0 * * * *'   | nil                                          | Time.zone.local(2021, 5, 27, 11, 0)  | Time.zone.local(2021, 5, 27, 12, 5)
+      '*/5 * * * *' | '0 * * * *'   | (1.day.in_minutes / 10).to_i                 | Time.zone.local(2021, 5, 27, 11, 0)  | Time.zone.local(2021, 5, 27, 12, 0)
+      '*/5 * * * *' | '0 * * * *'   | (1.day.in_minutes / 1.hour.in_minutes).to_i  | Time.zone.local(2021, 5, 27, 11, 0)  | Time.zone.local(2021, 5, 27, 12, 0)
+      '*/5 * * * *' | '0 * * * *'   | (1.day.in_minutes / 2.hours.in_minutes).to_i | Time.zone.local(2021, 5, 27, 11, 0)  | Time.zone.local(2021, 5, 27, 12, 5)
+      '*/5 * * * *' | '0 1 * * *'   | (1.day.in_minutes / 1.hour.in_minutes).to_i  | Time.zone.local(2021, 5, 27, 1, 0)   | Time.zone.local(2021, 5, 28, 1, 0)
+      '*/5 * * * *' | '0 1 * * *'   | (1.day.in_minutes / 10).to_i                 | Time.zone.local(2021, 5, 27, 1, 0)   | Time.zone.local(2021, 5, 28, 1, 0)
+      '*/5 * * * *' | '0 1 * * *'   | (1.day.in_minutes / 8).to_i                  | Time.zone.local(2021, 5, 27, 1, 0)   | Time.zone.local(2021, 5, 28, 1, 0)
+      '*/5 * * * *' | '0 1 1 * *'   | (1.day.in_minutes / 1.hour.in_minutes).to_i  | Time.zone.local(2021, 5, 1, 1, 0)    | Time.zone.local(2021, 6, 1, 1, 0)
+      '*/9 * * * *' | '0 1 1 * *'   | (1.day.in_minutes / 1.hour.in_minutes).to_i  | Time.zone.local(2021, 5, 1, 1, 9)    | Time.zone.local(2021, 6, 1, 1, 0)
+      '*/5 * * * *' | '59 14 * * *' | (1.day.in_minutes / 1.hour.in_minutes).to_i  | Time.zone.local(2021, 5, 1, 15, 0)   | Time.zone.local(2021, 5, 2, 15, 0)
+      '*/5 * * * *' | '45 21 1 2 *' | (1.day.in_minutes / 5).to_i                  | Time.zone.local(2021, 2, 1, 21, 45)  | Time.zone.local(2022, 2, 1, 21, 45)
     end
 
     with_them do
@@ -143,7 +141,6 @@ RSpec.describe Ci::PipelineSchedule do
         end
 
         create(:plan_limits, :default_plan, ci_daily_pipeline_schedule_triggers: plan_limit) if plan_limit
-        stub_feature_flags(ci_daily_limit_for_pipeline_schedules: false) unless ff_enabled
 
         # Setting this here to override initial save with the current time
         pipeline_schedule.next_run_at = now
@@ -228,6 +225,73 @@ RSpec.describe Ci::PipelineSchedule do
       end
 
       it { is_expected.to eq(144) }
+    end
+  end
+
+  describe '#for_tag?' do
+    context 'when the target is a tag' do
+      before do
+        subject.ref = 'refs/tags/v1.0'
+      end
+
+      it { expect(subject.for_tag?).to eq(true) }
+    end
+
+    context 'when the target is a branch' do
+      before do
+        subject.ref = 'refs/heads/main'
+      end
+
+      it { expect(subject.for_tag?).to eq(false) }
+    end
+
+    context 'when there is no ref' do
+      before do
+        subject.ref = nil
+      end
+
+      it { expect(subject.for_tag?).to eq(false) }
+    end
+  end
+
+  describe '#ref_for_display' do
+    context 'when the target is a tag' do
+      before do
+        subject.ref = 'refs/tags/v1.0'
+      end
+
+      it { expect(subject.ref_for_display).to eq('v1.0') }
+    end
+
+    context 'when the target is a branch' do
+      before do
+        subject.ref = 'refs/heads/main'
+      end
+
+      it { expect(subject.ref_for_display).to eq('main') }
+    end
+
+    context 'when the ref is ambiguous' do
+      before do
+        subject.ref = 'release-2.8'
+      end
+
+      it { expect(subject.ref_for_display).to eq('release-2.8') }
+    end
+
+    context 'when there is no ref' do
+      before do
+        subject.ref = nil
+      end
+
+      it { expect(subject.ref_for_display).to eq(nil) }
+    end
+  end
+
+  context 'loose foreign key on ci_pipeline_schedules.project_id' do
+    it_behaves_like 'cleanup by a loose foreign key' do
+      let!(:parent) { create(:project) }
+      let!(:model) { create(:ci_pipeline_schedule, project: parent) }
     end
   end
 end

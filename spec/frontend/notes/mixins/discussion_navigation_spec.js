@@ -1,4 +1,5 @@
-import { shallowMount, createLocalVue } from '@vue/test-utils';
+import { shallowMount } from '@vue/test-utils';
+import Vue, { nextTick } from 'vue';
 import Vuex from 'vuex';
 import { setHTMLFixture } from 'helpers/fixtures';
 import createEventHub from '~/helpers/event_hub_factory';
@@ -7,12 +8,15 @@ import eventHub from '~/notes/event_hub';
 import discussionNavigation from '~/notes/mixins/discussion_navigation';
 import notesModule from '~/notes/stores/modules';
 
+let scrollToFile;
 const discussion = (id, index) => ({
   id,
   resolvable: index % 2 === 0,
   active: true,
   notes: [{}],
   diff_discussion: true,
+  position: { new_line: 1, old_line: 1 },
+  diff_file: { file_path: 'test.js' },
 });
 const createDiscussions = () => [...'abcde'].map(discussion);
 const createComponent = () => ({
@@ -23,8 +27,7 @@ const createComponent = () => ({
 });
 
 describe('Discussion navigation mixin', () => {
-  const localVue = createLocalVue();
-  localVue.use(Vuex);
+  Vue.use(Vuex);
 
   let wrapper;
   let store;
@@ -45,6 +48,7 @@ describe('Discussion navigation mixin', () => {
     jest.spyOn(utils, 'scrollToElement');
 
     expandDiscussion = jest.fn();
+    scrollToFile = jest.fn();
     const { actions, ...notesRest } = notesModule();
     store = new Vuex.Store({
       modules: {
@@ -52,11 +56,15 @@ describe('Discussion navigation mixin', () => {
           ...notesRest,
           actions: { ...actions, expandDiscussion },
         },
+        diffs: {
+          namespaced: true,
+          actions: { scrollToFile },
+        },
       },
     });
     store.state.notes.discussions = createDiscussions();
 
-    wrapper = shallowMount(createComponent(), { store, localVue });
+    wrapper = shallowMount(createComponent(), { store });
   });
 
   afterEach(() => {
@@ -85,14 +93,13 @@ describe('Discussion navigation mixin', () => {
       expect(store.dispatch).toHaveBeenCalledWith('setCurrentDiscussionId', null);
     });
 
-    it('triggers the jumpToNextDiscussion action when the previous store action succeeds', () => {
+    it('triggers the jumpToNextDiscussion action when the previous store action succeeds', async () => {
       store.dispatch.mockResolvedValue();
 
       vm.jumpToFirstUnresolvedDiscussion();
 
-      return vm.$nextTick().then(() => {
-        expect(vm.jumpToNextDiscussion).toHaveBeenCalled();
-      });
+      await nextTick();
+      expect(vm.jumpToNextDiscussion).toHaveBeenCalled();
     });
   });
 
@@ -118,11 +125,11 @@ describe('Discussion navigation mixin', () => {
       });
 
       describe('on `show` active tab', () => {
-        beforeEach(() => {
+        beforeEach(async () => {
           window.mrTabs.currentAction = 'show';
           wrapper.vm[fn](...args);
 
-          return wrapper.vm.$nextTick();
+          await nextTick();
         });
 
         it('sets current discussion', () => {
@@ -136,16 +143,17 @@ describe('Discussion navigation mixin', () => {
         it('scrolls to element', () => {
           expect(utils.scrollToElement).toHaveBeenCalledWith(
             findDiscussion('div.discussion', expected),
+            { behavior: 'auto' },
           );
         });
       });
 
       describe('on `diffs` active tab', () => {
-        beforeEach(() => {
+        beforeEach(async () => {
           window.mrTabs.currentAction = 'diffs';
           wrapper.vm[fn](...args);
 
-          return wrapper.vm.$nextTick();
+          await nextTick();
         });
 
         it('sets current discussion', () => {
@@ -163,16 +171,17 @@ describe('Discussion navigation mixin', () => {
 
           expect(utils.scrollToElementWithContext).toHaveBeenCalledWith(
             findDiscussion('ul.notes', expected),
+            { behavior: 'auto' },
           );
         });
       });
 
       describe('on `other` active tab', () => {
-        beforeEach(() => {
+        beforeEach(async () => {
           window.mrTabs.currentAction = 'other';
           wrapper.vm[fn](...args);
 
-          return wrapper.vm.$nextTick();
+          await nextTick();
         });
 
         it('sets current discussion', () => {
@@ -203,10 +212,53 @@ describe('Discussion navigation mixin', () => {
           it('scrolls to discussion', () => {
             expect(utils.scrollToElement).toHaveBeenCalledWith(
               findDiscussion('div.discussion', expected),
+              { behavior: 'auto' },
             );
           });
         });
       });
+    });
+
+    describe('virtual scrolling feature', () => {
+      beforeEach(() => {
+        jest.spyOn(store, 'dispatch');
+
+        store.state.notes.currentDiscussionId = 'a';
+        window.location.hash = 'test';
+      });
+
+      afterEach(() => {
+        window.gon = {};
+        window.location.hash = '';
+      });
+
+      it('resets location hash', async () => {
+        wrapper.vm.jumpToNextDiscussion();
+
+        await nextTick();
+
+        expect(window.location.hash).toBe('');
+      });
+
+      it.each`
+        tabValue
+        ${'diffs'}
+        ${'show'}
+        ${'other'}
+      `(
+        'calls scrollToFile with setHash as $hashValue when the tab is $tabValue',
+        async ({ tabValue }) => {
+          window.mrTabs.currentAction = tabValue;
+
+          wrapper.vm.jumpToNextDiscussion();
+
+          await nextTick();
+
+          expect(store.dispatch).toHaveBeenCalledWith('diffs/scrollToFile', {
+            path: 'test.js',
+          });
+        },
+      );
     });
   });
 });

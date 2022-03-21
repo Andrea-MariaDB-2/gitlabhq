@@ -7,7 +7,7 @@ class IssuableExportCsvWorker # rubocop:disable Scalability/IdempotentWorker
 
   sidekiq_options retry: 3
 
-  feature_category :issue_tracking
+  feature_category :team_planning
   worker_resource_boundary :cpu
   loggable_arguments 2
 
@@ -41,7 +41,7 @@ class IssuableExportCsvWorker # rubocop:disable Scalability/IdempotentWorker
 
   def parse_params(params, project_id)
     params
-      .symbolize_keys
+      .with_indifferent_access
       .except(:sort)
       .merge(project_id: project_id)
   end

@@ -22,6 +22,18 @@ RSpec.describe Issues::CloseService do
   describe '#execute' do
     let(:service) { described_class.new(project: project, current_user: user) }
 
+    context 'when skip_authorization is true' do
+      it 'does close the issue even if user is not authorized' do
+        non_authorized_user = create(:user)
+
+        service = described_class.new(project: project, current_user: non_authorized_user)
+
+        expect do
+          service.execute(issue, skip_authorization: true)
+        end.to change { issue.reload.state }.from('opened').to('closed')
+      end
+    end
+
     it 'checks if the user is authorized to update the issue' do
       expect(service).to receive(:can?).with(user, :update_issue, issue)
         .and_call_original
@@ -58,14 +70,25 @@ RSpec.describe Issues::CloseService do
     end
 
     it 'refreshes the number of open issues', :use_clean_rails_memory_store_caching do
-      expect { service.execute(issue) }
-        .to change { project.open_issues_count }.from(1).to(0)
+      expect do
+        service.execute(issue)
+
+        BatchLoader::Executor.clear_current
+      end.to change { project.open_issues_count }.from(1).to(0)
     end
 
     it 'invalidates counter cache for assignees' do
       expect_any_instance_of(User).to receive(:invalidate_issue_cache_counts)
 
       service.execute(issue)
+    end
+
+    it 'does not change escalation status' do
+      resolved = IncidentManagement::Escalatable::STATUSES[:resolved]
+
+      expect { service.execute(issue) }
+        .to not_change { IncidentManagement::IssuableEscalationStatus.where(issue: issue).count }
+        .and not_change { IncidentManagement::IssuableEscalationStatus.where(status: resolved).count }
     end
 
     context 'issue is incident type' do
@@ -75,6 +98,40 @@ RSpec.describe Issues::CloseService do
       subject { service.execute(issue) }
 
       it_behaves_like 'an incident management tracked event', :incident_management_incident_closed
+
+      it 'creates a new escalation resolved escalation status', :aggregate_failures do
+        expect { service.execute(issue) }.to change { IncidentManagement::IssuableEscalationStatus.where(issue: issue).count }.by(1)
+
+        expect(issue.incident_management_issuable_escalation_status).to be_resolved
+      end
+
+      context 'when there is an escalation status' do
+        before do
+          create(:incident_management_issuable_escalation_status, issue: issue)
+        end
+
+        it 'changes escalations status to resolved' do
+          expect { service.execute(issue) }.to change { issue.incident_management_issuable_escalation_status.reload.resolved? }.to(true)
+        end
+
+        it 'adds a system note', :aggregate_failures do
+          expect { service.execute(issue) }.to change { issue.notes.count }.by(1)
+
+          new_note = issue.notes.last
+          expect(new_note.note).to eq('changed the incident status to **Resolved** by closing the incident')
+          expect(new_note.author).to eq(user)
+        end
+
+        context 'when the escalation status did not change to resolved' do
+          let(:escalation_status) { instance_double('IncidentManagement::IssuableEscalationStatus', resolve: false) }
+
+          it 'does not create a system note' do
+            allow(issue).to receive(:incident_management_issuable_escalation_status).and_return(escalation_status)
+
+            expect { service.execute(issue) }.not_to change { issue.notes.count }
+          end
+        end
+      end
     end
   end
 
@@ -153,7 +210,7 @@ RSpec.describe Issues::CloseService do
       context 'updating `metrics.first_mentioned_in_commit_at`' do
         context 'when `metrics.first_mentioned_in_commit_at` is not set' do
           it 'uses the first commit authored timestamp' do
-            expected = closing_merge_request.commits.first.authored_date
+            expected = closing_merge_request.commits.take(100).last.authored_date
 
             close_issue
 
@@ -222,7 +279,7 @@ RSpec.describe Issues::CloseService do
 
       it 'verifies the number of queries' do
         recorded = ActiveRecord::QueryRecorder.new { close_issue }
-        expected_queries = 25
+        expected_queries = 32
 
         expect(recorded.count).to be <= expected_queries
         expect(recorded.cached_count).to eq(0)
@@ -277,8 +334,12 @@ RSpec.describe Issues::CloseService do
           let!(:alert) { create(:alert_management_alert, issue: issue, project: project) }
 
           it 'resolves an alert and sends a system note' do
-            expect_next_instance_of(SystemNotes::AlertManagementService) do |notes_service|
-              expect(notes_service).to receive(:closed_alert_issue).with(issue)
+            expect_any_instance_of(SystemNoteService) do |notes_service|
+              expect(notes_service).to receive(:change_alert_status).with(
+                alert,
+                current_user,
+                " by closing issue #{issue.to_reference(project)}"
+              )
             end
 
             close_issue

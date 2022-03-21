@@ -21,9 +21,14 @@ module Gitlab
         response.exists
       end
 
-      def cleanup
-        request = Gitaly::CleanupRequest.new(repository: @gitaly_repo)
-        GitalyClient.call(@storage, :repository_service, :cleanup, request, timeout: GitalyClient.fast_timeout)
+      def optimize_repository
+        request = Gitaly::OptimizeRepositoryRequest.new(repository: @gitaly_repo)
+        GitalyClient.call(@storage, :repository_service, :optimize_repository, request, timeout: GitalyClient.long_timeout)
+      end
+
+      def prune_unreachable_objects
+        request = Gitaly::PruneUnreachableObjectsRequest.new(repository: @gitaly_repo)
+        GitalyClient.call(@storage, :repository_service, :prune_unreachable_objects, request, timeout: GitalyClient.long_timeout)
       end
 
       def garbage_collect(create_bitmap, prune:)
@@ -102,8 +107,8 @@ module Gitlab
       end
       # rubocop: enable Metrics/ParameterLists
 
-      def create_repository
-        request = Gitaly::CreateRepositoryRequest.new(repository: @gitaly_repo)
+      def create_repository(default_branch = nil)
+        request = Gitaly::CreateRepositoryRequest.new(repository: @gitaly_repo, default_branch: default_branch)
         GitalyClient.call(@storage, :repository_service, :create_repository, request, timeout: GitalyClient.fast_timeout)
       end
 

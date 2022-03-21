@@ -44,24 +44,9 @@ RSpec.describe AuthorizedProjectUpdate::UserRefreshFromReplicaWorker do
       end
     end
 
-    context 'with load balancing enabled', :db_load_balancing do
+    context 'with load balancing enabled' do
       it 'reads from the replica database' do
         expect(Gitlab::Database::LoadBalancing::Session.current).to receive(:use_replicas_for_read_queries).and_call_original
-
-        execute_worker
-      end
-    end
-
-    context 'when the feature flag `user_refresh_from_replica_worker_uses_replica_db` is disabled' do
-      before do
-        stub_feature_flags(user_refresh_from_replica_worker_uses_replica_db: false)
-      end
-
-      it 'calls Users::RefreshAuthorizedProjectsService' do
-        source = 'AuthorizedProjectUpdate::UserRefreshFromReplicaWorker'
-        expect_next_instance_of(Users::RefreshAuthorizedProjectsService, user, { source: source }) do |service|
-          expect(service).to receive(:execute)
-        end
 
         execute_worker
       end

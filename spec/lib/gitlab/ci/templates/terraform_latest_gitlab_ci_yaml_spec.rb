@@ -13,7 +13,7 @@ RSpec.describe 'Terraform.latest.gitlab-ci.yml' do
     let(:default_branch) { project.default_branch_or_main }
     let(:pipeline_branch) { default_branch }
     let(:project) { create(:project, :custom_repo, files: { 'README.md' => '' }) }
-    let(:user) { project.owner }
+    let(:user) { project.first_owner }
     let(:service) { Ci::CreatePipelineService.new(project, user, ref: pipeline_branch ) }
     let(:pipeline) { service.execute!(:push).payload }
     let(:build_names) { pipeline.builds.pluck(:name) }
@@ -27,7 +27,7 @@ RSpec.describe 'Terraform.latest.gitlab-ci.yml' do
     context 'on master branch' do
       it 'creates init, validate and build jobs', :aggregate_failures do
         expect(pipeline.errors).to be_empty
-        expect(build_names).to include('init', 'validate', 'build', 'deploy')
+        expect(build_names).to include('validate', 'build', 'deploy')
       end
     end
 

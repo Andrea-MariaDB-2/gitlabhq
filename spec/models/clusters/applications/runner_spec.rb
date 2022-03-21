@@ -69,63 +69,7 @@ RSpec.describe Clusters::Applications::Runner do
       expect(values).to include('privileged: true')
       expect(values).to include('image: ubuntu:16.04')
       expect(values).to include('resources')
-      expect(values).to match(/runnerToken: ['"]?#{Regexp.escape(ci_runner.token)}/)
       expect(values).to match(/gitlabUrl: ['"]?#{Regexp.escape(Gitlab::Routing.url_helpers.root_url)}/)
-    end
-
-    context 'without a runner' do
-      let(:application) { create(:clusters_applications_runner, runner: nil, cluster: cluster) }
-      let(:runner) { application.runner }
-
-      shared_examples 'runner creation' do
-        it 'creates a runner' do
-          expect { subject }.to change { Ci::Runner.count }.by(1)
-        end
-
-        it 'uses the new runner token' do
-          expect(values).to match(/runnerToken: '?#{Regexp.escape(runner.token)}/)
-        end
-      end
-
-      context 'project cluster' do
-        let(:project) { create(:project) }
-        let(:cluster) { create(:cluster, :with_installed_helm, projects: [project]) }
-
-        include_examples 'runner creation'
-
-        it 'creates a project runner' do
-          subject
-
-          expect(runner).to be_project_type
-          expect(runner.projects).to eq [project]
-        end
-      end
-
-      context 'group cluster' do
-        let(:group) { create(:group) }
-        let(:cluster) { create(:cluster, :with_installed_helm, cluster_type: :group_type, groups: [group]) }
-
-        include_examples 'runner creation'
-
-        it 'creates a group runner' do
-          subject
-
-          expect(runner).to be_group_type
-          expect(runner.groups).to eq [group]
-        end
-      end
-
-      context 'instance cluster' do
-        let(:cluster) { create(:cluster, :with_installed_helm, :instance) }
-
-        include_examples 'runner creation'
-
-        it 'creates an instance runner' do
-          subject
-
-          expect(runner).to be_instance_type
-        end
-      end
     end
 
     context 'with duplicated values on vendor/runner/values.yaml' do
@@ -154,19 +98,6 @@ RSpec.describe Clusters::Applications::Runner do
       it 'overwrites values.yaml' do
         expect(values).to match(/privileged: '?#{application.privileged}/)
       end
-    end
-  end
-
-  describe '#prepare_uninstall' do
-    it 'pauses associated runner' do
-      active_runner = create(:ci_runner, contacted_at: 1.second.ago)
-
-      expect(active_runner.status).to eq(:online)
-
-      application_runner = create(:clusters_applications_runner, :scheduled, runner: active_runner)
-      application_runner.prepare_uninstall
-
-      expect(active_runner.status).to eq(:paused)
     end
   end
 

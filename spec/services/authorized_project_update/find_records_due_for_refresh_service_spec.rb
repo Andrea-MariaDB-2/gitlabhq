@@ -40,7 +40,7 @@ RSpec.describe AuthorizedProjectUpdate::FindRecordsDueForRefreshService do
         it 'is called' do
           ProjectAuthorization.delete_all
 
-          expect(callback).to receive(:call).with(project.id, Gitlab::Access::MAINTAINER).once
+          expect(callback).to receive(:call).with(project.id, Gitlab::Access::OWNER).once
 
           service.execute
         end
@@ -59,18 +59,9 @@ RSpec.describe AuthorizedProjectUpdate::FindRecordsDueForRefreshService do
             .create!(project: project2, access_level: Gitlab::Access::MAINTAINER)
 
           to_be_removed = [project2.id]
-          to_be_added = [[user.id, project.id, Gitlab::Access::MAINTAINER]]
-
-          expect(service.execute).to eq([to_be_removed, to_be_added])
-        end
-
-        it 'finds duplicate entries that has to be removed' do
-          [Gitlab::Access::MAINTAINER, Gitlab::Access::REPORTER].each do |access_level|
-            user.project_authorizations.create!(project: project, access_level: access_level)
-          end
-
-          to_be_removed = [project.id]
-          to_be_added = [[user.id, project.id, Gitlab::Access::MAINTAINER]]
+          to_be_added = [
+            { user_id: user.id, project_id: project.id, access_level: Gitlab::Access::OWNER }
+          ]
 
           expect(service.execute).to eq([to_be_removed, to_be_added])
         end
@@ -80,7 +71,9 @@ RSpec.describe AuthorizedProjectUpdate::FindRecordsDueForRefreshService do
             .create!(project: project, access_level: Gitlab::Access::DEVELOPER)
 
           to_be_removed = [project.id]
-          to_be_added = [[user.id, project.id, Gitlab::Access::MAINTAINER]]
+          to_be_added = [
+            { user_id: user.id, project_id: project.id, access_level: Gitlab::Access::OWNER }
+          ]
 
           expect(service.execute).to eq([to_be_removed, to_be_added])
         end
@@ -137,16 +130,16 @@ RSpec.describe AuthorizedProjectUpdate::FindRecordsDueForRefreshService do
     end
 
     it 'sets the keys to the project IDs' do
-      expect(hash.keys).to eq([project.id])
+      expect(hash.keys).to match_array([project.id])
     end
 
     it 'sets the values to the access levels' do
-      expect(hash.values).to eq([Gitlab::Access::MAINTAINER])
+      expect(hash.values).to match_array([Gitlab::Access::OWNER])
     end
 
     context 'personal projects' do
       it 'includes the project with the right access level' do
-        expect(hash[project.id]).to eq(Gitlab::Access::MAINTAINER)
+        expect(hash[project.id]).to eq(Gitlab::Access::OWNER)
       end
     end
 
@@ -236,7 +229,7 @@ RSpec.describe AuthorizedProjectUpdate::FindRecordsDueForRefreshService do
       value = hash.values[0]
 
       expect(value.project_id).to eq(project.id)
-      expect(value.access_level).to eq(Gitlab::Access::MAINTAINER)
+      expect(value.access_level).to eq(Gitlab::Access::OWNER)
     end
   end
 
@@ -261,7 +254,7 @@ RSpec.describe AuthorizedProjectUpdate::FindRecordsDueForRefreshService do
       end
 
       it 'includes the access level for every row' do
-        expect(row.access_level).to eq(Gitlab::Access::MAINTAINER)
+        expect(row.access_level).to eq(Gitlab::Access::OWNER)
       end
     end
   end
@@ -277,7 +270,7 @@ RSpec.describe AuthorizedProjectUpdate::FindRecordsDueForRefreshService do
       rows = service.fresh_authorizations.to_a
 
       expect(rows.length).to eq(1)
-      expect(rows.first.access_level).to eq(Gitlab::Access::MAINTAINER)
+      expect(rows.first.access_level).to eq(Gitlab::Access::OWNER)
     end
 
     context 'every returned row' do
@@ -288,7 +281,7 @@ RSpec.describe AuthorizedProjectUpdate::FindRecordsDueForRefreshService do
       end
 
       it 'includes the access level' do
-        expect(row.access_level).to eq(Gitlab::Access::MAINTAINER)
+        expect(row.access_level).to eq(Gitlab::Access::OWNER)
       end
     end
   end

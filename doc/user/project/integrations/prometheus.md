@@ -1,12 +1,10 @@
 ---
 stage: Monitor
-group: Monitor
+group: Respond
 info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
 ---
 
 # Prometheus integration **(FREE)**
-
-> [Introduced](https://gitlab.com/gitlab-org/gitlab-foss/-/merge_requests/8935) in GitLab 9.0.
 
 GitLab offers powerful integration with [Prometheus](https://prometheus.io) for
 monitoring key metrics of your apps, directly in GitLab.
@@ -41,10 +39,9 @@ See [Prometheus cluster integration](../../clusters/integrations.md#prometheus-c
 
 Integration with Prometheus requires the following:
 
-1. GitLab 9.0 or higher
-1. Prometheus must be configured to collect one of the [supported metrics](prometheus_library/index.md)
-1. Each metric must be have a label to indicate the environment
-1. GitLab must have network connectivity to the Prometheus server
+- Prometheus must be configured to collect one of the [supported metrics](prometheus_library/index.md)
+- Each metric must have a label to indicate the environment
+- GitLab must have network connectivity to the Prometheus server
 
 #### Getting started
 
@@ -75,7 +72,7 @@ service account can be found at Google's documentation for
 1. (Optional) In **Google IAP Service Account JSON**, provide the contents of the
    Service Account credentials file that is authorized to access the Prometheus resource.
    The JSON key `token_credential_uri` is discarded to prevent
-   [Server-side Request Forgery (SSRF)](https://www.hackerone.com/blog-How-To-Server-Side-Request-Forgery-SSRF).
+   [Server-side Request Forgery (SSRF)](https://www.hackerone.com/application-security/how-server-side-request-forgery-ssrf).
 1. Click **Save changes**.
 
 ![Configure Prometheus Service](img/prometheus_manual_configuration_v13_2.png)
@@ -112,9 +109,6 @@ can use only one:
   matching [environment scope](../../../ci/environments/index.md#scope-environments-with-specs) is used.
 
 ## Determining the performance impact of a merge
-
-> - [Introduced](https://gitlab.com/gitlab-org/gitlab-foss/-/merge_requests/10408) in GitLab 9.2.
-> - GitLab 9.3 added the [numeric comparison](https://gitlab.com/gitlab-org/gitlab-foss/-/issues/27439) of the 30 minute averages.
 
 Developers can view the performance impact of their changes in the merge
 request workflow. This feature requires [Kubernetes](prometheus_library/kubernetes.md) metrics.

@@ -38,15 +38,17 @@ module AppearancesHelper
   def brand_header_logo
     if current_appearance&.header_logo?
       image_tag current_appearance.header_logo_path, class: 'brand-header-logo'
+    elsif Feature.enabled?(:ukraine_support_tanuki)
+      render partial: 'shared/logo_ukraine', formats: :svg
     else
-      render 'shared/logo.svg'
+      render partial: 'shared/logo', formats: :svg
     end
   end
 
   # Skip the 'GitLab' type logo when custom brand logo is set
   def brand_header_logo_type
     unless current_appearance&.header_logo?
-      render 'shared/logo_type.svg'
+      render partial: 'shared/logo_type', formats: :svg
     end
   end
 

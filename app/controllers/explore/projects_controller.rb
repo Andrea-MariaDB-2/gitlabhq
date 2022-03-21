@@ -26,6 +26,7 @@ class Explore::ProjectsController < Explore::ApplicationController
   feature_category :projects
 
   def index
+    show_alert_if_search_is_disabled
     @projects = load_projects
 
     respond_to do |format|
@@ -67,6 +68,20 @@ class Explore::ProjectsController < Explore::ApplicationController
   end
   # rubocop: enable CodeReuse/ActiveRecord
 
+  def topics
+    load_project_counts
+    load_topics
+  end
+
+  def topic
+    load_topic
+
+    return render_404 unless @topic
+
+    params[:topic] = @topic.name
+    @projects = load_projects
+  end
+
   private
 
   def load_project_counts
@@ -77,12 +92,25 @@ class Explore::ProjectsController < Explore::ApplicationController
   def load_projects
     load_project_counts
 
-    projects = ProjectsFinder.new(current_user: current_user, params: params.merge(minimum_search_length: MIN_SEARCH_LENGTH)).execute
+    finder_params = {
+      minimum_search_length: MIN_SEARCH_LENGTH,
+      not_aimed_for_deletion: true
+    }
+
+    projects = ProjectsFinder.new(current_user: current_user, params: params.merge(finder_params)).execute
 
     projects = preload_associations(projects)
     projects = projects.page(params[:page]).without_count
 
     prepare_projects_for_rendering(projects)
+  end
+
+  def load_topics
+    @topics = Projects::TopicsFinder.new(params: params.permit(:search)).execute.page(params[:page]).without_count
+  end
+
+  def load_topic
+    @topic = Projects::Topic.find_by_name(params[:topic_name])
   end
 
   # rubocop: disable CodeReuse/ActiveRecord
@@ -119,6 +147,12 @@ class Explore::ProjectsController < Explore::ApplicationController
         }, status: :bad_request
       end
     end
+  end
+
+  def show_alert_if_search_is_disabled
+    return if current_user || params[:name].blank? && params[:search].blank? || !html_request? || Feature.disabled?(:disable_anonymous_project_search, type: :ops)
+
+    flash.now[:notice] = _('You must sign in to search for specific projects.')
   end
 end
 

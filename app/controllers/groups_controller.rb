@@ -32,11 +32,13 @@ class GroupsController < Groups::ApplicationController
   before_action :user_actions, only: [:show]
 
   before_action do
-    push_frontend_feature_flag(:vue_issuables_list, @group)
+    push_frontend_feature_flag(:vue_issues_list, @group, default_enabled: :yaml)
     push_frontend_feature_flag(:iteration_cadences, @group, default_enabled: :yaml)
   end
 
-  before_action :export_rate_limit, only: [:export, :download_export]
+  before_action :check_export_rate_limit!, only: [:export, :download_export]
+
+  before_action :track_experiment_event, only: [:new]
 
   helper_method :captcha_required?
 
@@ -53,10 +55,13 @@ class GroupsController < Groups::ApplicationController
                      :destroy, :details, :transfer, :activity
                    ]
 
-  feature_category :issue_tracking, [:issues, :issues_calendar, :preview_markdown]
+  feature_category :team_planning, [:issues, :issues_calendar, :preview_markdown]
   feature_category :code_review, [:merge_requests, :unfoldered_environment_names]
   feature_category :projects, [:projects]
   feature_category :importers, [:export, :download_export]
+
+  urgency :high, [:unfoldered_environment_names]
+  urgency :low, [:merge_requests]
 
   def index
     redirect_to(current_user ? dashboard_groups_path : explore_groups_path)
@@ -204,6 +209,22 @@ class GroupsController < Groups::ApplicationController
     end
   end
 
+  def issues
+    return super if !html_request? || Feature.disabled?(:vue_issues_list, group, default_enabled: :yaml)
+
+    @has_issues = IssuesFinder.new(current_user, group_id: group.id, include_subgroups: true).execute
+      .non_archived
+      .exists?
+
+    @has_projects = group_projects.exists?
+
+    set_sort_order
+
+    respond_to do |format|
+      format.html
+    end
+  end
+
   protected
 
   def render_show_html
@@ -216,7 +237,7 @@ class GroupsController < Groups::ApplicationController
 
   def render_details_view_atom
     load_events
-    render layout: 'xml.atom', template: 'groups/show'
+    render layout: 'xml', template: 'groups/show'
   end
 
   # rubocop: disable CodeReuse/ActiveRecord
@@ -272,7 +293,8 @@ class GroupsController < Groups::ApplicationController
       :resource_access_token_creation_allowed,
       :prevent_sharing_groups_outside_hierarchy,
       :setup_for_company,
-      :jobs_to_be_done
+      :jobs_to_be_done,
+      :crm_enabled
     ]
   end
 
@@ -310,16 +332,12 @@ class GroupsController < Groups::ApplicationController
     url_for(safe_params)
   end
 
-  def export_rate_limit
+  def check_export_rate_limit!
     prefixed_action = "group_#{params[:action]}".to_sym
 
     scope = params[:action] == :download_export ? @group : nil
 
-    if Gitlab::ApplicationRateLimiter.throttled?(prefixed_action, scope: [current_user, scope].compact)
-      Gitlab::ApplicationRateLimiter.log_request(request, "#{prefixed_action}_request_limit".to_sym, current_user)
-
-      render plain: _('This endpoint has been requested too many times. Try again later.'), status: :too_many_requests
-    end
+    check_rate_limit!(prefixed_action, scope: [current_user, scope].compact)
   end
 
   def ensure_export_enabled
@@ -377,6 +395,12 @@ class GroupsController < Groups::ApplicationController
 
   def captcha_required?
     captcha_enabled? && !params[:parent_id]
+  end
+
+  def track_experiment_event
+    return if params[:parent_id]
+
+    experiment(:require_verification_for_namespace_creation, user: current_user).track(:start_create_group)
   end
 end
 

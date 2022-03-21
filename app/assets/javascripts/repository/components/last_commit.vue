@@ -1,6 +1,12 @@
 <script>
-/* eslint-disable vue/no-v-html */
-import { GlTooltipDirective, GlLink, GlButton, GlButtonGroup, GlLoadingIcon } from '@gitlab/ui';
+import {
+  GlTooltipDirective,
+  GlLink,
+  GlButton,
+  GlButtonGroup,
+  GlLoadingIcon,
+  GlSafeHtmlDirective,
+} from '@gitlab/ui';
 import defaultAvatarUrl from 'images/no_avatar.png';
 import pathLastCommitQuery from 'shared_queries/repository/path_last_commit.query.graphql';
 import { sprintf, s__ } from '~/locale';
@@ -24,6 +30,7 @@ export default {
   },
   directives: {
     GlTooltip: GlTooltipDirective,
+    SafeHtml: GlSafeHtmlDirective,
   },
   mixins: [getRefMixin],
   apollo: {
@@ -97,11 +104,14 @@ export default {
     },
   },
   defaultAvatarUrl,
+  safeHtmlConfig: {
+    ADD_TAGS: ['gl-emoji'],
+  },
 };
 </script>
 
 <template>
-  <div class="info-well d-none d-sm-flex project-last-commit commit p-3">
+  <div class="well-segment commit gl-p-5 gl-w-full">
     <gl-loading-icon v-if="isLoading" size="md" color="dark" class="m-auto" />
     <template v-else-if="commit">
       <user-avatar-link
@@ -122,15 +132,17 @@ export default {
       <div class="commit-detail flex-list">
         <div class="commit-content qa-commit-content">
           <gl-link
+            v-safe-html:[$options.safeHtmlConfig]="commit.titleHtml"
             :href="commit.webPath"
             :class="{ 'font-italic': !commit.message }"
             class="commit-row-message item-title"
-            v-html="commit.titleHtml"
           />
           <gl-button
             v-if="commit.descriptionHtml"
+            v-gl-tooltip
             :class="{ open: showDescription }"
-            :aria-label="__('Show commit description')"
+            :title="__('Toggle commit description')"
+            :aria-label="__('Toggle commit description')"
             class="text-expander gl-vertical-align-bottom!"
             icon="ellipsis_h"
             @click="toggleShowDescription"
@@ -151,13 +163,16 @@ export default {
           </div>
           <pre
             v-if="commitDescription"
+            v-safe-html:[$options.safeHtmlConfig]="commitDescription"
             :class="{ 'd-block': showDescription }"
             class="commit-row-description gl-mb-3"
-            v-html="commitDescription"
           ></pre>
         </div>
         <div class="commit-actions flex-row">
-          <div v-if="commit.signatureHtml" v-html="commit.signatureHtml"></div>
+          <div
+            v-if="commit.signatureHtml"
+            v-safe-html:[$options.safeHtmlConfig]="commit.signatureHtml"
+          ></div>
           <div v-if="commit.pipeline" class="ci-status-link">
             <gl-link
               v-gl-tooltip.left

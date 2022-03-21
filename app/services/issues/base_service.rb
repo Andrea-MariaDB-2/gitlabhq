@@ -2,7 +2,9 @@
 
 module Issues
   class BaseService < ::IssuableBaseService
+    extend ::Gitlab::Utils::Override
     include IncidentManagement::UsageData
+    include IssueTypeHelpers
 
     def hook_data(issue, action, old_associations: {})
       hook_data = issue.to_hook_data(current_user, old_associations: old_associations)
@@ -29,16 +31,22 @@ module Issues
       gates = [issue.project, issue.project.group].compact
       return unless gates.any? { |gate| Feature.enabled?(:rebalance_issues, gate) }
 
-      IssueRebalancingWorker.perform_async(nil, *issue.project.self_or_root_group_ids)
+      Issues::RebalancingWorker.perform_async(nil, *issue.project.self_or_root_group_ids)
     end
 
     private
 
+    def find_work_item_type_id(issue_type)
+      work_item_type = WorkItems::Type.default_by_type(issue_type)
+      work_item_type ||= WorkItems::Type.default_issue_type
+
+      work_item_type.id
+    end
+
     def filter_params(issue)
       super
 
-      params.delete(:issue_type) unless issue_type_allowed?(issue)
-      filter_incident_label(issue) if params[:issue_type]
+      params.delete(:issue_type) unless create_issue_type_allowed?(issue, params[:issue_type])
 
       moved_issue = params.delete(:moved_issue)
 
@@ -52,6 +60,21 @@ module Issues
       params.delete(:sentry_issue_attributes) unless current_user.can?(:update_sentry_issue, project)
 
       issue.system_note_timestamp = params[:created_at] || params[:updated_at]
+    end
+
+    override :handle_move_between_ids
+    def handle_move_between_ids(issue)
+      issue.check_repositioning_allowed! if params[:move_between_ids]
+
+      super
+
+      rebalance_if_needed(issue)
+    end
+
+    def issuable_for_positioning(id, positioning_scope)
+      return unless id
+
+      positioning_scope.find(id)
     end
 
     def create_assignee_note(issue, old_assignees)
@@ -80,43 +103,6 @@ module Issues
       return unless milestone
 
       Milestones::IssuesCountService.new(milestone).delete_cache
-    end
-
-    # @param object [Issue, Project]
-    def issue_type_allowed?(object)
-      WorkItem::Type.base_types.key?(params[:issue_type]) &&
-        can?(current_user, :"create_#{params[:issue_type]}", object)
-    end
-
-    # @param issue [Issue]
-    def filter_incident_label(issue)
-      return unless add_incident_label?(issue) || remove_incident_label?(issue)
-
-      label = ::IncidentManagement::CreateIncidentLabelService
-                .new(project, current_user)
-                .execute
-                .payload[:label]
-
-      # These(add_label_ids, remove_label_ids) are being added ahead of time
-      # to be consumed by #process_label_ids, this allows system notes
-      # to be applied correctly alongside the label updates.
-      if add_incident_label?(issue)
-        params[:add_label_ids] ||= []
-        params[:add_label_ids] << label.id
-      else
-        params[:remove_label_ids] ||= []
-        params[:remove_label_ids] << label.id
-      end
-    end
-
-    # @param issue [Issue]
-    def add_incident_label?(issue)
-      issue.incident?
-    end
-
-    # @param _issue [Issue, nil]
-    def remove_incident_label?(_issue)
-      false
     end
   end
 end

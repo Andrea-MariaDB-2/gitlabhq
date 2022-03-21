@@ -1,7 +1,7 @@
 ---
 stage: Package
 group: Package
-info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#designated-technical-writers
+info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
 comments: false
 description: 'Container Registry metadata database'
 ---
@@ -18,7 +18,7 @@ For GitLab.com and for GitLab customers, the Container Registry is a critical co
 
 ## Current Architecture
 
-The Container Registry is a single [Go](https://golang.org/) application. Its only dependency is the storage backend on which images and metadata are stored.
+The Container Registry is a single [Go](https://go.dev/) application. Its only dependency is the storage backend on which images and metadata are stored.
 
 ```mermaid
 graph LR
@@ -78,7 +78,7 @@ The single entrypoint for the registry is the [HTTP API](https://gitlab.com/gitl
 | Operation                                                    | UI                 | Background               | Observations                                                 |
 | ------------------------------------------------------------ | ------------------ | ------------------------ | ------------------------------------------------------------ |
 | [Check API version](https://gitlab.com/gitlab-org/container-registry/-/blob/master/docs/spec/api.md#api-version-check) | **{check-circle}** Yes | **{check-circle}** Yes | Used globally to ensure that the registry supports the Docker Distribution V2 API, as well as for identifying whether GitLab Rails is talking to the GitLab Container Registry or a third-party one (used to toggle features only available in the former). |
-| [List repository tags](https://gitlab.com/gitlab-org/container-registry/-/blob/master/docs/spec/api.md#listing-image-tags) | **{check-circle}** Yes | **{check-circle}** Yes | Used to list and show tags in the UI. Used to list tags in the background for [cleanup policies](../../../user/packages/container_registry/#cleanup-policy) and [Geo replication](../../../administration/geo/replication/docker_registry.md). |
+| [List repository tags](https://gitlab.com/gitlab-org/container-registry/-/blob/master/docs/spec/api.md#listing-image-tags) | **{check-circle}** Yes | **{check-circle}** Yes | Used to list and show tags in the UI. Used to list tags in the background for [cleanup policies](../../../user/packages/container_registry/reduce_container_registry_storage.md#cleanup-policy) and [Geo replication](../../../administration/geo/replication/docker_registry.md). |
 | [Check if manifest exists](https://gitlab.com/gitlab-org/container-registry/-/blob/master/docs/spec/api.md#existing-manifests) | **{check-circle}** Yes | **{dotted-circle}** No | Used to get the digest of a manifest by tag. This is then used to pull the manifest and show the tag details in the UI. |
 | [Pull manifest](https://gitlab.com/gitlab-org/container-registry/-/blob/master/docs/spec/api.md#pulling-an-image-manifest) | **{check-circle}** Yes | **{dotted-circle}** No | Used to show the image size and the manifest digest in the tag details UI. |
 | [Pull blob](https://gitlab.com/gitlab-org/container-registry/-/blob/master/docs/spec/api.md#pulling-a-layer) | **{check-circle}** Yes | **{dotted-circle}** No | Used to show the configuration digest and the creation date in the tag details UI. |
@@ -146,7 +146,7 @@ The interaction between the registry and its clients, including GitLab Rails and
 
 ### Database
 
-Following the GitLab [Go standards and style guidelines](../../../development/go_guide), no ORM is used to manage the database, only the [`database/sql`](https://golang.org/pkg/database/sql/) package from the Go standard library, a PostgreSQL driver ([`lib/pq`](https://pkg.go.dev/github.com/lib/pq?tab=doc)) and raw SQL queries, over a TCP connection pool.
+Following the GitLab [Go standards and style guidelines](../../../development/go_guide), no ORM is used to manage the database, only the [`database/sql`](https://pkg.go.dev/database/sql) package from the Go standard library, a PostgreSQL driver ([`lib/pq`](https://pkg.go.dev/github.com/lib/pq?tab=doc)) and raw SQL queries, over a TCP connection pool.
 
 The design and development of the registry database adhere to the GitLab [database guidelines](../../../development/database/). Being a Go application, the required tooling to support the database will have to be developed, such as for running database migrations.
 
@@ -193,13 +193,19 @@ PostgreSQL introduced significant improvements for partitioning in [version 12](
 - Bulk load (`COPY`) now uses bulk inserts instead of inserting one row at a time;
 
 To leverage these features and performance improvements, we need to use PostgreSQL 12 from the start.
+GitLab 14.0 and later [ships with PostgreSQL 12](../../../administration/package_information/postgresql_versions.md)
+for self-managed instances. Customers not able to upgrade to PostgreSQL 12 have two options:
 
-GitLab currently ships with PostgreSQL 11 for self-managed instances. That is _likely_ to change in 14.0, with PostgreSQL 12 becoming the minimum required version, which will likely happen before the upgraded registry becomes available for self-managed instances. If not, self-managed instances will have two options:
+- Administrators can manually provision and configure a separate PostgreSQL 12 database for the
+  registry. This lets you benefit from the features provided by the new registry and its metadata
+  database.
+- If online garbage collection isn't a concern or provisioning a separate database isn't possible,
+  continue to use the current registry without the database. GitLab supports the current version
+  with security backports and bug fixes.
 
-1. Administrators can manually provision and configure a separate PostgreSQL 12 database for the registry, allowing them to benefit from features provided by the new registry and its metadata database.
-1. Continue to use the current registry without the database if online garbage collection is not a concern or provisioning a separate database is not possible. We will continue supporting the current version with security backports and bug fixes for the foreseeable feature.
-
-It's important to note that apart from online garbage collection, the metadata database's availability will unblock the implementation of many requested features for the GitLab Container Registry, which will only be available for instances using the new version backed by the metadata database.
+Apart from online garbage collection, the metadata database's availability unblocks the
+implementation of many requested features for the GitLab Container Registry. These features are only
+available for instances using the new version backed by the metadata database.
 
 ### Availability
 

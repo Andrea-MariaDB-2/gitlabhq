@@ -3,18 +3,29 @@
 module Projects
   module ImportExport
     class ProjectExportPresenter < Gitlab::View::Presenter::Delegated
+      # NOTE: This is needed because this presenter is serialized to JSON,
+      # and we need to make sure that `#as_json` is called in this class so
+      # it will use the overriden attributes below. Otherwise the call is
+      # delegated to the model and will use the original methods.
       include ActiveModel::Serializers::JSON
 
-      presents :project
+      presents ::Project, as: :project
 
+      delegator_override_with ActiveModel::Serializers::JSON
+      delegator_override_with ActiveModel::Naming
+      delegator_override :include_root_in_json, :include_root_in_json?
+
+      delegator_override :project_members
       def project_members
         super + converted_group_members
       end
 
+      delegator_override :description
       def description
         self.respond_to?(:override_description) ? override_description : super
       end
 
+      delegator_override :protected_branches
       def protected_branches
         project.exported_protected_branches
       end
@@ -34,7 +45,6 @@ module Projects
         # We need `.connected_to_user` here otherwise when a group has an
         # invitee, it would make the following query return 0 rows since a NULL
         # user_id would be present in the subquery
-        # See http://stackoverflow.com/questions/129077/not-in-clause-and-null-values
         non_null_user_ids = project.project_members.connected_to_user.select(:user_id)
         GroupMembersFinder.new(project.group).execute.where.not(user_id: non_null_user_ids)
       end

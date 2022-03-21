@@ -2,8 +2,6 @@
 
 module Issues
   class UpdateService < Issues::BaseService
-    extend ::Gitlab::Utils::Override
-
     # NOTE: For Issues::UpdateService, we default the spam_params to nil, because spam_checking is not
     # necessary in many cases, and we don't want to require every caller to explicitly pass it as nil
     # to disable spam checking.
@@ -26,6 +24,8 @@ module Issues
     end
 
     def before_update(issue, skip_spam_check: false)
+      change_work_item_type(issue)
+
       return if skip_spam_check
 
       Spam::SpamActionService.new(
@@ -34,6 +34,14 @@ module Issues
         user: current_user,
         action: :update
       ).execute
+    end
+
+    def change_work_item_type(issue)
+      return unless issue.changed_attributes['issue_type']
+
+      type_id = find_work_item_type_id(issue.issue_type)
+
+      issue.work_item_type_id = type_id
     end
 
     def handle_changes(issue, options)
@@ -59,6 +67,7 @@ module Issues
       handle_milestone_change(issue)
       handle_added_mentions(issue, old_mentioned_users)
       handle_severity_change(issue, old_severity)
+      handle_escalation_status_change(issue)
       handle_issue_type_change(issue)
     end
 
@@ -70,26 +79,12 @@ module Issues
       todo_service.reassigned_assignable(issue, current_user, old_assignees)
       track_incident_action(current_user, issue, :incident_assigned)
 
-      if Gitlab::ActionCable::Config.in_app? || Feature.enabled?(:broadcast_issue_updates, issue.project)
-        GraphqlTriggers.issuable_assignees_updated(issue)
-      end
+      GraphqlTriggers.issuable_assignees_updated(issue)
     end
 
     def handle_task_changes(issuable)
       todo_service.resolve_todos_for_target(issuable, current_user)
       todo_service.update_issue(issuable, current_user)
-    end
-
-    def handle_move_between_ids(issue)
-      issue.check_repositioning_allowed! if params[:move_between_ids]
-
-      super
-
-      rebalance_if_needed(issue)
-    end
-
-    def positioning_scope_key
-      :board_group_id
     end
 
     # rubocop: disable CodeReuse/ActiveRecord
@@ -198,33 +193,18 @@ module Issues
       ::IncidentManagement::AddSeveritySystemNoteWorker.perform_async(issue.id, current_user.id)
     end
 
-    # rubocop: disable CodeReuse/ActiveRecord
-    def issuable_for_positioning(id, board_group_id = nil)
-      return unless id
+    def handle_escalation_status_change(issue)
+      return unless issue.supports_escalation? && issue.escalation_status
 
-      issue =
-        if board_group_id
-          IssuesFinder.new(current_user, group_id: board_group_id, include_subgroups: true).find_by(id: id)
-        else
-          project.issues.find(id)
-        end
-
-      issue if can?(current_user, :update_issue, issue)
+      ::IncidentManagement::IssuableEscalationStatuses::AfterUpdateService.new(
+        issue,
+        current_user,
+        status_change_reason: @escalation_status_change_reason # Defined in IssuableBaseService before save
+      ).execute
     end
-    # rubocop: enable CodeReuse/ActiveRecord
 
     def create_confidentiality_note(issue)
       SystemNoteService.change_issue_confidentiality(issue, issue.project, current_user)
-    end
-
-    override :add_incident_label?
-    def add_incident_label?(issue)
-      issue.issue_type != params[:issue_type] && !issue.incident?
-    end
-
-    override :remove_incident_label?
-    def remove_incident_label?(issue)
-      issue.issue_type != params[:issue_type] && issue.incident?
     end
 
     def handle_issue_type_change(issue)
@@ -235,6 +215,8 @@ module Issues
 
     def do_handle_issue_type_change(issue)
       SystemNoteService.change_issue_type(issue, current_user)
+
+      ::IncidentManagement::IssuableEscalationStatuses::CreateService.new(issue).execute if issue.supports_escalation?
     end
   end
 end

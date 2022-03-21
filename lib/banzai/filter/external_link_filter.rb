@@ -64,8 +64,8 @@ module Banzai
 
       def internal_url?(uri)
         return false if uri.nil?
-        # Relative URLs miss a hostname
-        return true unless uri.hostname
+        # Relative URLs miss a hostname AND a scheme
+        return true if !uri.hostname && !uri.scheme
 
         uri.hostname == internal_url.hostname
       end
@@ -112,7 +112,9 @@ module Banzai
 
       def add_nofollow!(uri, node)
         if SCHEMES.include?(uri&.scheme)
+          license = true if node.attribute('rel')&.value == 'license'
           node.set_attribute('rel', 'nofollow noreferrer noopener')
+          node.kwattr_append('rel', 'license') if license
           node.set_attribute('target', '_blank')
         end
       end

@@ -107,17 +107,24 @@ RSpec.configure do |config|
         warn `curl -s -o log/goroutines.log http://localhost:9236/debug/pprof/goroutine?debug=2`
       end
     end
-  end
-
-  unless ENV['CI']
+  else
     # Allow running `:focus` examples locally,
     # falling back to all tests when there is no `:focus` example.
     config.filter_run focus: true
     config.run_all_when_everything_filtered = true
-
-    # Re-run failures locally with `--only-failures`
-    config.example_status_persistence_file_path = './spec/examples.txt'
   end
+
+  # Attempt to troubleshoot  https://gitlab.com/gitlab-org/gitlab/-/issues/351531
+  config.after do |example|
+    if example.exception.is_a?(Gitlab::Database::QueryAnalyzers::PreventCrossDatabaseModification::CrossDatabaseModificationAcrossUnsupportedTablesError)
+      ::CrossDatabaseModification::TransactionStackTrackRecord.log_gitlab_transactions_stack(action: :after_failure, example: example.description)
+    else
+      ::CrossDatabaseModification::TransactionStackTrackRecord.log_gitlab_transactions_stack(action: :after_example, example: example.description)
+    end
+  end
+
+  # Re-run failures locally with `--only-failures`
+  config.example_status_persistence_file_path = ENV.fetch('RSPEC_LAST_RUN_RESULTS_FILE', './spec/examples.txt')
 
   config.define_derived_metadata(file_path: %r{(ee)?/spec/.+_spec\.rb\z}) do |metadata|
     location = metadata[:location]
@@ -164,6 +171,7 @@ RSpec.configure do |config|
   config.include NextInstanceOf
   config.include TestEnv
   config.include FileReadHelpers
+  config.include Database::MultipleDatabases
   config.include Devise::Test::ControllerHelpers, type: :controller
   config.include Devise::Test::ControllerHelpers, type: :view
   config.include Devise::Test::IntegrationHelpers, type: :feature
@@ -185,23 +193,33 @@ RSpec.configure do |config|
   config.include RedisHelpers
   config.include Rails.application.routes.url_helpers, type: :routing
   config.include PolicyHelpers, type: :policy
-  config.include MemoryUsageHelper
   config.include ExpectRequestWithStatus, type: :request
   config.include IdempotentWorkerHelper, type: :worker
   config.include RailsHelpers
   config.include SidekiqMiddleware
   config.include StubActionCableConnection, type: :channel
   config.include StubSpamServices
+  config.include RSpec::Benchmark::Matchers, type: :benchmark
 
   include StubFeatureFlags
 
   if ENV['CI'] || ENV['RETRIES']
     # This includes the first try, i.e. tests will be run 4 times before failing.
     config.default_retry_count = ENV.fetch('RETRIES', 3).to_i + 1
+
+    # Do not retry controller tests because rspec-retry cannot properly
+    # reset the controller which may contain data from last attempt. See
+    # https://gitlab.com/gitlab-org/gitlab/-/merge_requests/73360
+    config.prepend_before(:each, type: :controller) do |example|
+      example.metadata[:retry] = 1
+    end
+
     config.exceptions_to_hard_fail = [DeprecationToolkitEnv::DeprecationBehaviors::SelectiveRaise::RaiseDisallowedDeprecation]
   end
 
-  if ENV['FLAKY_RSPEC_GENERATE_REPORT']
+  require_relative '../tooling/rspec_flaky/config'
+
+  if RspecFlaky::Config.generate_report?
     require_relative '../tooling/rspec_flaky/listener'
 
     config.reporter.register_listener(
@@ -220,6 +238,8 @@ RSpec.configure do |config|
     # Enable all features by default for testing
     # Reset any changes in after hook.
     stub_all_feature_flags
+
+    TestEnv.seed_db
   end
 
   config.after(:all) do
@@ -229,15 +249,27 @@ RSpec.configure do |config|
   # We can't use an `around` hook here because the wrapping transaction
   # is not yet opened at the time that is triggered
   config.prepend_before do
-    Gitlab::Database.main.set_open_transactions_baseline
+    ApplicationRecord.set_open_transactions_baseline
+    ::Ci::ApplicationRecord.set_open_transactions_baseline
   end
 
-  config.append_before do
-    Thread.current[:current_example_group] = ::RSpec.current_example.metadata[:example_group]
+  config.around do |example|
+    if example.metadata.fetch(:stub_feature_flags, true)
+      # It doesn't make sense for this to default to enabled as we only plan to
+      # use this temporarily to override an environment variable but eventually
+      # we'll just use the environment variable value when we've completed the
+      # gradual rollout. This stub must happen in around block as there are other
+      # around blocks in tests that will run before this and get the wrong
+      # database connection.
+      stub_feature_flags(force_no_sharing_primary_model: false)
+    end
+
+    example.run
   end
 
   config.append_after do
-    Gitlab::Database.main.reset_open_transactions_baseline
+    ApplicationRecord.reset_open_transactions_baseline
+    ::Ci::ApplicationRecord.reset_open_transactions_baseline
   end
 
   config.before do |example|
@@ -277,17 +309,9 @@ RSpec.configure do |config|
       # See https://gitlab.com/gitlab-org/gitlab/-/issues/33867
       stub_feature_flags(file_identifier_hash: false)
 
-      stub_feature_flags(diffs_virtual_scrolling: false)
-
-      # The following `vue_issues_list`/`vue_issuables_list` stubs can be removed
+      # The following `vue_issues_list` stub can be removed
       # once the Vue issues page has feature parity with the current Haml page
       stub_feature_flags(vue_issues_list: false)
-      stub_feature_flags(vue_issuables_list: false)
-
-      # Disable `refactor_blob_viewer` as we refactor
-      # the blob viewer. See the follwing epic for more:
-      # https://gitlab.com/groups/gitlab-org/-/epics/5531
-      stub_feature_flags(refactor_blob_viewer: false)
 
       # Disable `main_branch_over_master` as we migrate
       # from `master` to `main` accross our codebase.
@@ -295,13 +319,20 @@ RSpec.configure do |config|
       # As we're ready to change `master` usages to `main`, let's enable it
       stub_feature_flags(main_branch_over_master: false)
 
-      stub_feature_flags(issue_boards_filtered_search: false)
-
       # Disable issue respositioning to avoid heavy load on database when importing big projects.
       # This is only turned on when app is handling heavy project imports.
       # Can be removed when we find a better way to deal with the problem.
       # For more information check https://gitlab.com/gitlab-com/gl-infra/production/-/issues/4321
       stub_feature_flags(block_issue_repositioning: false)
+
+      # These are ops feature flags that are disabled by default
+      stub_feature_flags(disable_anonymous_search: false)
+      stub_feature_flags(disable_anonymous_project_search: false)
+
+      # Disable the refactored top nav search until there is functionality
+      # Can be removed once all existing functionality has been replicated
+      # For more information check https://gitlab.com/gitlab-org/gitlab/-/issues/339348
+      stub_feature_flags(new_header_search: false)
 
       allow(Gitlab::GitalyClient).to receive(:can_use_disk?).and_return(enable_rugged)
     else
@@ -415,6 +446,10 @@ RSpec.configure do |config|
     Gitlab::Metrics.reset_registry!
   end
 
+  config.before(:example, :eager_load) do
+    Rails.application.eager_load!
+  end
+
   # This makes sure the `ApplicationController#can?` method is stubbed with the
   # original implementation for all view specs.
   config.before(:each, type: :view) do
@@ -423,13 +458,16 @@ RSpec.configure do |config|
     end
   end
 
-  # Allows stdout to be redirected to reduce noise
-  config.before(:each, :silence_stdout) do
-    $stdout = StringIO.new
+  # Makes diffs show entire non-truncated values.
+  config.before(:each, unlimited_max_formatted_output_length: true) do |_example|
+    config.expect_with :rspec do |c|
+      c.max_formatted_output_length = nil
+    end
   end
 
-  config.after(:each, :silence_stdout) do
-    $stdout = STDOUT
+  # Ensures that any Javascript script that tries to make the external VersionCheck API call skips it and returns a response
+  config.before(:each, :js) do
+    allow_any_instance_of(VersionCheck).to receive(:response).and_return({ "severity" => "success" })
   end
 
   config.disable_monkey_patching!
@@ -449,3 +487,18 @@ Rugged::Settings['search_path_global'] = Rails.root.join('tmp/tests').to_s
 
 # Initialize FactoryDefault to use create_default helper
 TestProf::FactoryDefault.init
+
+# Exclude the Geo proxy API request from getting on_next_request Warden handlers,
+# necessary to prevent race conditions with feature tests not getting authenticated.
+::Warden.asset_paths << %r{^/api/v4/geo/proxy$}
+
+module TouchRackUploadedFile
+  def initialize_from_file_path(path)
+    super
+
+    # This is a no-op workaround for https://github.com/docker/for-linux/issues/1015
+    File.utime @tempfile.atime, @tempfile.mtime, @tempfile.path # rubocop:disable Gitlab/ModuleWithInstanceVariables
+  end
+end
+
+Rack::Test::UploadedFile.prepend(TouchRackUploadedFile)

@@ -23,10 +23,6 @@ RSpec.describe 'Environment' do
     let!(:action) { }
     let!(:cluster) { }
 
-    before do
-      visit_environment(environment)
-    end
-
     context 'with auto-stop' do
       let!(:environment) { create(:environment, :will_auto_stop, name: 'staging', project: project) }
 
@@ -52,12 +48,20 @@ RSpec.describe 'Environment' do
     end
 
     context 'without deployments' do
+      before do
+        visit_environment(environment)
+      end
+
       it 'does not show deployments' do
         expect(page).to have_content('You don\'t have any deployments right now.')
       end
     end
 
     context 'with deployments' do
+      before do
+        visit_environment(environment)
+      end
+
       context 'when there is no related deployable' do
         let(:deployment) do
           create(:deployment, :success, environment: environment, deployable: nil)
@@ -108,12 +112,59 @@ RSpec.describe 'Environment' do
         end
       end
 
+      context 'with many deployments' do
+        let(:pipeline) { create(:ci_pipeline, project: project) }
+        let(:build) { create(:ci_build, pipeline: pipeline) }
+
+        let!(:second) { create(:deployment, environment: environment, deployable: build, status: :success, finished_at: Time.current) }
+        let!(:first) { create(:deployment, environment: environment, deployable: build, status: :running) }
+        let!(:last) { create(:deployment, environment: environment, deployable: build, status: :success, finished_at: 2.days.ago) }
+        let!(:third) { create(:deployment, environment: environment, deployable: build, status: :canceled, finished_at: 1.day.ago) }
+
+        before do
+          visit_environment(environment)
+        end
+
+        it 'shows all of them in ordered way' do
+          ids = find_all('[data-testid="deployment-id"]').map { |e| e.text }
+          expected_ordered_ids = [first, second, third, last].map { |d| "##{d.iid}" }
+          expect(ids).to eq(expected_ordered_ids)
+        end
+      end
+
+      context 'with upcoming deployments' do
+        let(:pipeline) { create(:ci_pipeline, project: project) }
+        let(:build) { create(:ci_build, pipeline: pipeline) }
+
+        let!(:runnind_deployment_1) { create(:deployment, environment: environment, deployable: build, status: :running) }
+        let!(:runnind_deployment_2) { create(:deployment, environment: environment, deployable: build, status: :running) }
+        # Success deployments must have present `finished_at`. We'll backfill in the future.
+        # See https://gitlab.com/gitlab-org/gitlab/-/issues/350618 for more information.
+        let!(:success_without_finished_at) { create(:deployment, environment: environment, deployable: build, status: :success, finished_at: nil) }
+
+        before do
+          visit_environment(environment)
+        end
+
+        # This ordering is unexpected and to be fixed.
+        # See https://gitlab.com/gitlab-org/gitlab/-/issues/350618 for more information.
+        it 'shows upcoming deployments in unordered way' do
+          displayed_ids = find_all('[data-testid="deployment-id"]').map { |e| e.text }
+          internal_ids = [runnind_deployment_1, runnind_deployment_2, success_without_finished_at].map { |d| "##{d.iid}" }
+          expect(displayed_ids).to match_array(internal_ids)
+        end
+      end
+
       context 'with related deployable present' do
         let(:pipeline) { create(:ci_pipeline, project: project) }
         let(:build) { create(:ci_build, pipeline: pipeline) }
 
         let(:deployment) do
           create(:deployment, :success, environment: environment, deployable: build)
+        end
+
+        before do
+          visit_environment(environment)
         end
 
         it 'does show build name' do
@@ -312,24 +363,6 @@ RSpec.describe 'Environment' do
       visit_environment(environment)
 
       expect(page).not_to have_button('Stop')
-    end
-
-    context 'when the feature flag :delete_branch_confirmation_modals is disabled' do
-      before do
-        stub_feature_flags(delete_branch_confirmation_modals: false)
-      end
-
-      it 'user deletes the branch with running environment' do
-        visit project_branches_filtered_path(project, state: 'all', search: 'feature')
-
-        remove_branch_with_hooks(project, user, 'feature') do
-          within('.js-branch-feature') { click_link(title: 'Delete branch') }
-        end
-
-        visit_environment(environment)
-
-        expect(page).not_to have_button('Stop')
-      end
     end
 
     ##

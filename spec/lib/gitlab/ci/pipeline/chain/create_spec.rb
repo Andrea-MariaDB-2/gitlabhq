@@ -7,7 +7,7 @@ RSpec.describe Gitlab::Ci::Pipeline::Chain::Create do
   let_it_be(:user) { create(:user) }
 
   let(:pipeline) do
-    build(:ci_empty_pipeline, project: project, ref: 'master')
+    build(:ci_empty_pipeline, project: project, ref: 'master', user: user)
   end
 
   let(:command) do
@@ -54,6 +54,57 @@ RSpec.describe Gitlab::Ci::Pipeline::Chain::Create do
     it 'appends validation error' do
       expect(pipeline.errors.to_a)
         .to include /Failed to persist the pipeline/
+    end
+  end
+
+  context 'tags persistence' do
+    let(:stage) do
+      build(:ci_stage_entity, pipeline: pipeline, project: project)
+    end
+
+    let(:job) do
+      build(:ci_build, stage: stage, pipeline: pipeline, project: project)
+    end
+
+    let(:bridge) do
+      build(:ci_bridge, stage: stage, pipeline: pipeline, project: project)
+    end
+
+    before do
+      pipeline.stages = [stage]
+      stage.statuses = [job, bridge]
+    end
+
+    context 'without tags' do
+      it 'extracts an empty tag list' do
+        expect(CommitStatus)
+          .to receive(:bulk_insert_tags!)
+          .with([job])
+          .and_call_original
+
+        step.perform!
+
+        expect(job).to be_persisted
+        expect(job.tag_list).to eq([])
+      end
+    end
+
+    context 'with tags' do
+      before do
+        job.tag_list = %w[tag1 tag2]
+      end
+
+      it 'bulk inserts tags' do
+        expect(CommitStatus)
+          .to receive(:bulk_insert_tags!)
+          .with([job])
+          .and_call_original
+
+        step.perform!
+
+        expect(job).to be_persisted
+        expect(job.reload.tag_list).to match_array(%w[tag1 tag2])
+      end
     end
   end
 end

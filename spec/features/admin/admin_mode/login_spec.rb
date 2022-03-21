@@ -30,7 +30,7 @@ RSpec.describe 'Admin Mode Login' do
 
           enter_code(repeated_otp)
 
-          expect(current_path).to eq admin_session_path
+          expect(page).to have_current_path admin_session_path, ignore_query: true
           expect(page).to have_content('Invalid two-factor code')
         end
 
@@ -51,7 +51,7 @@ RSpec.describe 'Admin Mode Login' do
             travel_to(30.seconds.from_now) do
               enter_code(user.current_otp)
 
-              expect(current_path).to eq admin_root_path
+              expect(page).to have_current_path admin_root_path, ignore_query: true
               expect(page).to have_content('Admin mode enabled')
             end
           end
@@ -74,7 +74,7 @@ RSpec.describe 'Admin Mode Login' do
 
               enter_code(user.current_otp)
 
-              expect(current_path).to eq admin_root_path
+              expect(page).to have_current_path admin_root_path, ignore_query: true
               expect(page).to have_content('Admin mode enabled')
             end
           end
@@ -93,7 +93,7 @@ RSpec.describe 'Admin Mode Login' do
               it 'allows login' do
                 enter_code(codes.sample)
 
-                expect(current_path).to eq admin_root_path
+                expect(page).to have_current_path admin_root_path, ignore_query: true
                 expect(page).to have_content('Admin mode enabled')
               end
 
@@ -121,7 +121,7 @@ RSpec.describe 'Admin Mode Login' do
       end
 
       context 'when logging in via omniauth' do
-        let(:user) { create(:omniauth_user, :admin, :two_factor, extern_uid: 'my-uid', provider: 'saml')}
+        let(:user) { create(:omniauth_user, :admin, :two_factor, extern_uid: 'my-uid', provider: 'saml', password_automatically_set: false)}
         let(:mock_saml_response) do
           File.read('spec/fixtures/authentication/saml_response.xml')
         end
@@ -146,7 +146,7 @@ RSpec.describe 'Admin Mode Login' do
             enable_admin_mode_using_saml!
 
             expect(page).not_to have_content('Two-Factor Authentication')
-            expect(current_path).to eq admin_root_path
+            expect(page).to have_current_path admin_root_path, ignore_query: true
             expect(page).to have_content('Admin mode enabled')
           end
         end
@@ -166,7 +166,7 @@ RSpec.describe 'Admin Mode Login' do
             travel_to(30.seconds.from_now) do
               enter_code(user.current_otp)
 
-              expect(current_path).to eq admin_root_path
+              expect(page).to have_current_path admin_root_path, ignore_query: true
               expect(page).to have_content('Admin mode enabled')
             end
           end
@@ -218,7 +218,7 @@ RSpec.describe 'Admin Mode Login' do
             travel_to(30.seconds.from_now) do
               enter_code(user.current_otp)
 
-              expect(current_path).to eq admin_root_path
+              expect(page).to have_current_path admin_root_path, ignore_query: true
               expect(page).to have_content('Admin mode enabled')
             end
           end

@@ -44,10 +44,10 @@ module Gitlab
       DISTRIBUTED_HLL_FALLBACK = -2
       MAX_BUCKET_SIZE = 100
 
-      def add_metric(metric, time_frame: 'none')
+      def add_metric(metric, time_frame: 'none', options: {})
         metric_class = "Gitlab::Usage::Metrics::Instrumentations::#{metric}".constantize
 
-        metric_class.new(time_frame: time_frame).value
+        metric_class.new(time_frame: time_frame, options: options).value
       end
 
       def count(relation, column = nil, batch: true, batch_size: nil, start: nil, finish: nil)
@@ -56,7 +56,8 @@ module Gitlab
         else
           relation.count
         end
-      rescue ActiveRecord::StatementInvalid
+      rescue ActiveRecord::StatementInvalid => error
+        Gitlab::ErrorTracking.track_and_raise_for_dev_exception(error)
         FALLBACK
       end
 
@@ -66,7 +67,8 @@ module Gitlab
         else
           relation.distinct_count_by(column)
         end
-      rescue ActiveRecord::StatementInvalid
+      rescue ActiveRecord::StatementInvalid => error
+        Gitlab::ErrorTracking.track_and_raise_for_dev_exception(error)
         FALLBACK
       end
 
@@ -78,7 +80,8 @@ module Gitlab
         yield buckets if block_given?
 
         buckets.estimated_distinct_count
-      rescue ActiveRecord::StatementInvalid
+      rescue ActiveRecord::StatementInvalid => error
+        Gitlab::ErrorTracking.track_and_raise_for_dev_exception(error)
         FALLBACK
       # catch all rescue should be removed as a part of feature flag rollout issue
       # https://gitlab.com/gitlab-org/gitlab/-/issues/285485
@@ -89,7 +92,8 @@ module Gitlab
 
       def sum(relation, column, batch_size: nil, start: nil, finish: nil)
         Gitlab::Database::BatchCount.batch_sum(relation, column, batch_size: batch_size, start: start, finish: finish)
-      rescue ActiveRecord::StatementInvalid
+      rescue ActiveRecord::StatementInvalid => error
+        Gitlab::ErrorTracking.track_and_raise_for_dev_exception(error)
         FALLBACK
       end
 
@@ -155,7 +159,8 @@ module Gitlab
           query: query.to_sql,
           message: e.message
         )
-
+        # Raises error for dev env
+        Gitlab::ErrorTracking.track_and_raise_for_dev_exception(e)
         HISTOGRAM_FALLBACK
       end
       # rubocop: enable CodeReuse/ActiveRecord
@@ -164,7 +169,8 @@ module Gitlab
         return -1 if args.any?(&:negative?)
 
         args.sum
-      rescue StandardError
+      rescue StandardError => error
+        Gitlab::ErrorTracking.track_and_raise_for_dev_exception(error)
         FALLBACK
       end
 
@@ -174,7 +180,8 @@ module Gitlab
         else
           value
         end
-      rescue StandardError
+      rescue StandardError => error
+        Gitlab::ErrorTracking.track_and_raise_for_dev_exception(error)
         fallback
       end
 
@@ -290,13 +297,15 @@ module Gitlab
 
       def redis_usage_counter
         yield
-      rescue ::Redis::CommandError, Gitlab::UsageDataCounters::BaseCounter::UnknownEvent, Gitlab::UsageDataCounters::HLLRedisCounter::EventError
+      rescue ::Redis::CommandError, Gitlab::UsageDataCounters::BaseCounter::UnknownEvent, Gitlab::UsageDataCounters::HLLRedisCounter::EventError => error
+        Gitlab::ErrorTracking.track_and_raise_for_dev_exception(error)
         FALLBACK
       end
 
       def redis_usage_data_totals(counter)
         counter.totals
-      rescue ::Redis::CommandError, Gitlab::UsageDataCounters::BaseCounter::UnknownEvent
+      rescue ::Redis::CommandError, Gitlab::UsageDataCounters::BaseCounter::UnknownEvent => error
+        Gitlab::ErrorTracking.track_and_raise_for_dev_exception(error)
         counter.fallback_totals
       end
     end

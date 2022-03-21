@@ -1,3 +1,4 @@
+import { GlLink } from '@gitlab/ui';
 import { mount } from '@vue/test-utils';
 import { nextTick } from 'vue';
 import batchComments from '~/batch_comments/stores/modules/batch_comments';
@@ -44,6 +45,8 @@ describe('issue_note_form component', () => {
       noteBody: 'Magni suscipit eius consectetur enim et ex et commodi.',
       noteId: '545',
     };
+
+    gon.features = { markdownContinueLists: true };
   });
 
   afterEach(() => {
@@ -91,6 +94,7 @@ describe('issue_note_form component', () => {
 
       expect(conflictWarning.exists()).toBe(true);
       expect(conflictWarning.text().replace(/\s+/g, ' ').trim()).toBe(message);
+      expect(conflictWarning.find(GlLink).attributes('href')).toBe('#note_545');
     });
   });
 
@@ -149,6 +153,16 @@ describe('issue_note_form component', () => {
           const { handleFormUpdate } = wrapper.emitted();
 
           expect(handleFormUpdate.length).toBe(1);
+        });
+
+        it('should disable textarea when ctrl+enter is pressed', async () => {
+          textarea.trigger('keydown.enter', { ctrlKey: true });
+
+          expect(textarea.attributes('disabled')).toBeUndefined();
+
+          await nextTick();
+
+          expect(textarea.attributes('disabled')).toBe('disabled');
         });
       });
     });
@@ -245,6 +259,8 @@ describe('issue_note_form component', () => {
       props = { ...props, ...options };
       wrapper = createComponentWrapper();
 
+      // setData usage is discouraged. See https://gitlab.com/groups/gitlab-org/-/epics/7330 for details
+      // eslint-disable-next-line no-restricted-syntax
       wrapper.setData({ isSubmittingWithKeydown: true });
 
       const textarea = wrapper.find('textarea');

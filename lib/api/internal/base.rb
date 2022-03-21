@@ -43,6 +43,10 @@ module API
           # This is a separate method so that EE can alter its behaviour more
           # easily.
 
+          if Feature.enabled?(:rate_limit_gitlab_shell, default_enabled: :yaml)
+            check_rate_limit!(:gitlab_shell_operation, scope: [params[:action], params[:project], actor.key_or_user])
+          end
+
           # Stores some Git-specific env thread-safely
           env = parse_env
           Gitlab::Git::HookEnv.set(gl_repository, env) if container
@@ -88,12 +92,18 @@ module API
               payload[:git_config_options] << "receive.maxInputSize=#{receive_max_input_size.megabytes}"
             end
 
+            send_git_audit_streaming_event(protocol: params[:protocol], action: params[:action])
+
             response_with_status(**payload)
           when ::Gitlab::GitAccessResult::CustomAction
             response_with_status(code: 300, payload: check_result.payload, gl_console_messages: check_result.console_messages)
           else
             response_with_status(code: 500, success: false, message: UNKNOWN_CHECK_RESULT_ERROR)
           end
+        end
+
+        def send_git_audit_streaming_event(msg)
+          # Defined in EE
         end
 
         def access_check!(actor, params)
@@ -145,7 +155,7 @@ module API
           check_allowed(params)
         end
 
-        post "/lfs_authenticate", feature_category: :source_code_management do
+        post "/lfs_authenticate", feature_category: :source_code_management, urgency: :high do
           not_found! unless container&.lfs_enabled?
 
           status 200
@@ -164,7 +174,7 @@ module API
         #
         # Check whether an SSH key is known to GitLab
         #
-        get '/authorized_keys', feature_category: :source_code_management do
+        get '/authorized_keys', feature_category: :source_code_management, urgency: :high do
           fingerprint = Gitlab::InsecureKeyFingerprint.new(params.fetch(:key)).fingerprint_sha256
 
           key = Key.find_by_fingerprint_sha256(fingerprint)

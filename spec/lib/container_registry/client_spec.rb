@@ -5,29 +5,7 @@ require 'spec_helper'
 RSpec.describe ContainerRegistry::Client do
   using RSpec::Parameterized::TableSyntax
 
-  let(:token) { '12345' }
-  let(:options) { { token: token } }
-  let(:registry_api_url) { 'http://container-registry' }
-  let(:client) { described_class.new(registry_api_url, options) }
-  let(:push_blob_headers) do
-    {
-        'Accept' => 'application/vnd.docker.distribution.manifest.v2+json, application/vnd.oci.image.manifest.v1+json',
-        'Authorization' => "bearer #{token}",
-        'Content-Type' => 'application/octet-stream',
-        'User-Agent' => "GitLab/#{Gitlab::VERSION}"
-    }
-  end
-
-  let(:headers_with_accept_types) do
-    {
-      'Accept' => 'application/vnd.docker.distribution.manifest.v2+json, application/vnd.oci.image.manifest.v1+json',
-      'Authorization' => "bearer #{token}",
-      'User-Agent' => "GitLab/#{Gitlab::VERSION}"
-    }
-  end
-
-  let(:expected_faraday_headers) { { user_agent: "GitLab/#{Gitlab::VERSION}" } }
-  let(:expected_faraday_request_options) { Gitlab::HTTP::DEFAULT_TIMEOUT_OPTIONS }
+  include_context 'container registry client'
 
   shared_examples 'handling timeouts' do
     let(:retry_options) do
@@ -48,14 +26,14 @@ RSpec.describe ContainerRegistry::Client do
         retry_block: -> (_, _, _, _) { actual_retries += 1 }
       )
 
-      stub_const('ContainerRegistry::Client::RETRY_OPTIONS', retry_options_with_block)
+      stub_const('ContainerRegistry::BaseClient::RETRY_OPTIONS', retry_options_with_block)
 
       expect { subject }.to raise_error(Faraday::ConnectionFailed)
       expect(actual_retries).to eq(retry_options_with_block[:max])
     end
 
     it 'logs the error' do
-      stub_const('ContainerRegistry::Client::RETRY_OPTIONS', retry_options)
+      stub_const('ContainerRegistry::BaseClient::RETRY_OPTIONS', retry_options)
 
       expect(Gitlab::ErrorTracking)
         .to receive(:log_exception)
@@ -63,7 +41,7 @@ RSpec.describe ContainerRegistry::Client do
         .times
         .with(
           an_instance_of(Faraday::ConnectionFailed),
-          class: described_class.name,
+          class: ::ContainerRegistry::BaseClient.name,
           url: URI(url)
         )
 
@@ -111,6 +89,49 @@ RSpec.describe ContainerRegistry::Client do
     it_behaves_like 'handling timeouts'
   end
 
+  shared_examples 'handling repository info' do
+    context 'when the check is successful' do
+      context 'when using the GitLab container registry' do
+        before do
+          stub_registry_info(headers: {
+            'GitLab-Container-Registry-Version' => '2.9.1-gitlab',
+            'GitLab-Container-Registry-Features' => 'a,b,c'
+          })
+        end
+
+        it 'identifies the vendor as "gitlab"' do
+          expect(subject).to include(vendor: 'gitlab')
+        end
+
+        it 'identifies version and features' do
+          expect(subject).to include(version: '2.9.1-gitlab', features: %w[a b c])
+        end
+      end
+
+      context 'when using a third-party container registry' do
+        before do
+          stub_registry_info
+        end
+
+        it 'identifies the vendor as "other"' do
+          expect(subject).to include(vendor: 'other')
+        end
+
+        it 'does not identify version or features' do
+          expect(subject).to include(version: nil, features: [])
+        end
+      end
+    end
+
+    context 'when the check is not successful' do
+      it 'does not identify vendor, version or features' do
+        stub_registry_info(status: 500)
+
+        expect(subject).to eq({})
+      end
+    end
+  end
+
   describe '#repository_manifest' do
     subject { client.repository_manifest('group/test', 'mytag') }
 
@@ -147,24 +168,100 @@ RSpec.describe ContainerRegistry::Client do
       expect(subject).to eq('Blob')
     end
 
-    it 'follows 307 redirect for GET /v2/:name/blobs/:digest' do
-      stub_request(method, url)
-        .with(headers: blob_headers)
-        .to_return(status: 307, body: '', headers: { Location: 'http://redirected' })
-      # We should probably use hash_excluding here, but that requires an update to WebMock:
-      # https://github.com/bblimke/webmock/blob/master/lib/webmock/matchers/hash_excluding_matcher.rb
-      stub_request(:get, "http://redirected/")
-        .with(headers: redirect_header) do |request|
-          !request.headers.include?('Authorization')
+    context 'with a 307 redirect' do
+      let(:redirect_location) { 'http://redirected' }
+
+      before do
+        stub_request(method, url)
+          .with(headers: blob_headers)
+          .to_return(status: 307, body: '', headers: { Location: redirect_location })
+
+        # We should probably use hash_excluding here, but that requires an update to WebMock:
+        # https://github.com/bblimke/webmock/blob/master/lib/webmock/matchers/hash_excluding_matcher.rb
+        stub_request(:get, redirect_location)
+          .with(headers: redirect_header) do |request|
+            !request.headers.include?('Authorization')
+          end
+          .to_return(status: 200, body: "Successfully redirected")
+      end
+
+      shared_examples 'handling redirects' do
+        it 'follows the redirect' do
+          expect(Faraday::Utils).not_to receive(:escape).with('signature=')
+          expect_new_faraday
+          expect(subject).to eq('Successfully redirected')
         end
-        .to_return(status: 200, body: "Successfully redirected")
+      end
 
-      expect_new_faraday(times: 2)
+      it_behaves_like 'handling redirects'
 
-      expect(subject).to eq('Successfully redirected')
+      context 'with a redirect location with params ending with =' do
+        let(:redirect_location) { 'http://redirect?foo=bar&test=signature=' }
+
+        it_behaves_like 'handling redirects'
+
+        context 'with container_registry_follow_redirects_middleware disabled' do
+          before do
+            stub_feature_flags(container_registry_follow_redirects_middleware: false)
+          end
+
+          it 'follows the redirect' do
+            expect(Faraday::Utils).to receive(:escape).with('foo').and_call_original
+            expect(Faraday::Utils).to receive(:escape).with('bar').and_call_original
+            expect(Faraday::Utils).to receive(:escape).with('test').and_call_original
+            expect(Faraday::Utils).to receive(:escape).with('signature=').and_call_original
+
+            expect_new_faraday(times: 2)
+            expect(subject).to eq('Successfully redirected')
+          end
+        end
+      end
+
+      context 'with a redirect location with params ending with %3D' do
+        let(:redirect_location) { 'http://redirect?foo=bar&test=signature%3D' }
+
+        it_behaves_like 'handling redirects'
+
+        context 'with container_registry_follow_redirects_middleware disabled' do
+          before do
+            stub_feature_flags(container_registry_follow_redirects_middleware: false)
+          end
+
+          it 'follows the redirect' do
+            expect(Faraday::Utils).to receive(:escape).with('foo').and_call_original
+            expect(Faraday::Utils).to receive(:escape).with('bar').and_call_original
+            expect(Faraday::Utils).to receive(:escape).with('test').and_call_original
+            expect(Faraday::Utils).to receive(:escape).with('signature=').and_call_original
+
+            expect_new_faraday(times: 2)
+            expect(subject).to eq('Successfully redirected')
+          end
+        end
+      end
     end
 
     it_behaves_like 'handling timeouts'
+
+    # TODO Remove this context along with the
+    # container_registry_follow_redirects_middleware feature flag
+    # See https://gitlab.com/gitlab-org/gitlab/-/issues/353291
+    context 'faraday blob' do
+      subject { client.send(:faraday_blob) }
+
+      it 'has a follow redirects middleware' do
+        expect(subject.builder.handlers).to include(::FaradayMiddleware::FollowRedirects)
+      end
+
+      context 'with container_registry_follow_redirects_middleware is disabled' do
+        before do
+          stub_feature_flags(container_registry_follow_redirects_middleware: false)
+        end
+
+        it 'has  not a follow redirects middleware' do
+          expect(subject.builder.handlers).not_to include(::FaradayMiddleware::FollowRedirects)
+        end
+      end
+    end
   end
 
   describe '#upload_blob' do
@@ -236,7 +333,7 @@ RSpec.describe ContainerRegistry::Client do
     it 'uploads the manifest and returns the digest' do
       stub_request(:put, "http://container-registry/v2/path/manifests/tagA")
         .with(body: "{\n  \"foo\": \"bar\"\n}", headers: manifest_headers)
-        .to_return(status: 200, body: "", headers: { 'docker-content-digest' => 'sha256:123' })
+        .to_return(status: 200, body: "", headers: { DependencyProxy::Manifest::DIGEST_HEADER => 'sha256:123' })
 
       expect_new_faraday(timeout: false)
 
@@ -282,14 +379,14 @@ RSpec.describe ContainerRegistry::Client do
     subject { client.supports_tag_delete? }
 
     where(:registry_tags_support_enabled, :is_on_dot_com, :container_registry_features, :expect_registry_to_be_pinged, :expected_result) do
-      true  | true  | [ContainerRegistry::Client::REGISTRY_TAG_DELETE_FEATURE] | false | true
-      true  | false | [ContainerRegistry::Client::REGISTRY_TAG_DELETE_FEATURE] | true  | true
-      true  | true  | []                                                       | true  | true
-      true  | false | []                                                       | true  | true
-      false | true  | [ContainerRegistry::Client::REGISTRY_TAG_DELETE_FEATURE] | false | true
-      false | false | [ContainerRegistry::Client::REGISTRY_TAG_DELETE_FEATURE] | true  | false
-      false | true  | []                                                       | true  | false
-      false | false | []                                                       | true  | false
+      true  | true  | [described_class::REGISTRY_TAG_DELETE_FEATURE] | false | true
+      true  | false | [described_class::REGISTRY_TAG_DELETE_FEATURE] | true  | true
+      true  | true  | []                                             | true  | true
+      true  | false | []                                             | true  | true
+      false | true  | [described_class::REGISTRY_TAG_DELETE_FEATURE] | false | true
+      false | false | [described_class::REGISTRY_TAG_DELETE_FEATURE] | true  | false
+      false | true  | []                                             | true  | false
+      false | false | []                                             | true  | false
     end
 
     with_them do
@@ -316,84 +413,45 @@ RSpec.describe ContainerRegistry::Client do
   describe '#registry_info' do
     subject { client.registry_info }
 
-    context 'when the check is successful' do
-      context 'when using the GitLab container registry' do
-        before do
-          stub_registry_info(headers: {
-            'GitLab-Container-Registry-Version' => '2.9.1-gitlab',
-            'GitLab-Container-Registry-Features' => 'a,b,c'
-          })
-        end
-
-        it 'identifies the vendor as "gitlab"' do
-          expect(subject).to include(vendor: 'gitlab')
-        end
-
-        it 'identifies version and features' do
-          expect(subject).to include(version: '2.9.1-gitlab', features: %w[a b c])
-        end
-      end
-
-      context 'when using a third-party container registry' do
-        before do
-          stub_registry_info
-        end
-
-        it 'identifies the vendor as "other"' do
-          expect(subject).to include(vendor: 'other')
-        end
-
-        it 'does not identify version or features' do
-          expect(subject).to include(version: nil, features: [])
-        end
-      end
-    end
-
-    context 'when the check is not successful' do
-      it 'does not identify vendor, version or features' do
-        stub_registry_info(status: 500)
-
-        expect(subject).to eq({})
-      end
-    end
+    it_behaves_like 'handling repository info'
   end
 
   describe '.supports_tag_delete?' do
     subject { described_class.supports_tag_delete? }
 
     where(:registry_api_url, :registry_enabled, :registry_tags_support_enabled, :is_on_dot_com, :container_registry_features, :expect_registry_to_be_pinged, :expected_result) do
-      'http://sandbox.local' | true  | true  | true  | [ContainerRegistry::Client::REGISTRY_TAG_DELETE_FEATURE] | false | true
-      'http://sandbox.local' | true  | true  | false | [ContainerRegistry::Client::REGISTRY_TAG_DELETE_FEATURE] | true  | true
-      'http://sandbox.local' | true  | false | true  | [ContainerRegistry::Client::REGISTRY_TAG_DELETE_FEATURE] | false | true
-      'http://sandbox.local' | true  | false | false | [ContainerRegistry::Client::REGISTRY_TAG_DELETE_FEATURE] | true  | false
-      'http://sandbox.local' | false | true  | true  | [ContainerRegistry::Client::REGISTRY_TAG_DELETE_FEATURE] | false | false
-      'http://sandbox.local' | false | true  | false | [ContainerRegistry::Client::REGISTRY_TAG_DELETE_FEATURE] | false | false
-      'http://sandbox.local' | false | false | true  | [ContainerRegistry::Client::REGISTRY_TAG_DELETE_FEATURE] | false | false
-      'http://sandbox.local' | false | false | false | [ContainerRegistry::Client::REGISTRY_TAG_DELETE_FEATURE] | false | false
-      'http://sandbox.local' | true  | true  | true  | []                                                       | true  | true
-      'http://sandbox.local' | true  | true  | false | []                                                       | true  | true
-      'http://sandbox.local' | true  | false | true  | []                                                       | true  | false
-      'http://sandbox.local' | true  | false | false | []                                                       | true  | false
-      'http://sandbox.local' | false | true  | true  | []                                                       | false | false
-      'http://sandbox.local' | false | true  | false | []                                                       | false | false
-      'http://sandbox.local' | false | false | true  | []                                                       | false | false
-      'http://sandbox.local' | false | false | false | []                                                       | false | false
-      ''                     | true  | true  | true  | [ContainerRegistry::Client::REGISTRY_TAG_DELETE_FEATURE] | false | false
-      ''                     | true  | true  | false | [ContainerRegistry::Client::REGISTRY_TAG_DELETE_FEATURE] | false | false
-      ''                     | true  | false | true  | [ContainerRegistry::Client::REGISTRY_TAG_DELETE_FEATURE] | false | false
-      ''                     | true  | false | false | [ContainerRegistry::Client::REGISTRY_TAG_DELETE_FEATURE] | false | false
-      ''                     | false | true  | true  | [ContainerRegistry::Client::REGISTRY_TAG_DELETE_FEATURE] | false | false
-      ''                     | false | true  | false | [ContainerRegistry::Client::REGISTRY_TAG_DELETE_FEATURE] | false | false
-      ''                     | false | false | true  | [ContainerRegistry::Client::REGISTRY_TAG_DELETE_FEATURE] | false | false
-      ''                     | false | false | false | [ContainerRegistry::Client::REGISTRY_TAG_DELETE_FEATURE] | false | false
-      ''                     | true  | true  | true  | []                                                       | false | false
-      ''                     | true  | true  | false | []                                                       | false | false
-      ''                     | true  | false | true  | []                                                       | false | false
-      ''                     | true  | false | false | []                                                       | false | false
-      ''                     | false | true  | true  | []                                                       | false | false
-      ''                     | false | true  | false | []                                                       | false | false
-      ''                     | false | false | true  | []                                                       | false | false
-      ''                     | false | false | false | []                                                       | false | false
+      'http://sandbox.local' | true  | true  | true  | [described_class::REGISTRY_TAG_DELETE_FEATURE] | false | true
+      'http://sandbox.local' | true  | true  | false | [described_class::REGISTRY_TAG_DELETE_FEATURE] | true  | true
+      'http://sandbox.local' | true  | false | true  | [described_class::REGISTRY_TAG_DELETE_FEATURE] | false | true
+      'http://sandbox.local' | true  | false | false | [described_class::REGISTRY_TAG_DELETE_FEATURE] | true  | false
+      'http://sandbox.local' | false | true  | true  | [described_class::REGISTRY_TAG_DELETE_FEATURE] | false | false
+      'http://sandbox.local' | false | true  | false | [described_class::REGISTRY_TAG_DELETE_FEATURE] | false | false
+      'http://sandbox.local' | false | false | true  | [described_class::REGISTRY_TAG_DELETE_FEATURE] | false | false
+      'http://sandbox.local' | false | false | false | [described_class::REGISTRY_TAG_DELETE_FEATURE] | false | false
+      'http://sandbox.local' | true  | true  | true  | []                                             | true  | true
+      'http://sandbox.local' | true  | true  | false | []                                             | true  | true
+      'http://sandbox.local' | true  | false | true  | []                                             | true  | false
+      'http://sandbox.local' | true  | false | false | []                                             | true  | false
+      'http://sandbox.local' | false | true  | true  | []                                             | false | false
+      'http://sandbox.local' | false | true  | false | []                                             | false | false
+      'http://sandbox.local' | false | false | true  | []                                             | false | false
+      'http://sandbox.local' | false | false | false | []                                             | false | false
+      ''                     | true  | true  | true  | [described_class::REGISTRY_TAG_DELETE_FEATURE] | false | false
+      ''                     | true  | true  | false | [described_class::REGISTRY_TAG_DELETE_FEATURE] | false | false
+      ''                     | true  | false | true  | [described_class::REGISTRY_TAG_DELETE_FEATURE] | false | false
+      ''                     | true  | false | false | [described_class::REGISTRY_TAG_DELETE_FEATURE] | false | false
+      ''                     | false | true  | true  | [described_class::REGISTRY_TAG_DELETE_FEATURE] | false | false
+      ''                     | false | true  | false | [described_class::REGISTRY_TAG_DELETE_FEATURE] | false | false
+      ''                     | false | false | true  | [described_class::REGISTRY_TAG_DELETE_FEATURE] | false | false
+      ''                     | false | false | false | [described_class::REGISTRY_TAG_DELETE_FEATURE] | false | false
+      ''                     | true  | true  | true  | []                                             | false | false
+      ''                     | true  | true  | false | []                                             | false | false
+      ''                     | true  | false | true  | []                                             | false | false
+      ''                     | true  | false | false | []                                             | false | false
+      ''                     | false | true  | true  | []                                             | false | false
+      ''                     | false | true  | false | []                                             | false | false
+      ''                     | false | false | true  | []                                             | false | false
+      ''                     | false | false | false | []                                             | false | false
     end
 
     with_them do
@@ -416,6 +474,16 @@ RSpec.describe ContainerRegistry::Client do
         expect(subject).to be expected_result
       end
     end
+  end
+
+  describe '.registry_info' do
+    subject { described_class.registry_info }
+
+    before do
+      stub_container_registry_config(enabled: true, api_url: registry_api_url, key: 'spec/fixtures/x509_certificate_pk.key')
+    end
+
+    it_behaves_like 'handling repository info'
   end
 
   def stub_upload(path, content, digest, status = 200)

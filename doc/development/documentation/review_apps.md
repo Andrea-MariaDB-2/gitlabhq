@@ -7,7 +7,7 @@ description: Learn how documentation review apps work.
 
 # Documentation review apps
 
-If your merge request contains documentation changes, you can use a review app to preview
+If you're a GitLab team member and your merge request contains documentation changes, you can use a review app to preview
 how they would look if they were deployed to the [GitLab Docs site](https://docs.gitlab.com).
 
 Review apps are enabled for the following projects:
@@ -26,7 +26,7 @@ to render and preview the documentation locally.
 If a merge request has documentation changes, use the `review-docs-deploy` manual job
 to deploy the documentation review app for your merge request.
 
-![Manual trigger a documentation review app](img/manual_build_docs.png)
+![Manual trigger a documentation review app](img/manual_build_docs_v14_6.png)
 
 The `review-docs-deploy*` job triggers a cross project pipeline and builds the
 docs site with your changes. When the pipeline finishes, the review app URL
@@ -41,7 +41,7 @@ the GitLab team to run the job.
 If you want to know the in-depth details, here's what's really happening:
 
 1. You manually run the `review-docs-deploy` job in a merge request.
-1. The job runs the [`scripts/trigger-build`](https://gitlab.com/gitlab-org/gitlab/-/blob/master/scripts/trigger-build)
+1. The job runs the [`scripts/trigger-build.rb`](https://gitlab.com/gitlab-org/gitlab/-/blob/master/scripts/trigger-build.rb)
    script with the `docs deploy` flag, which triggers the "Triggered from `gitlab-org/gitlab` 'review-docs-deploy' job"
    pipeline trigger in the `gitlab-org/gitlab-docs` project for the `$DOCS_BRANCH` (defaults to `main`).
 1. The preview URL is shown both at the job output and in the merge request
@@ -61,7 +61,7 @@ The following GitLab features are used among others:
 - [Review Apps](../../ci/review_apps/index.md)
 - [Artifacts](../../ci/yaml/index.md#artifacts)
 - [Specific runner](../../ci/runners/runners_scope.md#prevent-a-specific-runner-from-being-enabled-for-other-projects)
-- [Pipelines for merge requests](../../ci/pipelines/merge_request_pipelines.md)
+- [Merge request pipelines](../../ci/pipelines/merge_request_pipelines.md)
 
 ## Troubleshooting review apps
 

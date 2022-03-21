@@ -10,12 +10,25 @@ RSpec.describe RunPipelineScheduleWorker do
 
     let(:worker) { described_class.new }
 
-    context 'when a project not found' do
+    context 'when a schedule not found' do
       it 'does not call the Service' do
         expect(Ci::CreatePipelineService).not_to receive(:new)
         expect(worker).not_to receive(:run_pipeline_schedule)
 
-        worker.perform(100000, user.id)
+        worker.perform(non_existing_record_id, user.id)
+      end
+    end
+
+    context 'when a schedule project is missing' do
+      before do
+        project.delete
+      end
+
+      it 'does not call the Service' do
+        expect(Ci::CreatePipelineService).not_to receive(:new)
+        expect(worker).not_to receive(:run_pipeline_schedule)
+
+        worker.perform(pipeline_schedule.id, user.id)
       end
     end
 
@@ -24,7 +37,7 @@ RSpec.describe RunPipelineScheduleWorker do
         expect(Ci::CreatePipelineService).not_to receive(:new)
         expect(worker).not_to receive(:run_pipeline_schedule)
 
-        worker.perform(pipeline_schedule.id, 10000)
+        worker.perform(pipeline_schedule.id, non_existing_record_id)
       end
     end
 
@@ -63,6 +76,21 @@ RSpec.describe RunPipelineScheduleWorker do
         expect(Gitlab::AppLogger)
           .to receive(:error)
           .with(a_string_matching('ActiveRecord::StatementInvalid'))
+          .and_call_original
+
+        worker.perform(pipeline_schedule.id, user.id)
+      end
+    end
+
+    context 'when pipeline cannot be created' do
+      before do
+        allow(Ci::CreatePipelineService).to receive(:new) { raise Ci::CreatePipelineService::CreateError }
+      end
+
+      it 'logging a pipeline error' do
+        expect(worker)
+          .to receive(:log_extra_metadata_on_done)
+          .with(:pipeline_creation_error, an_instance_of(Ci::CreatePipelineService::CreateError))
           .and_call_original
 
         worker.perform(pipeline_schedule.id, user.id)

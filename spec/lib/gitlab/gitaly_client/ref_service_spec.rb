@@ -92,6 +92,36 @@ RSpec.describe Gitlab::GitalyClient::RefService do
     end
   end
 
+  describe '#find_branch' do
+    it 'sends a find_branch message' do
+      expect_any_instance_of(Gitaly::RefService::Stub)
+        .to receive(:find_branch)
+        .with(gitaly_request_with_path(storage_name, relative_path), kind_of(Hash))
+        .and_return(double(branch: Gitaly::Branch.new(name: 'name', target_commit: build(:gitaly_commit))))
+
+      client.find_branch('name')
+    end
+  end
+
+  describe '#find_tag' do
+    it 'sends a find_tag message' do
+      expect_any_instance_of(Gitaly::RefService::Stub)
+        .to receive(:find_tag)
+        .with(gitaly_request_with_path(storage_name, relative_path), kind_of(Hash))
+        .and_return(double(tag: Gitaly::Tag.new))
+
+      client.find_tag('name')
+    end
+
+    context 'when tag is empty' do
+      it 'does not send a fing_tag message' do
+        expect_any_instance_of(Gitaly::RefService::Stub).not_to receive(:find_tag)
+
+        expect(client.find_tag('')).to be_nil
+      end
+    end
+  end
+
   describe '#default_branch_name' do
     it 'sends a find_default_branch_name message' do
       expect_any_instance_of(Gitaly::RefService::Stub)
@@ -100,16 +130,6 @@ RSpec.describe Gitlab::GitalyClient::RefService do
         .and_return(double(name: 'foo'))
 
       client.default_branch_name
-    end
-  end
-
-  describe '#list_new_blobs' do
-    it 'raises DeadlineExceeded when timeout is too small' do
-      newrev = '54fcc214b94e78d7a41a9a8fe6d87a5e59500e51'
-
-      expect do
-        client.list_new_blobs(newrev, dynamic_timeout: 0.001)
-      end.to raise_error(GRPC::DeadlineExceeded)
     end
   end
 
@@ -153,6 +173,38 @@ RSpec.describe Gitlab::GitalyClient::RefService do
         .and_return([])
 
       client.tags
+    end
+
+    context 'with sorting option' do
+      it 'sends a correct find_all_tags message' do
+        expected_sort_by = Gitaly::FindAllTagsRequest::SortBy.new(
+          key: :REFNAME,
+          direction: :ASCENDING
+        )
+
+        expect_any_instance_of(Gitaly::RefService::Stub)
+          .to receive(:find_all_tags)
+          .with(gitaly_request_with_params(sort_by: expected_sort_by), kind_of(Hash))
+          .and_return([])
+
+        client.tags(sort_by: 'name_asc')
+      end
+    end
+
+    context 'with pagination option' do
+      it 'sends a correct find_all_tags message' do
+        expected_pagination = Gitaly::PaginationParameter.new(
+          limit: 5,
+          page_token: 'refs/tags/v1.0.0'
+        )
+
+        expect_any_instance_of(Gitaly::RefService::Stub)
+          .to receive(:find_all_tags)
+          .with(gitaly_request_with_params(pagination_params: expected_pagination), kind_of(Hash))
+          .and_return([])
+
+        client.tags(pagination_params: { limit: 5, page_token: 'refs/tags/v1.0.0' })
+      end
     end
   end
 
@@ -216,6 +268,26 @@ RSpec.describe Gitlab::GitalyClient::RefService do
     end
   end
 
+  describe '#list_refs' do
+    it 'sends a list_refs message' do
+      expect_any_instance_of(Gitaly::RefService::Stub)
+        .to receive(:list_refs)
+        .with(gitaly_request_with_params(patterns: ['refs/heads/']), kind_of(Hash))
+        .and_call_original
+
+      client.list_refs
+    end
+
+    it 'accepts a patterns argument' do
+      expect_any_instance_of(Gitaly::RefService::Stub)
+        .to receive(:list_refs)
+        .with(gitaly_request_with_params(patterns: ['refs/tags/']), kind_of(Hash))
+        .and_call_original
+
+      client.list_refs([Gitlab::Git::TAG_REF_PREFIX])
+    end
+  end
+
   describe '#pack_refs' do
     it 'sends a pack_refs message' do
       expect_any_instance_of(Gitaly::RefService::Stub)
@@ -224,6 +296,21 @@ RSpec.describe Gitlab::GitalyClient::RefService do
         .and_return(double(:pack_refs_response))
 
       client.pack_refs
+    end
+  end
+
+  describe '#find_refs_by_oid' do
+    let(:oid) { project.repository.commit.id }
+
+    it 'sends a find_refs_by_oid message' do
+      expect_any_instance_of(Gitaly::RefService::Stub)
+        .to receive(:find_refs_by_oid)
+        .with(gitaly_request_with_params(sort_field: 'refname', oid: oid, limit: 1), kind_of(Hash))
+        .and_call_original
+
+      refs = client.find_refs_by_oid(oid: oid, limit: 1)
+
+      expect(refs.to_a).to eq([Gitlab::Git::BRANCH_REF_PREFIX + project.repository.root_ref])
     end
   end
 end

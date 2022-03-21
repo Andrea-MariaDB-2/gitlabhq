@@ -38,14 +38,6 @@ namespace :admin do
   resources :abuse_reports, only: [:index, :destroy]
   resources :gitaly_servers, only: [:index]
 
-  namespace :serverless do
-    resources :domains, only: [:index, :create, :update, :destroy] do
-      member do
-        post '/verify', to: 'domains#verify'
-      end
-    end
-  end
-
   resources :spam_logs, only: [:index, :destroy] do
     member do
       post :mark_as_ham
@@ -66,6 +58,13 @@ namespace :admin do
       patch '/', action: :update
       put '/', action: :update
       delete '/', action: :destroy
+    end
+  end
+
+  resources :topics, only: [:index, :new, :create, :edit, :update] do
+    resource :avatar, controller: 'topics/avatars', only: [:destroy]
+    collection do
+      post :preview_markdown
     end
   end
 
@@ -146,6 +145,8 @@ namespace :admin do
     delete :delete_self_monitoring_project
     get :status_delete_self_monitoring_project
 
+    get :service_usage_data
+
     resource :appearances, only: [:show, :create, :update], path: 'appearance', module: 'application_settings' do
       member do
         get :preview_sign_in
@@ -160,7 +161,7 @@ namespace :admin do
 
   resources :labels
 
-  resources :runners, only: [:index, :show, :update, :destroy] do
+  resources :runners, only: [:index, :show, :edit, :update, :destroy] do
     member do
       post :resume
       post :pause
@@ -187,4 +188,6 @@ namespace :admin do
   get '/dashboard/stats', to: 'dashboard#stats'
 
   root to: 'dashboard#index'
+
+  get :version_check, to: 'version_check#version_check'
 end

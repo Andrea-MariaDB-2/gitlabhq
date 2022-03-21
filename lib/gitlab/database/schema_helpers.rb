@@ -25,6 +25,7 @@ module Gitlab
           CREATE TRIGGER #{name}
           #{fires} ON #{table_name}
           FOR EACH ROW
+          #{yield if block_given?}
           EXECUTE FUNCTION #{function_name}()
         SQL
       end
@@ -72,6 +73,7 @@ module Gitlab
 
       def with_lock_retries(&block)
         Gitlab::Database::WithLockRetries.new(
+          connection: connection,
           klass: self.class,
           logger: Gitlab::BackgroundMigration::Logger
         ).run(&block)

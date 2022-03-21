@@ -2,11 +2,11 @@
 
 # Projects::TransferService class
 #
-# Used for transfer project to another namespace
+# Used to transfer a project to another namespace
 #
 # Ex.
-#   # Move projects to namespace with ID 17 by user
-#   Projects::TransferService.new(project, user, namespace_id: 17).execute
+#   # Move project to namespace by user
+#   Projects::TransferService.new(project, user).execute(namespace)
 #
 module Projects
   class TransferService < BaseService
@@ -81,7 +81,7 @@ module Projects
 
         # Apply changes to the project
         update_namespace_and_visibility(@new_namespace)
-        update_shared_runners_settings
+        project.reconcile_shared_runners_setting!
         project.save!
 
         # Notifications
@@ -103,8 +103,12 @@ module Projects
 
         update_repository_configuration(@new_path)
 
+        remove_issue_contacts
+
         execute_system_hooks
       end
+
+      update_pending_builds
 
       post_update_hooks(project)
     rescue Exception # rubocop:disable Lint/RescueException
@@ -154,19 +158,15 @@ module Projects
       user_ids = @old_namespace.user_ids_for_project_authorizations |
         @new_namespace.user_ids_for_project_authorizations
 
-      if Feature.enabled?(:specialized_worker_for_project_transfer_auth_recalculation)
-        AuthorizedProjectUpdate::ProjectRecalculateWorker.perform_async(project.id)
+      AuthorizedProjectUpdate::ProjectRecalculateWorker.perform_async(project.id)
 
-        # Until we compare the inconsistency rates of the new specialized worker and
-        # the old approach, we still run AuthorizedProjectsWorker
-        # but with some delay and lower urgency as a safety net.
-        UserProjectAccessChangedService.new(user_ids).execute(
-          blocking: false,
-          priority: UserProjectAccessChangedService::LOW_PRIORITY
-        )
-      else
-        UserProjectAccessChangedService.new(user_ids).execute
-      end
+      # Until we compare the inconsistency rates of the new specialized worker and
+      # the old approach, we still run AuthorizedProjectsWorker
+      # but with some delay and lower urgency as a safety net.
+      UserProjectAccessChangedService.new(user_ids).execute(
+        blocking: false,
+        priority: UserProjectAccessChangedService::LOW_PRIORITY
+      )
     end
 
     def rollback_side_effects
@@ -189,7 +189,7 @@ module Projects
     end
 
     def execute_system_hooks
-      SystemHooksService.new.execute_hooks_for(project, :transfer)
+      system_hook_service.execute_hooks_for(project, :transfer)
     end
 
     def move_project_folders(project)
@@ -241,17 +241,26 @@ module Projects
       "#{new_path}#{::Gitlab::GlRepository::DESIGN.path_suffix}"
     end
 
-    def update_shared_runners_settings
-      # If a project is being transferred to another group it means it can already
-      # have shared runners enabled but we need to check whether the new group allows that.
-      if project.group && project.group.shared_runners_setting == 'disabled_and_unoverridable'
-        project.shared_runners_enabled = false
-      end
-    end
-
     def update_integrations
       project.integrations.with_default_settings.delete_all
       Integration.create_from_active_default_integrations(project, :project_id)
+    end
+
+    def update_pending_builds
+      ::Ci::PendingBuilds::UpdateProjectWorker.perform_async(project.id, pending_builds_params)
+    end
+
+    def pending_builds_params
+      {
+        namespace_id: new_namespace.id,
+        namespace_traversal_ids: new_namespace.traversal_ids
+      }
+    end
+
+    def remove_issue_contacts
+      return unless @old_group&.root_ancestor != @new_namespace&.root_ancestor
+
+      CustomerRelations::IssueContact.delete_for_project(project.id)
     end
   end
 end

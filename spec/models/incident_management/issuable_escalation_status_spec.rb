@@ -3,7 +3,7 @@
 require 'spec_helper'
 
 RSpec.describe IncidentManagement::IssuableEscalationStatus do
-  let_it_be(:issue) { create(:issue) }
+  let_it_be(:issue) { create(:incident) }
 
   subject(:escalation_status) { build(:incident_management_issuable_escalation_status, issue: issue) }
 
@@ -11,6 +11,7 @@ RSpec.describe IncidentManagement::IssuableEscalationStatus do
 
   describe 'associations' do
     it { is_expected.to belong_to(:issue) }
+    it { is_expected.to have_one(:project).through(:issue) }
   end
 
   describe 'validatons' do

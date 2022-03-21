@@ -63,11 +63,11 @@ rules:
           group: internal
         - pattern: emojis/**
           group: internal
-        - pattern: '{ee_,}empty_states/**'
+        - pattern: '{ee_,jh_,}empty_states/**'
           group: internal
-        - pattern: '{ee_,}icons/**'
+        - pattern: '{ee_,jh_,}icons/**'
           group: internal
-        - pattern: '{ee_,}images/**'
+        - pattern: '{ee_,jh_,}images/**'
           group: internal
         - pattern: vendor/**
           group: internal
@@ -75,31 +75,45 @@ rules:
           group: internal
         - pattern: '{ee_,}spec/**'
           group: internal
-        - pattern: '{ee_,}jest/**'
+        - pattern: '{ee_,jh_,}jest/**'
           group: internal
-        - pattern: ee_else_ce/**
+        - pattern: '{ee_,jh_,any_}else_ce/**'
           group: internal
         - pattern: ee/**
           group: internal
-        - pattern: ee_component/**
+        - pattern: '{ee_,jh_,}component/**'
+          group: internal
+        - pattern: jh_else_ee/**
+          group: internal
+        - pattern: jh/**
           group: internal
         - pattern: '{test_,}helpers/**'
           group: internal
         - pattern: test_fixtures/**
           group: internal
       alphabetize:
-        order: asc
+        order: ignore
 overrides:
   - files:
-      - '**/spec/**/*'
+    - '{,ee/,jh/}spec/frontend*/**/*'
     rules:
       '@gitlab/require-i18n-strings': off
       '@gitlab/no-runtime-template-compiler': off
+      'no-restricted-syntax':
+        - error
+        - selector: CallExpression[callee.object.name=/(wrapper|vm)/][callee.property.name="setData"]
+          message: 'Avoid using "setData" on VTU wrapper'
+        - selector: MemberExpression[object.type!='ThisExpression'][property.type='Identifier'][property.name='$nextTick']
+          message: 'Using $nextTick from a component instance is discouraged. Import nextTick directly from the Vue package.'
+        - selector: Identifier[name='setImmediate']
+          message: 'Prefer explicit waitForPromises (or equivalent), or jest.runAllTimers (or equivalent) to vague setImmediate calls.'
   - files:
       - 'config/**/*'
       - 'scripts/**/*'
       - '*.config.js'
       - '*.config.*.js'
+      - 'jest_resolver.js'
+      - storybook/config/*.js
     rules:
       '@gitlab/require-i18n-strings': off
       import/no-extraneous-dependencies: off
@@ -111,3 +125,25 @@ overrides:
       - '*.stories.js'
     rules:
       filenames/match-regex: off
+  - files:
+      - '*.graphql'
+    plugins:
+      - '@graphql-eslint'
+    parserOptions:
+      parser: '@graphql-eslint/eslint-plugin'
+      operations:
+        - '{,ee/,jh/}app/**/*.graphql'
+        # You can run `bundle exec rake gitlab:graphql:schema:dump` and then uncomment this line
+        # schema: './tmp/tests/graphql/gitlab_schema.graphql'
+    rules:
+      filenames/match-regex: off
+      spaced-comment: off
+      # TODO: We need a way to include this rule + support ee_else_ce fragments
+      #'@graphql-eslint/unique-fragment-name': error
+      # TODO: Uncomment these rules when then `schema` is available
+      #'@graphql-eslint/fragments-on-composite-type': error
+      #'@graphql-eslint/known-argument-names': error
+      #'@graphql-eslint/known-type-names': error
+      '@graphql-eslint/no-anonymous-operations': error
+      '@graphql-eslint/unique-operation-name': error
+      '@graphql-eslint/require-id-when-available': error

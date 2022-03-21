@@ -1,19 +1,15 @@
 import { GlIcon, GlLink, GlLoadingIcon, GlSprintf } from '@gitlab/ui';
-import { shallowMount, createLocalVue } from '@vue/test-utils';
+import { shallowMount } from '@vue/test-utils';
+import Vue from 'vue';
 import VueApollo from 'vue-apollo';
 import createMockApollo from 'helpers/mock_apollo_helper';
 import waitForPromises from 'helpers/wait_for_promises';
 import PipelineStatus, { i18n } from '~/pipeline_editor/components/header/pipeline_status.vue';
-import getPipelineQuery from '~/pipeline_editor/graphql/queries/client/pipeline.graphql';
-import CiIcon from '~/vue_shared/components/ci_icon.vue';
+import getPipelineQuery from '~/pipeline_editor/graphql/queries/pipeline.query.graphql';
+import PipelineEditorMiniGraph from '~/pipeline_editor/components/header/pipeline_editor_mini_graph.vue';
 import { mockCommitSha, mockProjectPipeline, mockProjectFullPath } from '../../mock_data';
 
-const localVue = createLocalVue();
-localVue.use(VueApollo);
-
-const mockProvide = {
-  projectFullPath: mockProjectFullPath,
-};
+Vue.use(VueApollo);
 
 describe('Pipeline Status', () => {
   let wrapper;
@@ -25,24 +21,26 @@ describe('Pipeline Status', () => {
     mockApollo = createMockApollo(handlers);
 
     wrapper = shallowMount(PipelineStatus, {
-      localVue,
       apolloProvider: mockApollo,
       propsData: {
         commitSha: mockCommitSha,
       },
-      provide: mockProvide,
+      provide: {
+        projectFullPath: mockProjectFullPath,
+      },
       stubs: { GlLink, GlSprintf },
     });
   };
 
   const findIcon = () => wrapper.findComponent(GlIcon);
-  const findCiIcon = () => wrapper.findComponent(CiIcon);
   const findLoadingIcon = () => wrapper.findComponent(GlLoadingIcon);
+  const findPipelineEditorMiniGraph = () => wrapper.findComponent(PipelineEditorMiniGraph);
   const findPipelineId = () => wrapper.find('[data-testid="pipeline-id"]');
   const findPipelineCommit = () => wrapper.find('[data-testid="pipeline-commit"]');
   const findPipelineErrorMsg = () => wrapper.find('[data-testid="pipeline-error-msg"]');
   const findPipelineLoadingMsg = () => wrapper.find('[data-testid="pipeline-loading-msg"]');
   const findPipelineViewBtn = () => wrapper.find('[data-testid="pipeline-view-btn"]');
+  const findStatusIcon = () => wrapper.find('[data-testid="pipeline-status-icon"]');
 
   beforeEach(() => {
     mockPipelineQuery = jest.fn();
@@ -50,9 +48,7 @@ describe('Pipeline Status', () => {
 
   afterEach(() => {
     mockPipelineQuery.mockReset();
-
     wrapper.destroy();
-    wrapper = null;
   });
 
   describe('loading icon', () => {
@@ -75,7 +71,7 @@ describe('Pipeline Status', () => {
     describe('when data is set', () => {
       beforeEach(async () => {
         mockPipelineQuery.mockResolvedValue({
-          data: { project: mockProjectPipeline },
+          data: { project: mockProjectPipeline() },
         });
 
         createComponentWithApollo();
@@ -91,19 +87,24 @@ describe('Pipeline Status', () => {
       });
 
       it('does not render error', () => {
-        expect(findIcon().exists()).toBe(false);
+        expect(findPipelineErrorMsg().exists()).toBe(false);
       });
 
       it('renders pipeline data', () => {
         const {
           id,
+          commit: { title },
           detailedStatus: { detailsPath },
-        } = mockProjectPipeline.pipeline;
+        } = mockProjectPipeline().pipeline;
 
-        expect(findCiIcon().exists()).toBe(true);
+        expect(findStatusIcon().exists()).toBe(true);
         expect(findPipelineId().text()).toBe(`#${id.match(/\d+/g)[0]}`);
-        expect(findPipelineCommit().text()).toBe(mockCommitSha);
+        expect(findPipelineCommit().text()).toBe(`${mockCommitSha}: ${title}`);
         expect(findPipelineViewBtn().attributes('href')).toBe(detailsPath);
+      });
+
+      it('renders the pipeline mini graph', () => {
+        expect(findPipelineEditorMiniGraph().exists()).toBe(true);
       });
     });
 
@@ -121,7 +122,7 @@ describe('Pipeline Status', () => {
       });
 
       it('does not render pipeline data', () => {
-        expect(findCiIcon().exists()).toBe(false);
+        expect(findStatusIcon().exists()).toBe(false);
         expect(findPipelineId().exists()).toBe(false);
         expect(findPipelineCommit().exists()).toBe(false);
         expect(findPipelineViewBtn().exists()).toBe(false);

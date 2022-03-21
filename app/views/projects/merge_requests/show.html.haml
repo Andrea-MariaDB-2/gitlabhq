@@ -6,7 +6,6 @@
 - page_description @merge_request.description_html
 - page_card_attributes @merge_request.card_attributes
 - suggest_changes_help_path = help_page_path('user/project/merge_requests/reviews/suggestions.md')
-- number_of_pipelines = @pipelines.size
 - mr_action = j(params[:tab].presence || 'show')
 - add_page_specific_style 'page_bundles/merge_requests'
 - add_page_specific_style 'page_bundles/pipelines'
@@ -26,21 +25,21 @@
           = render "projects/merge_requests/tabs/tab", class: "notes-tab", qa_selector: "notes_tab" do
             = tab_link_for @merge_request, :show, force_link: @commit.present? do
               = _("Overview")
-              %span.badge.badge-pill.gl-badge.badge-muted.sm= @merge_request.related_notes.user.count
+              = gl_badge_tag @merge_request.related_notes.user.count, { size: :sm }
           - if @merge_request.source_project
             = render "projects/merge_requests/tabs/tab", name: "commits", class: "commits-tab", qa_selector: "commits_tab" do
               = tab_link_for @merge_request, :commits do
                 = _("Commits")
-                %span.badge.badge-pill.gl-badge.badge-muted.sm= @commits_count
-          - if number_of_pipelines.nonzero?
+                = gl_badge_tag @commits_count, { size: :sm }
+          - if @number_of_pipelines.nonzero?
             = render "projects/merge_requests/tabs/tab", name: "pipelines", class: "pipelines-tab" do
               = tab_link_for @merge_request, :pipelines do
                 = _("Pipelines")
-                %span.badge.badge-pill.gl-badge.badge-muted.sm.js-pipelines-mr-count= number_of_pipelines
+                = gl_badge_tag @number_of_pipelines, { size: :sm }, { class: 'js-pipelines-mr-count' }
           = render "projects/merge_requests/tabs/tab", name: "diffs", class: "diffs-tab", id: "diffs-tab", qa_selector: "diffs_tab" do
             = tab_link_for @merge_request, :diffs do
               = _("Changes")
-              %span.badge.badge-pill.gl-badge.badge-muted.sm= @diffs_count
+              = gl_badge_tag @diffs_count, { size: :sm }
         .d-flex.flex-wrap.align-items-center.justify-content-lg-end
           #js-vue-discussion-counter
 
@@ -50,7 +49,6 @@
       = render "projects/merge_requests/tabs/pane", id: "notes", class: "notes voting_notes" do
         .row
           %section.col-md-12
-            %script.js-notes-data{ type: "application/json" }= initial_notes_data(true).to_json.html_safe
             .issuable-discussion.js-vue-notes-event
               - if @merge_request.description.present?
                 .detail-page-description
@@ -76,16 +74,14 @@
       = render "projects/merge_requests/tabs/pane", name: "commits", id: "commits", class: "commits" do
         -# This tab is always loaded via AJAX
       = render "projects/merge_requests/tabs/pane", name: "pipelines", id: "pipelines", class: "pipelines" do
-        - if number_of_pipelines.nonzero?
+        - if @number_of_pipelines.nonzero?
           = render 'projects/commit/pipelines_list', disable_initialization: true, endpoint: pipelines_project_merge_request_path(@project, @merge_request)
-      - params = request.query_parameters
-      - if Feature.enabled?(:default_merge_ref_for_diffs, @project, default_enabled: :yaml)
-        - params = params.merge(diff_head: true)
+      - params = request.query_parameters.merge(diff_head: true)
       = render "projects/merge_requests/tabs/pane", name: "diffs", id: "js-diffs-app", class: "diffs", data: diffs_tab_pane_data(@project, @merge_request, params)
 
     .mr-loading-status
       .loading.hide
-        .gl-spinner.gl-spinner-md
+        = gl_loading_icon(size: 'lg')
 
 = render 'shared/issuable/sidebar', issuable_sidebar: @issuable_sidebar, assignees: @merge_request.assignees, reviewers: @merge_request.reviewers, source_branch: @merge_request.source_branch
 
@@ -96,6 +92,8 @@
 
 #js-review-bar
 
+- if Feature.enabled?(:mr_attention_requests, default_enabled: :yaml)
+  #js-need-attention-sidebar-onboarding
+
 = render 'projects/invite_members_modal', project: @project
-- if Gitlab::CurrentSettings.gitpod_enabled && !current_user&.gitpod_enabled
-  = render 'shared/gitpod/enable_gitpod_modal'
+= render 'shared/web_ide_path'

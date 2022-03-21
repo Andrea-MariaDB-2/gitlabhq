@@ -9,6 +9,13 @@ class Projects::MergeRequests::DraftsController < Projects::MergeRequests::Appli
   before_action :authorize_admin_draft!, only: [:update, :destroy]
   before_action :authorize_admin_draft!, if: -> { action_name == 'publish' && params[:id].present? }
 
+  urgency :low, [
+    :create,
+    :update,
+    :destroy,
+    :publish
+  ]
+
   def index
     drafts = prepare_notes_for_rendering(draft_notes)
     render json: DraftNoteSerializer.new(current_user: current_user).represent(drafts)
@@ -85,7 +92,8 @@ class Projects::MergeRequests::DraftsController < Projects::MergeRequests::Appli
       :commit_id,
       :note,
       :position,
-      :resolve_discussion
+      :resolve_discussion,
+      :line_code
     ).tap do |h|
       # Old FE version will still be sending `draft_note[commit_id]` as 'undefined'.
       # That can result to having a note linked to a commit with 'undefined' ID
@@ -110,7 +118,7 @@ class Projects::MergeRequests::DraftsController < Projects::MergeRequests::Appli
   def render_draft_note(note)
     params = { target_id: merge_request.id, target_type: 'MergeRequest', text: note.note }
     result = PreviewMarkdownService.new(@project, current_user, params).execute
-    markdown_params = { markdown_engine: result[:markdown_engine], issuable_state_filter_enabled: true }
+    markdown_params = { markdown_engine: result[:markdown_engine], issuable_reference_expansion_enabled: true }
 
     note.rendered_note = view_context.markdown(result[:text], markdown_params)
     note.users_referenced = result[:users]

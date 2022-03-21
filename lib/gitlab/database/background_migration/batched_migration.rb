@@ -3,7 +3,7 @@
 module Gitlab
   module Database
     module BackgroundMigration
-      class BatchedMigration < ActiveRecord::Base # rubocop:disable Rails/ApplicationRecord
+      class BatchedMigration < SharedModel
         JOB_CLASS_MODULE = 'Gitlab::BackgroundMigration'
         BATCH_CLASS_MODULE = "#{JOB_CLASS_MODULE}::BatchingStrategies"
 
@@ -17,6 +17,8 @@ module Gitlab
         validates :job_arguments, uniqueness: {
           scope: [:job_class_name, :table_name, :column_name]
         }
+
+        validate :validate_batched_jobs_status, if: -> { status_changed? && finished? }
 
         scope :queue_order, -> { order(id: :asc) }
         scope :queued, -> { where(status: [:active, :paused]) }
@@ -45,7 +47,7 @@ module Gitlab
 
         def self.successful_rows_counts(migrations)
           BatchedJob
-            .succeeded
+            .with_status(:succeeded)
             .where(batched_background_migration_id: migrations)
             .group(:batched_background_migration_id)
             .sum(:batch_size)
@@ -69,7 +71,7 @@ module Gitlab
         end
 
         def retry_failed_jobs!
-          batched_jobs.failed.each_batch(of: 100) do |batch|
+          batched_jobs.with_status(:failed).each_batch(of: 100) do |batch|
             self.class.transaction do
               batch.lock.each(&:split_and_retry!)
               self.active!
@@ -92,15 +94,15 @@ module Gitlab
         end
 
         def job_class_name=(class_name)
-          write_attribute(:job_class_name, class_name.demodulize)
+          write_attribute(:job_class_name, class_name.delete_prefix("::"))
         end
 
         def batch_class_name=(class_name)
-          write_attribute(:batch_class_name, class_name.demodulize)
+          write_attribute(:batch_class_name, class_name.delete_prefix("::"))
         end
 
         def migrated_tuple_count
-          batched_jobs.succeeded.sum(:batch_size)
+          batched_jobs.with_status(:succeeded).sum(:batch_size)
         end
 
         def prometheus_labels
@@ -111,7 +113,7 @@ module Gitlab
         end
 
         def smoothed_time_efficiency(number_of_jobs: 10, alpha: 0.2)
-          jobs = batched_jobs.successful_in_execution_order.reverse_order.limit(number_of_jobs)
+          jobs = batched_jobs.successful_in_execution_order.reverse_order.limit(number_of_jobs).with_preloads
 
           return if jobs.size < number_of_jobs
 
@@ -132,6 +134,12 @@ module Gitlab
 
         def optimize!
           BatchOptimizer.new(self).optimize!
+        end
+
+        private
+
+        def validate_batched_jobs_status
+          errors.add(:batched_jobs, 'jobs need to be succeeded') if batched_jobs.except_succeeded.exists?
         end
       end
     end

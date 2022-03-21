@@ -6,39 +6,12 @@ RSpec.describe 'Groups > Members > Manage groups', :js do
   include Select2Helper
   include Spec::Support::Helpers::Features::MembersHelpers
   include Spec::Support::Helpers::Features::InviteMembersModalHelper
+  include Spec::Support::Helpers::ModalHelpers
 
   let_it_be(:user) { create(:user) }
 
   before do
     sign_in(user)
-  end
-
-  context 'with invite_members_group_modal disabled' do
-    before do
-      stub_feature_flags(invite_members_group_modal: false)
-    end
-
-    context 'when group link does not exist' do
-      let_it_be(:group) { create(:group) }
-      let_it_be(:group_to_add) { create(:group) }
-
-      before do
-        group.add_owner(user)
-        group_to_add.add_owner(user)
-        visit group_group_members_path(group)
-      end
-
-      it 'can share group with group' do
-        add_group(group_to_add.id, 'Reporter')
-
-        click_groups_tab
-
-        page.within(first_row) do
-          expect(page).to have_content(group_to_add.name)
-          expect(page).to have_content('Reporter')
-        end
-      end
-    end
   end
 
   context 'when group link does not exist' do
@@ -63,6 +36,7 @@ RSpec.describe 'Groups > Members > Manage groups', :js do
   context 'when group link exists' do
     let_it_be(:shared_with_group) { create(:group) }
     let_it_be(:shared_group) { create(:group) }
+    let_it_be(:expiration_date) { 5.days.from_now.to_date }
 
     let(:additional_link_attrs) { {} }
 
@@ -91,7 +65,7 @@ RSpec.describe 'Groups > Members > Manage groups', :js do
         click_button 'Remove group'
       end
 
-      page.within('[role="dialog"]') do
+      within_modal do
         click_button('Remove group')
       end
 
@@ -115,29 +89,29 @@ RSpec.describe 'Groups > Members > Manage groups', :js do
       click_groups_tab
 
       page.within first_row do
-        fill_in 'Expiration date', with: 5.days.from_now.to_date
+        fill_in 'Expiration date', with: expiration_date
         find_field('Expiration date').native.send_keys :enter
 
         wait_for_requests
 
-        expect(page).to have_content(/in \d days/)
+        expect(page).to have_field('Expiration date', with: expiration_date)
       end
     end
 
     context 'when expiry date is set' do
-      let(:additional_link_attrs) { { expires_at: 5.days.from_now.to_date } }
+      let(:additional_link_attrs) { { expires_at: expiration_date } }
 
       it 'clears expiry date' do
         click_groups_tab
 
         page.within first_row do
-          expect(page).to have_content(/in \d days/)
+          expect(page).to have_field('Expiration date', with: expiration_date)
 
           find('[data-testid="clear-button"]').click
 
           wait_for_requests
 
-          expect(page).to have_content('No expiration set')
+          expect(page).to have_field('Expiration date', with: '')
         end
       end
     end
@@ -154,33 +128,35 @@ RSpec.describe 'Groups > Members > Manage groups', :js do
       group_outside_hierarchy.add_owner(user)
     end
 
-    context 'when sharing with groups outside the hierarchy is enabled' do
-      context 'when the invite members group modal is disabled' do
-        before do
-          stub_feature_flags(invite_members_group_modal: false)
-        end
+    context 'when the invite members group modal is enabled' do
+      it 'does not show self or ancestors', :aggregate_failures do
+        group_sibbling = create(:group, parent: group)
+        group_sibbling.add_owner(user)
 
-        it 'shows groups within and outside the hierarchy in search results' do
-          visit group_group_members_path(group)
+        visit group_group_members_path(group_within_hierarchy)
 
-          click_on 'Invite group'
-          click_on 'Search for a group'
+        click_on 'Invite a group'
+        click_on 'Select a group'
+        wait_for_requests
 
-          expect(page).to have_text group_within_hierarchy.name
-          expect(page).to have_text group_outside_hierarchy.name
+        page.within('[data-testid="group-select-dropdown"]') do
+          expect(page).to have_selector("[entity-id='#{group_outside_hierarchy.id}']")
+          expect(page).to have_selector("[entity-id='#{group_sibbling.id}']")
+          expect(page).not_to have_selector("[entity-id='#{group.id}']")
+          expect(page).not_to have_selector("[entity-id='#{group_within_hierarchy.id}']")
         end
       end
+    end
 
-      context 'when the invite members group modal is enabled' do
-        it 'shows groups within and outside the hierarchy in search results' do
-          visit group_group_members_path(group)
+    context 'when sharing with groups outside the hierarchy is enabled' do
+      it 'shows groups within and outside the hierarchy in search results' do
+        visit group_group_members_path(group)
 
-          click_on 'Invite a group'
-          click_on 'Select a group'
+        click_on 'Invite a group'
+        click_on 'Select a group'
 
-          expect(page).to have_text group_within_hierarchy.name
-          expect(page).to have_text group_outside_hierarchy.name
-        end
+        expect(page).to have_text group_within_hierarchy.name
+        expect(page).to have_text group_outside_hierarchy.name
       end
     end
 
@@ -189,42 +165,15 @@ RSpec.describe 'Groups > Members > Manage groups', :js do
         group.namespace_settings.update!(prevent_sharing_groups_outside_hierarchy: true)
       end
 
-      context 'when the invite members group modal is disabled' do
-        before do
-          stub_feature_flags(invite_members_group_modal: false)
-        end
+      it 'shows only groups within the hierarchy in search results' do
+        visit group_group_members_path(group)
 
-        it 'shows only groups within the hierarchy in search results' do
-          visit group_group_members_path(group)
+        click_on 'Invite a group'
+        click_on 'Select a group'
 
-          click_on 'Invite group'
-          click_on 'Search for a group'
-
-          expect(page).to have_text group_within_hierarchy.name
-          expect(page).not_to have_text group_outside_hierarchy.name
-        end
+        expect(page).to have_text group_within_hierarchy.name
+        expect(page).not_to have_text group_outside_hierarchy.name
       end
-
-      context 'when the invite members group modal is enabled' do
-        it 'shows only groups within the hierarchy in search results' do
-          visit group_group_members_path(group)
-
-          click_on 'Invite a group'
-          click_on 'Select a group'
-
-          expect(page).to have_text group_within_hierarchy.name
-          expect(page).not_to have_text group_outside_hierarchy.name
-        end
-      end
-    end
-  end
-
-  def add_group(id, role)
-    page.click_link 'Invite group'
-    page.within ".invite-group-form" do
-      select2(id, from: "#shared_with_group_id")
-      select(role, from: "shared_group_access")
-      click_button "Invite"
     end
   end
 

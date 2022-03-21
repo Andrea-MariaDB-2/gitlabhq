@@ -1,5 +1,5 @@
 import Vue from 'vue';
-import { IssuableType } from '~/issue_show/constants';
+import { IssuableType } from '~/issues/constants';
 import { parseBoolean } from '~/lib/utils/common_utils';
 import timeTracker from './components/time_tracking/time_tracker.vue';
 
@@ -21,6 +21,7 @@ export default class SidebarMilestone {
     // eslint-disable-next-line no-new
     new Vue({
       el,
+      name: 'SidebarMilestoneRoot',
       components: {
         timeTracker,
       },

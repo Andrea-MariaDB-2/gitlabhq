@@ -12,8 +12,11 @@ full list of reference architectures, see
 
 > - **Supported users (approximate):** 10,000
 > - **High Availability:** Yes ([Praefect](#configure-praefect-postgresql) needs a third-party PostgreSQL solution for HA)
-> - **Test requests per second (RPS) rates:** API: 200 RPS, Web: 20 RPS, Git (Pull): 20 RPS, Git (Push): 4 RPS
-> - **[Latest 10k weekly performance testing results](https://gitlab.com/gitlab-org/quality/performance/-/wikis/Benchmarks/Latest/10k)**
+> - **Estimated Costs:** [See cost table](index.md#cost-to-run)
+> - **Cloud Native Hybrid Alternative:** [Yes](#cloud-native-hybrid-reference-architecture-with-helm-charts-alternative)
+> - **Performance tested daily with the [GitLab Performance Tool](https://gitlab.com/gitlab-org/quality/performance)**:
+>   - **Test requests per second (RPS) rates:** API: 200 RPS, Web: 20 RPS, Git (Pull): 20 RPS, Git (Push): 4 RPS
+>   - **[Latest Results](https://gitlab.com/gitlab-org/quality/performance/-/wikis/Benchmarks/Latest/10k)**
 
 | Service                                             | Nodes       | Configuration           | GCP              | AWS          | Azure     |
 |-----------------------------------------------------|-------------|-------------------------|------------------|--------------|-----------|
@@ -22,25 +25,24 @@ full list of reference architectures, see
 | PostgreSQL<sup>1</sup>                              | 3           | 8 vCPU, 30 GB memory    | `n1-standard-8`  | `m5.2xlarge` | `D8s v3`  |
 | PgBouncer<sup>1</sup>                               | 3           | 2 vCPU, 1.8 GB memory   | `n1-highcpu-2`   | `c5.large`   | `F2s v2`  |
 | Internal load balancing node<sup>3</sup>            | 1           | 2 vCPU, 1.8 GB memory   | `n1-highcpu-2`   | `c5.large`   | `F2s v2`  |
-| Redis - Cache<sup>2</sup>                           | 3           | 4 vCPU, 15 GB memory    | `n1-standard-4`  | `m5.xlarge`  | `D4s v3`  |
-| Redis - Queues / Shared State<sup>2</sup>           | 3           | 4 vCPU, 15 GB memory    | `n1-standard-4`  | `m5.xlarge`  | `D4s v3`  |
-| Redis Sentinel - Cache<sup>2</sup>                  | 3           | 1 vCPU, 3.75 GB memory  | `n1-standard-1`  | `c5.large`   | `A1 v2`   |
-| Redis Sentinel - Queues / Shared State<sup>2</sup>  | 3           | 1 vCPU, 3.75 GB memory  | `n1-standard-1`  | `c5.large`   | `A1 v2`   |
-| Gitaly                                              | 3           | 16 vCPU, 60 GB memory   | `n1-standard-16` | `m5.4xlarge` | `D16s v3` |
-| Praefect                                            | 3           | 2 vCPU, 1.8 GB memory   | `n1-highcpu-2`   | `c5.large`   | `F2s v2`  |
+| Redis/Sentinel - Cache<sup>2</sup>                  | 3           | 4 vCPU, 15 GB memory    | `n1-standard-4`  | `m5.xlarge`  | `D4s v3`  |
+| Redis/Sentinel - Persistent<sup>2</sup>             | 3           | 4 vCPU, 15 GB memory    | `n1-standard-4`  | `m5.xlarge`  | `D4s v3`  |
+| Gitaly<sup>5</sup>                                  | 3           | 16 vCPU, 60 GB memory   | `n1-standard-16` | `m5.4xlarge` | `D16s v3` |
+| Praefect<sup>5</sup>                                | 3           | 2 vCPU, 1.8 GB memory   | `n1-highcpu-2`   | `c5.large`   | `F2s v2`  |
 | Praefect PostgreSQL<sup>1</sup>                     | 1+          | 2 vCPU, 1.8 GB memory   | `n1-highcpu-2`   | `c5.large`   | `F2s v2`  |
 | Sidekiq                                             | 4           | 4 vCPU, 15 GB memory    | `n1-standard-4`  | `m5.xlarge`  | `D4s v3`  |
 | GitLab Rails                                        | 3           | 32 vCPU, 28.8 GB memory | `n1-highcpu-32`  | `c5.9xlarge` | `F32s v2` |
 | Monitoring node                                     | 1           | 4 vCPU, 3.6 GB memory   | `n1-highcpu-4`   | `c5.xlarge`  | `F4s v2`  |
 | Object storage<sup>4</sup>                          | n/a         | n/a                     | n/a              | n/a          | n/a       |
-| NFS server (optional, not recommended)              | 1           | 4 vCPU, 3.6 GB memory   | `n1-highcpu-4`   | `c5.xlarge`  | `F4s v2`  |
+| NFS server (non-Gitaly)                             | 1           | 4 vCPU, 3.6 GB memory   | `n1-highcpu-4`   | `c5.xlarge`  | `F4s v2`  |
 
 <!-- Disable ordered list rule https://github.com/DavidAnson/markdownlint/blob/main/doc/Rules.md#md029---ordered-list-item-prefix -->
 <!-- markdownlint-disable MD029 -->
-1. Can be optionally run on reputable third-party external PaaS PostgreSQL solutions. Google Cloud SQL and AWS RDS are known to work, however Azure Database for PostgreSQL is [not recommended](https://gitlab.com/gitlab-org/quality/reference-architectures/-/issues/61) due to performance issues. Consul is primarily used for PostgreSQL high availability so can be ignored when using a PostgreSQL PaaS setup. However it is also used optionally by Prometheus for Omnibus auto host discovery.
+1. Can be optionally run on reputable third-party external PaaS PostgreSQL solutions. [Google Cloud SQL](https://cloud.google.com/sql/docs/postgres/high-availability#normal) and [Amazon RDS](https://aws.amazon.com/rds/) are known to work, however Azure Database for PostgreSQL is **not recommended** due to [performance issues](https://gitlab.com/gitlab-org/quality/reference-architectures/-/issues/61). Consul is primarily used for PostgreSQL high availability so can be ignored when using a PostgreSQL PaaS setup. However it is also used optionally by Prometheus for Omnibus auto host discovery.
 2. Can be optionally run on reputable third-party external PaaS Redis solutions. Google Memorystore and AWS Elasticache are known to work.
 3. Can be optionally run on reputable third-party load balancing services (LB PaaS). AWS ELB is known to work.
 4. Should be run on reputable third-party object storage (storage PaaS) for cloud implementations. Google Cloud Storage and AWS S3 are known to work.
+5. Gitaly Cluster provides the benefits of fault tolerance, but comes with additional complexity of setup and management. Please [review the existing technical limitations and considerations prior to deploying Gitaly Cluster](../gitaly/index.md#guidance-regarding-gitaly-cluster). If Gitaly Sharded is desired, the same specs listed above for `Gitaly` should be used.
 <!-- markdownlint-enable MD029 -->
 
 NOTE:
@@ -48,6 +50,8 @@ For all PaaS solutions that involve configuring instances, it is strongly recomm
 
 ```plantuml
 @startuml 10k
+skinparam linetype ortho
+
 card "**External Load Balancer**" as elb #6a9be7
 card "**Internal Load Balancer**" as ilb #9370DB
 
@@ -72,8 +76,8 @@ card "Gitaly Cluster" as gitaly_cluster {
 
 card "Database" as database {
   collections "**PGBouncer** x3" as pgbouncer #4EA7FF
-  card "**PostgreSQL** (Primary)" as postgres_primary #4EA7FF
-  collections "**PostgreSQL** (Secondary) x2" as postgres_secondary #4EA7FF
+  card "**PostgreSQL** //Primary//" as postgres_primary #4EA7FF
+  collections "**PostgreSQL** //Secondary// x2" as postgres_secondary #4EA7FF
 
   pgbouncer -[#4EA7FF]-> postgres_primary
   postgres_primary .[#4EA7FF]> postgres_secondary
@@ -82,36 +86,38 @@ card "Database" as database {
 card "redis" as redis {
   collections "**Redis Persistent** x3" as redis_persistent #FF6347
   collections "**Redis Cache** x3" as redis_cache #FF6347
-  collections "**Redis Persistent Sentinel** x3" as redis_persistent_sentinel #FF6347
-  collections "**Redis Cache Sentinel** x3"as redis_cache_sentinel #FF6347
-
-  redis_persistent <.[#FF6347]- redis_persistent_sentinel
-  redis_cache <.[#FF6347]- redis_cache_sentinel
+  
+  redis_cache -[hidden]-> redis_persistent
 }
 
 cloud "**Object Storage**" as object_storage #white
 
 elb -[#6a9be7]-> gitlab
-elb -[#6a9be7]--> monitor
+elb -[#6a9be7,norank]--> monitor
 
-gitlab -[#32CD32]--> ilb
-gitlab -[#32CD32]-> object_storage
-gitlab -[#32CD32]---> redis
+gitlab -[#32CD32,norank]--> ilb
+gitlab -[#32CD32]r-> object_storage
+gitlab -[#32CD32]----> redis
+gitlab .[#32CD32]----> database
 gitlab -[hidden]-> monitor
 gitlab -[hidden]-> consul
 
-sidekiq -[#ff8dd1]--> ilb
-sidekiq -[#ff8dd1]-> object_storage
-sidekiq -[#ff8dd1]---> redis
+sidekiq -[#ff8dd1,norank]--> ilb
+sidekiq -[#ff8dd1]r-> object_storage
+sidekiq -[#ff8dd1]----> redis
+sidekiq .[#ff8dd1]----> database
 sidekiq -[hidden]-> monitor
 sidekiq -[hidden]-> consul
 
-ilb -[#9370DB]-> gitaly_cluster
-ilb -[#9370DB]-> database
+ilb -[#9370DB]--> gitaly_cluster
+ilb -[#9370DB]--> database
+ilb -[hidden]--> redis
+ilb -[hidden]u-> consul
+ilb -[hidden]u-> monitor
 
 consul .[#e76a9b]u-> gitlab
 consul .[#e76a9b]u-> sidekiq
-consul .[#e76a9b]> monitor
+consul .[#e76a9b]r-> monitor
 consul .[#e76a9b]-> database
 consul .[#e76a9b]-> gitaly_cluster
 consul .[#e76a9b,norank]--> redis
@@ -128,22 +134,34 @@ monitor .[#7FFFD4,norank]u--> elb
 @enduml
 ```
 
-The Google Cloud Platform (GCP) architectures were built and tested using the
+## Requirements
+
+Before starting, you should take note of the following requirements / guidance for this reference architecture.
+
+### Supported CPUs
+
+This reference architecture was built and tested on Google Cloud Platform (GCP) using the
 [Intel Xeon E5 v3 (Haswell)](https://cloud.google.com/compute/docs/cpu-platforms)
 CPU platform. On different hardware you may find that adjustments, either lower
 or higher, are required for your CPU or node counts. For more information, see
 our [Sysbench](https://github.com/akopytov/sysbench)-based
 [CPU benchmarks](https://gitlab.com/gitlab-org/quality/performance/-/wikis/Reference-Architectures/GCP-CPU-Benchmarks).
 
-Due to better performance and availability, for data objects (such as LFS,
-uploads, or artifacts), using an [object storage service](#configure-the-object-storage)
-is recommended instead of using NFS. Using an object storage service also
-doesn't require you to provision and maintain a node.
+### Supported infrastructure
 
-It's also worth noting that at this time [Praefect requires its own database server](../gitaly/praefect.md#postgresql) and
+As a general guidance, GitLab should run on most infrastructure such as reputable Cloud Providers (AWS, GCP, Azure) and their services, or self managed (ESXi) that meet both the specs detailed above, as well as any requirements in this section. However, this does not constitute a guarantee for every potential permutation.
+
+Be aware of the following specific call outs:
+
+- [Azure Database for PostgreSQL](https://docs.microsoft.com/en-us/azure/postgresql/#:~:text=Azure%20Database%20for%20PostgreSQL%20is,high%20availability%2C%20and%20dynamic%20scalability.) is [not recommended](https://gitlab.com/gitlab-org/quality/reference-architectures/-/issues/61) due to known performance issues or missing features.
+- [Azure Blob Storage](https://docs.microsoft.com/en-us/azure/storage/blobs/) is recommended to be configured with [Premium accounts](https://docs.microsoft.com/en-us/azure/storage/blobs/storage-blob-block-blob-premium) to ensure consistent performance.
+
+### Praefect PostgreSQL
+
+It's worth noting that at this time [Praefect requires its own database server](../gitaly/praefect.md#postgresql) and
 that to achieve full High Availability a third-party PostgreSQL database solution will be required.
 We hope to offer a built in solutions for these restrictions in the future but in the meantime a non HA PostgreSQL server
-can be set up via Omnibus GitLab, which the above specs reflect. Refer to the following issues for more information: [`omnibus-gitlab#5919`](https://gitlab.com/gitlab-org/omnibus-gitlab/-/issues/5919) & [`gitaly#3398`](https://gitlab.com/gitlab-org/gitaly/-/issues/3398)
+can be set up via Omnibus GitLab, which the above specs reflect. Refer to the following issues for more information: [`omnibus-gitlab#5919`](https://gitlab.com/gitlab-org/omnibus-gitlab/-/issues/5919) & [`gitaly#3398`](https://gitlab.com/gitlab-org/gitaly/-/issues/3398).
 
 ## Setup components
 
@@ -169,10 +187,8 @@ To set up GitLab and its components to accommodate up to 10,000 users:
    used for shared data objects.
 1. [Configure Advanced Search](#configure-advanced-search) (optional) for faster,
    more advanced code search across your entire GitLab instance.
-1. [Configure NFS](#configure-nfs-optional) (optional, and not recommended)
-   to have shared disk storage service as an alternative to Gitaly or object
-   storage. You can skip this step if you're not using GitLab Pages (which
-   requires NFS).
+1. [Configure NFS](#configure-nfs)
+   to have shared disk storage service for certain GitLab operations (non Gitaly or Object Storage).
 
 The servers start on the same 10.6.0.0/24 private network range, and can
 connect to each other freely on these addresses.
@@ -193,15 +209,9 @@ The following list includes descriptions of each server and its assigned IP:
 - `10.6.0.51`: Redis - Cache Primary
 - `10.6.0.52`: Redis - Cache Replica 1
 - `10.6.0.53`: Redis - Cache Replica 2
-- `10.6.0.71`: Sentinel - Cache 1
-- `10.6.0.72`: Sentinel - Cache 2
-- `10.6.0.73`: Sentinel - Cache 3
-- `10.6.0.61`: Redis - Queues Primary
-- `10.6.0.62`: Redis - Queues Replica 1
-- `10.6.0.63`: Redis - Queues Replica 2
-- `10.6.0.81`: Sentinel - Queues 1
-- `10.6.0.82`: Sentinel - Queues 2
-- `10.6.0.83`: Sentinel - Queues 3
+- `10.6.0.61`: Redis - Persistent Primary
+- `10.6.0.62`: Redis - Persistent Replica 1
+- `10.6.0.63`: Redis - Persistent Replica 2
 - `10.6.0.91`: Gitaly 1
 - `10.6.0.92`: Gitaly 2
 - `10.6.0.93`: Gitaly 3
@@ -264,11 +274,11 @@ for details.
 
 ### Load balancer terminates SSL with backend SSL
 
-Configure your load balancer(s) to use the 'HTTP(S)' protocol rather than 'TCP'.
-The load balancer(s) will be responsible for managing SSL certificates that
+Configure your load balancers to use the 'HTTP(S)' protocol rather than 'TCP'.
+The load balancers will be responsible for managing SSL certificates that
 end users will see.
 
-Traffic will also be secure between the load balancer(s) and NGINX in this
+Traffic will also be secure between the load balancers and NGINX in this
 scenario. There is no need to add configuration for proxied SSL since the
 connection will be secure all the way. However, configuration will need to be
 added to GitLab to configure SSL certificates. See
@@ -293,7 +303,7 @@ The basic ports to be used are shown in the table below.
 | 443     | 443          | TCP or HTTPS (*1*) (*2*) |
 | 22      | 22           | TCP                      |
 
-- (*1*): [Web terminal](../../ci/environments/index.md#web-terminals) support requires
+- (*1*): [Web terminal](../../ci/environments/index.md#web-terminals-deprecated) support requires
   your load balancer to correctly handle WebSocket connections. When using
   HTTP or HTTPS proxying, this means your load balancer must be configured
   to pass through the `Connection` and `Upgrade` hop-by-hop headers. See the
@@ -484,14 +494,15 @@ run: node-exporter: (pid 30093) 76833s; run: log: (pid 29663) 76855s
 
 ## Configure PostgreSQL
 
-In this section, you'll be guided through configuring an external PostgreSQL database
-to be used with GitLab.
+In this section, you'll be guided through configuring a highly available PostgreSQL
+cluster to be used with GitLab.
 
 ### Provide your own PostgreSQL instance
 
 If you're hosting GitLab on a cloud provider, you can optionally use a
-managed service for PostgreSQL. For example, AWS offers a managed Relational
-Database Service (RDS) that runs PostgreSQL.
+managed service for PostgreSQL.
+
+A reputable provider or solution should be used for this. [Google Cloud SQL](https://cloud.google.com/sql/docs/postgres/high-availability#normal) and [Amazon RDS](https://aws.amazon.com/rds/) are known to work, however Azure Database for PostgreSQL is **not recommended** due to [performance issues](https://gitlab.com/gitlab-org/quality/reference-architectures/-/issues/61).
 
 If you use a cloud-managed service, or provide your own PostgreSQL:
 
@@ -501,11 +512,24 @@ If you use a cloud-managed service, or provide your own PostgreSQL:
    needs privileges to create the `gitlabhq_production` database.
 1. Configure the GitLab application servers with the appropriate details.
    This step is covered in [Configuring the GitLab Rails application](#configure-gitlab-rails).
+1. For improved performance, configuring [Database Load Balancing](../postgresql/database_load_balancing.md)
+   with multiple read replicas is recommended.
 
 See [Configure GitLab using an external PostgreSQL service](../postgresql/external.md) for
 further configuration steps.
 
 ### Standalone PostgreSQL using Omnibus GitLab
+
+The recommended Omnibus GitLab configuration for a PostgreSQL cluster with
+replication and failover requires:
+
+- A minimum of three PostgreSQL nodes.
+- A minimum of three Consul server nodes.
+- A minimum of three PgBouncer nodes that track and handle primary database reads and writes.
+  - An [internal load balancer](#configure-the-internal-load-balancer) (TCP) to balance requests between the PgBouncer nodes.
+- [Database Load Balancing](../postgresql/database_load_balancing.md) enabled.
+
+  A local PgBouncer service to be configured on each PostgreSQL node. Note that this is separate from the main PgBouncer cluster that tracks the primary.
 
 The following IPs will be used as an example:
 
@@ -561,8 +585,8 @@ in the second step, do not supply the `EXTERNAL_URL` value.
 1. On every database node, edit `/etc/gitlab/gitlab.rb` replacing values noted in the `# START user configuration` section:
 
    ```ruby
-   # Disable all components except Patroni and Consul
-   roles(['patroni_role'])
+   # Disable all components except Patroni, PgBouncer and Consul
+   roles(['patroni_role', 'pgbouncer_role'])
 
    # PostgreSQL configuration
    postgresql['listen_address'] = '0.0.0.0'
@@ -606,6 +630,15 @@ in the second step, do not supply the `EXTERNAL_URL` value.
 
    # Replace 10.6.0.0/24 with Network Address
    postgresql['trust_auth_cidr_addresses'] = %w(10.6.0.0/24 127.0.0.1/32)
+
+   # Local PgBouncer service for Database Load Balancing
+   pgbouncer['databases'] = {
+      gitlabhq_production: {
+         host: "127.0.0.1",
+         user: "pgbouncer",
+         password: '<pgbouncer_password_hash>'
+      }
+   }
 
    # Set the network addresses that the exporters will listen on for monitoring
    node_exporter['listen_address'] = '0.0.0.0:9100'
@@ -667,9 +700,11 @@ If the 'State' column for any node doesn't say "running", check the
   </a>
 </div>
 
-## Configure PgBouncer
+### Configure PgBouncer
 
-Now that the PostgreSQL servers are all set up, let's configure PgBouncer.
+Now that the PostgreSQL servers are all set up, let's configure PgBouncer
+for tracking and handling reads/writes to the primary database.
+
 The following IPs will be used as an example:
 
 - `10.6.0.31`: PgBouncer 1
@@ -792,15 +827,9 @@ to be used with GitLab. The following IPs will be used as an example:
 - `10.6.0.51`: Redis - Cache Primary
 - `10.6.0.52`: Redis - Cache Replica 1
 - `10.6.0.53`: Redis - Cache Replica 2
-- `10.6.0.71`: Sentinel - Cache 1
-- `10.6.0.72`: Sentinel - Cache 2
-- `10.6.0.73`: Sentinel - Cache 3
-- `10.6.0.61`: Redis - Queues Primary
-- `10.6.0.62`: Redis - Queues Replica 1
-- `10.6.0.63`: Redis - Queues Replica 2
-- `10.6.0.81`: Sentinel - Queues 1
-- `10.6.0.82`: Sentinel - Queues 2
-- `10.6.0.83`: Sentinel - Queues 3
+- `10.6.0.61`: Redis - Persistent Primary
+- `10.6.0.62`: Redis - Persistent Replica 1
+- `10.6.0.63`: Redis - Persistent Replica 2
 
 ### Providing your own Redis instance
 
@@ -812,7 +841,7 @@ optional count argument to SPOP, which is required for [Merge Trains](../../ci/p
 Note the Redis node's IP address or hostname, port, and password (if required).
 These will be necessary later when configuring the [GitLab application servers](#configure-gitlab-rails).
 
-### Configure the Redis and Sentinel Cache cluster
+### Configure the Redis Cache cluster
 
 This is the section where we install and set up the new Redis Cache instances.
 
@@ -830,8 +859,12 @@ a node and change its status from primary to replica (and vice versa).
 1. Edit `/etc/gitlab/gitlab.rb` and add the contents:
 
    ```ruby
-   # Specify server role as 'redis_master_role' and enable Consul agent
-   roles(['redis_master_role', 'consul_role'])
+   # Specify server roles as 'redis_master_role' with sentinel and the Consul agent
+   roles ['redis_sentinel_role', 'redis_master_role', 'consul_role']
+
+   # Set IP bind address and Quorum number for Redis Sentinel service
+   sentinel['bind'] = '0.0.0.0'
+   sentinel['quorum'] = 2
 
    # IP address pointing to a local IP that the other machines can reach to.
    # You can also set bind to '0.0.0.0' which listen in all interfaces.
@@ -843,8 +876,19 @@ a node and change its status from primary to replica (and vice versa).
    # machines to connect to it.
    redis['port'] = 6379
 
-   # Set up password authentication for Redis (use the same password in all nodes).
+   ## Port of primary Redis server for Sentinel, uncomment to change to non default. Defaults
+   ## to `6379`.
+   #redis['master_port'] = 6379
+
+   # Set up password authentication for Redis and replicas (use the same password in all nodes).
    redis['password'] = 'REDIS_PRIMARY_PASSWORD_OF_FIRST_CLUSTER'
+   redis['master_password'] = 'REDIS_PRIMARY_PASSWORD_OF_FIRST_CLUSTER'
+
+   ## Must be the same in every Redis node
+   redis['master_name'] = 'gitlab-redis-cache'
+
+   ## The IP of this primary Redis node.
+   redis['master_ip'] = '10.6.0.51'
 
    # Set the Redis Cache instance as an LRU
    # 90% of available RAM in MB
@@ -878,10 +922,6 @@ a node and change its status from primary to replica (and vice versa).
 
 1. [Reconfigure Omnibus GitLab](../restart_gitlab.md#omnibus-gitlab-reconfigure) for the changes to take effect.
 
-You can specify multiple roles, like sentinel and Redis, as:
-`roles(['redis_sentinel_role', 'redis_master_role'])`. Read more about
-[roles](https://docs.gitlab.com/omnibus/roles/).
-
 #### Configure the replica Redis Cache nodes
 
 1. SSH in to the **replica** Redis server.
@@ -889,11 +929,15 @@ You can specify multiple roles, like sentinel and Redis, as:
    package of your choice. Be sure to both follow _only_ installation steps 1 and 2
    on the page, and to select the correct Omnibus GitLab package, with the same version
    and type (Community or Enterprise editions) as your current install.
-1. Edit `/etc/gitlab/gitlab.rb` and add the contents:
+1. Edit `/etc/gitlab/gitlab.rb` and add same contents as the primary node in the previous section replacing `redis_master_node` with `redis_replica_node`:
 
    ```ruby
-   # Specify server role as 'redis_replica_role' and enable Consul agent
-   roles(['redis_replica_role', 'consul_role'])
+   # Specify server roles as 'redis_sentinel_role' and 'redis_replica_role'
+   roles ['redis_sentinel_role', 'redis_replica_role', 'consul_role']
+
+   # Set IP bind address and Quorum number for Redis Sentinel service
+   sentinel['bind'] = '0.0.0.0'
+   sentinel['quorum'] = 2
 
    # IP address pointing to a local IP that the other machines can reach to.
    # You can also set bind to '0.0.0.0' which listen in all interfaces.
@@ -905,15 +949,19 @@ You can specify multiple roles, like sentinel and Redis, as:
    # machines to connect to it.
    redis['port'] = 6379
 
-   # The same password for Redis authentication you set up for the primary node.
-   redis['password'] = 'REDIS_PRIMARY_PASSWORD_OF_FIRST_CLUSTER'
-
-   # The IP of the primary Redis node.
-   redis['master_ip'] = '10.6.0.51'
-
-   # Port of primary Redis server, uncomment to change to non default. Defaults
-   # to `6379`.
+   ## Port of primary Redis server for Sentinel, uncomment to change to non default. Defaults
+   ## to `6379`.
    #redis['master_port'] = 6379
+
+   # Set up password authentication for Redis and replicas (use the same password in all nodes).
+   redis['password'] = 'REDIS_PRIMARY_PASSWORD_OF_FIRST_CLUSTER'
+   redis['master_password'] = 'REDIS_PRIMARY_PASSWORD_OF_FIRST_CLUSTER'
+
+   ## Must be the same in every Redis node
+   redis['master_name'] = 'gitlab-redis-cache'
+
+   ## The IP of the primary Redis node.
+   redis['master_ip'] = '10.6.0.51'
 
    # Set the Redis Cache instance as an LRU
    # 90% of available RAM in MB
@@ -949,15 +997,6 @@ You can specify multiple roles, like sentinel and Redis, as:
 1. Go through the steps again for all the other replica nodes, and
    make sure to set up the IPs correctly.
 
-You can specify multiple roles, like sentinel and Redis, as:
-`roles(['redis_sentinel_role', 'redis_master_role'])`. Read more about
-[roles](https://docs.gitlab.com/omnibus/roles/).
-
-These values don't have to be changed again in `/etc/gitlab/gitlab.rb` after
-a failover, as the nodes will be managed by the [Sentinels](#configure-the-sentinel-cache-nodes), and even after a
-`gitlab-ctl reconfigure`, they will get their configuration restored by
-the same Sentinels.
-
 Advanced [configuration options](https://docs.gitlab.com/omnibus/settings/redis.html)
 are supported and can be added if needed.
 
@@ -967,133 +1006,15 @@ are supported and can be added if needed.
   </a>
 </div>
 
-#### Configure the Sentinel Cache nodes
+### Configure the Redis Persistent cluster
 
-Now that the Redis servers are all set up, let's configure the Sentinel
-servers. The following IPs will be used as an example:
-
-- `10.6.0.71`: Sentinel - Cache 1
-- `10.6.0.72`: Sentinel - Cache 2
-- `10.6.0.73`: Sentinel - Cache 3
-
-NOTE:
-If you're using an external Redis Sentinel instance, be sure to exclude the
-`requirepass` parameter from the Sentinel configuration. This parameter causes
-clients to report `NOAUTH Authentication required.`.
-[Redis Sentinel 3.2.x doesn't support password authentication](https://github.com/antirez/redis/issues/3279).
-
-To configure the Sentinel Cache server:
-
-1. SSH in to the server that will host Consul/Sentinel.
-1. [Download and install](https://about.gitlab.com/install/) the Omnibus GitLab
-   package of your choice. Be sure to both follow _only_ installation steps 1 and 2
-   on the page, and to select the correct Omnibus GitLab package, with the same version
-   and type (Community or Enterprise editions) as your current install.
-1. Edit `/etc/gitlab/gitlab.rb` and add the contents:
-
-   ```ruby
-   roles(['redis_sentinel_role', 'consul_role'])
-
-   ## Must be the same in every sentinel node
-   redis['master_name'] = 'gitlab-redis-cache'
-
-   ## The same password for Redis authentication you set up for the primary node.
-   redis['master_password'] = 'REDIS_PRIMARY_PASSWORD_OF_FIRST_CLUSTER'
-
-   ## The IP of the primary Redis node.
-   redis['master_ip'] = '10.6.0.51'
-
-   ## Define a port so Redis can listen for TCP requests which will allow other
-   ## machines to connect to it.
-   redis['port'] = 6379
-
-   ## Port of primary Redis server, uncomment to change to non default. Defaults
-   ## to `6379`.
-   #redis['master_port'] = 6379
-
-   ## Configure Sentinel's IP
-   sentinel['bind'] = '10.6.0.71'
-
-   ## Port that Sentinel listens on, uncomment to change to non default. Defaults
-   ## to `26379`.
-   #sentinel['port'] = 26379
-
-   ## Quorum must reflect the amount of voting sentinels it take to start a failover.
-   ## Value must NOT be greater then the amount of sentinels.
-   ##
-   ## The quorum can be used to tune Sentinel in two ways:
-   ## 1. If a the quorum is set to a value smaller than the majority of Sentinels
-   ##    we deploy, we are basically making Sentinel more sensible to primary failures,
-   ##    triggering a failover as soon as even just a minority of Sentinels is no longer
-   ##    able to talk with the primary.
-   ## 1. If a quorum is set to a value greater than the majority of Sentinels, we are
-   ##    making Sentinel able to failover only when there are a very large number (larger
-   ##    than majority) of well connected Sentinels which agree about the primary being down.s
-   sentinel['quorum'] = 2
-
-   ## Consider unresponsive server down after x amount of ms.
-   #sentinel['down_after_milliseconds'] = 10000
-
-   ## Specifies the failover timeout in milliseconds. It is used in many ways:
-   ##
-   ## - The time needed to re-start a failover after a previous failover was
-   ##   already tried against the same primary by a given Sentinel, is two
-   ##   times the failover timeout.
-   ##
-   ## - The time needed for a replica replicating to a wrong primary according
-   ##   to a Sentinel current configuration, to be forced to replicate
-   ##   with the right primary, is exactly the failover timeout (counting since
-   ##   the moment a Sentinel detected the misconfiguration).
-   ##
-   ## - The time needed to cancel a failover that is already in progress but
-   ##   did not produced any configuration change (REPLICAOF NO ONE yet not
-   ##   acknowledged by the promoted replica).
-   ##
-   ## - The maximum time a failover in progress waits for all the replica to be
-   ##   reconfigured as replicas of the new primary. However even after this time
-   ##   the replicas will be reconfigured by the Sentinels anyway, but not with
-   ##   the exact parallel-syncs progression as specified.
-   #sentinel['failover_timeout'] = 60000
-
-   ## Enable service discovery for Prometheus
-   consul['monitoring_service_discovery'] =  true
-
-   ## The IPs of the Consul server nodes
-   ## You can also use FQDNs and intermix them with IPs
-   consul['configuration'] = {
-      retry_join: %w(10.6.0.11 10.6.0.12 10.6.0.13),
-   }
-
-   # Set the network addresses that the exporters will listen on
-   node_exporter['listen_address'] = '0.0.0.0:9100'
-   redis_exporter['listen_address'] = '0.0.0.0:9121'
-
-   # Prevent database migrations from running on upgrade automatically
-   gitlab_rails['auto_migrate'] = false
-   ```
-
-1. Copy the `/etc/gitlab/gitlab-secrets.json` file from the first Omnibus node you configured and add or replace
-   the file of the same name on this server. If this is the first Omnibus node you are configuring then you can skip this step.
-
-1. [Reconfigure Omnibus GitLab](../restart_gitlab.md#omnibus-gitlab-reconfigure) for the changes to take effect.
-1. Go through the steps again for all the other Consul/Sentinel nodes, and
-   make sure you set up the correct IPs.
-
-<div align="right">
-  <a type="button" class="btn btn-default" href="#setup-components">
-    Back to setup components <i class="fa fa-angle-double-up" aria-hidden="true"></i>
-  </a>
-</div>
-
-### Configure the Redis and Sentinel Queues cluster
-
-This is the section where we install and set up the new Redis Queues instances.
+This is the section where we install and set up the new Redis Persistent instances.
 
 Both the primary and replica Redis nodes need the same password defined in
 `redis['password']`. At any time during a failover, the Sentinels can reconfigure
 a node and change its status from primary to replica (and vice versa).
 
-#### Configure the primary Redis Queues node
+#### Configure the primary Redis Persistent node
 
 1. SSH in to the **Primary** Redis server.
 1. [Download and install](https://about.gitlab.com/install/) the Omnibus GitLab
@@ -1103,8 +1024,12 @@ a node and change its status from primary to replica (and vice versa).
 1. Edit `/etc/gitlab/gitlab.rb` and add the contents:
 
    ```ruby
-   # Specify server role as 'redis_master_role' and enable Consul agent
-   roles(['redis_master_role', 'consul_role'])
+   # Specify server roles as 'redis_master_role' with Sentinel and the Consul agent
+   roles ['redis_sentinel_role', 'redis_master_role', 'consul_role']
+
+   # Set IP bind address and Quorum number for Redis Sentinel service
+   sentinel['bind'] = '0.0.0.0'
+   sentinel['quorum'] = 2
 
    # IP address pointing to a local IP that the other machines can reach to.
    # You can also set bind to '0.0.0.0' which listen in all interfaces.
@@ -1116,8 +1041,19 @@ a node and change its status from primary to replica (and vice versa).
    # machines to connect to it.
    redis['port'] = 6379
 
-   # Set up password authentication for Redis (use the same password in all nodes).
-   redis['password'] = 'REDIS_PRIMARY_PASSWORD_OF_SECOND_CLUSTER'
+   ## Port of primary Redis server for Sentinel, uncomment to change to non default. Defaults
+   ## to `6379`.
+   #redis['master_port'] = 6379
+
+   # Set up password authentication for Redis and replicas (use the same password in all nodes).
+   redis['password'] = 'REDIS_PRIMARY_PASSWORD_OF_FIRST_CLUSTER'
+   redis['master_password'] = 'REDIS_PRIMARY_PASSWORD_OF_SECOND_CLUSTER'
+
+   ## Must be the same in every Redis node
+   redis['master_name'] = 'gitlab-redis-persistent'
+
+   ## The IP of this primary Redis node.
+   redis['master_ip'] = '10.6.0.61'
 
    ## Enable service discovery for Prometheus
    consul['monitoring_service_discovery'] =  true
@@ -1141,13 +1077,9 @@ a node and change its status from primary to replica (and vice versa).
 
 1. [Reconfigure Omnibus GitLab](../restart_gitlab.md#omnibus-gitlab-reconfigure) for the changes to take effect.
 
-You can specify multiple roles, like sentinel and Redis, as:
-`roles(['redis_sentinel_role', 'redis_master_role'])`. Read more about
-[roles](https://docs.gitlab.com/omnibus/roles/).
+#### Configure the replica Redis Persistent nodes
 
-#### Configure the replica Redis Queues nodes
-
-1. SSH in to the **replica** Redis Queue server.
+1. SSH in to the **replica** Redis Persistent server.
 1. [Download and install](https://about.gitlab.com/install/) the Omnibus GitLab
    package of your choice. Be sure to both follow _only_ installation steps 1 and 2
    on the page, and to select the correct Omnibus GitLab package, with the same version
@@ -1155,8 +1087,12 @@ You can specify multiple roles, like sentinel and Redis, as:
 1. Edit `/etc/gitlab/gitlab.rb` and add the contents:
 
    ```ruby
-   # Specify server role as 'redis_replica_role' and enable Consul agent
-   roles(['redis_replica_role', 'consul_role'])
+   # Specify server roles as 'redis_sentinel_role' and 'redis_replica_role'
+   roles ['redis_sentinel_role', 'redis_replica_role', 'consul_role']
+
+   # Set IP bind address and Quorum number for Redis Sentinel service
+   sentinel['bind'] = '0.0.0.0'
+   sentinel['quorum'] = 2
 
    # IP address pointing to a local IP that the other machines can reach to.
    # You can also set bind to '0.0.0.0' which listen in all interfaces.
@@ -1168,15 +1104,19 @@ You can specify multiple roles, like sentinel and Redis, as:
    # machines to connect to it.
    redis['port'] = 6379
 
+   ## Port of primary Redis server for Sentinel, uncomment to change to non default. Defaults
+   ## to `6379`.
+   #redis['master_port'] = 6379
+
    # The same password for Redis authentication you set up for the primary node.
    redis['password'] = 'REDIS_PRIMARY_PASSWORD_OF_SECOND_CLUSTER'
+   redis['master_password'] = 'REDIS_PRIMARY_PASSWORD_OF_SECOND_CLUSTER'
+
+   ## Must be the same in every Redis node
+   redis['master_name'] = 'gitlab-redis-persistent'
 
    # The IP of the primary Redis node.
    redis['master_ip'] = '10.6.0.61'
-
-   # Port of primary Redis server, uncomment to change to non default. Defaults
-   # to `6379`.
-   #redis['master_port'] = 6379
 
    ## Enable service discovery for Prometheus
    consul['monitoring_service_discovery'] =  true
@@ -1202,135 +1142,8 @@ You can specify multiple roles, like sentinel and Redis, as:
 1. Go through the steps again for all the other replica nodes, and
    make sure to set up the IPs correctly.
 
-You can specify multiple roles, like sentinel and Redis, as:
-`roles(['redis_sentinel_role', 'redis_master_role'])`. Read more about
-[roles](https://docs.gitlab.com/omnibus/roles/).
-
-These values don't have to be changed again in `/etc/gitlab/gitlab.rb` after
-a failover, as the nodes will be managed by the [Sentinels](#configure-the-sentinel-queues-nodes), and even after a
-`gitlab-ctl reconfigure`, they will get their configuration restored by
-the same Sentinels.
-
 Advanced [configuration options](https://docs.gitlab.com/omnibus/settings/redis.html)
 are supported and can be added if needed.
-
-<div align="right">
-  <a type="button" class="btn btn-default" href="#setup-components">
-    Back to setup components <i class="fa fa-angle-double-up" aria-hidden="true"></i>
-  </a>
-</div>
-
-#### Configure the Sentinel Queues nodes
-
-Now that the Redis servers are all set up, let's configure the Sentinel
-servers. The following IPs will be used as an example:
-
-- `10.6.0.81`: Sentinel - Queues 1
-- `10.6.0.82`: Sentinel - Queues 2
-- `10.6.0.83`: Sentinel - Queues 3
-
-NOTE:
-If you're using an external Redis Sentinel instance, be sure to exclude the
-`requirepass` parameter from the Sentinel configuration. This parameter causes
-clients to report `NOAUTH Authentication required.`.
-[Redis Sentinel 3.2.x doesn't support password authentication](https://github.com/antirez/redis/issues/3279).
-
-To configure the Sentinel Queues server:
-
-1. SSH in to the server that will host Sentinel.
-1. [Download and install](https://about.gitlab.com/install/) the Omnibus GitLab
-   package of your choice. Be sure to both follow _only_ installation steps 1 and 2
-   on the page, and to select the correct Omnibus GitLab package, with the same version
-   and type (Community or Enterprise editions) as your current install.
-1. Edit `/etc/gitlab/gitlab.rb` and add the contents:
-
-   ```ruby
-   roles(['redis_sentinel_role', 'consul_role'])
-
-   ## Must be the same in every sentinel node
-   redis['master_name'] = 'gitlab-redis-persistent'
-
-   ## The same password for Redis authentication you set up for the primary node.
-   redis['master_password'] = 'REDIS_PRIMARY_PASSWORD_OF_SECOND_CLUSTER'
-
-   ## The IP of the primary Redis node.
-   redis['master_ip'] = '10.6.0.61'
-
-   ## Define a port so Redis can listen for TCP requests which will allow other
-   ## machines to connect to it.
-   redis['port'] = 6379
-
-   ## Port of primary Redis server, uncomment to change to non default. Defaults
-   ## to `6379`.
-   #redis['master_port'] = 6379
-
-   ## Configure Sentinel's IP
-   sentinel['bind'] = '10.6.0.81'
-
-   ## Port that Sentinel listens on, uncomment to change to non default. Defaults
-   ## to `26379`.
-   #sentinel['port'] = 26379
-
-   ## Quorum must reflect the amount of voting sentinels it take to start a failover.
-   ## Value must NOT be greater then the amount of sentinels.
-   ##
-   ## The quorum can be used to tune Sentinel in two ways:
-   ## 1. If a the quorum is set to a value smaller than the majority of Sentinels
-   ##    we deploy, we are basically making Sentinel more sensible to primary failures,
-   ##    triggering a failover as soon as even just a minority of Sentinels is no longer
-   ##    able to talk with the primary.
-   ## 1. If a quorum is set to a value greater than the majority of Sentinels, we are
-   ##    making Sentinel able to failover only when there are a very large number (larger
-   ##    than majority) of well connected Sentinels which agree about the primary being down.s
-   sentinel['quorum'] = 2
-
-   ## Consider unresponsive server down after x amount of ms.
-   #sentinel['down_after_milliseconds'] = 10000
-
-   ## Specifies the failover timeout in milliseconds. It is used in many ways:
-   ##
-   ## - The time needed to re-start a failover after a previous failover was
-   ##   already tried against the same primary by a given Sentinel, is two
-   ##   times the failover timeout.
-   ##
-   ## - The time needed for a replica replicating to a wrong primary according
-   ##   to a Sentinel current configuration, to be forced to replicate
-   ##   with the right primary, is exactly the failover timeout (counting since
-   ##   the moment a Sentinel detected the misconfiguration).
-   ##
-   ## - The time needed to cancel a failover that is already in progress but
-   ##   did not produced any configuration change (REPLICAOF NO ONE yet not
-   ##   acknowledged by the promoted replica).
-   ##
-   ## - The maximum time a failover in progress waits for all the replica to be
-   ##   reconfigured as replicas of the new primary. However even after this time
-   ##   the replicas will be reconfigured by the Sentinels anyway, but not with
-   ##   the exact parallel-syncs progression as specified.
-   #sentinel['failover_timeout'] = 60000
-
-   ## Enable service discovery for Prometheus
-   consul['monitoring_service_discovery'] =  true
-
-   ## The IPs of the Consul server nodes
-   ## You can also use FQDNs and intermix them with IPs
-   consul['configuration'] = {
-      retry_join: %w(10.6.0.11 10.6.0.12 10.6.0.13),
-   }
-
-   # Set the network addresses that the exporters will listen on
-   node_exporter['listen_address'] = '0.0.0.0:9100'
-   redis_exporter['listen_address'] = '0.0.0.0:9121'
-
-   # Prevent database migrations from running on upgrade automatically
-   gitlab_rails['auto_migrate'] = false
-   ```
-
-1. Copy the `/etc/gitlab/gitlab-secrets.json` file from the first Omnibus node you configured and add or replace
-   the file of the same name on this server. If this is the first Omnibus node you are configuring then you can skip this step.
-
-1. [Reconfigure Omnibus GitLab](../restart_gitlab.md#omnibus-gitlab-reconfigure) for the changes to take effect.
-1. Go through the steps again for all the other Sentinel nodes, and
-   make sure you set up the correct IPs.
 
 <div align="right">
   <a type="button" class="btn btn-default" href="#setup-components">
@@ -1342,6 +1155,10 @@ To configure the Sentinel Queues server:
 
 [Gitaly Cluster](../gitaly/praefect.md) is a GitLab provided and recommended fault tolerant solution for storing Git repositories.
 In this configuration, every Git repository is stored on every Gitaly node in the cluster, with one being designated the primary, and failover occurs automatically if the primary node goes down.
+
+NOTE:
+Gitaly Cluster provides the benefits of fault tolerance, but comes with additional complexity of setup and management. Please [review the existing technical limitations and considerations prior to deploying Gitaly Cluster](../gitaly/index.md#guidance-regarding-gitaly-cluster).
+For implementations with Gitaly Sharded, the same Gitaly specs should be used. Follow the [separate Gitaly documentation](../gitaly/configure_gitaly.md) instead of this section.
 
 The recommended cluster setup includes the following components:
 
@@ -1447,6 +1264,15 @@ There are many third-party solutions for PostgreSQL HA. The solution selected mu
 - A static IP for all connections that doesn't change on failover.
 - [`LISTEN`](https://www.postgresql.org/docs/12/sql-listen.html) SQL functionality must be supported.
 
+NOTE:
+With a third-party setup, it's possible to colocate Praefect's database on the same server as
+the main [GitLab](#provide-your-own-postgresql-instance) database as a convenience unless
+you are using Geo, where separate database instances are required for handling replication correctly.
+In this setup, the specs of the main database setup shouldn't need to be changed as the impact should be
+minimal.
+
+A reputable provider or solution should be used for this. [Google Cloud SQL](https://cloud.google.com/sql/docs/postgres/high-availability#normal) and [Amazon RDS](https://aws.amazon.com/rds/) are known to work, however Azure Database for PostgreSQL is **not recommended** due to [performance issues](https://gitlab.com/gitlab-org/quality/reference-architectures/-/issues/61).
+
 Examples of the above could include [Google's Cloud SQL](https://cloud.google.com/sql/docs/postgres/high-availability#normal) or [Amazon RDS](https://aws.amazon.com/rds/).
 
 Once the database is set up, follow the [post configuration](#praefect-postgresql-post-configuration).
@@ -1509,7 +1335,7 @@ the details of each Gitaly node that makes up the cluster. Each storage is also 
 and this name is used in several areas of the configuration. In this guide, the name of the storage will be
 `default`. Also, this guide is geared towards new installs, if upgrading an existing environment
 to use Gitaly Cluster, you may need to use a different name.
-Refer to the [Praefect documentation](../gitaly/praefect.md#praefect) for more info.
+Refer to the [Praefect documentation](../gitaly/praefect.md#praefect) for more information.
 
 The following IPs will be used as an example:
 
@@ -1537,6 +1363,7 @@ To configure the Praefect nodes, on each one:
    alertmanager['enable'] = false
    grafana['enable'] = false
    gitlab_exporter['enable'] = false
+   gitlab_kas['enable'] = false
    nginx['enable'] = false
 
    # Praefect Configuration
@@ -1550,7 +1377,7 @@ To configure the Praefect nodes, on each one:
    # Configure the Consul agent
    consul['enable'] = true
    ## Enable service discovery for Prometheus
-   consul['monitoring_service_discovery'] =  true
+   consul['monitoring_service_discovery'] = true
 
    # START user configuration
    # Please set the real values as explained in Required Information section
@@ -1677,6 +1504,7 @@ On each node:
    alertmanager['enable'] = false
    grafana['enable'] = false
    gitlab_exporter['enable'] = false
+   gitlab_kas['enable'] = false
    nginx['enable'] = false
 
    # Prevent database migrations from running on upgrade automatically
@@ -1698,6 +1526,11 @@ On each node:
    # Gitaly Auth Token
    # Should be the same as praefect_internal_token
    gitaly['auth_token'] = '<praefect_internal_token>'
+
+   # Gitaly Pack-objects cache
+   # Recommended to be enabled for improved performance but can notably increase disk I/O
+   # Refer to https://docs.gitlab.com/ee/administration/gitaly/configure_gitaly.html#pack-objects-cache for more info
+   gitaly['pack_objects_cache_enabled'] = true
    ```
 
 1. Append the following to `/etc/gitlab/gitlab.rb` for each respective server:
@@ -1805,7 +1638,7 @@ To configure Praefect with TLS:
    ```ruby
    git_data_dirs({
      "default" => {
-       "gitaly_address" => 'tls://LOAD_BALANCER_SERVER_ADDRESS:2305',
+       "gitaly_address" => 'tls://LOAD_BALANCER_SERVER_ADDRESS:3305',
        "gitaly_token" => 'PRAEFECT_EXTERNAL_TOKEN'
      }
    })
@@ -1836,7 +1669,7 @@ To configure the Sidekiq nodes, on each one:
 1. [Download and install](https://about.gitlab.com/install/) the Omnibus GitLab
    package of your choice. Be sure to follow _only_ installation steps 1 and 2
    on the page.
-1. Open `/etc/gitlab/gitlab.rb` with your editor:
+1. Create or edit `/etc/gitlab/gitlab.rb` and use the following configuration:
 
    ```ruby
    # Avoid running unnecessary services on the Sidekiq server
@@ -1849,7 +1682,12 @@ To configure the Sidekiq nodes, on each one:
    alertmanager['enable'] = false
    grafana['enable'] = false
    gitlab_exporter['enable'] = false
+   gitlab_kas['enable'] = false
    nginx['enable'] = false
+
+   # External URL
+   ## This should match the URL of the external load balancer
+   external_url 'https://gitlab.example.com'
 
    # Redis
    ## Redis connection details
@@ -1857,30 +1695,30 @@ To configure the Sidekiq nodes, on each one:
    gitlab_rails['redis_cache_instance'] = 'redis://:<REDIS_PRIMARY_PASSWORD_OF_FIRST_CLUSTER>@gitlab-redis-cache'
 
    gitlab_rails['redis_cache_sentinels'] = [
-     {host: '10.6.0.71', port: 26379},
-     {host: '10.6.0.72', port: 26379},
-     {host: '10.6.0.73', port: 26379},
+     {host: '10.6.0.51', port: 26379},
+     {host: '10.6.0.52', port: 26379},
+     {host: '10.6.0.53', port: 26379},
    ]
 
-   ## Second cluster that will host the queues, shared state, and actioncable
+   ## Second cluster that will host the persistent queues, shared state, and actioncable
    gitlab_rails['redis_queues_instance'] = 'redis://:<REDIS_PRIMARY_PASSWORD_OF_SECOND_CLUSTER>@gitlab-redis-persistent'
    gitlab_rails['redis_shared_state_instance'] = 'redis://:<REDIS_PRIMARY_PASSWORD_OF_SECOND_CLUSTER>@gitlab-redis-persistent'
    gitlab_rails['redis_actioncable_instance'] = 'redis://:<REDIS_PRIMARY_PASSWORD_OF_SECOND_CLUSTER>@gitlab-redis-persistent'
 
    gitlab_rails['redis_queues_sentinels'] = [
-     {host: '10.6.0.81', port: 26379},
-     {host: '10.6.0.82', port: 26379},
-     {host: '10.6.0.83', port: 26379},
+     {host: '10.6.0.61', port: 26379},
+     {host: '10.6.0.62', port: 26379},
+     {host: '10.6.0.63', port: 26379},
    ]
    gitlab_rails['redis_shared_state_sentinels'] = [
-     {host: '10.6.0.81', port: 26379},
-     {host: '10.6.0.82', port: 26379},
-     {host: '10.6.0.83', port: 26379},
+     {host: '10.6.0.61', port: 26379},
+     {host: '10.6.0.62', port: 26379},
+     {host: '10.6.0.63', port: 26379},
    ]
    gitlab_rails['redis_actioncable_sentinels'] = [
-     {host: '10.6.0.81', port: 26379},
-     {host: '10.6.0.82', port: 26379},
-     {host: '10.6.0.83', port: 26379},
+     {host: '10.6.0.61', port: 26379},
+     {host: '10.6.0.62', port: 26379},
+     {host: '10.6.0.63', port: 26379},
    ]
 
    # Gitaly Cluster
@@ -1898,8 +1736,8 @@ To configure the Sidekiq nodes, on each one:
    gitlab_rails['db_host'] = '10.6.0.40' # internal load balancer IP
    gitlab_rails['db_port'] = 6432
    gitlab_rails['db_password'] = '<postgresql_user_password>'
-   gitlab_rails['db_adapter'] = 'postgresql'
-   gitlab_rails['db_encoding'] = 'unicode'
+   gitlab_rails['db_load_balancing'] = { 'hosts' => ['10.6.0.21', '10.6.0.22', '10.6.0.23'] } # PostgreSQL IPs
+
    ## Prevent database migrations from running on upgrade automatically
    gitlab_rails['auto_migrate'] = false
 
@@ -2003,7 +1841,7 @@ On each node perform the following:
    external_url 'https://gitlab.example.com'
 
    # git_data_dirs get configured for the Praefect virtual storage
-   # Address is Interal Load Balancer for Praefect
+   # Address is Internal Load Balancer for Praefect
    # Token is praefect_external_token
    git_data_dirs({
      "default" => {
@@ -2024,6 +1862,8 @@ On each node perform the following:
    gitlab_rails['db_host'] = '10.6.0.20' # internal load balancer IP
    gitlab_rails['db_port'] = 6432
    gitlab_rails['db_password'] = '<postgresql_user_password>'
+   gitlab_rails['db_load_balancing'] = { 'hosts' => ['10.6.0.21', '10.6.0.22', '10.6.0.23'] } # PostgreSQL IPs
+
    # Prevent database migrations from running on upgrade automatically
    gitlab_rails['auto_migrate'] = false
 
@@ -2032,30 +1872,30 @@ On each node perform the following:
    gitlab_rails['redis_cache_instance'] = 'redis://:<REDIS_PRIMARY_PASSWORD_OF_FIRST_CLUSTER>@gitlab-redis-cache'
 
    gitlab_rails['redis_cache_sentinels'] = [
-     {host: '10.6.0.71', port: 26379},
-     {host: '10.6.0.72', port: 26379},
-     {host: '10.6.0.73', port: 26379},
+     {host: '10.6.0.51', port: 26379},
+     {host: '10.6.0.52', port: 26379},
+     {host: '10.6.0.53', port: 26379},
    ]
 
-   ## Second cluster that will host the queues, shared state, and actionable
+   ## Second cluster that will host the persistent queues, shared state, and actionable
    gitlab_rails['redis_queues_instance'] = 'redis://:<REDIS_PRIMARY_PASSWORD_OF_SECOND_CLUSTER>@gitlab-redis-persistent'
    gitlab_rails['redis_shared_state_instance'] = 'redis://:<REDIS_PRIMARY_PASSWORD_OF_SECOND_CLUSTER>@gitlab-redis-persistent'
    gitlab_rails['redis_actioncable_instance'] = 'redis://:<REDIS_PRIMARY_PASSWORD_OF_SECOND_CLUSTER>@gitlab-redis-persistent'
 
    gitlab_rails['redis_queues_sentinels'] = [
-     {host: '10.6.0.81', port: 26379},
-     {host: '10.6.0.82', port: 26379},
-     {host: '10.6.0.83', port: 26379},
+     {host: '10.6.0.61', port: 26379},
+     {host: '10.6.0.62', port: 26379},
+     {host: '10.6.0.63', port: 26379},
    ]
    gitlab_rails['redis_shared_state_sentinels'] = [
-     {host: '10.6.0.81', port: 26379},
-     {host: '10.6.0.82', port: 26379},
-     {host: '10.6.0.83', port: 26379},
+     {host: '10.6.0.61', port: 26379},
+     {host: '10.6.0.62', port: 26379},
+     {host: '10.6.0.63', port: 26379},
    ]
    gitlab_rails['redis_actioncable_sentinels'] = [
-     {host: '10.6.0.81', port: 26379},
-     {host: '10.6.0.82', port: 26379},
-     {host: '10.6.0.83', port: 26379},
+     {host: '10.6.0.61', port: 26379},
+     {host: '10.6.0.62', port: 26379},
+     {host: '10.6.0.63', port: 26379},
    ]
 
    # Set the network addresses that the exporters used for monitoring will listen on
@@ -2127,7 +1967,7 @@ On each node perform the following:
 
 1. [Reconfigure GitLab](../restart_gitlab.md#omnibus-gitlab-reconfigure) for the changes to take effect.
 
-1. If you're [using NFS](#configure-nfs-optional):
+1. If you're [using NFS](#configure-nfs):
    1. If necessary, install the NFS client utility packages using the following
       commands:
 
@@ -2271,7 +2111,7 @@ To configure the Monitoring node:
 ## Configure the object storage
 
 GitLab supports using an object storage service for holding numerous types of data.
-It's recommended over [NFS](#configure-nfs-optional) and in general it's better
+It's recommended over [NFS](#configure-nfs) and in general it's better
 in larger setups as object storage is typically much more performant, reliable,
 and scalable.
 
@@ -2295,6 +2135,9 @@ There are two ways of specifying object storage configuration in GitLab:
 
 Starting with GitLab 13.2, consolidated object storage configuration is available. It simplifies your GitLab configuration since the connection details are shared across object types. Refer to [Consolidated object storage configuration](../object_storage.md#consolidated-object-storage-configuration) guide for instructions on how to set it up.
 
+GitLab Runner returns job logs in chunks which Omnibus GitLab caches temporarily on disk in `/var/opt/gitlab/gitlab-ci/builds` by default, even when using consolidated object storage. With default configuration, this directory needs to be shared via NFS on any GitLab Rails and Sidekiq nodes.
+In GitLab 13.6 and later, it's recommended to switch to [Incremental logging](../job_logs.md#incremental-logging-architecture), which uses Redis instead of disk space for temporary caching of job logs.
+
 For configuring object storage in GitLab 13.1 and earlier, or for storage types not
 supported by consolidated configuration form, refer to the following guides based
 on what features you intend to use:
@@ -2310,7 +2153,7 @@ on what features you intend to use:
 | [Mattermost](https://docs.mattermost.com/administration/config-settings.html#file-storage)| No |
 | [Packages](../packages/index.md#using-object-storage) (optional feature) | Yes |
 | [Dependency Proxy](../packages/dependency_proxy.md#using-object-storage) (optional feature) | Yes |
-| [Pseudonymizer](../pseudonymizer.md#configuration) (optional feature) **(ULTIMATE SELF)** | No |
+| [Pseudonymizer](../pseudonymizer.md) (optional feature) | No |
 | [Autoscale runner caching](https://docs.gitlab.com/runner/configuration/autoscale.html#distributed-runners-caching) (optional for improved performance) | No |
 | [Terraform state files](../terraform_state.md#using-object-storage) | Yes |
 
@@ -2341,11 +2184,10 @@ cluster alongside your instance, read how to
   </a>
 </div>
 
-## Configure NFS (optional)
+## Configure NFS
 
 [Object storage](#configure-the-object-storage), along with [Gitaly](#configure-gitaly)
-are recommended over NFS wherever possible for improved performance. If you intend
-to use GitLab Pages, this currently [requires NFS](troubleshooting.md#gitlab-pages-requires-nfs).
+are recommended over NFS wherever possible for improved performance.
 
 See how to [configure NFS](../nfs.md).
 
@@ -2355,7 +2197,7 @@ unavailable from GitLab 15.0. No further enhancements are planned for this featu
 
 Read:
 
-- The [Gitaly and NFS deprecation notice](../gitaly/index.md#nfs-deprecation-notice).
+- [Gitaly and NFS Deprecation](../nfs.md#gitaly-and-nfs-deprecation).
 - About the [correct mount options to use](../nfs.md#upgrade-to-gitaly-cluster-or-disable-caching-if-experiencing-data-loss).
 
 <div align="right">
@@ -2390,21 +2232,20 @@ The following tables and diagram detail the hybrid environment using the same fo
 as the normal environment above.
 
 First are the components that run in Kubernetes. The recommendation at this time is to
-use Google Cloud’s Kubernetes Engine (GKE) and associated machine types, but the memory
+use Google Cloud's Kubernetes Engine (GKE) and associated machine types, but the memory
 and CPU requirements should translate to most other providers. We hope to update this in the
 future with further specific cloud provider details.
 
-| Service                                               | Nodes<sup>1</sup> | Configuration           | GCP              | Allocatable CPUs and Memory |
-|-------------------------------------------------------|-------------------|-------------------------|------------------|-----------------------------|
-| Webservice                                            | 4                 | 32 vCPU, 28.8 GB memory | `n1-highcpu-32` | 127.5 vCPU, 118 GB memory   |
-| Sidekiq                                               | 4                 | 4 vCPU, 15 GB memory    | `n1-standard-4`  | 15.5 vCPU, 50 GB memory     |
-| Supporting services such as NGINX, Prometheus         | 2                 | 4 vCPU, 15 GB memory    | `n1-standard-4`  | 7.75 vCPU, 25 GB memory     |
+| Service                                               | Nodes | Configuration           | GCP              | Allocatable CPUs and Memory |
+|-------------------------------------------------------|-------|-------------------------|------------------|-----------------------------|
+| Webservice                                            | 4     | 32 vCPU, 28.8 GB memory | `n1-highcpu-32` | 127.5 vCPU, 118 GB memory   |
+| Sidekiq                                               | 4     | 4 vCPU, 15 GB memory    | `n1-standard-4`  | 15.5 vCPU, 50 GB memory     |
+| Supporting services such as NGINX, Prometheus         | 2     | 4 vCPU, 15 GB memory    | `n1-standard-4`  | 7.75 vCPU, 25 GB memory     |
 
-<!-- Disable ordered list rule https://github.com/DavidAnson/markdownlint/blob/main/doc/Rules.md#md029---ordered-list-item-prefix -->
-<!-- markdownlint-disable MD029 -->
-1. Nodes configuration is shown as it is forced to ensure pod vcpu / memory ratios and avoid scaling during **performance testing**.
-   In production deployments there is no need to assign pods to nodes. A minimum of three nodes in three different availability zones is strongly recommended to align with resilient cloud architecture practices.
-<!-- markdownlint-enable MD029 -->
+- For this setup, we **recommend** and regularly [test](index.md#validation-and-test-results)
+[Google Kubernetes Engine (GKE)](https://cloud.google.com/kubernetes-engine) and [Amazon Elastic Kubernetes Service (EKS)](https://aws.amazon.com/eks/). Other Kubernetes services may also work, but your mileage may vary.
+- Nodes configuration is shown as it is forced to ensure pod vcpu / memory ratios and avoid scaling during **performance testing**.
+  - In production deployments, there is no need to assign pods to nodes. A minimum of three nodes in three different availability zones is strongly recommended to align with resilient cloud architecture practices.
 
 Next are the backend components that run on static compute VMs via Omnibus (or External PaaS
 services where applicable):
@@ -2415,21 +2256,20 @@ services where applicable):
 | PostgreSQL<sup>1</sup>                              | 3     | 8 vCPU, 30 GB memory    | `n1-standard-8`  |
 | PgBouncer<sup>1</sup>                               | 3     | 2 vCPU, 1.8 GB memory   | `n1-highcpu-2`   |
 | Internal load balancing node<sup>3</sup>            | 1     | 2 vCPU, 1.8 GB memory   | `n1-highcpu-2`   |
-| Redis - Cache<sup>2</sup>                           | 3     | 4 vCPU, 15 GB memory    | `n1-standard-4`  |
-| Redis - Queues / Shared State<sup>2</sup>           | 3     | 4 vCPU, 15 GB memory    | `n1-standard-4`  |
-| Redis Sentinel - Cache<sup>2</sup>                  | 3     | 1 vCPU, 3.75 GB memory  | `n1-standard-1`  |
-| Redis Sentinel - Queues / Shared State<sup>2</sup>  | 3     | 1 vCPU, 3.75 GB memory  | `n1-standard-1`  |
-| Gitaly                                              | 3     | 16 vCPU, 60 GB memory   | `n1-standard-16` |
-| Praefect                                            | 3     | 2 vCPU, 1.8 GB memory   | `n1-highcpu-2`   |
+| Redis/Sentinel - Cache<sup>2</sup>                  | 3     | 4 vCPU, 15 GB memory    | `n1-standard-4`  |
+| Redis/Sentinel - Persistent<sup>2</sup>             | 3     | 4 vCPU, 15 GB memory    | `n1-standard-4`  |
+| Gitaly<sup>5</sup>                                  | 3     | 16 vCPU, 60 GB memory   | `n1-standard-16` |
+| Praefect<sup>5</sup>                                | 3     | 2 vCPU, 1.8 GB memory   | `n1-highcpu-2`   |
 | Praefect PostgreSQL<sup>1</sup>                     | 1+    | 2 vCPU, 1.8 GB memory   | `n1-highcpu-2`   |
 | Object storage<sup>4</sup>                          | n/a   | n/a                     | n/a              |
 
 <!-- Disable ordered list rule https://github.com/DavidAnson/markdownlint/blob/main/doc/Rules.md#md029---ordered-list-item-prefix -->
 <!-- markdownlint-disable MD029 -->
-1. Can be optionally run on reputable third-party external PaaS PostgreSQL solutions. Google Cloud SQL and AWS RDS are known to work, however Azure Database for PostgreSQL is [not recommended](https://gitlab.com/gitlab-org/quality/reference-architectures/-/issues/61) due to performance issues. Consul is primarily used for PostgreSQL high availability so can be ignored when using a PostgreSQL PaaS setup. However it is also used optionally by Prometheus for Omnibus auto host discovery.
+1. Can be optionally run on reputable third-party external PaaS PostgreSQL solutions. [Google Cloud SQL](https://cloud.google.com/sql/docs/postgres/high-availability#normal) and [Amazon RDS](https://aws.amazon.com/rds/) are known to work, however Azure Database for PostgreSQL is **not recommended** due to [performance issues](https://gitlab.com/gitlab-org/quality/reference-architectures/-/issues/61). Consul is primarily used for PostgreSQL high availability so can be ignored when using a PostgreSQL PaaS setup. However it is also used optionally by Prometheus for Omnibus auto host discovery.
 2. Can be optionally run on reputable third-party external PaaS Redis solutions. Google Memorystore and AWS Elasticache are known to work.
 3. Can be optionally run on reputable third-party load balancing services (LB PaaS). AWS ELB is known to work.
 4. Should be run on reputable third-party object storage (storage PaaS) for cloud implementations. Google Cloud Storage and AWS S3 are known to work.
+5. Gitaly Cluster provides the benefits of fault tolerance, but comes with additional complexity of setup and management. Please [review the existing technical limitations and considerations prior to deploying Gitaly Cluster](../gitaly/index.md#guidance-regarding-gitaly-cluster). If Gitaly Sharded is desired, the same specs listed above for `Gitaly` should be used.
 <!-- markdownlint-enable MD029 -->
 
 NOTE:
@@ -2437,6 +2277,7 @@ For all PaaS solutions that involve configuring instances, it is strongly recomm
 
 ```plantuml
 @startuml 10k
+skinparam linetype ortho
 
 card "Kubernetes via Helm Charts" as kubernetes {
   card "**External Load Balancer**" as elb #6a9be7
@@ -2446,7 +2287,6 @@ card "Kubernetes via Helm Charts" as kubernetes {
     collections "**Sidekiq** x4" as sidekiq #ff8dd1
   }
 
-  card "**Prometheus + Grafana**" as monitor #7FFFD4
   card "**Supporting Services**" as support
 }
 
@@ -2474,42 +2314,33 @@ card "Database" as database {
 card "redis" as redis {
   collections "**Redis Persistent** x3" as redis_persistent #FF6347
   collections "**Redis Cache** x3" as redis_cache #FF6347
-  collections "**Redis Persistent Sentinel** x3" as redis_persistent_sentinel #FF6347
-  collections "**Redis Cache Sentinel** x3"as redis_cache_sentinel #FF6347
-
-  redis_persistent <.[#FF6347]- redis_persistent_sentinel
-  redis_cache <.[#FF6347]- redis_cache_sentinel
+  
+  redis_cache -[hidden]-> redis_persistent
 }
 
 cloud "**Object Storage**" as object_storage #white
 
 elb -[#6a9be7]-> gitlab
-elb -[#6a9be7]-> monitor
+elb -[hidden]-> sidekiq
 elb -[hidden]-> support
 
 gitlab -[#32CD32]--> ilb
-gitlab -[#32CD32]-> object_storage
-gitlab -[#32CD32]---> redis
-gitlab -[hidden]--> consul
+gitlab -[#32CD32]r--> object_storage
+gitlab -[#32CD32,norank]----> redis
+gitlab -[#32CD32]----> database
 
 sidekiq -[#ff8dd1]--> ilb
-sidekiq -[#ff8dd1]-> object_storage
-sidekiq -[#ff8dd1]---> redis
-sidekiq -[hidden]--> consul
+sidekiq -[#ff8dd1]r--> object_storage
+sidekiq -[#ff8dd1,norank]----> redis
+sidekiq .[#ff8dd1]----> database
 
-ilb -[#9370DB]-> gitaly_cluster
-ilb -[#9370DB]-> database
+ilb -[#9370DB]--> gitaly_cluster
+ilb -[#9370DB]--> database
+ilb -[hidden,norank]--> redis
 
-consul .[#e76a9b]-> database
-consul .[#e76a9b]-> gitaly_cluster
-consul .[#e76a9b,norank]--> redis
-
-monitor .[#7FFFD4]> consul
-monitor .[#7FFFD4]-> database
-monitor .[#7FFFD4]-> gitaly_cluster
-monitor .[#7FFFD4,norank]--> redis
-monitor .[#7FFFD4]> ilb
-monitor .[#7FFFD4,norank]u--> elb
+consul .[#e76a9b]--> database
+consul .[#e76a9b,norank]--> gitaly_cluster
+consul .[#e76a9b]--> redis
 
 @enduml
 ```

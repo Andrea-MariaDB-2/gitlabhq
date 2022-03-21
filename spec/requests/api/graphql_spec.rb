@@ -12,21 +12,33 @@ RSpec.describe 'GraphQL' do
 
   describe 'logging' do
     shared_examples 'logging a graphql query' do
-      let(:expected_params) do
+      let(:expected_execute_query_log) do
         {
-          query_string: query,
-          variables: variables.to_s,
-          duration_s: anything,
+          "correlation_id" => kind_of(String),
+          "meta.caller_id" => "graphql:anonymous",
+          "meta.client_id" => kind_of(String),
+          "meta.feature_category" => "not_owned",
+          "meta.remote_ip" => kind_of(String),
+          "query_analysis.duration_s" => kind_of(Numeric),
+          "query_analysis.depth" => 1,
+          "query_analysis.complexity" => 1,
+          "query_analysis.used_fields" => ['Query.echo'],
+          "query_analysis.used_deprecated_fields" => [],
+          # query_fingerprint starts with operation name
+          query_fingerprint: %r{^anonymous\/},
+          duration_s: kind_of(Numeric),
+          trace_type: 'execute_query',
           operation_name: nil,
-          depth: 1,
-          complexity: 1,
-          used_fields: ['Query.echo'],
-          used_deprecated_fields: []
+          # operation_fingerprint starts with operation name
+          operation_fingerprint: %r{^anonymous\/},
+          is_mutation: false,
+          variables: variables.to_s,
+          query_string: query
         }
       end
 
       it 'logs a query with the expected params' do
-        expect(Gitlab::GraphqlLogger).to receive(:info).with(expected_params).once
+        expect(Gitlab::GraphqlLogger).to receive(:info).with(expected_execute_query_log).once
 
         post_graphql(query, variables: variables)
       end
@@ -241,7 +253,7 @@ RSpec.describe 'GraphQL' do
     end
 
     context 'with token authentication' do
-      let(:token) { create(:personal_access_token) }
+      let(:token) { create(:personal_access_token, user: user) }
 
       it 'authenticates users with a PAT' do
         stub_authentication_activity_metrics(debug: false)
@@ -262,6 +274,32 @@ RSpec.describe 'GraphQL' do
         post_graphql(query, headers: { 'PRIVATE-TOKEN' => token.token })
 
         expect(graphql_errors).to include({ 'message' => /API not accessible/ })
+      end
+
+      context 'when user with expired password' do
+        let_it_be(:user) { create(:user, password_expires_at: 2.minutes.ago) }
+
+        it 'does not authenticate user' do
+          post_graphql(query, headers: { 'PRIVATE-TOKEN' => token.token })
+
+          expect(response).to have_gitlab_http_status(:ok)
+
+          expect(graphql_data['echo']).to eq('nil says: Hello world')
+        end
+      end
+
+      context 'when password expiration is not applicable' do
+        context 'when ldap user' do
+          let_it_be(:user) { create(:omniauth_user, provider: 'ldap', password_expires_at: 2.minutes.ago) }
+
+          it 'authenticates user' do
+            post_graphql(query, headers: { 'PRIVATE-TOKEN' => token.token })
+
+            expect(response).to have_gitlab_http_status(:ok)
+
+            expect(graphql_data['echo']).to eq("\"#{token.user.username}\" says: Hello world")
+          end
+        end
       end
 
       context 'when the personal access token has no api scope' do

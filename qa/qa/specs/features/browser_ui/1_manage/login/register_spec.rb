@@ -14,7 +14,7 @@ module QA
   end
 
   RSpec.describe 'Manage', :skip_signup_disabled, :requires_admin do
-    describe 'while LDAP is enabled', :orchestrated, :ldap_no_tls, testcase: 'https://gitlab.com/gitlab-org/quality/testcases/-/quality/test_cases/1300' do
+    describe 'while LDAP is enabled', :orchestrated, :ldap_no_tls, testcase: 'https://gitlab.com/gitlab-org/gitlab/-/quality/test_cases/347934' do
       before do
         # When LDAP is enabled, a previous test might have created a token for the LDAP 'tanuki' user who is not an admin
         # So we need to set it to nil in order to create a new token for admin user so that we are able to set_application_settings
@@ -39,7 +39,7 @@ module QA
       end
     end
 
-    describe 'standard', testcase: 'https://gitlab.com/gitlab-org/quality/testcases/-/quality/test_cases/1652' do
+    describe 'standard', testcase: 'https://gitlab.com/gitlab-org/gitlab/-/quality/test_cases/347867' do
       context 'when admin approval is not required' do
         before(:all) do
           set_require_admin_approval_after_user_signup_via_api(false)
@@ -64,9 +64,12 @@ module QA
             Page::Profile::Accounts::Show.perform do |show|
               show.delete_account(user.password)
             end
+
+            # TODO: Remove retry_on_exception once https://gitlab.com/gitlab-org/gitlab/-/issues/24294 is resolved
+            Support::Waiter.wait_until(retry_on_exception: true, sleep_interval: 3) { !user.exists? }
           end
 
-          it 'allows recreating with same credentials', testcase: 'https://gitlab.com/gitlab-org/quality/testcases/-/quality/test_cases/1651' do
+          it 'allows recreating with same credentials', testcase: 'https://gitlab.com/gitlab-org/gitlab/-/quality/test_cases/347868' do
             expect(Page::Main::Menu.perform(&:signed_in?)).to be_falsy
 
             Flow::Login.sign_in(as: user, skip_page_validation: true)
@@ -83,7 +86,7 @@ module QA
           end
 
           after do
-            @recreated_user.remove_via_api!
+            @recreated_user&.remove_via_api!
           end
 
           def admin_api_client
@@ -106,7 +109,7 @@ module QA
           end
         end
 
-        it 'allows user login after approval', testcase: 'https://gitlab.com/gitlab-org/quality/testcases/-/quality/test_cases/1639' do
+        it 'allows user login after approval', testcase: 'https://gitlab.com/gitlab-org/gitlab/-/quality/test_cases/347871' do
           expect(page).to have_text(signed_up_waiting_approval_text)
 
           Flow::Login.sign_in(as: @user, skip_page_validation: true)
@@ -117,11 +120,12 @@ module QA
 
           Flow::Login.sign_in(as: @user, skip_page_validation: true)
 
-          Page::Registration::Welcome.perform(&:click_get_started_button_if_available)
+          Flow::UserOnboarding.onboard_user
 
-          Page::Main::Menu.perform do |menu|
-            expect(menu).to have_personal_area
-          end
+          # In development env and .com the user is asked to create a group and a project which can be skipped for
+          # the purpose of this test
+          Runtime::Browser.visit(:gitlab, Page::Dashboard::Welcome)
+          Page::Main::Menu.perform(&:has_personal_area?)
         end
 
         after do

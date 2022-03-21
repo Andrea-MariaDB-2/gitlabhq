@@ -1,8 +1,8 @@
 <script>
-import { GlIcon, GlSprintf, GlLink, GlFormCheckbox, GlToggle } from '@gitlab/ui';
-
+import { GlButton, GlIcon, GlSprintf, GlLink, GlFormCheckbox, GlToggle } from '@gitlab/ui';
+import ConfirmDanger from '~/vue_shared/components/confirm_danger/confirm_danger.vue';
 import settingsMixin from 'ee_else_ce/pages/projects/shared/permissions/mixins/settings_pannel_mixin';
-import { s__ } from '~/locale';
+import { __, s__ } from '~/locale';
 import {
   visibilityOptions,
   visibilityLevelDescriptions,
@@ -31,22 +31,29 @@ export default {
     operationsLabel: s__('ProjectSettings|Operations'),
     packagesLabel: s__('ProjectSettings|Packages'),
     pagesLabel: s__('ProjectSettings|Pages'),
-    ciCdLabel: s__('CI/CD'),
+    ciCdLabel: __('CI/CD'),
     repositoryLabel: s__('ProjectSettings|Repository'),
     requirementsLabel: s__('ProjectSettings|Requirements'),
     securityAndComplianceLabel: s__('ProjectSettings|Security & Compliance'),
     snippetsLabel: s__('ProjectSettings|Snippets'),
     wikiLabel: s__('ProjectSettings|Wiki'),
+    pucWarningLabel: s__('ProjectSettings|Warn about Potentially Unwanted Characters'),
+    pucWarningHelpText: s__(
+      'ProjectSettings|Highlight the usage of hidden unicode characters. These have innocent uses for right-to-left languages, but can also be used in potential exploits.',
+    ),
+    confirmButtonText: __('Save changes'),
   },
 
   components: {
     projectFeatureSetting,
     projectSettingRow,
+    GlButton,
     GlIcon,
     GlSprintf,
     GlLink,
     GlFormCheckbox,
     GlToggle,
+    ConfirmDanger,
   },
   mixins: [settingsMixin],
 
@@ -159,6 +166,15 @@ export default {
       required: false,
       default: '',
     },
+    confirmationPhrase: {
+      type: String,
+      required: true,
+    },
+    showVisibilityConfirmModal: {
+      type: Boolean,
+      required: false,
+      default: false,
+    },
   },
   data() {
     const defaults = {
@@ -178,6 +194,7 @@ export default {
       securityAndComplianceAccessLevel: featureAccessLevel.PROJECT_MEMBERS,
       operationsAccessLevel: featureAccessLevel.EVERYONE,
       containerRegistryAccessLevel: featureAccessLevel.EVERYONE,
+      warnAboutPotentiallyUnwantedCharacters: true,
       lfsEnabled: true,
       requestAccessEnabled: true,
       highlightChangesClass: false,
@@ -263,11 +280,17 @@ export default {
       }
 
       return s__(
-        'ProjectSettings|View and edit files in this project. Non-project members will only have read access.',
+        'ProjectSettings|View and edit files in this project. Non-project members have only read access.',
       );
     },
     cveIdRequestIsDisabled() {
       return this.visibilityLevel !== visibilityOptions.PUBLIC;
+    },
+    isVisibilityReduced() {
+      return (
+        this.showVisibilityConfirmModal &&
+        this.visibilityLevel < this.currentSettings.visibilityLevel
+      );
     },
   },
 
@@ -395,6 +418,9 @@ export default {
         ref="project-visibility-settings"
         :help-path="visibilityHelpPath"
         :label="s__('ProjectSettings|Project visibility')"
+        :help-text="
+          s__('ProjectSettings|Manage who can see the project in the public access directory.')
+        "
       >
         <div class="project-feature-controls gl-display-flex gl-align-items-center gl-my-3 gl-mx-0">
           <div class="select-wrapper gl-flex-grow-1">
@@ -752,5 +778,37 @@ export default {
         }}</template>
       </gl-form-checkbox>
     </project-setting-row>
+    <project-setting-row class="gl-mb-5">
+      <input
+        :value="warnAboutPotentiallyUnwantedCharacters"
+        type="hidden"
+        name="project[project_setting_attributes][warn_about_potentially_unwanted_characters]"
+      />
+      <gl-form-checkbox
+        v-model="warnAboutPotentiallyUnwantedCharacters"
+        name="project[project_setting_attributes][warn_about_potentially_unwanted_characters]"
+      >
+        {{ $options.i18n.pucWarningLabel }}
+        <template #help>{{ $options.i18n.pucWarningHelpText }}</template>
+      </gl-form-checkbox>
+    </project-setting-row>
+    <confirm-danger
+      v-if="isVisibilityReduced"
+      button-variant="confirm"
+      :disabled="false"
+      :phrase="confirmationPhrase"
+      :button-text="$options.i18n.confirmButtonText"
+      data-testid="project-features-save-button"
+      @confirm="$emit('confirm')"
+    />
+    <gl-button
+      v-else
+      type="submit"
+      variant="confirm"
+      data-testid="project-features-save-button"
+      data-qa-selector="visibility_features_permissions_save_button"
+    >
+      {{ $options.i18n.confirmButtonText }}
+    </gl-button>
   </div>
 </template>

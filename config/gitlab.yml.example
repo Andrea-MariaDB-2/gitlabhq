@@ -9,6 +9,8 @@
 # If you change this file in a merge request, please also create       #
 # a MR on https://gitlab.com/gitlab-org/omnibus-gitlab/merge_requests. #
 # For more details see https://gitlab.com/gitlab-org/omnibus-gitlab/blob/master/doc/settings/gitlab.yml.md #
+# Be sure to create a MR against the GDK configuration                 #
+# file (https://gitlab.com/gitlab-org/gitlab-development-kit/-/blob/main/support/templates/gitlab/config/gitlab.yml.erb) too. #
 ########################################################################
 #
 #
@@ -176,12 +178,14 @@ production: &base
     ## Application settings cache expiry in seconds (default: 60)
     # application_settings_cache_seconds: 60
 
-    ## Print initial root password to stdout during initialization (default: true)
-    # display_initial_root_password: true
+    ## Print initial root password to stdout during initialization (default: false)
+    # WARNING: setting this to true means that the root password will be printed in
+    # plaintext. This can be a security risk.
+    # display_initial_root_password: false
 
   ## Reply by email
   # Allow users to comment on issues and merge requests by replying to notification emails.
-  # For documentation on how to set this up, see http://doc.gitlab.com/ce/administration/reply_by_email.html
+  # For documentation on how to set this up, see https://docs.gitlab.com/ee/administration/reply_by_email.html
   incoming_email:
     enabled: false
 
@@ -225,6 +229,26 @@ production: &base
     #   tenant_id: "YOUR-TENANT-ID"
     #   client_id: "YOUR-CLIENT-ID"
     #   client_secret: "YOUR-CLIENT-SECRET"
+
+    # How mailroom delivers email content to Rails. There are two methods at the moment:
+    # - sidekiq: mailroom pushes the email content to Sidekiq directly. This job
+    # is then picked up by Sidekiq.
+    # - webhook: mailroom triggers a HTTP POST request to Rails web server. The
+    # content is embedded into the request body.
+    # Default is sidekiq.
+    # delivery_method: sidekiq
+
+    # When the delivery method is webhook, those configs tell the url that
+    # mailroom can contact to. Note that the combined url must not end with "/".
+    # At the moment, the webhook delivery method doesn't support HTTP/HTTPs via
+    # UNIX socket.
+    # gitlab_url: "http://gitlab.example"
+
+    # When the delivery method is webhook, this config is the file that
+    # contains the shared secret key for verifying access for mailroom's
+    # incoming_email.
+    # Default is '.gitlab_mailroom_secret' relative to Rails.root (i.e. root of the GitLab app).
+    # secret_file: /home/git/gitlab/.gitlab_mailroom_secret
 
   ## Consolidated object store config
   ## This will only take effect if the object_store sections are not defined
@@ -386,6 +410,23 @@ production: &base
     object_store:
       enabled: false
       remote_directory: terraform # The bucket name
+      connection:
+        provider: AWS
+        aws_access_key_id: AWS_ACCESS_KEY_ID
+        aws_secret_access_key: AWS_SECRET_ACCESS_KEY
+        region: us-east-1
+        # host: 'localhost' # default: s3.amazonaws.com
+        # endpoint: 'http://127.0.0.1:9000' # default: nil
+        # aws_signature_version: 4 # For creation of signed URLs. Set to 2 if provider does not support v4.
+        # path_style: true # Use 'host/bucket_name/object' instead of 'bucket_name.host/object'
+
+  ## CI Secure Files
+  ci_secure_files:
+    enabled: true
+    # storage_path: shared/ci_secure_files
+    object_store:
+      enabled: false
+      remote_directory: ci-secure-files # The bucket name
       connection:
         provider: AWS
         aws_access_key_id: AWS_ACCESS_KEY_ID
@@ -959,6 +1000,11 @@ production: &base
     # (default: false)
     auto_link_saml_user: false
 
+    # CAUTION!
+    # Allows larger SAML messages to be received. Numeric value in bytes (default: 250000)
+    # Too high limits exposes instance to decompression DDoS attack type.
+    saml_message_max_byte_size: 250000
+
     # Allow users with existing accounts to sign in and auto link their account via OmniAuth
     # login, without having to do a manual login first and manually add OmniAuth. Links on email.
     # Define the allowed providers using an array, e.g. ["saml", "twitter"], or as true/false to
@@ -1015,6 +1061,9 @@ production: &base
       #     verify_ssl: true,
       #     args: { scope: 'user:email' } }
       # - { name: 'bitbucket',
+      #     app_id: 'YOUR_APP_ID',
+      #     app_secret: 'YOUR_APP_SECRET' }
+      # - { name: 'dingtalk',
       #     app_id: 'YOUR_APP_ID',
       #     app_secret: 'YOUR_APP_SECRET' }
       # - { name: 'gitlab',
@@ -1213,6 +1262,9 @@ production: &base
     # The URL to the internal KAS API (used by the GitLab backend)
     # internal_url: grpc://localhost:8153
 
+    # The URL to the Kubernetes API proxy (used by GitLab users)
+    # external_k8s_proxy_url: https://localhost:8154 # default: nil
+
   ## GitLab Elasticsearch settings
   elasticsearch:
     indexer_path: /home/git/gitlab-elasticsearch-indexer/
@@ -1242,6 +1294,12 @@ production: &base
 
     # Sidekiq exporter is webserver built in to Sidekiq to expose Prometheus metrics
     sidekiq_exporter:
+    #  enabled: true
+    #  log_enabled: false
+    #  address: localhost
+    #  port: 8082
+
+    sidekiq_health_checks:
     #  enabled: true
     #  log_enabled: false
     #  address: localhost
@@ -1286,6 +1344,12 @@ production: &base
 
     ## Google tag manager
     # google_tag_manager_id: '_your_tracking_id'
+
+    ## OneTrust
+    # one_trust_id: '_your_one_trust_id'
+
+    ## Bizible.
+    # bizible: true
 
     ## Matomo analytics.
     # matomo_url: '_your_matomo_url'
@@ -1399,6 +1463,18 @@ test:
         aws_secret_access_key: AWS_SECRET_ACCESS_KEY
         region: us-east-1
 
+  ci_secure_files:
+    enabled: true
+    storage_path: tmp/tests/ci_secure_files
+    object_store:
+      enabled: false
+      remote_directory: ci-secure-files
+      connection:
+        provider: AWS # Only AWS supported at the moment
+        aws_access_key_id: AWS_ACCESS_KEY_ID
+        aws_secret_access_key: AWS_SECRET_ACCESS_KEY
+        region: us-east-1
+
   gitlab:
     host: localhost
     port: 80
@@ -1500,6 +1576,9 @@ test:
           verify_ssl: false,
           args: { scope: 'user:email' } }
       - { name: 'bitbucket',
+          app_id: 'YOUR_APP_ID',
+          app_secret: 'YOUR_APP_SECRET' }
+      - { name: 'dingtalk',
           app_id: 'YOUR_APP_ID',
           app_secret: 'YOUR_APP_SECRET' }
       - { name: 'gitlab',

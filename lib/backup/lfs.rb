@@ -2,12 +2,13 @@
 
 module Backup
   class Lfs < Backup::Files
-    attr_reader :progress
-
     def initialize(progress)
-      @progress = progress
+      super(progress, 'lfs', Settings.lfs.storage_path)
+    end
 
-      super('lfs', Settings.lfs.storage_path)
+    override :human_name
+    def human_name
+      _('lfs objects')
     end
   end
 end

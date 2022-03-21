@@ -5,25 +5,20 @@ group: Composition Analysis
 info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
 ---
 
-# License Compliance **(ULTIMATE)**
+# License compliance **(ULTIMATE)**
 
-> [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/5483) in [GitLab Ultimate](https://about.gitlab.com/pricing/) 11.0.
+> [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/5483) in GitLab 11.0.
 
 If you're using [GitLab CI/CD](../../../ci/index.md), you can use License Compliance to search your
 project's dependencies for their licenses. You can then decide whether to allow or deny the use of
 each license. For example, if your application uses an external (open source) library whose license
 is incompatible with yours, then you can deny the use of that license.
 
-You can take advantage of License Compliance by either:
+To detect the licenses in use, License Compliance uses the [License Finder](https://github.com/pivotal/LicenseFinder) scan tool that runs as part of the CI/CD pipeline. The License Compliance job is not dependent on any other job in
+a pipeline.
 
-- [Including the job](#configuration)
-  in your existing `.gitlab-ci.yml` file.
-- Implicitly using
-  [Auto License Compliance](../../../topics/autodevops/stages.md#auto-license-compliance),
-  provided by [Auto DevOps](../../../topics/autodevops/index.md).
-
-The [License Finder](https://github.com/pivotal/LicenseFinder) scan tool runs as part of the CI/CD
-pipeline, and detects the licenses in use. GitLab checks the License Compliance report, compares the
+For the job to activate, License Finder needs to find a compatible package definition in the project directory. For details, see the [Activation on License Finder documentation](https://github.com/pivotal/LicenseFinder#activation).
+GitLab checks the License Compliance report, compares the
 licenses between the source and target branches, and shows the information right on the merge
 request. Denied licenses are indicated by a `x` red icon next to them as well as new licenses that
 need a decision from you. In addition, you can [manually allow or deny](#policies) licenses in your
@@ -38,16 +33,34 @@ is displayed in the merge request area. That is the case when you add the
 Consecutive merge requests have something to compare to and the license
 compliance report is shown properly.
 
+The results are saved as a
+[License Compliance report artifact](../../../ci/yaml/artifacts_reports.md#artifactsreportslicense_scanning)
+that you can later download and analyze. Due to implementation limitations, we
+always take the latest License Compliance artifact available.
+
+WARNING:
+License Compliance Scanning does not support run-time installation of compilers and interpreters.
+
 ![License Compliance Widget](img/license_compliance_v13_0.png)
 
-You can click on a license to see more information.
+You can select a license to see more information.
 
 When GitLab detects a **Denied** license, you can view it in the [license list](#license-list).
 
 ![License List](img/license_list_v13_0.png)
 
 You can view and modify existing policies from the [policies](#policies) tab.
-![Edit Policy](img/policies_maintainer_edit_v14_2.png)
+
+![Edit Policy](img/policies_maintainer_edit_v14_3.png)
+
+## License expressions
+
+GitLab has limited support for [composite licenses](https://spdx.github.io/spdx-spec/SPDX-license-expressions/).
+License compliance can read multiple licenses, but always considers them combined using the `AND` operator. For example,
+if a dependency has two licenses, and one of them is allowed and the other is denied by the project [policy](#policies),
+GitLab evaluates the composite license as _denied_, as this is the safer option.
+The ability to support other license expression operators (like `OR`, `WITH`) is tracked
+in [this epic](https://gitlab.com/groups/gitlab-org/-/epics/6571).
 
 ## Supported languages and package managers
 
@@ -58,7 +71,7 @@ Gradle 1.x projects are not supported. The minimum supported version of Maven is
 | Language   | Package managers                                                                             | Notes |
 |------------|----------------------------------------------------------------------------------------------|-------|
 | JavaScript | [Bower](https://bower.io/), [npm](https://www.npmjs.com/) (7 and earlier)                    |       |
-| Go         | [Godep](https://github.com/tools/godep), [go mod](https://github.com/golang/go/wiki/Modules) |       |
+| Go         | [Godep](https://github.com/tools/godep) ([deprecated](../../../update/deprecations.md#godep-support-in-license-compliance)), [go mod](https://github.com/golang/go/wiki/Modules) |       |
 | Java       | [Gradle](https://gradle.org/), [Maven](https://maven.apache.org/)                            |       |
 | .NET       | [NuGet](https://www.nuget.org/)                                                              | The .NET Framework is supported via the [mono project](https://www.mono-project.com/). There are, however, some limitations. The scanner doesn't support Windows-specific dependencies and doesn't report dependencies of your project's listed dependencies. Also, the scanner always marks detected licenses for all dependencies as `unknown`. |
 | Python     | [pip](https://pip.pypa.io/en/stable/)                                                        | Python is supported through [requirements.txt](https://pip.pypa.io/en/stable/user_guide/#requirements-files) and [Pipfile.lock](https://github.com/pypa/pipfile#pipfilelock). |
@@ -77,31 +90,29 @@ The reported licenses might be incomplete or inaccurate.
 | Objective-C, Swift | [Carthage](https://github.com/Carthage/Carthage), [CocoaPods](https://cocoapods.org/) v0.39 and below |
 | Elixir     | [Mix](https://elixir-lang.org/getting-started/mix-otp/introduction-to-mix.html)                               |
 | C++/C      | [Conan](https://conan.io/)                                                                                    |
-| Scala      | [sbt](https://www.scala-sbt.org/)                                                                             |
-| Rust       | [Cargo](https://crates.io)                                                                                    |
+| Rust       | [Cargo](https://crates.io/)                                                                                   |
 | PHP        | [Composer](https://getcomposer.org/)                                                                          |
 
-## Requirements
+## Enable License Compliance
 
-WARNING:
-License Compliance Scanning does not support run-time installation of compilers and interpreters.
+To enable License Compliance in your project's pipeline, either:
 
-To run a License Compliance scanning job, you need GitLab Runner with the
-[`docker` executor](https://docs.gitlab.com/runner/executors/docker.html).
+- Enable [Auto License Compliance](../../../topics/autodevops/stages.md#auto-license-compliance)
+  (provided by [Auto DevOps](../../../topics/autodevops/index.md)).
+- Include the [`License-Scanning.gitlab-ci.yml` template](https://gitlab.com/gitlab-org/gitlab/-/blob/master/lib/gitlab/ci/templates/Security/License-Scanning.gitlab-ci.yml) in your `.gitlab-ci.yml` file.
 
-## Configuration
+### Include the License Scanning template
 
-For GitLab 12.8 and later, to enable License Compliance, you must
-[include](../../../ci/yaml/index.md#includetemplate) the
-[`License-Scanning.gitlab-ci.yml` template](https://gitlab.com/gitlab-org/gitlab/-/blob/master/lib/gitlab/ci/templates/Security/License-Scanning.gitlab-ci.yml)
-that's provided as a part of your GitLab installation.
-For older versions of GitLab from 11.9 to 12.7, you must
-[include](../../../ci/yaml/index.md#includetemplate) the
-[`License-Management.gitlab-ci.yml` template](https://gitlab.com/gitlab-org/gitlab/-/blob/d2cc841c55d65bc8134bfb3a467e66c36ac32b0a/lib/gitlab/ci/templates/Security/License-Management.gitlab-ci.yml).
-For GitLab versions earlier than 11.9, you can copy and use the job as defined
-that template.
+Prerequisites:
 
-Add the following to your `.gitlab-ci.yml` file:
+- [GitLab Runner](../../../ci/runners/index.md) available, with the
+  [`docker` executor](https://docs.gitlab.com/runner/executors/docker.html). If you're using the
+  shared runners on GitLab.com, this is enabled by default.
+- License Scanning runs in the `test` stage, which is available by default. If you redefine the stages in the
+  `.gitlab-ci.yml` file, the `test` stage is required.
+
+To [include](../../../ci/yaml/index.md#includetemplate) the
+[`License-Scanning.gitlab-ci.yml` template](https://gitlab.com/gitlab-org/gitlab/-/blob/master/lib/gitlab/ci/templates/Security/License-Scanning.gitlab-ci.yml), add it to your `.gitlab-ci.yml` file:
 
 ```yaml
 include:
@@ -110,26 +121,6 @@ include:
 
 The included template creates a `license_scanning` job in your CI/CD pipeline and scans your
 dependencies to find their licenses.
-
-NOTE:
-Before GitLab 12.8, the `license_scanning` job was named `license_management`. GitLab 13.0 removes
-the `license_management` job, so you must migrate to the `license_scanning` job and use the new
-`License-Scanning.gitlab-ci.yml` template.
-
-The results are saved as a
-[License Compliance report artifact](../../../ci/yaml/index.md#artifactsreportslicense_scanning)
-that you can later download and analyze. Due to implementation limitations, we
-always take the latest License Compliance artifact available. Behind the scenes, the
-[GitLab License Compliance Docker image](https://gitlab.com/gitlab-org/security-products/analyzers/license-finder)
-is used to detect the languages/frameworks and in turn analyzes the licenses.
-
-The License Compliance settings can be changed through [CI/CD variables](#available-cicd-variables) by using the
-[`variables`](../../../ci/yaml/index.md#variables) parameter in `.gitlab-ci.yml`.
-
-### When License Compliance runs
-
-When using the GitLab `License-Scanning.gitlab-ci.yml` template, the License Compliance job doesn't
-wait for other stages to complete.
 
 ### Available CI/CD variables
 
@@ -153,7 +144,7 @@ License Compliance can be configured using CI/CD variables.
 
 ### Installing custom dependencies
 
-> Introduced in [GitLab Ultimate](https://about.gitlab.com/pricing/) 11.4.
+> Introduced in GitLab 11.4.
 
 The `license_finder` image already embeds many auto-detection scripts, languages,
 and packages. Nevertheless, it's almost impossible to cover all cases for all projects.
@@ -163,7 +154,7 @@ For that, a `SETUP_CMD` CI/CD variable can be passed to the container,
 with the required commands to run before the license detection.
 
 If present, this variable overrides the setup step necessary to install all the packages
-of your application (e.g.: for a project with a `Gemfile`, the setup step could be
+of your application (for example: for a project with a `Gemfile`, the setup step could be
 `bundle install`).
 
 For example:
@@ -178,6 +169,21 @@ variables:
 
 In this example, `my-custom-install-script.sh` is a shell script at the root
 directory of your project.
+
+### Working with Monorepos
+
+Depending on your language, you may need to specify the path to the individual
+projects of a monorepo using the `LICENSE_FINDER_CLI_OPTS` variable. Passing in
+the project paths can significantly speed up builds over using the `--recursive`
+license_finder option.
+
+```yaml
+include:
+  - template: Security/License-Scanning.gitlab-ci.yml
+
+variables:
+  LICENSE_FINDER_CLI_OPTS: "--aggregate_paths=relative-path/to/sub-project/one relative-path/to/sub-project/two"
+```
 
 ### Overriding the template
 
@@ -213,7 +219,7 @@ license_scanning:
     MAVEN_CLI_OPTS: --debug
 ```
 
-`mvn install` runs through all of the [build life cycle](http://maven.apache.org/guides/introduction/introduction-to-the-lifecycle.html)
+`mvn install` runs through all of the [build life cycle](https://maven.apache.org/guides/introduction/introduction-to-the-lifecycle.html)
 stages prior to `install`, including `test`. Running unit tests is not directly
 necessary for the license scanning purposes and consumes time, so it's skipped
 by having the default value of `MAVEN_CLI_OPTS` as `-DskipTests`. If you want
@@ -243,17 +249,17 @@ license_scanning:
 
 Alternatively, you can use a Java key store to verify the TLS connection. For instructions on how to
 generate a key store file, see the
-[Maven Guide to Remote repository access through authenticated HTTPS](http://maven.apache.org/guides/mini/guide-repository-ssl.html).
+[Maven Guide to Remote repository access through authenticated HTTPS](https://maven.apache.org/guides/mini/guide-repository-ssl.html).
 
 ### Selecting the version of Java
 
 License Compliance uses Java 8 by default. You can specify a different Java version using `LM_JAVA_VERSION`.
 
-`LM_JAVA_VERSION` only accepts versions: 8, 11, 14, 15. 
+`LM_JAVA_VERSION` only accepts versions: 8, 11, 14, 15.
 
 ### Selecting the version of Python
 
-> - [Introduced](https://gitlab.com/gitlab-org/security-products/license-management/-/merge_requests/36) in [GitLab Ultimate](https://about.gitlab.com/pricing/) 12.0.
+> - [Introduced](https://gitlab.com/gitlab-org/security-products/license-management/-/merge_requests/36) in GitLab 12.0.
 > - In [GitLab 12.2](https://gitlab.com/gitlab-org/gitlab/-/issues/12032), Python 3.5 became the default.
 > - In [GitLab 12.7](https://gitlab.com/gitlab-org/security-products/license-management/-/merge_requests/101), Python 3.8 became the default.
 
@@ -516,24 +522,24 @@ configured to use this as the default `CA_CERT_PATH`.
 ### Configuring Go projects
 
 To configure [Go modules](https://github.com/golang/go/wiki/Modules)
-based projects, specify [CI/CD variables](https://golang.org/pkg/cmd/go/#hdr-Environment_variables)
+based projects, specify [CI/CD variables](https://pkg.go.dev/cmd/go#hdr-Environment_variables)
 in the `license_scanning` job's [variables](#available-cicd-variables) section in `.gitlab-ci.yml`.
 
-If a project has [vendored](https://golang.org/pkg/cmd/go/#hdr-Vendor_Directories) its modules,
+If a project has [vendored](https://pkg.go.dev/cmd/go#hdr-Vendor_Directories) its modules,
 then the combination of the `vendor` directory and `mod.sum` file are used to detect the software
 licenses associated with the Go module dependencies.
 
 #### Using private Go registries
 
-You can use the [`GOPRIVATE`](https://golang.org/pkg/cmd/go/#hdr-Environment_variables)
-and [`GOPROXY`](https://golang.org/pkg/cmd/go/#hdr-Environment_variables)
+You can use the [`GOPRIVATE`](https://pkg.go.dev/cmd/go#hdr-Environment_variables)
+and [`GOPROXY`](https://pkg.go.dev/cmd/go#hdr-Environment_variables)
 environment variables to control where modules are sourced from. Alternatively, you can use
-[`go mod vendor`](https://golang.org/ref/mod#tmp_28) to vendor a project's modules.
+[`go mod vendor`](https://go.dev/ref/mod#tmp_28) to vendor a project's modules.
 
 #### Custom root certificates for Go
 
-You can specify the [`-insecure`](https://golang.org/pkg/cmd/go/internal/get/) flag by exporting the
-[`GOFLAGS`](https://golang.org/cmd/go/#hdr-Environment_variables)
+You can specify the [`-insecure`](https://pkg.go.dev/cmd/go/internal/get) flag by exporting the
+[`GOFLAGS`](https://pkg.go.dev/cmd/go#hdr-Environment_variables)
 environment variable. For example:
 
 ```yaml
@@ -626,7 +632,7 @@ successfully run. For more information, see [Offline environments](../../applica
 
 To use License Compliance in an offline environment, you need:
 
-- GitLab Runner with the [`docker` or `kubernetes` executor](#requirements).
+- To meet the standard [License Compliance prerequisites](#include-the-license-scanning-template).
 - Docker Container Registry with locally available copies of License Compliance [analyzer](https://gitlab.com/gitlab-org/security-products/analyzers) images.
 
 NOTE:
@@ -644,12 +650,12 @@ import the following default License Compliance analyzer images from `registry.g
 offline [local Docker container registry](../../packages/container_registry/index.md):
 
 ```plaintext
-registry.gitlab.com/gitlab-org/security-products/analyzers/license-finder:latest
+registry.gitlab.com/security-products/license-finder:latest
 ```
 
 The process for importing Docker images into a local offline Docker registry depends on
 **your network security policy**. Please consult your IT staff to find an accepted and approved
-process by which external resources can be imported or temporarily accessed. Note that these scanners are [updated periodically](../../application_security/vulnerabilities/index.md#vulnerability-scanner-maintenance)
+process by which external resources can be imported or temporarily accessed. Note that these scanners are [updated periodically](../../application_security/index.md#vulnerability-scanner-maintenance)
 with new definitions, so consider if you are able to make periodic updates yourself.
 
 For details on saving and transporting Docker images as a file, see Docker's documentation on
@@ -686,7 +692,7 @@ Additional configuration may be needed for connecting to private registries for:
 
 ### SPDX license list name matching
 
-> [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/212388) in [GitLab Ultimate](https://about.gitlab.com/pricing/) 13.3.
+> [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/212388) in GitLab 13.3.
 
 Prior to GitLab 13.3, offline environments required an exact name match for [project policies](#policies).
 In GitLab 13.3 and later, GitLab matches the name of [project policies](#policies)
@@ -696,20 +702,21 @@ instance's administrator can manually update it with a [Rake task](../../../rake
 
 ## License list
 
-> [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/13582) in [GitLab Ultimate](https://about.gitlab.com/pricing/) 12.7.
+> [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/13582) in GitLab 12.7.
 
 The License list allows you to see your project's licenses and key
 details about them.
 
-In order for the licenses to appear under the license list, the following
+For the licenses to appear under the license list, the following
 requirements must be met:
 
-1. The License Compliance CI job must be [configured](#configuration) for your project.
+1. The License Compliance CI/CD job must be [enabled](#enable-license-compliance) for your project.
 1. Your project must use at least one of the
    [supported languages and package managers](#supported-languages-and-package-managers).
 
-Once everything is set, navigate to **Security & Compliance > License Compliance**
-in your project's sidebar, and the licenses are displayed, where:
+When everything is configured, on the left sidebar, select **Security & Compliance > License Compliance**.
+
+The licenses are displayed, where:
 
 - **Name:** The name of the license.
 - **Component:** The components which have this license.
@@ -719,7 +726,7 @@ in your project's sidebar, and the licenses are displayed, where:
 
 ## Policies
 
-> [Introduced](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/22465) in [GitLab Ultimate](https://about.gitlab.com/pricing/) 12.9.
+> [Introduced](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/22465) in GitLab 12.9.
 
 Policies allow you to specify licenses that are `allowed` or `denied` in a project. If a `denied`
 license is newly committed it blocks the merge request and instructs the developer to remove it.
@@ -727,13 +734,14 @@ Note, the merge request is not able to be merged until the `denied` license is r
 You may add a [`License-Check` approval rule](#enabling-license-approvals-within-a-project),
 which enables a designated approver that can approve and then merge a merge request with `denied` license.
 
-![Merge Request with denied licenses](img/denied_licenses_v13_3.png)
+![Merge request with denied licenses](img/denied_licenses_v13_3.png)
 
 The **Policies** tab in the project's license compliance section displays your project's license
 policies. Project maintainers can specify policies in this section.
 
-![Edit Policy](img/policies_maintainer_edit_v14_2.png)
-![Add Policy](img/policies_maintainer_add_v13_2.png)
+![Edit Policy](img/policies_maintainer_edit_v14_3.png)
+
+![Add Policy](img/policies_maintainer_add_v14_3.png)
 
 Developers of the project can view the policies configured in a project.
 
@@ -741,7 +749,11 @@ Developers of the project can view the policies configured in a project.
 
 ## Enabling License Approvals within a project
 
-> [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/13067) in [GitLab Ultimate](https://about.gitlab.com/pricing/) 12.3.
+> [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/13067) in GitLab 12.3.
+
+Prerequisites:
+
+- Maintainer or Owner role.
 
 `License-Check` is a [merge request approval](../../project/merge_requests/approvals/index.md) rule
 you can enable to allow an individual or group to approve a merge request that contains a `denied`
@@ -749,8 +761,10 @@ license.
 
 You can enable `License-Check` one of two ways:
 
-1. Navigate to your project's **Settings > General** and expand **Merge request approvals**.
-1. Click **Enable** or **Edit**.
+1. On the top bar, select **Menu > Projects** and find your project.
+1. On the left sidebar, select **Settings > General**.
+1. Expand **Merge request approvals**.
+1. Select **Enable** or **Edit**.
 1. Add or change the **Rule name** to `License-Check` (case sensitive).
 
 ![License Check Approver Rule](img/license-check_v13_4.png)
@@ -770,6 +784,10 @@ An approval is optional when a license report:
 
 - Contains no software license violations.
 - Contains only new licenses that are `allowed` or unknown.
+
+## Warnings
+
+We recommend that you use the most recent version of all containers, and the most recent supported version of all package managers and languages. Using previous versions carries an increased security risk because unsupported versions may no longer benefit from active security reporting and backporting of security fixes.
 
 ## Troubleshooting
 
@@ -835,7 +853,7 @@ A full list of variables can be found in [CI/CD variables](#available-cicd-varia
 To find out what tools are pre-installed in the `license_scanning` Docker image use the following command:
 
 ```shell
-$ docker run --entrypoint='' registry.gitlab.com/gitlab-org/security-products/analyzers/license-finder:3 /bin/bash -lc 'asdf list'
+$ docker run --entrypoint='' registry.gitlab.com/security-products/license-finder:3 /bin/bash -lc 'asdf list'
 golang
   1.14
 gradle
@@ -862,7 +880,7 @@ sbt
 To interact with the `license_scanning` runtime environment use the following command:
 
 ```shell
-$ docker run -it --entrypoint='' registry.gitlab.com/gitlab-org/security-products/analyzers/license-finder:3 /bin/bash -l
+$ docker run -it --entrypoint='' registry.gitlab.com/security-products/license-finder:3 /bin/bash -l
 root@6abb70e9f193:~#
 ```
 

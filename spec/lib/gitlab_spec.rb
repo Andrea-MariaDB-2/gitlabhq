@@ -3,9 +3,19 @@
 require 'spec_helper'
 
 RSpec.describe Gitlab do
-  describe '.root' do
-    it 'returns the root path of the app' do
-      expect(described_class.root).to eq(Pathname.new(File.expand_path('../..', __dir__)))
+  %w[root extensions ee? jh?].each do |method_name|
+    it "delegates #{method_name} to GitlabEdition" do
+      expect(GitlabEdition).to receive(method_name)
+
+      described_class.public_send(method_name)
+    end
+  end
+
+  %w[ee jh].each do |method_name|
+    it "delegates #{method_name} to GitlabEdition" do
+      expect(GitlabEdition).to receive(method_name)
+
+      described_class.public_send(method_name) {}
     end
   end
 
@@ -70,27 +80,53 @@ RSpec.describe Gitlab do
   end
 
   describe '.com?' do
-    it "is true when on #{Gitlab::Saas.com_url}" do
-      stub_config_setting(url: Gitlab::Saas.com_url)
+    context 'when not simulating SaaS' do
+      before do
+        stub_env('GITLAB_SIMULATE_SAAS', '0')
+      end
+
+      it "is true when on #{Gitlab::Saas.com_url}" do
+        stub_config_setting(url: Gitlab::Saas.com_url)
+
+        expect(described_class.com?).to eq true
+      end
+
+      it "is true when on #{Gitlab::Saas.staging_com_url}" do
+        stub_config_setting(url: Gitlab::Saas.staging_com_url)
+
+        expect(described_class.com?).to eq true
+      end
+
+      it 'is true when on other gitlab subdomain' do
+        url_with_subdomain = Gitlab::Saas.com_url.gsub('https://', 'https://example.')
+        stub_config_setting(url: url_with_subdomain)
+
+        expect(described_class.com?).to eq true
+      end
+
+      it 'is true when on other gitlab subdomain with hyphen' do
+        url_with_subdomain = Gitlab::Saas.com_url.gsub('https://', 'https://test-example.')
+        stub_config_setting(url: url_with_subdomain)
+
+        expect(described_class.com?).to eq true
+      end
+
+      it 'is false when not on GitLab.com' do
+        stub_config_setting(url: 'http://example.com')
+
+        expect(described_class.com?).to eq false
+      end
+    end
+
+    it 'is true when GITLAB_SIMULATE_SAAS is true and in development' do
+      stub_rails_env('development')
+      stub_env('GITLAB_SIMULATE_SAAS', '1')
 
       expect(described_class.com?).to eq true
     end
 
-    it "is true when on #{Gitlab::Saas.staging_com_url}" do
-      stub_config_setting(url: Gitlab::Saas.staging_com_url)
-
-      expect(described_class.com?).to eq true
-    end
-
-    it 'is true when on other gitlab subdomain' do
-      url_with_subdomain = Gitlab::Saas.com_url.gsub('https://', 'https://example.')
-      stub_config_setting(url: url_with_subdomain)
-
-      expect(described_class.com?).to eq true
-    end
-
-    it 'is false when not on GitLab.com' do
-      stub_config_setting(url: 'http://example.com')
+    it 'is false when GITLAB_SIMULATE_SAAS is true and in test' do
+      stub_env('GITLAB_SIMULATE_SAAS', '1')
 
       expect(described_class.com?).to eq false
     end
@@ -180,51 +216,71 @@ RSpec.describe Gitlab do
     end
   end
 
-  describe '.dev_env_org_or_com?' do
+  describe '.org_or_com?' do
     it 'is true when on .com' do
       allow(described_class).to receive_messages(com?: true, org?: false)
 
-      expect(described_class.dev_env_org_or_com?).to eq true
+      expect(described_class.org_or_com?).to eq true
     end
 
     it 'is true when org' do
       allow(described_class).to receive_messages(com?: false, org?: true)
 
-      expect(described_class.dev_env_org_or_com?).to eq true
-    end
-
-    it 'is true when dev env' do
-      allow(described_class).to receive_messages(com?: false, org?: false)
-      stub_rails_env('development')
-
-      expect(described_class.dev_env_org_or_com?).to eq true
+      expect(described_class.org_or_com?).to eq true
     end
 
     it 'is false when not dev, org or com' do
       allow(described_class).to receive_messages(com?: false, org?: false)
 
-      expect(described_class.dev_env_org_or_com?).to eq false
+      expect(described_class.org_or_com?).to eq false
     end
   end
 
-  describe '.dev_env_or_com?' do
-    it 'is true when on .com' do
-      allow(described_class).to receive(:com?).and_return(true)
+  describe '.simulate_com?' do
+    subject { described_class.simulate_com? }
 
-      expect(described_class.dev_env_or_com?).to eq true
+    context 'when GITLAB_SIMULATE_SAAS is true' do
+      before do
+        stub_env('GITLAB_SIMULATE_SAAS', '1')
+      end
+
+      it 'is false when test env' do
+        expect(subject).to eq false
+      end
+
+      it 'is true when dev env' do
+        stub_rails_env('development')
+
+        expect(subject).to eq true
+      end
+
+      it 'is false when env is not dev' do
+        stub_rails_env('production')
+
+        expect(subject).to eq false
+      end
     end
 
-    it 'is true when dev env' do
-      allow(described_class).to receive(:com?).and_return(false)
-      allow(Rails).to receive(:env).and_return(ActiveSupport::StringInquirer.new('development'))
+    context 'when GITLAB_SIMULATE_SAAS is false' do
+      before do
+        stub_env('GITLAB_SIMULATE_SAAS', '0')
+      end
 
-      expect(described_class.dev_env_or_com?).to eq true
-    end
+      it 'is false when test env' do
+        expect(subject).to eq false
+      end
 
-    it 'is false when not dev or com' do
-      allow(described_class).to receive(:com?).and_return(false)
+      it 'is false when dev env' do
+        stub_rails_env('development')
 
-      expect(described_class.dev_env_or_com?).to eq false
+        expect(subject).to eq false
+      end
+
+      it 'is false when env is not dev or test' do
+        stub_rails_env('production')
+
+        expect(subject).to eq false
+      end
     end
   end
 
@@ -245,121 +301,6 @@ RSpec.describe Gitlab do
       allow(Rails).to receive(:env).and_return(ActiveSupport::StringInquirer.new('production'))
 
       expect(subject).to eq false
-    end
-  end
-
-  describe 'ee? and jh?' do
-    before do
-      # Make sure the ENV is clean
-      stub_env('FOSS_ONLY', nil)
-      stub_env('EE_ONLY', nil)
-
-      described_class.instance_variable_set(:@is_ee, nil)
-      described_class.instance_variable_set(:@is_jh, nil)
-    end
-
-    after do
-      described_class.instance_variable_set(:@is_ee, nil)
-      described_class.instance_variable_set(:@is_jh, nil)
-    end
-
-    def stub_path(*paths, **arguments)
-      root = Pathname.new('dummy')
-      pathname = double(:path, **arguments)
-
-      allow(described_class)
-        .to receive(:root)
-        .and_return(root)
-
-      allow(root).to receive(:join)
-
-      paths.each do |path|
-        allow(root)
-          .to receive(:join)
-          .with(path)
-          .and_return(pathname)
-      end
-    end
-
-    describe '.ee?' do
-      context 'for EE' do
-        before do
-          stub_path('ee/app/models/license.rb', exist?: true)
-        end
-
-        context 'when using FOSS_ONLY=1' do
-          before do
-            stub_env('FOSS_ONLY', '1')
-          end
-
-          it 'returns not to be EE' do
-            expect(described_class).not_to be_ee
-          end
-        end
-
-        context 'when using FOSS_ONLY=0' do
-          before do
-            stub_env('FOSS_ONLY', '0')
-          end
-
-          it 'returns to be EE' do
-            expect(described_class).to be_ee
-          end
-        end
-
-        context 'when using default FOSS_ONLY' do
-          it 'returns to be EE' do
-            expect(described_class).to be_ee
-          end
-        end
-      end
-
-      context 'for CE' do
-        before do
-          stub_path('ee/app/models/license.rb', exist?: false)
-        end
-
-        it 'returns not to be EE' do
-          expect(described_class).not_to be_ee
-        end
-      end
-    end
-
-    describe '.jh?' do
-      context 'for JH' do
-        before do
-          stub_path(
-            'ee/app/models/license.rb',
-            'jh',
-            exist?: true)
-        end
-
-        context 'when using default FOSS_ONLY and EE_ONLY' do
-          it 'returns to be JH' do
-            expect(described_class).to be_jh
-          end
-        end
-
-        context 'when using FOSS_ONLY=1' do
-          before do
-            stub_env('FOSS_ONLY', '1')
-          end
-
-          it 'returns not to be JH' do
-            expect(described_class).not_to be_jh
-          end
-        end
-
-        context 'when using EE_ONLY=1' do
-          before do
-            stub_env('EE_ONLY', '1')
-          end
-
-          it 'returns not to be JH' do
-            expect(described_class).not_to be_jh
-          end
-        end
-      end
     end
   end
 

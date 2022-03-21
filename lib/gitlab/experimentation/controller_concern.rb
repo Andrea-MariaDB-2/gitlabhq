@@ -16,11 +16,11 @@ module Gitlab
 
       included do
         before_action :set_experimentation_subject_id_cookie, unless: :dnt_enabled?
-        helper_method :experiment_enabled?, :experiment_tracking_category_and_group, :record_experiment_group, :tracking_label
+        helper_method :experiment_enabled?, :experiment_tracking_category_and_group, :record_experiment_group
       end
 
       def set_experimentation_subject_id_cookie
-        if Gitlab.dev_env_or_com?
+        if Gitlab.com?
           return if cookies[:experimentation_subject_id].present?
 
           cookies.permanent.signed[:experimentation_subject_id] = {

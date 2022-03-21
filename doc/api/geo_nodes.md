@@ -6,7 +6,7 @@ info: To determine the technical writer assigned to the Stage/Group associated w
 
 # Geo Nodes API **(PREMIUM SELF)**
 
-To interact with Geo node endpoints, you need to authenticate yourself as an
+To interact with Geo node endpoints, you must authenticate yourself as an
 administrator.
 
 ## Create a new Geo node
@@ -26,7 +26,7 @@ curl --header "PRIVATE-TOKEN: <your_access_token>" "https://primary.example.com/
 
 | Attribute                   | Type    | Required | Description                                                      |
 | ----------------------------| ------- | -------- | -----------------------------------------------------------------|
-| `primary`                   | boolean | no       | Specifying whether this node will be primary. Defaults to false. |
+| `primary`                   | boolean | no       | Specifying whether this node should be primary. Defaults to false. |
 | `enabled`                   | boolean | no       | Flag indicating if the Geo node is enabled. Defaults to true.    |
 | `name`                      | string  | yes      | The unique identifier for the Geo node. Must match `geo_node_name` if it is set in `gitlab.rb`, otherwise it must match `external_url` |
 | `url`                       | string  | yes      | The user-facing URL for the Geo node. |
@@ -35,11 +35,11 @@ curl --header "PRIVATE-TOKEN: <your_access_token>" "https://primary.example.com/
 | `repos_max_capacity`        | integer | no       | Control the maximum concurrency of repository backfill for this secondary node. Defaults to 25. |
 | `verification_max_capacity` | integer | no       | Control the maximum concurrency of repository verification for this node. Defaults to 100. |
 | `container_repositories_max_capacity` | integer  | no | Control the maximum concurrency of container repository sync for this node. Defaults to 10. |
-| `sync_object_storage`       | boolean | no       | Flag indicating if the secondary Geo node will replicate blobs in Object Storage. Defaults to false. |
+| `sync_object_storage`       | boolean | no       | Flag indicating if the secondary Geo node should replicate blobs in Object Storage. Defaults to false. |
 | `selective_sync_type`       | string  | no       | Limit syncing to only specific groups or shards. Valid values: `"namespaces"`, `"shards"`, or `null`. |
 | `selective_sync_shards`     | array   | no       | The repository storage for the projects synced if `selective_sync_type` == `shards`. |
 | `selective_sync_namespace_ids` | array | no      | The IDs of groups that should be synced, if `selective_sync_type` == `namespaces`. |
-| `minimum_reverification_interval` | integer | no | The interval (in days) in which the repository verification is valid. Once expired, it will be reverified. This has no effect when set on a secondary node. |
+| `minimum_reverification_interval` | integer | no | The interval (in days) in which the repository verification is valid. Once expired, it is reverified. This has no effect when set on a secondary node. |
 
 Example response:
 
@@ -62,8 +62,9 @@ Example response:
   "container_repositories_max_capacity": 10,
   "sync_object_storage": false,
   "clone_protocol": "http",
-  "web_edit_url": "https://primary.example.com/admin/geo/nodes/3/edit",
-  "web_geo_projects_url": "http://secondary.example.com/admin/geo/projects",
+  "web_edit_url": "https://primary.example.com/admin/geo/sites/3/edit",
+  "web_geo_projects_url": "https://secondary.example.com/admin/geo/projects",
+  "web_geo_replication_details_url": "https://secondary.example.com/admin/geo/sites/3/replication/lfs_objects",
   "_links": {
      "self": "https://primary.example.com/api/v4/geo_nodes/3",
      "status": "https://primary.example.com/api/v4/geo_nodes/3/status",
@@ -71,6 +72,10 @@ Example response:
   }
 }
 ```
+
+WARNING:
+The `web_geo_projects_url` attribute is in its end-of-life process. It is [deprecated](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/80106)
+for use in GitLab 14.9.
 
 ## Retrieve configuration about all Geo nodes
 
@@ -103,7 +108,7 @@ Example response:
     "selective_sync_namespace_ids": [1, 25],
     "minimum_reverification_interval": 7,
     "clone_protocol": "http",
-    "web_edit_url": "https://primary.example.com/admin/geo/nodes/1/edit",
+    "web_edit_url": "https://primary.example.com/admin/geo/sites/1/edit",
     "_links": {
       "self": "https://primary.example.com/api/v4/geo_nodes/1",
       "status":"https://primary.example.com/api/v4/geo_nodes/1/status",
@@ -128,8 +133,9 @@ Example response:
     "minimum_reverification_interval": 7,
     "sync_object_storage": true,
     "clone_protocol": "http",
-    "web_edit_url": "https://primary.example.com/admin/geo/nodes/2/edit",
+    "web_edit_url": "https://primary.example.com/admin/geo/sites/2/edit",
     "web_geo_projects_url": "https://secondary.example.com/admin/geo/projects",
+    "web_geo_replication_details_url": "https://secondary.example.com/admin/geo/sites/2/replication/lfs_objects",
     "_links": {
       "self":"https://primary.example.com/api/v4/geo_nodes/2",
       "status":"https://primary.example.com/api/v4/geo_nodes/2/status",
@@ -138,6 +144,10 @@ Example response:
   }
 ]
 ```
+
+WARNING:
+The `web_geo_projects_url` attribute is in its end-of-life process. It is [deprecated](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/80106)
+for use in GitLab 14.9.
 
 ## Retrieve configuration about a specific Geo node
 
@@ -169,7 +179,7 @@ Example response:
   "selective_sync_namespace_ids": [1, 25],
   "minimum_reverification_interval": 7,
   "clone_protocol": "http",
-  "web_edit_url": "https://primary.example.com/admin/geo/nodes/1/edit",
+  "web_edit_url": "https://primary.example.com/admin/geo/sites/1/edit",
   "_links": {
     "self": "https://primary.example.com/api/v4/geo_nodes/1",
     "status":"https://primary.example.com/api/v4/geo_nodes/1/status",
@@ -199,11 +209,11 @@ PUT /geo_nodes/:id
 | `repos_max_capacity`        | integer | no        | Control the maximum concurrency of repository backfill for this secondary node.     |
 | `verification_max_capacity` | integer | no        | Control the maximum concurrency of verification for this node. |
 | `container_repositories_max_capacity` | integer | no | Control the maximum concurrency of container repository sync for this node. |
-| `sync_object_storage`       | boolean | no        | Flag indicating if the secondary Geo node will replicate blobs in Object Storage. |
+| `sync_object_storage`       | boolean | no        | Flag indicating if the secondary Geo node should replicate blobs in Object Storage. |
 | `selective_sync_type`       | string  | no        | Limit syncing to only specific groups or shards. Valid values: `"namespaces"`, `"shards"`, or `null`. |
 | `selective_sync_shards`     | array   | no        | The repository storage for the projects synced if `selective_sync_type` == `shards`. |
 | `selective_sync_namespace_ids` | array | no       | The IDs of groups that should be synced, if `selective_sync_type` == `namespaces`. |
-| `minimum_reverification_interval` | integer | no | The interval (in days) in which the repository verification is valid. Once expired, it will be reverified. This has no effect when set on a secondary node. |
+| `minimum_reverification_interval` | integer | no | The interval (in days) in which the repository verification is valid. Once expired, it is reverified. This has no effect when set on a secondary node. |
 
 Example response:
 
@@ -226,8 +236,9 @@ Example response:
   "minimum_reverification_interval": 7,
   "sync_object_storage": true,
   "clone_protocol": "http",
-  "web_edit_url": "https://primary.example.com/admin/geo/nodes/2/edit",
+  "web_edit_url": "https://primary.example.com/admin/geo/sites/2/edit",
   "web_geo_projects_url": "https://secondary.example.com/admin/geo/projects",
+  "web_geo_replication_details_url": "https://secondary.example.com/admin/geo/sites/2/replication/lfs_objects",
   "_links": {
     "self":"https://primary.example.com/api/v4/geo_nodes/2",
     "status":"https://primary.example.com/api/v4/geo_nodes/2/status",
@@ -236,12 +247,16 @@ Example response:
 }
 ```
 
+WARNING:
+The `web_geo_projects_url` attribute is in its end-of-life process. It is [deprecated](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/80106)
+for use in GitLab 14.9.
+
 ## Delete a Geo node
 
 Removes the Geo node.
 
 NOTE:
-Only a Geo primary node will accept this request.
+Only a Geo primary node accepts this request.
 
 ```plaintext
 DELETE /geo_nodes/:id
@@ -277,7 +292,7 @@ Example response:
   "container_repositories_max_capacity": 10,
   "verification_max_capacity": 100,
   "clone_protocol": "http",
-  "web_edit_url": "https://primary.example.com/admin/geo/nodes/1/edit",
+  "web_edit_url": "https://primary.example.com/admin/geo/sites/1/edit",
   "_links": {
     "self": "https://primary.example.com/api/v4/geo_nodes/1",
     "status":"https://primary.example.com/api/v4/geo_nodes/1/status",
@@ -306,17 +321,19 @@ Example response:
     "health": "Healthy",
     "health_status": "Healthy",
     "missing_oauth_application": false,
-    "attachments_count": 1,
-    "attachments_synced_count": null,
-    "attachments_failed_count": null,
-    "attachments_synced_missing_on_primary_count": 0,
-    "attachments_synced_in_percentage": "0.00%",
     "db_replication_lag_seconds": null,
-    "lfs_objects_count": 0,
+    "lfs_objects_count": 5,
+    "lfs_objects_checksum_total_count": 5,
+    "lfs_objects_checksummed_count": 5,
+    "lfs_objects_checksum_failed_count": 0,
     "lfs_objects_synced_count": null,
     "lfs_objects_failed_count": null,
-    "lfs_objects_synced_missing_on_primary_count": 0,
+    "lfs_objects_registry_count": null,
+    "lfs_objects_verification_total_count": null,
+    "lfs_objects_verified_count": null,
+    "lfs_objects_verification_failed_count": null,
     "lfs_objects_synced_in_percentage": "0.00%",
+    "lfs_objects_verified_in_percentage": "0.00%",
     "job_artifacts_count": 2,
     "job_artifacts_synced_count": null,
     "job_artifacts_failed_count": null,
@@ -453,6 +470,31 @@ Example response:
     "pipeline_artifacts_verification_failed_count": null,
     "pipeline_artifacts_synced_in_percentage": "0.00%",
     "pipeline_artifacts_verified_in_percentage": "0.00%",
+    "uploads_count": 5,
+    "uploads_synced_count": null,
+    "uploads_failed_count": 0,
+    "uploads_registry_count": null,
+    "uploads_synced_in_percentage": "0.00%",
+    "uploads_checksum_total_count": 5,
+    "uploads_checksummed_count": 5,
+    "uploads_checksum_failed_count": null,
+    "uploads_verification_total_count":  null,
+    "uploads_verified_count": null,
+    "uploads_verification_failed_count": null,
+    "uploads_verified_in_percentage": "0.00%",
+    "job_artifacts_count": 5,
+    "job_artifacts_checksum_total_count": 5,
+    "job_artifacts_checksummed_count": 5,
+    "job_artifacts_checksum_failed_count": 0,
+    "job_artifacts_synced_count": 5,
+    "job_artifacts_failed_count": 0,
+    "job_artifacts_registry_count": 5,
+    "job_artifacts_verification_total_count": 5,
+    "job_artifacts_verified_count": 5,
+    "job_artifacts_verification_failed_count": 0,
+    "job_artifacts_synced_in_percentage": "100.00%",
+    "job_artifacts_verified_in_percentage": "100.00%",
+    "job_artifacts_synced_missing_on_primary_count": 0,
   },
   {
     "geo_node_id": 2,
@@ -460,17 +502,19 @@ Example response:
     "health": "Healthy",
     "health_status": "Healthy",
     "missing_oauth_application": false,
-    "attachments_count": 1,
-    "attachments_synced_count": 1,
-    "attachments_failed_count": 0,
-    "attachments_synced_missing_on_primary_count": 0,
-    "attachments_synced_in_percentage": "100.00%",
     "db_replication_lag_seconds": 0,
-    "lfs_objects_count": 0,
-    "lfs_objects_synced_count": 0,
-    "lfs_objects_failed_count": 0,
-    "lfs_objects_synced_missing_on_primary_count": 0,
+    "lfs_objects_count": 5,
+    "lfs_objects_checksum_total_count": 5,
+    "lfs_objects_checksummed_count": 5,
+    "lfs_objects_checksum_failed_count": 0,
+    "lfs_objects_synced_count": null,
+    "lfs_objects_failed_count": null,
+    "lfs_objects_registry_count": null,
+    "lfs_objects_verification_total_count": null,
+    "lfs_objects_verified_count": null,
+    "lfs_objects_verification_failed_count": null,
     "lfs_objects_synced_in_percentage": "0.00%",
+    "lfs_objects_verified_in_percentage": "0.00%",
     "job_artifacts_count": 2,
     "job_artifacts_synced_count": 1,
     "job_artifacts_failed_count": 1,
@@ -595,6 +639,31 @@ Example response:
     "pipeline_artifacts_verification_failed_count": 0,
     "pipeline_artifacts_synced_in_percentage": "100.00%",
     "pipeline_artifacts_verified_in_percentage": "100.00%",
+    "uploads_count": 5,
+    "uploads_synced_count": null,
+    "uploads_failed_count": 0,
+    "uploads_registry_count": null,
+    "uploads_synced_in_percentage": "0.00%",
+    "uploads_checksum_total_count": 5,
+    "uploads_checksummed_count": 5,
+    "uploads_checksum_failed_count": null,
+    "uploads_verification_total_count":  null,
+    "uploads_verified_count": null,
+    "uploads_verification_failed_count": null,
+    "uploads_verified_in_percentage": "0.00%",
+    "job_artifacts_count": 5,
+    "job_artifacts_checksum_total_count": 5,
+    "job_artifacts_checksummed_count": 5,
+    "job_artifacts_checksum_failed_count": 0,
+    "job_artifacts_synced_count": 5,
+    "job_artifacts_failed_count": 0,
+    "job_artifacts_registry_count": 5,
+    "job_artifacts_verification_total_count": 5,
+    "job_artifacts_verified_count": 5,
+    "job_artifacts_verification_failed_count": 0,
+    "job_artifacts_synced_in_percentage": "100.00%",
+    "job_artifacts_verified_in_percentage": "100.00%",
+    "job_artifacts_synced_missing_on_primary_count": 0,
   }
 ]
 ```
@@ -618,17 +687,19 @@ Example response:
   "health": "Healthy",
   "health_status": "Healthy",
   "missing_oauth_application": false,
-  "attachments_count": 1,
-  "attachments_synced_count": 1,
-  "attachments_failed_count": 0,
-  "attachments_synced_missing_on_primary_count": 0,
-  "attachments_synced_in_percentage": "100.00%",
   "db_replication_lag_seconds": 0,
-  "lfs_objects_count": 0,
-  "lfs_objects_synced_count": 0,
-  "lfs_objects_failed_count": 0,
-  "lfs_objects_synced_missing_on_primary_count": 0,
+  "lfs_objects_count": 5,
+  "lfs_objects_checksum_total_count": 5,
+  "lfs_objects_checksummed_count": 5,
+  "lfs_objects_checksum_failed_count": 0,
+  "lfs_objects_synced_count": null,
+  "lfs_objects_failed_count": null,
+  "lfs_objects_registry_count": null,
+  "lfs_objects_verification_total_count": null,
+  "lfs_objects_verified_count": null,
+  "lfs_objects_verification_failed_count": null,
   "lfs_objects_synced_in_percentage": "0.00%",
+  "lfs_objects_verified_in_percentage": "0.00%",
   "job_artifacts_count": 2,
   "job_artifacts_synced_count": 1,
   "job_artifacts_failed_count": 1,
@@ -734,6 +805,31 @@ Example response:
   "pipeline_artifacts_verification_failed_count": 0,
   "pipeline_artifacts_synced_in_percentage": "100.00%",
   "pipeline_artifacts_verified_in_percentage": "100.00%",
+  "uploads_count": 5,
+  "uploads_synced_count": null,
+  "uploads_failed_count": 0,
+  "uploads_registry_count": null,
+  "uploads_synced_in_percentage": "0.00%",
+  "uploads_checksum_total_count": 5,
+  "uploads_checksummed_count": 5,
+  "uploads_checksum_failed_count": null,
+  "uploads_verification_total_count":  null,
+  "uploads_verified_count": null,
+  "uploads_verification_failed_count": null,
+  "uploads_verified_in_percentage": "0.00%",
+  "job_artifacts_count": 5,
+  "job_artifacts_checksum_total_count": 5,
+  "job_artifacts_checksummed_count": 5,
+  "job_artifacts_checksum_failed_count": 0,
+  "job_artifacts_synced_count": 5,
+  "job_artifacts_failed_count": 0,
+  "job_artifacts_registry_count": 5,
+  "job_artifacts_verification_total_count": 5,
+  "job_artifacts_verified_count": 5,
+  "job_artifacts_verification_failed_count": 0,
+  "job_artifacts_synced_in_percentage": "100.00%",
+  "job_artifacts_verified_in_percentage": "100.00%",
+  "job_artifacts_synced_missing_on_primary_count": 0,
 }
 ```
 

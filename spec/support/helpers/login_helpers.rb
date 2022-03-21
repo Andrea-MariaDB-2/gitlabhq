@@ -95,7 +95,7 @@ module LoginHelpers
     visit new_user_session_path
 
     fill_in "user_login", with: user.email
-    fill_in "user_password", with: "12345678"
+    fill_in "user_password", with: Gitlab::Password.test_default
     check 'user_remember_me' if remember
 
     click_button "Sign in"
@@ -178,7 +178,7 @@ module LoginHelpers
   end
 
   def mock_saml_config
-    OpenStruct.new(name: 'saml', label: 'saml', args: {
+    ActiveSupport::InheritableOptions.new(name: 'saml', label: 'saml', args: {
       assertion_consumer_service_url: 'https://localhost:3443/users/auth/saml/callback',
       idp_cert_fingerprint: '26:43:2C:47:AF:F0:6B:D0:07:9C:AD:A3:74:FE:5D:94:5F:4E:9E:52',
       idp_sso_target_url: 'https://idp.example.com/sso/saml',

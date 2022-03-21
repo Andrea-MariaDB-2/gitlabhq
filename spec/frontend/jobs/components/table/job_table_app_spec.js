@@ -1,5 +1,6 @@
-import { GlSkeletonLoader, GlAlert, GlEmptyState, GlPagination } from '@gitlab/ui';
-import { createLocalVue, mount, shallowMount } from '@vue/test-utils';
+import { GlSkeletonLoader, GlAlert, GlEmptyState, GlIntersectionObserver } from '@gitlab/ui';
+import { mount, shallowMount } from '@vue/test-utils';
+import Vue from 'vue';
 import VueApollo from 'vue-apollo';
 import createMockApollo from 'helpers/mock_apollo_helper';
 import waitForPromises from 'helpers/wait_for_promises';
@@ -10,8 +11,7 @@ import JobsTableTabs from '~/jobs/components/table/jobs_table_tabs.vue';
 import { mockJobsQueryResponse, mockJobsQueryEmptyResponse } from '../../mock_data';
 
 const projectPath = 'gitlab-org/gitlab';
-const localVue = createLocalVue();
-localVue.use(VueApollo);
+Vue.use(VueApollo);
 
 describe('Job table app', () => {
   let wrapper;
@@ -25,10 +25,9 @@ describe('Job table app', () => {
   const findTabs = () => wrapper.findComponent(JobsTableTabs);
   const findAlert = () => wrapper.findComponent(GlAlert);
   const findEmptyState = () => wrapper.findComponent(GlEmptyState);
-  const findPagination = () => wrapper.findComponent(GlPagination);
 
-  const findPrevious = () => findPagination().findAll('.page-item').at(0);
-  const findNext = () => findPagination().findAll('.page-item').at(1);
+  const triggerInfiniteScroll = () =>
+    wrapper.findComponent(GlIntersectionObserver).vm.$emit('appear');
 
   const createMockApolloProvider = (handler) => {
     const requestHandlers = [[getJobsQuery, handler]];
@@ -48,9 +47,8 @@ describe('Job table app', () => {
         };
       },
       provide: {
-        projectPath,
+        fullPath: projectPath,
       },
-      localVue,
       apolloProvider: createMockApolloProvider(handler),
     });
   };
@@ -65,7 +63,6 @@ describe('Job table app', () => {
 
       expect(findSkeletonLoader().exists()).toBe(true);
       expect(findTable().exists()).toBe(false);
-      expect(findPagination().exists()).toBe(false);
     });
   });
 
@@ -79,7 +76,6 @@ describe('Job table app', () => {
     it('should display the jobs table with data', () => {
       expect(findTable().exists()).toBe(true);
       expect(findSkeletonLoader().exists()).toBe(false);
-      expect(findPagination().exists()).toBe(true);
     });
 
     it('should refetch jobs query on fetchJobsByStatus event', async () => {
@@ -91,68 +87,24 @@ describe('Job table app', () => {
 
       expect(wrapper.vm.$apollo.queries.jobs.refetch).toHaveBeenCalledTimes(1);
     });
-  });
 
-  describe('pagination', () => {
-    it('should disable the next page button on the last page', async () => {
-      createComponent({
-        handler: successHandler,
-        mountFn: mount,
-        data: {
-          pagination: {
-            currentPage: 3,
-          },
-          jobs: {
-            pageInfo: {
-              hasPreviousPage: true,
-              startCursor: 'abc',
-              endCursor: 'bcd',
-            },
-          },
-        },
+    describe('when infinite scrolling is triggered', () => {
+      beforeEach(() => {
+        triggerInfiniteScroll();
       });
 
-      await wrapper.vm.$nextTick();
-
-      wrapper.setData({
-        jobs: {
-          pageInfo: {
-            hasNextPage: false,
-          },
-        },
+      it('does not display a skeleton loader', () => {
+        expect(findSkeletonLoader().exists()).toBe(false);
       });
 
-      await wrapper.vm.$nextTick();
+      it('handles infinite scrolling by calling fetch more', async () => {
+        await waitForPromises();
 
-      expect(findPrevious().exists()).toBe(true);
-      expect(findNext().exists()).toBe(true);
-      expect(findNext().classes('disabled')).toBe(true);
-    });
-
-    it('should disable the previous page button on the first page', async () => {
-      createComponent({
-        handler: successHandler,
-        mountFn: mount,
-        data: {
-          pagination: {
-            currentPage: 1,
-          },
-          jobs: {
-            pageInfo: {
-              hasNextPage: true,
-              hasPreviousPage: false,
-              startCursor: 'abc',
-              endCursor: 'bcd',
-            },
-          },
-        },
+        expect(successHandler).toHaveBeenCalledWith({
+          after: 'eyJpZCI6IjIzMTcifQ',
+          fullPath: 'gitlab-org/gitlab',
+        });
       });
-
-      await wrapper.vm.$nextTick();
-
-      expect(findPrevious().exists()).toBe(true);
-      expect(findPrevious().classes('disabled')).toBe(true);
-      expect(findNext().exists()).toBe(true);
     });
   });
 

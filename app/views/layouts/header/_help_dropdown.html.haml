@@ -1,5 +1,7 @@
 %ul
   - if current_user_menu?(:help)
+    = render 'layouts/header/gitlab_version'
+    = render_if_exists 'layouts/header/help_dropdown/cross_stage_fdm'
     = render 'layouts/header/whats_new_dropdown_item'
     %li
       = link_to _("Help"), help_path
@@ -10,7 +12,7 @@
     %li
       %button.js-shortcuts-modal-trigger{ type: "button" }
         = _("Keyboard shortcuts")
-        %span.text-secondary.float-right{ "aria-hidden": "true" }= '?'.html_safe
+        %kbd.flat.float-right{ "aria-hidden": "true" }= '?'.html_safe
     %li.divider
   %li
     = link_to _("Submit feedback"), "https://about.gitlab.com/submit-feedback"
@@ -20,4 +22,4 @@
   = render 'shared/user_dropdown_instance_review'
   - if Gitlab.com_but_not_canary?
     %li
-      = link_to _("Switch to GitLab Next"), "https://next.gitlab.com/"
+      = link_to _("Switch to GitLab Next"), Gitlab::Saas.canary_toggle_com_url

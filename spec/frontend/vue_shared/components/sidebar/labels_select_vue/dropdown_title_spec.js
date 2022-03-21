@@ -1,5 +1,6 @@
 import { GlButton, GlLoadingIcon } from '@gitlab/ui';
-import { shallowMount, createLocalVue } from '@vue/test-utils';
+import { shallowMount } from '@vue/test-utils';
+import Vue, { nextTick } from 'vue';
 import Vuex from 'vuex';
 
 import DropdownTitle from '~/vue_shared/components/sidebar/labels_select_vue/dropdown_title.vue';
@@ -8,8 +9,7 @@ import labelsSelectModule from '~/vue_shared/components/sidebar/labels_select_vu
 
 import { mockConfig } from './mock_data';
 
-const localVue = createLocalVue();
-localVue.use(Vuex);
+Vue.use(Vuex);
 
 const createComponent = (initialState = mockConfig) => {
   const store = new Vuex.Store(labelsSelectModule());
@@ -17,7 +17,6 @@ const createComponent = (initialState = mockConfig) => {
   store.dispatch('setInitialState', initialState);
 
   return shallowMount(DropdownTitle, {
-    localVue,
     store,
     propsData: {
       labelsSelectInProgress: false,
@@ -48,14 +47,13 @@ describe('DropdownTitle', () => {
       expect(editBtnEl.text()).toBe('Edit');
     });
 
-    it('renders loading icon element when `labelsSelectInProgress` prop is true', () => {
+    it('renders loading icon element when `labelsSelectInProgress` prop is true', async () => {
       wrapper.setProps({
         labelsSelectInProgress: true,
       });
 
-      return wrapper.vm.$nextTick(() => {
-        expect(wrapper.find(GlLoadingIcon).isVisible()).toBe(true);
-      });
+      await nextTick();
+      expect(wrapper.find(GlLoadingIcon).isVisible()).toBe(true);
     });
   });
 });

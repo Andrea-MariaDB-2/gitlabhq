@@ -1,17 +1,17 @@
 ---
 stage: Monitor
-group: Monitor
+group: Respond
 info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
 ---
 
 # On-call Schedule Management **(PREMIUM)**
 
-> [Introduced](https://gitlab.com/groups/gitlab-org/-/epics/4544) in [GitLab Premium](https://about.gitlab.com/pricing/) 13.11.
+> [Introduced](https://gitlab.com/groups/gitlab-org/-/epics/4544) in GitLab 13.11.
 
 Use on-call schedule management to create schedules for responders to rotate on-call
 responsibilities. Maintain the availability of your software services by putting your teams on-call.
-With an on-call schedule, your team is notified immediately when things go wrong so they can quickly
-respond to service outages and disruptions.
+With [escalation policies](escalation_policies.md) and on-call schedules, your team is notified immediately
+when things go wrong so they can quickly respond to service outages and disruptions.
 
 To use on-call schedules:
 
@@ -24,14 +24,14 @@ Set up an on-call schedule for your team to add rotations to.
 
 Prerequisite:
 
-- You must have at least the Maintainer [role](../../user/permissions.md).
+- You must have at least the Maintainer role.
 
 To create an on-call schedule:
 
 1. On the top bar, select **Menu > Projects** and find your project.
 1. On the left sidebar, select **Monitor > On-call Schedules**.
 1. Select **Add a schedule**.
-1. Enter the schedule's name and description and select a timezone.
+1. Enter the schedule's name and description and select a time zone.
 1. Select **Add schedule**.
 
 You now have an empty schedule with no rotations. This renders as an empty state, prompting you to
@@ -111,9 +111,7 @@ Hover over any rotation shift participants in the schedule to view their individ
 
 ## Page an on-call responder
 
-When an alert is created in a project, GitLab sends an email to the on-call responder(s) in the
-on-call schedule for that project. If there is no schedule or no one on-call in that schedule at the
-time the alert is triggered, no email is sent.
+See [Paging](paging.md#paging) for more details.
 
 ## Removal or deletion of on-call user
 

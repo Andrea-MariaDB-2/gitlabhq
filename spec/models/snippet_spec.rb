@@ -3,6 +3,8 @@
 require 'spec_helper'
 
 RSpec.describe Snippet do
+  include FakeBlobHelpers
+
   describe 'modules' do
     subject { described_class }
 
@@ -98,7 +100,7 @@ RSpec.describe Snippet do
       snippet = build(:snippet)
       expect(snippet.statistics).to be_nil
 
-      snippet.save
+      snippet.save!
 
       expect(snippet.statistics).to be_persisted
     end
@@ -289,7 +291,7 @@ RSpec.describe Snippet do
     let(:access_level) { ProjectFeature::ENABLED }
 
     before do
-      project.project_feature.update(snippets_access_level: access_level)
+      project.project_feature.update!(snippets_access_level: access_level)
     end
 
     it 'includes snippets for projects with snippets enabled' do
@@ -403,6 +405,51 @@ RSpec.describe Snippet do
     end
   end
 
+  describe '.find_by_project_title_trunc_created_at' do
+    let_it_be(:snippet) { create(:snippet) }
+    let_it_be(:created_at_without_ms) { snippet.created_at.change(usec: 0) }
+
+    it 'returns a record if arguments match' do
+      result = described_class.find_by_project_title_trunc_created_at(
+        snippet.project,
+        snippet.title,
+        created_at_without_ms
+      )
+
+      expect(result).to eq(snippet)
+    end
+
+    it 'returns nil if project does not match' do
+      result = described_class.find_by_project_title_trunc_created_at(
+        'unmatched project',
+        snippet.title,
+        created_at_without_ms # to_s truncates ms of the argument
+      )
+
+      expect(result).to be(nil)
+    end
+
+    it 'returns nil if title does not match' do
+      result = described_class.find_by_project_title_trunc_created_at(
+        snippet.project,
+        'unmatched title',
+        created_at_without_ms # to_s truncates ms of the argument
+      )
+
+      expect(result).to be(nil)
+    end
+
+    it 'returns nil if created_at does not match' do
+      result = described_class.find_by_project_title_trunc_created_at(
+        snippet.project,
+        snippet.title,
+        snippet.created_at # fails match by milliseconds
+      )
+
+      expect(result).to be(nil)
+    end
+  end
+
   describe '#participants' do
     let_it_be(:project) { create(:project, :public) }
     let_it_be(:snippet) { create(:snippet, content: 'foo', project: project) }
@@ -481,6 +528,21 @@ RSpec.describe Snippet do
     end
   end
 
+  describe '#all_files' do
+    let(:snippet) { create(:snippet, :repository) }
+    let(:files) { double(:files) }
+
+    subject(:all_files) { snippet.all_files }
+
+    before do
+      allow(snippet.repository).to receive(:ls_files).with(snippet.default_branch).and_return(files)
+    end
+
+    it 'lists files from the repository with the default branch' do
+      expect(all_files).to eq(files)
+    end
+  end
+
   describe '#blobs' do
     context 'when repository does not exist' do
       let(:snippet) { create(:snippet) }
@@ -505,6 +567,23 @@ RSpec.describe Snippet do
           expect(blobs.count).to eq 1
           expect(blobs.first.name).to eq 'LICENSE'
         end
+      end
+    end
+
+    context 'when some blobs are not retrievable from repository' do
+      let(:snippet) { create(:snippet, :repository) }
+      let(:container) { double(:container) }
+      let(:retrievable_filename) { 'retrievable_file'}
+      let(:unretrievable_filename) { 'unretrievable_file'}
+
+      before do
+        allow(snippet).to receive(:list_files).and_return([retrievable_filename, unretrievable_filename])
+        blob = fake_blob(path: retrievable_filename, container: container)
+        allow(snippet.repository).to receive(:blobs_at).and_return([blob, nil])
+      end
+
+      it 'does not include unretrievable blobs' do
+        expect(snippet.blobs.map(&:name)).to contain_exactly(retrievable_filename)
       end
     end
   end
@@ -588,6 +667,16 @@ RSpec.describe Snippet do
       expect(snippet.repository.exists?).to be_truthy
     end
 
+    it 'sets the default branch' do
+      expect(snippet).to receive(:default_branch).and_return('default-branch-1')
+      expect(subject).to be_truthy
+
+      snippet.repository.create_file(snippet.author, 'file', 'content', message: 'initial commit', branch_name: 'default-branch-1')
+
+      expect(snippet.repository.exists?).to be_truthy
+      expect(snippet.repository.root_ref).to eq('default-branch-1')
+    end
+
     it 'tracks snippet repository' do
       expect do
         subject
@@ -598,6 +687,7 @@ RSpec.describe Snippet do
       expect(snippet).to receive(:repository_storage).and_return('picked')
       expect(snippet).to receive(:repository_exists?).and_return(false)
       expect(snippet.repository).to receive(:create_if_not_exists)
+      allow(snippet).to receive(:default_branch).and_return('picked')
 
       subject
 
@@ -623,7 +713,7 @@ RSpec.describe Snippet do
 
       context 'when snippet_repository does not exist' do
         it 'creates a snippet_repository' do
-          snippet.snippet_repository.destroy
+          snippet.snippet_repository.destroy!
           snippet.reload
 
           expect do
@@ -802,75 +892,5 @@ RSpec.describe Snippet do
 
   it_behaves_like 'can move repository storage' do
     let_it_be(:container) { create(:snippet, :repository) }
-  end
-
-  describe '#change_head_to_default_branch' do
-    let(:head_path) { Rails.root.join(TestEnv.repos_path, "#{snippet.disk_path}.git", 'HEAD') }
-
-    subject { snippet.change_head_to_default_branch }
-
-    context 'when repository does not exist' do
-      let(:snippet) { create(:snippet) }
-
-      it 'does nothing' do
-        expect(snippet.repository_exists?).to eq false
-        expect(snippet.repository.raw_repository).not_to receive(:write_ref)
-
-        subject
-      end
-    end
-
-    context 'when repository is empty' do
-      let(:snippet) { create(:snippet, :empty_repo) }
-
-      before do
-        allow(Gitlab::CurrentSettings).to receive(:default_branch_name).and_return(default_branch)
-      end
-
-      context 'when default branch in settings is different from "master"' do
-        let(:default_branch) { 'custom-branch' }
-
-        it 'changes the HEAD reference to the default branch' do
-          expect { subject }.to change { File.read(head_path).squish }.to("ref: refs/heads/#{default_branch}")
-        end
-      end
-    end
-
-    context 'when repository is not empty' do
-      let(:snippet) { create(:snippet, :empty_repo) }
-
-      before do
-        populate_snippet_repo
-      end
-
-      context 'when HEAD branch is empty' do
-        it 'changes HEAD to default branch' do
-          File.write(head_path, 'ref: refs/heads/non_existen_branch')
-          expect(File.read(head_path).squish).to eq 'ref: refs/heads/non_existen_branch'
-
-          subject
-
-          expect(File.read(head_path).squish).to eq 'ref: refs/heads/main'
-          expect(snippet.list_files('HEAD')).not_to be_empty
-        end
-      end
-
-      context 'when HEAD branch is not empty' do
-        it 'does nothing' do
-          File.write(head_path, 'ref: refs/heads/main')
-
-          expect(snippet.repository.raw_repository).not_to receive(:write_ref)
-
-          subject
-        end
-      end
-
-      def populate_snippet_repo
-        allow(Gitlab::CurrentSettings).to receive(:default_branch_name).and_return('main')
-
-        data = [{ file_path: 'new_file_test', content: 'bar' }]
-        snippet.snippet_repository.multi_files_action(snippet.author, data, branch_name: 'main', message: 'foo')
-      end
-    end
   end
 end

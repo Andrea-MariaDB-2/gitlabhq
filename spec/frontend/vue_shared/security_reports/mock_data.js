@@ -314,7 +314,7 @@ export const sastDiffSuccessMock = {
   head_report_created_at: '2020-01-10T10:00:00.000Z',
 };
 
-export const secretScanningDiffSuccessMock = {
+export const secretDetectionDiffSuccessMock = {
   added: [mockFindings[0], mockFindings[1]],
   fixed: [mockFindings[2]],
   base_report_created_at: '2020-01-01T10:00:00.000Z',
@@ -324,7 +324,9 @@ export const secretScanningDiffSuccessMock = {
 
 export const securityReportMergeRequestDownloadPathsQueryNoArtifactsResponse = {
   project: {
+    id: 'project-1',
     mergeRequest: {
+      id: 'mr-1',
       headPipeline: {
         id: 'gid://gitlab/Ci::Pipeline/176',
         jobs: {
@@ -341,12 +343,15 @@ export const securityReportMergeRequestDownloadPathsQueryNoArtifactsResponse = {
 
 export const securityReportMergeRequestDownloadPathsQueryResponse = {
   project: {
+    id: '1',
     mergeRequest: {
+      id: 'mr-1',
       headPipeline: {
         id: 'gid://gitlab/Ci::Pipeline/176',
         jobs: {
           nodes: [
             {
+              id: 'job-1',
               name: 'secret_detection',
               artifacts: {
                 nodes: [
@@ -368,6 +373,7 @@ export const securityReportMergeRequestDownloadPathsQueryResponse = {
               __typename: 'CiJob',
             },
             {
+              id: 'job-2',
               name: 'bandit-sast',
               artifacts: {
                 nodes: [
@@ -389,6 +395,7 @@ export const securityReportMergeRequestDownloadPathsQueryResponse = {
               __typename: 'CiJob',
             },
             {
+              id: 'job-3',
               name: 'eslint-sast',
               artifacts: {
                 nodes: [
@@ -410,6 +417,7 @@ export const securityReportMergeRequestDownloadPathsQueryResponse = {
               __typename: 'CiJob',
             },
             {
+              id: 'job-4',
               name: 'all_artifacts',
               artifacts: {
                 nodes: [
@@ -449,11 +457,13 @@ export const securityReportMergeRequestDownloadPathsQueryResponse = {
 
 export const securityReportPipelineDownloadPathsQueryResponse = {
   project: {
+    id: 'project-1',
     pipeline: {
       id: 'gid://gitlab/Ci::Pipeline/176',
       jobs: {
         nodes: [
           {
+            id: 'job-1',
             name: 'secret_detection',
             artifacts: {
               nodes: [
@@ -475,6 +485,7 @@ export const securityReportPipelineDownloadPathsQueryResponse = {
             __typename: 'CiJob',
           },
           {
+            id: 'job-2',
             name: 'bandit-sast',
             artifacts: {
               nodes: [
@@ -496,6 +507,7 @@ export const securityReportPipelineDownloadPathsQueryResponse = {
             __typename: 'CiJob',
           },
           {
+            id: 'job-3',
             name: 'eslint-sast',
             artifacts: {
               nodes: [
@@ -517,6 +529,7 @@ export const securityReportPipelineDownloadPathsQueryResponse = {
             __typename: 'CiJob',
           },
           {
+            id: 'job-4',
             name: 'all_artifacts',
             artifacts: {
               nodes: [

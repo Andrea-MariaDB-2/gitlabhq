@@ -30,9 +30,9 @@ The existing database model requires the following:
 
 ### API endpoints
 
-Package systems work with GitLab via API. For example `lib/api/npm_packages.rb`
+Package systems work with GitLab via API. For example `lib/api/npm_project_packages.rb`
 implements API endpoints to work with npm clients. So, the first thing to do is to
-add a new `lib/api/your_name_packages.rb` file with API endpoints that are
+add a new `lib/api/your_name_project_packages.rb` file with API endpoints that are
 necessary to make the package system client to work. Usually that means having
 endpoints like:
 
@@ -48,7 +48,7 @@ GET https://gitlab.com/api/v4/projects/<your_project_id>/packages/npm/
 PUT https://gitlab.com/api/v4/projects/<your_project_id>/packages/npm/
 ```
 
-Group-level and instance-level endpoints are good to have but are optional.
+Group-level and instance-level endpoints should only be considered after the project-level endpoint is available in production.
 
 #### Remote hierarchy
 
@@ -133,7 +133,7 @@ During this phase, the idea is to collect as much information as possible about 
 - **Authentication**: What authentication mechanisms are available (OAuth, Basic
   Authorization, other). Keep in mind that GitLab users often want to use their
   [Personal Access Tokens](../user/profile/personal_access_tokens.md).
-  Although not needed for the MVC first iteration, the [CI/CD job tokens](../api/index.md#gitlab-cicd-job-token)
+  Although not needed for the MVC first iteration, the [CI/CD job tokens](../ci/jobs/ci_job_token.md)
   have to be supported at some point in the future.
 - **Requests**: Which requests are needed to have a working MVC. Ideally, produce
   a list of all the requests needed for the MVC (including required actions). Further
@@ -151,7 +151,7 @@ During this phase, the idea is to collect as much information as possible about 
   1. Empty file structure (API file, base service for this package)
   1. Authentication system for "logging in" to the package manager
   1. Identify metadata and create applicable tables
-  1. Workhorse route for [object storage direct upload](uploads.md#direct-upload)
+  1. Workhorse route for [object storage direct upload](uploads/implementation.md#direct-upload)
   1. Endpoints required for upload/publish
   1. Endpoints required for install/download
   1. Endpoints required for required actions
@@ -168,7 +168,7 @@ The implementation of the different Merge Requests varies between different pack
 
 The MVC must support [Personal Access Tokens](../user/profile/personal_access_tokens.md) right from the start. We currently support two options for these tokens: OAuth and Basic Access.
 
-OAuth authentication is already supported. You can see an example in the [npm API](https://gitlab.com/gitlab-org/gitlab/-/blob/master/lib/api/npm_packages.rb).
+OAuth authentication is already supported. You can see an example in the [npm API](https://gitlab.com/gitlab-org/gitlab/-/blob/master/lib/api/npm_project_packages.rb).
 
 [Basic Access authentication](https://developer.mozilla.org/en-US/docs/Web/HTTP/Authentication)
 support is done by overriding a specific function in the API helpers, like
@@ -210,7 +210,7 @@ File uploads should be handled by GitLab Workhorse using object accelerated uplo
 the workhorse proxy that checks all incoming requests to GitLab intercept the upload request,
 upload the file, and forward a request to the main GitLab codebase only containing the metadata
 and file location rather than the file itself. An overview of this process can be found in the
-[development documentation](uploads.md#direct-upload).
+[development documentation](uploads/implementation.md#direct-upload).
 
 In terms of code, this means a route must be added to the
 [GitLab Workhorse project](https://gitlab.com/gitlab-org/gitlab-workhorse) for each upload endpoint being added
@@ -272,7 +272,7 @@ features must be implemented when the feature flag is removed.
 - File format guards (only accept valid file formats for the package type)
 - Name regex with validation
 - Version regex with validation
-- Workhorse route for [accelerated](uploads.md#how-to-add-a-new-upload-route) uploads
+- Workhorse route for [accelerated](uploads/working_with_uploads.md) uploads
 - Background workers for extracting package metadata (if applicable)
 - Documentation (how to use the feature)
 - API Documentation (individual endpoints with curl examples)

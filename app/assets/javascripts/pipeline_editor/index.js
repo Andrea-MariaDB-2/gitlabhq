@@ -2,21 +2,17 @@ import Vue from 'vue';
 
 import VueApollo from 'vue-apollo';
 import createDefaultClient from '~/lib/graphql';
-import { resetServiceWorkersPublicPath } from '../lib/utils/webpack';
+import { EDITOR_APP_STATUS_LOADING } from './constants';
 import { CODE_SNIPPET_SOURCE_SETTINGS } from './components/code_snippet_alert/constants';
-import getCurrentBranch from './graphql/queries/client/current_branch.graphql';
-import getLastCommitBranchQuery from './graphql/queries/client/last_commit_branch.query.graphql';
-import getPipelineEtag from './graphql/queries/client/pipeline_etag.graphql';
+import getCurrentBranch from './graphql/queries/client/current_branch.query.graphql';
+import getAppStatus from './graphql/queries/client/app_status.query.graphql';
+import getLastCommitBranch from './graphql/queries/client/last_commit_branch.query.graphql';
+import getPipelineEtag from './graphql/queries/client/pipeline_etag.query.graphql';
 import { resolvers } from './graphql/resolvers';
 import typeDefs from './graphql/typedefs.graphql';
 import PipelineEditorApp from './pipeline_editor_app.vue';
 
 export const initPipelineEditor = (selector = '#js-pipeline-editor') => {
-  // Prevent issues loading syntax validation workers
-  // Fixes https://gitlab.com/gitlab-org/gitlab/-/issues/297252
-  // TODO Remove when https://gitlab.com/gitlab-org/gitlab/-/issues/321656 is resolved
-  resetServiceWorkersPublicPath();
-
   const el = document.querySelector(selector);
 
   if (!el) {
@@ -35,6 +31,7 @@ export const initPipelineEditor = (selector = '#js-pipeline-editor') => {
     emptyStateIllustrationPath,
     helpPaths,
     lintHelpPagePath,
+    lintUnavailableHelpPagePath,
     needsHelpPagePath,
     newMergeRequestPath,
     pipelinePagePath,
@@ -59,29 +56,53 @@ export const initPipelineEditor = (selector = '#js-pipeline-editor') => {
     defaultClient: createDefaultClient(resolvers, {
       typeDefs,
       useGet: true,
-      assumeImmutableResults: true,
     }),
   });
   const { cache } = apolloProvider.clients.defaultClient;
 
   cache.writeQuery({
+    query: getAppStatus,
+    data: {
+      app: {
+        __typename: 'PipelineEditorApp',
+        status: EDITOR_APP_STATUS_LOADING,
+      },
+    },
+  });
+
+  cache.writeQuery({
     query: getCurrentBranch,
     data: {
-      currentBranch: initialBranchName || defaultBranch,
+      workBranches: {
+        __typename: 'BranchList',
+        current: {
+          __typename: 'WorkBranch',
+          name: initialBranchName || defaultBranch,
+        },
+      },
+    },
+  });
+
+  cache.writeQuery({
+    query: getLastCommitBranch,
+    data: {
+      workBranches: {
+        __typename: 'BranchList',
+        lastCommit: {
+          __typename: 'WorkBranch',
+          name: '',
+        },
+      },
     },
   });
 
   cache.writeQuery({
     query: getPipelineEtag,
     data: {
-      pipelineEtag,
-    },
-  });
-
-  cache.writeQuery({
-    query: getLastCommitBranchQuery,
-    data: {
-      lastCommitBranch: '',
+      etags: {
+        __typename: 'EtagValues',
+        pipeline: pipelineEtag,
+      },
     },
   });
 
@@ -93,10 +114,12 @@ export const initPipelineEditor = (selector = '#js-pipeline-editor') => {
       ciExamplesHelpPagePath,
       ciHelpPagePath,
       configurationPaths,
+      dataMethod: 'graphql',
       defaultBranch,
       emptyStateIllustrationPath,
       helpPaths,
       lintHelpPagePath,
+      lintUnavailableHelpPagePath,
       needsHelpPagePath,
       newMergeRequestPath,
       pipelinePagePath,

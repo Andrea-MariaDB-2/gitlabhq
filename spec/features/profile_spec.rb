@@ -6,6 +6,7 @@ RSpec.describe 'Profile account page', :js do
   let(:user) { create(:user) }
 
   before do
+    stub_feature_flags(bootstrap_confirmation_modals: false)
     sign_in(user)
   end
 
@@ -28,7 +29,7 @@ RSpec.describe 'Profile account page', :js do
     it 'deletes user', :js, :sidekiq_might_not_need_inline do
       click_button 'Delete account'
 
-      fill_in 'password', with: '12345678'
+      fill_in 'password', with: Gitlab::Password.test_default
 
       page.within '.modal' do
         click_button 'Delete account'
@@ -61,36 +62,33 @@ RSpec.describe 'Profile account page', :js do
     end
   end
 
-  describe 'when I reset feed token' do
-    before do
-      visit profile_personal_access_tokens_path
-    end
+  it 'allows resetting of feed token' do
+    visit profile_personal_access_tokens_path
 
-    it 'resets feed token' do
-      within('.feed-token-reset') do
-        previous_token = find("#feed_token").value
+    within('[data-testid="feed-token-container"]') do
+      previous_token = find_field('Feed token').value
 
-        accept_confirm { find('[data-testid="reset_feed_token_link"]').click }
+      accept_confirm { click_link('reset this token') }
 
-        expect(find('#feed_token').value).not_to eq(previous_token)
-      end
+      click_button('Click to reveal')
+
+      expect(find_field('Feed token').value).not_to eq(previous_token)
     end
   end
 
-  describe 'when I reset incoming email token' do
-    before do
-      allow(Gitlab.config.incoming_email).to receive(:enabled).and_return(true)
-      visit profile_personal_access_tokens_path
-    end
+  it 'allows resetting of incoming email token' do
+    allow(Gitlab.config.incoming_email).to receive(:enabled).and_return(true)
 
-    it 'resets incoming email token' do
-      within('.incoming-email-token-reset') do
-        previous_token = find('#incoming_email_token').value
+    visit profile_personal_access_tokens_path
 
-        accept_confirm { find('[data-testid="reset_email_token_link"]').click }
+    within('[data-testid="incoming-email-token-container"]') do
+      previous_token = find_field('Incoming email token').value
 
-        expect(find('#incoming_email_token').value).not_to eq(previous_token)
-      end
+      accept_confirm { click_link('reset this token') }
+
+      click_button('Click to reveal')
+
+      expect(find_field('Incoming email token').value).not_to eq(previous_token)
     end
   end
 

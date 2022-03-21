@@ -94,15 +94,21 @@ export default {
       return this.noteableData.noteableType;
     },
     allDiscussions() {
+      let skeletonNotes = [];
+
       if (this.renderSkeleton || this.isLoading) {
         const prerenderedNotesCount = parseInt(this.notesData.prerenderedNotesCount, 10) || 0;
 
-        return new Array(prerenderedNotesCount).fill({
+        skeletonNotes = new Array(prerenderedNotesCount).fill({
           isSkeletonNote: true,
         });
       }
 
-      return this.discussions;
+      if (this.sortDirDesc) {
+        return skeletonNotes.concat(this.discussions);
+      }
+
+      return this.discussions.concat(skeletonNotes);
     },
     canReply() {
       return this.userCanReply && !this.commentsDisabled && !this.timelineEnabled;
@@ -258,7 +264,13 @@ export default {
     getFetchDiscussionsConfig() {
       const defaultConfig = { path: this.getNotesDataByProp('discussionsPath') };
 
-      if (doesHashExistInUrl(constants.NOTE_UNDERSCORE)) {
+      const currentFilter =
+        this.getNotesDataByProp('notesFilter') || constants.DISCUSSION_FILTERS_DEFAULT_VALUE;
+
+      if (
+        doesHashExistInUrl(constants.NOTE_UNDERSCORE) &&
+        currentFilter !== constants.DISCUSSION_FILTERS_DEFAULT_VALUE
+      ) {
         return {
           ...defaultConfig,
           filter: constants.DISCUSSION_FILTERS_DEFAULT_VALUE,
@@ -317,6 +329,7 @@ export default {
               :key="discussion.id"
               :discussion="discussion"
               :render-diff-file="true"
+              is-overview-tab
               :help-page-path="helpPagePath"
             />
           </template>

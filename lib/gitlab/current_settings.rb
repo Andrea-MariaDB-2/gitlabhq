@@ -8,7 +8,7 @@ module Gitlab
       end
 
       def signup_limited?
-        domain_allowlist.present? || email_restrictions_enabled? || require_admin_approval_after_user_signup?
+        domain_allowlist.present? || email_restrictions_enabled? || require_admin_approval_after_user_signup? || user_default_external?
       end
 
       def current_application_settings
@@ -62,7 +62,7 @@ module Gitlab
         # need to be added to the application settings. To prevent Rake tasks
         # and other callers from failing, use any loaded settings and return
         # defaults for missing columns.
-        if Gitlab::Runtime.rake? && ActiveRecord::Base.connection.migration_context.needs_migration?
+        if Gitlab::Runtime.rake? && ::ApplicationSetting.connection.migration_context.needs_migration?
           db_attributes = current_settings&.attributes || {}
           fake_application_settings(db_attributes)
         elsif current_settings.present?
@@ -70,6 +70,8 @@ module Gitlab
         else
           ::ApplicationSetting.create_from_defaults
         end
+      rescue ::ApplicationSetting::Recursion
+        in_memory_application_settings
       end
 
       def fake_application_settings(attributes = {})
@@ -82,10 +84,10 @@ module Gitlab
 
       def connect_to_db?
         # When the DBMS is not available, an exception (e.g. PG::ConnectionBad) is raised
-        active_db_connection = ActiveRecord::Base.connection.active? rescue false
+        active_db_connection = ::ApplicationSetting.connection.active? rescue false
 
         active_db_connection &&
-          Gitlab::Database.main.cached_table_exists?('application_settings')
+          ApplicationSetting.database.cached_table_exists?
       rescue ActiveRecord::NoDatabaseError
         false
       end

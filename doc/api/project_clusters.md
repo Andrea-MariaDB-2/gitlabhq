@@ -4,11 +4,15 @@ group: Configure
 info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
 ---
 
-# Project clusters API **(FREE)**
+# Project clusters API (certificate-based) (DEPRECATED) **(FREE)**
 
-> [Introduced](https://gitlab.com/gitlab-org/gitlab-foss/-/merge_requests/23922) in GitLab 11.7.
+> - [Introduced](https://gitlab.com/gitlab-org/gitlab-foss/-/merge_requests/23922) in GitLab 11.7.
+> - [Deprecated](https://gitlab.com/groups/gitlab-org/configure/-/epics/8) in GitLab 14.5.
 
-Users need at least the [Maintainer](../user/permissions.md) role to use these endpoints.
+WARNING:
+This feature was [deprecated](https://gitlab.com/groups/gitlab-org/configure/-/epics/8) in GitLab 14.5.
+
+Users need at least the Maintainer role to use these endpoints.
 
 ## List project clusters
 
@@ -294,7 +298,7 @@ Parameters:
 | `platform_kubernetes_attributes[token]`     | string  | no       | The token to authenticate against Kubernetes                                               |
 | `platform_kubernetes_attributes[ca_cert]`   | string  | no       | TLS certificate. Required if API is using a self-signed TLS certificate.                   |
 | `platform_kubernetes_attributes[namespace]` | string  | no       | The unique namespace related to the project                                                |
-| `environment_scope`                         | string  | no       | The associated environment to the cluster **(PREMIUM)**                                    |
+| `environment_scope`                         | string  | no       | The associated environment to the cluster                                                  |
 
 NOTE:
 `name`, `api_url`, `ca_cert` and `token` can only be updated if the cluster was added
@@ -380,7 +384,6 @@ Example response:
     }
   }
 }
-
 ```
 
 ## Delete project cluster

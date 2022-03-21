@@ -63,6 +63,7 @@ WORKDIR /home/gitlab/qa
 
 # Install qa dependencies or fetch from cache if unchanged
 COPY ./qa/Gemfile* /home/gitlab/qa/
+RUN gem install bundler --no-document --conservative --version 2.3.6
 RUN bundle install --jobs=$(nproc) --retry=3 --without=development --quiet
 
 ##
@@ -76,7 +77,8 @@ COPY ./config/initializers/0_inject_enterprise_edition_module.rb /home/gitlab/co
 # Copy VERSION to ensure the COPY succeeds to copy at least one file since ee/app/models/license.rb isn't present in FOSS
 # The [b] part makes ./ee/app/models/license.r[b] a pattern that is allowed to return no files (which is the case in FOSS)
 COPY VERSION ./ee/app/models/license.r[b] /home/gitlab/ee/app/models/
-COPY ./lib/gitlab.rb /home/gitlab/lib/
+COPY ./config/bundler_setup.rb /home/gitlab/config/
+COPY ./lib/gitlab_edition.rb /home/gitlab/lib/
 COPY ./lib/gitlab/utils.rb /home/gitlab/lib/gitlab/
 COPY ./INSTALLATION_TYPE ./VERSION /home/gitlab/
 

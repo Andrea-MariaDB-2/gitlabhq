@@ -3,7 +3,6 @@
 module Gitlab
   module Ci
     class Trace
-      # This was inspired from: http://stackoverflow.com/a/10219411/1520132
       class Stream
         BUFFER_SIZE = 4096
         LIMIT_SIZE = 500.kilobytes
@@ -11,10 +10,6 @@ module Gitlab
         attr_reader :stream, :metrics
 
         delegate :close, :tell, :seek, :size, :url, :truncate, to: :stream, allow_nil: true
-
-        delegate :valid?, to: :stream, allow_nil: true
-
-        alias_method :present?, :valid?
 
         def initialize(metrics = Trace::Metrics.new)
           @stream = yield
@@ -25,6 +20,7 @@ module Gitlab
         def valid?
           self.stream.present?
         end
+        alias_method :present?, :valid?
 
         def file?
           self.path.present?

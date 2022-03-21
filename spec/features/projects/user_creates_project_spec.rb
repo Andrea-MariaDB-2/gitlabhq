@@ -6,7 +6,6 @@ RSpec.describe 'User creates a project', :js do
   let(:user) { create(:user) }
 
   before do
-    stub_feature_flags(paginatable_namespace_drop_down_for_project_creation: false)
     sign_in(user)
     create(:personal_key, user: user)
   end
@@ -14,7 +13,7 @@ RSpec.describe 'User creates a project', :js do
   it 'creates a new project' do
     visit(new_project_path)
 
-    find('[data-qa-panel-name="blank_project"]').click # rubocop:disable QA/SelectorUsage
+    click_link 'Create blank project'
     fill_in(:project_name, with: 'Empty')
 
     expect(page).to have_checked_field 'Initialize repository with a README'
@@ -26,11 +25,57 @@ RSpec.describe 'User creates a project', :js do
 
     project = Project.last
 
-    expect(current_path).to eq(project_path(project))
+    expect(page).to have_current_path(project_path(project), ignore_query: true)
     expect(page).to have_content('Empty')
     expect(page).to have_content('git init')
     expect(page).to have_content('git remote')
     expect(page).to have_content(project.url_to_repo)
+  end
+
+  it 'creates a new project that is not blank' do
+    stub_experiments(new_project_sast_enabled: 'candidate')
+
+    visit(new_project_path)
+
+    click_link 'Create blank project'
+    fill_in(:project_name, with: 'With initial commits')
+
+    expect(page).to have_checked_field 'Initialize repository with a README'
+    expect(page).to have_checked_field 'Enable Static Application Security Testing (SAST)'
+
+    click_button('Create project')
+
+    project = Project.last
+
+    expect(page).to have_current_path(project_path(project), ignore_query: true)
+    expect(page).to have_content('With initial commits')
+    expect(page).to have_content('Configure SAST in `.gitlab-ci.yml`, creating this file if it does not already exist')
+    expect(page).to have_content('README.md Initial commit')
+  end
+
+  it 'allows creating a new project when the new_project_sast_enabled is assigned the unchecked candidate' do
+    stub_experiments(new_project_sast_enabled: 'unchecked_candidate')
+
+    visit(new_project_path)
+
+    click_link 'Create blank project'
+    fill_in(:project_name, with: 'With initial commits')
+
+    expect(page).to have_checked_field 'Initialize repository with a README'
+    expect(page).to have_unchecked_field 'Enable Static Application Security Testing (SAST)'
+
+    check 'Enable Static Application Security Testing (SAST)'
+
+    page.within('#content-body') do
+      click_button('Create project')
+    end
+
+    project = Project.last
+
+    expect(page).to have_current_path(project_path(project), ignore_query: true)
+    expect(page).to have_content('With initial commits')
+    expect(page).to have_content('Configure SAST in `.gitlab-ci.yml`, creating this file if it does not already exist')
+    expect(page).to have_content('README.md Initial commit')
   end
 
   context 'in a subgroup they do not own' do
@@ -44,16 +89,14 @@ RSpec.describe 'User creates a project', :js do
     it 'creates a new project' do
       visit(new_project_path)
 
-      find('[data-qa-panel-name="blank_project"]').click # rubocop:disable QA/SelectorUsage
+      click_link 'Create blank project'
       fill_in :project_name, with: 'A Subgroup Project'
       fill_in :project_path, with: 'a-subgroup-project'
 
-      page.find('.js-select-namespace').click
-      page.find("div[role='option']", text: subgroup.full_path).click
+      click_button user.username
+      click_button subgroup.full_path
 
-      page.within('#content-body') do
-        click_button('Create project')
-      end
+      click_button('Create project')
 
       expect(page).to have_content("Project 'A Subgroup Project' was successfully created")
 
@@ -73,12 +116,12 @@ RSpec.describe 'User creates a project', :js do
     it 'creates a new project' do
       visit(new_project_path)
 
-      find('[data-qa-panel-name="blank_project"]').click # rubocop:disable QA/SelectorUsage
+      click_link 'Create blank project'
       fill_in :project_name, with: 'a-new-project'
       fill_in :project_path, with: 'a-new-project'
 
-      page.find('.js-select-namespace').click
-      page.find("div[role='option']", text: group.full_path).click
+      click_button user.username
+      click_button group.full_path
 
       page.within('#content-body') do
         click_button('Create project')

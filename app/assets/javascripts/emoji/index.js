@@ -1,25 +1,32 @@
 import { escape, minBy } from 'lodash';
+import emojiRegexFactory from 'emoji-regex';
 import emojiAliases from 'emojis/aliases.json';
-import { sanitize } from '~/lib/dompurify';
+import { setAttributes } from '~/lib/utils/dom_utils';
 import AccessorUtilities from '../lib/utils/accessor';
 import axios from '../lib/utils/axios_utils';
-import { CATEGORY_ICON_MAP, FREQUENTLY_USED_KEY } from './constants';
+import { CACHE_KEY, CACHE_VERSION_KEY, CATEGORY_ICON_MAP, FREQUENTLY_USED_KEY } from './constants';
 
 let emojiMap = null;
 let validEmojiNames = null;
 export const FALLBACK_EMOJI_KEY = 'grey_question';
 
-export const EMOJI_VERSION = '1';
+// Keep the version in sync with `lib/gitlab/emoji.rb`
+export const EMOJI_VERSION = '2';
 
-const isLocalStorageAvailable = AccessorUtilities.isLocalStorageAccessSafe();
+const isLocalStorageAvailable = AccessorUtilities.canUseLocalStorage();
 
 async function loadEmoji() {
   if (
     isLocalStorageAvailable &&
-    window.localStorage.getItem('gl-emoji-map-version') === EMOJI_VERSION &&
-    window.localStorage.getItem('gl-emoji-map')
+    window.localStorage.getItem(CACHE_VERSION_KEY) === EMOJI_VERSION &&
+    window.localStorage.getItem(CACHE_KEY)
   ) {
-    return JSON.parse(window.localStorage.getItem('gl-emoji-map'));
+    const emojis = JSON.parse(window.localStorage.getItem(CACHE_KEY));
+    // Workaround because the pride flag is broken in EMOJI_VERSION = '1'
+    if (emojis.gay_pride_flag) {
+      emojis.gay_pride_flag.e = '🏳️‍🌈';
+    }
+    return emojis;
   }
 
   // We load the JSON file direct from the server
@@ -28,15 +35,19 @@ async function loadEmoji() {
   const { data } = await axios.get(
     `${gon.relative_url_root || ''}/-/emojis/${EMOJI_VERSION}/emojis.json`,
   );
-  window.localStorage.setItem('gl-emoji-map-version', EMOJI_VERSION);
-  window.localStorage.setItem('gl-emoji-map', JSON.stringify(data));
+  window.localStorage.setItem(CACHE_VERSION_KEY, EMOJI_VERSION);
+  window.localStorage.setItem(CACHE_KEY, JSON.stringify(data));
   return data;
 }
 
 async function loadEmojiWithNames() {
-  return Object.entries(await loadEmoji()).reduce((acc, [key, value]) => {
-    acc[key] = { ...value, name: key, e: sanitize(value.e) };
+  const emojiRegex = emojiRegexFactory();
 
+  return Object.entries(await loadEmoji()).reduce((acc, [key, value]) => {
+    // Filter out entries which aren't emojis
+    if (value.e.match(emojiRegex)?.[0] === value.e) {
+      acc[key] = { ...value, name: key };
+    }
     return acc;
   }, {});
 }
@@ -210,7 +221,19 @@ export function emojiFallbackImageSrc(inputName) {
 }
 
 export function emojiImageTag(name, src) {
-  return `<img class="emoji" title=":${name}:" alt=":${name}:" src="${src}" width="20" height="20" align="absmiddle" />`;
+  const img = document.createElement('img');
+
+  img.className = 'emoji';
+  setAttributes(img, {
+    title: `:${name}:`,
+    alt: `:${name}:`,
+    src,
+    width: '20',
+    height: '20',
+    align: 'absmiddle',
+  });
+
+  return img;
 }
 
 export function glEmojiTag(inputName, options) {

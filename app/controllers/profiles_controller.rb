@@ -6,9 +6,12 @@ class ProfilesController < Profiles::ApplicationController
 
   before_action :user
   before_action :authorize_change_username!, only: :update_username
+  before_action only: :update_username do
+    check_rate_limit!(:profile_update_username, scope: current_user)
+  end
   skip_before_action :require_email, only: [:show, :update]
   before_action do
-    push_frontend_feature_flag(:webauthn)
+    push_frontend_feature_flag(:webauthn, default_enabled: :yaml)
   end
 
   feature_category :users
@@ -18,7 +21,7 @@ class ProfilesController < Profiles::ApplicationController
 
   def update
     respond_to do |format|
-      result = Users::UpdateService.new(current_user, user_params.merge(user: @user)).execute
+      result = Users::UpdateService.new(current_user, user_params.merge(user: @user)).execute(check_password: true)
 
       if result[:status] == :success
         message = s_("Profiles|Profile was successfully updated")
@@ -63,7 +66,7 @@ class ProfilesController < Profiles::ApplicationController
 
   # rubocop: disable CodeReuse/ActiveRecord
   def audit_log
-    @events = AuditEvent.where(entity_type: "User", entity_id: current_user.id)
+    @events = AuthenticationEvent.where(user: current_user)
       .order("created_at DESC")
       .page(params[:page])
 
@@ -103,8 +106,8 @@ class ProfilesController < Profiles::ApplicationController
     @username_param ||= user_params.require(:username)
   end
 
-  def user_params
-    @user_params ||= params.require(:user).permit(
+  def user_params_attributes
+    [
       :avatar,
       :bio,
       :email,
@@ -129,7 +132,14 @@ class ProfilesController < Profiles::ApplicationController
       :job_title,
       :pronouns,
       :pronunciation,
+      :validation_password,
       status: [:emoji, :message, :availability]
-    )
+    ]
+  end
+
+  def user_params
+    @user_params ||= params.require(:user).permit(user_params_attributes)
   end
 end
+
+ProfilesController.prepend_mod

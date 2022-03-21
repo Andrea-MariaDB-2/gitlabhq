@@ -1,85 +1,77 @@
 ---
 stage: Create
 group: Editor
-info: "To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments"
-type: index, reference, howto
+info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
 ---
 
-# Search through GitLab **(FREE)**
+# Searching in GitLab **(FREE)**
 
-## Issues and merge requests
+## Search issues and merge requests
 
-To search through issues and merge requests in multiple projects, use the **Issues** or **Merge Requests** links
-in the top-right part of your screen. These instructions are valid for both.
+To search through issues and merge requests in multiple projects, on the top bar, select the **Issues** or **Merge requests** links.
 
-The numbers in the right-hand side of the top menu indicate how many issues, merge requests,
-and to-do items are assigned to you:
+The numbers indicate how many issues, merge requests, and to-do items are assigned to you:
 
-![issues and MRs dashboard links](img/dashboard_links_v13_11.png)
+![issues and MRs dashboard links](img/dashboard_links_v14_6.png)
 
 - **{issues}** **Issues**: The open issues assigned to you.
 - **{merge-request-open}** **Merge requests**: The [merge requests](../project/merge_requests/index.md) assigned to you.
 - **{todo-done}** **To-do items**: The [to-do items](../todos.md) assigned to you.
 
-When you click **Issues**, GitLab shows the opened issues assigned to you:
-
-![Issues assigned to you](img/issues_assigned_to_you.png)
-
 You can search through **Open**, **Closed**, or **All** issues.
 
-You can also filter the results using the search and filter field, as described below in
-[Filtering issue and merge request lists](#filtering-issue-and-merge-request-lists).
+You can also filter the results using the search and filter field, as described in
+[Filter issue and merge request lists](#filter-issue-and-merge-request-lists).
 
 ### Issues and MRs assigned to you or created by you
 
 GitLab shows shortcuts to issues and merge requests created by you or assigned to you
 in the search field in the upper right corner:
 
-![shortcut to your issues and merge requests](img/issues_mrs_shortcut.png)
+![shortcut to your issues and merge requests](img/issues_mrs_shortcut_v14_6.png)
 
-### Filtering issue and merge request lists
+### Filter issue and merge request lists
 
-> - Filtering by Epics was [introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/195704) in GitLab Ultimate 12.9.
-> - Filtering by child Epics was [introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/9029) in GitLab Ultimate 13.0.
-> - Filtering by Iterations was [introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/118742) in GitLab 13.6. Moved to GitLab Premium in 13.9.
+> - Filtering by epics was [introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/195704) in GitLab 12.9.
+> - Filtering by child epics was [introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/9029) in GitLab 13.0.
+> - Filtering by iterations was [introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/118742) in GitLab 13.6.
+> - Filtering by iterations was moved from GitLab Ultimate to GitLab Premium in 13.9.
+> - Filtering by type was [introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/322755) in GitLab 13.10 [with a flag](../../administration/feature_flags.md) named `vue_issues_list`. Disabled by default.
 
-Follow these steps to filter the **Issues** and **Merge Requests** list pages in projects and
+Follow these steps to filter the **Issues** and **Merge requests** list pages in projects and
 groups:
 
-1. Click in the field **Search or filter results...**.
-1. In the dropdown menu that appears, select the attribute you wish to filter by:
-   - Author
+1. Select **Search or filter results...**.
+1. In the dropdown list that appears, select the attribute you wish to filter by:
    - Assignee
-   - [Milestone](../project/milestones/index.md)
-   - [Iteration](../group/iterations/index.md)
-   - Release
-   - [Label](../project/labels.md)
-   - My-reaction
+   - Author
    - Confidential
    - [Epic and child Epic](../group/epics/index.md) (available only for the group the Epic was created, not for [higher group levels](https://gitlab.com/gitlab-org/gitlab/-/issues/233729)).
+   - [Iteration](../group/iterations/index.md)
+   - [Label](../project/labels.md)
+   - [Milestone](../project/milestones/index.md)
+   - My-reaction
+   - Release
+   - Type
+
+     FLAG:
+     On self-managed GitLab, by default filtering by type is not available.
+     To make it available per group, ask an administrator to [enable the feature flag](../../administration/feature_flags.md) named `vue_issues_list`.
+     On GitLab.com, this feature is not available.
+
+   - Weight
    - Search for this text
 1. Select or type the operator to use for filtering the attribute. The following operators are
    available:
    - `=`: Is
    - `!=`: Is not ([Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/18059) in GitLab 12.7)
 1. Enter the text to [filter the attribute by](#filters-autocomplete).
+   You can filter some attributes by **None** or **Any**.
 1. Repeat this process to filter by multiple attributes. Multiple attributes are joined by a logical
    `AND`.
 
-For example, filtering by Author `=` Jane and Milestone `!=` 12.6 filters for the issues where Jane
-is the author and the milestone is not 12.6.
-
-![filter issues in a project](img/issue_search_filter_v12_7.png)
-
-### Filtering by **None** / **Any**
-
-Some filter fields like milestone and assignee, allow you to filter by **None** or **Any**.
-
-![filter by none any](img/issues_filter_none_any.png)
-
-Selecting **None** returns results that have an empty value for that field. For example: no milestone, no assignee.
-
-Selecting **Any** does the opposite. It returns results that have a non-empty value for that field.
+GitLab displays the results on-screen, but you can also
+[retrieve them as an RSS feed](#retrieve-search-results-as-feed).
 
 ### Searching for specific terms
 
@@ -94,33 +86,37 @@ You can filter issues and merge requests by specific terms included in titles or
     issues for `included in titles` is same as `included titles`
   - Search is limited to 4096 characters and 64 terms per query.
 
-![filter issues by specific terms](img/issue_search_by_term.png)
-
-### Retrieving search results as feed
+### Retrieve search results as feed
 
 > Feeds for merge requests were [introduced](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/66336) in GitLab 14.3.
 
-You can subscribe to the results of your search query for issues or merge requests within a project as an Atom feed by clicking on the feed symbol **{rss}**.
+GitLab provides RSS feeds of search results for your project. To subscribe to the
+RSS feed of search results:
 
-This will generate a feed URL containing both a feed token and your search query, which can be added to your feed reader.
+1. Go to your project's page.
+1. On the left sidebar, select **Issues** or **Merge requests**.
+1. Build your search query as described in [Filter issue and merge request lists](#filter-issue-and-merge-request-lists).
+1. Select the feed symbol **{rss}** to display the results as an RSS feed in Atom format.
+
+The URL of the result contains both a feed token, and your search query.
+You can add this URL to your feed reader.
 
 ### Filtering by ID
 
 > [Introduced](https://gitlab.com/gitlab-org/gitlab-foss/-/issues/39908) in GitLab 12.1.
 
-You can filter the **Issues** list to individual instances by their ID. For example, enter filter `#10` to return only issue 10. The same applies to the **Merge Requests** list. Enter filter `#30` to return only merge request 30.
+You can filter the **Issues** list to individual instances by their ID. For example, enter filter `#10` to return only issue 10. The same applies to the **Merge requests** list. Enter filter `#30` to return only merge request 30.
 
-![filter issues by specific id](img/issue_search_by_id.png)
+![filter issues by specific ID](img/issue_search_by_id.png)
 
 ### Filtering merge requests by approvers **(PREMIUM)**
 
-> - [Introduced](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/9468) in GitLab 11.9.
-> - Moved to GitLab Premium in 13.9.
+> Moved to GitLab Premium in 13.9.
 
-To filter merge requests by an individual approver, you can type (or select from
-the dropdown) **Approver** and select the user.
+To filter merge requests by an individual eligible approver ([Codeowner](../project/code_owners.md)), you can type (or select from
+the dropdown list) **Approver** and select the user.
 
-![Filter MRs by an approver](img/filter_approver_merge_requests.png)
+![Filter MRs by an approver](img/filter_approver_merge_requests_v14_6.png)
 
 ### Filtering merge requests by "approved by" **(PREMIUM)**
 
@@ -128,38 +124,40 @@ the dropdown) **Approver** and select the user.
 > - Moved to GitLab Premium in 13.9.
 
 To filter merge requests already approved by a specific individual, you can type (or select from
-the dropdown) **Approved-By** and select the user.
+the dropdown list) **Approved-By** and select the user.
 
-![Filter MRs by approved by](img/filter_approved_by_merge_requests_v13_0.png)
+![Filter MRs by approved by](img/filter_approved_by_merge_requests_v14_6.png)
 
-### Filtering merge requests by reviewer **(FREE)**
+### Filtering merge requests by reviewer
 
 > [Introduced](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/47605) in GitLab 13.7.
 
 To filter review requested merge requests for a specific individual, you can type (or select from
-the dropdown) **Reviewer** and select the user.
+the dropdown list) **Reviewer** and select the user.
 
-### Filtering merge requests by environment or deployment date **(FREE)**
+### Filtering merge requests by environment or deployment date
 
 > [Introduced](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/44041) in GitLab 13.6.
 
 To filter merge requests by deployment data, such as the environment or a date,
-you can type (or select from the dropdown) the following:
+you can type (or select from the dropdown list) the following:
 
 - Environment
 - Deployed-before
 - Deployed-after
 
-When filtering by an environment, a dropdown presents all environments that
+When filtering by an environment, a dropdown list presents all environments that
 you can choose from:
 
-![Filter MRs by their environment](img/filtering_merge_requests_by_environment_v13_6.png)
+![Filter MRs by their environment](img/filtering_merge_requests_by_environment_v14_6.png)
 
-When filtering by a deploy date, you must enter the date manually. Deploy dates
+When filtering by `Deployed-before` or `Deployed-after`, the date refers to when
+the deployment to an environment (triggered by the merge commit) completed successfully.
+You must enter the deploy date manually. Deploy dates
 use the format `YYYY-MM-DD`, and must be quoted if you wish to specify
 both a date and time (`"YYYY-MM-DD HH:MM"`):
 
-![Filter MRs by a deploy date](img/filtering_merge_requests_by_date_v13_6.png)
+![Filter MRs by a deploy date](img/filtering_merge_requests_by_date_v14_6.png)
 
 ## Filters autocomplete
 
@@ -177,7 +175,7 @@ you must type at least `Sim` before autocomplete displays results.
 Search history is available for issues and merge requests, and is stored locally
 in your browser. To run a search from history:
 
-1. In the top menu, click **Issues** or **Merge requests**.
+1. In the top menu, select **Issues** or **Merge requests**.
 1. To the left of the search bar, click **Recent searches**, and select a search from the list.
 
 ## Removing search filters
@@ -196,7 +194,7 @@ Some filters can be added multiple times. These include but are not limited to a
 
 You can search your [To-Do List](../todos.md) by "to do" and "done".
 You can filter to-do items per project, author, type, and action.
-Also, you can sort them by [**Label priority**](../../user/project/labels.md#label-priority),
+Also, you can sort them by [**Label priority**](../../user/project/labels.md#set-label-priority),
 **Last created**, and **Oldest created**.
 
 ## Projects
@@ -230,27 +228,16 @@ and sort them by **Last created**, **Oldest created**, **Last updated**, or **Ol
 From an [issue board](../../user/project/issue_board.md), you can filter issues by **Author**, **Assignee**, **Milestone**, and **Labels**.
 You can also filter them by name (issue title), from the field **Filter by name**, which is loaded as you type.
 
-To search for issues to add to lists present in your issue board, click
+To search for issues to add to lists present in your issue board, select
 the button **Add issues** on the top-right of your screen, opening a modal window from which
 you can, besides filtering them by **Name**, **Author**, **Assignee**, **Milestone**,
 and **Labels**, select multiple issues to add to a list of your choice:
 
 ![search and select issues to add to board](img/search_issues_board.png)
 
-## Shortcut
+## Autocomplete suggestions
 
-To view issues and merge requests created or assigned to you in a project:
-
-1. Go to your project.
-1. In the top navigation bar, click the search box to display a list of issues and
-   merge requests.
-1. Select your desired issue or merge request:
-
-   ![search per project - shortcut](img/project_search.png)
-
-### Autocomplete suggestions
-
-You can also type in this search bar to see autocomplete suggestions for:
+In the search bar, you can view autocomplete suggestions for:
 
 - Projects and groups
 - Various help pages (try and type **API help**)
@@ -282,7 +269,7 @@ To start a search, type into the search bar on the top-right of the screen. You 
 in all GitLab and may also see the options to search in a group or project if you are in the
 group or project dashboard.
 
-![basic search](img/basic_search.png)
+![basic search](img/basic_search_v14_4.png)
 
 After the results are returned, you can modify the search, select a different type of data to
 search, or choose a specific group or project.
@@ -293,8 +280,15 @@ search, or choose a specific group or project.
 
 To search through code or other documents in a single project, you can use
 the search field on the top-right of your screen while the project page is open.
+Code search shows only the first result in the file.
 
-![code search results](img/project_code_search.png)
+#### Git blame from code search **(FREE)**
+
+> [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/327052) in GitLab 14.7.
+
+You can access Git blame from any line that returned a result from the code search:
+
+![code search results](img/code_search_git_blame_v14_9.png)
 
 ### SHA search
 
@@ -313,9 +307,10 @@ GitLab instance.
 
 ## Search settings
 
-> - [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/292941) in GitLab 13.8 behind a feature flag, disabled by default.
-> - [Added to Group, Administrator, and User settings](https://gitlab.com/groups/gitlab-org/-/epics/4842) in GitLab 13.9.
-> - [Enabled by default](https://gitlab.com/gitlab-org/gitlab/-/issues/294025) in GitLab 13.11.
+> - [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/292941) in GitLab 13.8 [with a flag](../../administration/feature_flags.md) named `search_settings_in_page`. Disabled by default.
+> - [Added](https://gitlab.com/groups/gitlab-org/-/epics/4842) to Group, Administrator, and User settings in GitLab 13.9.
+> - [Feature flag `search_settings_in_page` removed](https://gitlab.com/gitlab-org/gitlab/-/issues/294025) in GitLab 13.11.
+> - [Generally available](https://gitlab.com/gitlab-org/gitlab/-/issues/294025) in GitLab 13.11.
 
 You can search inside a Project, Group, Administrator, or User's settings by entering
 a search term in the search box located at the top of the page. The search results

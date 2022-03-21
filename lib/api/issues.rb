@@ -4,16 +4,20 @@ module API
   class Issues < ::API::Base
     include PaginationParams
     helpers Helpers::IssuesHelpers
-    helpers Helpers::RateLimiter
+    helpers SpammableActions::CaptchaCheck::RestApiActionsSupport
 
     before { authenticate_non_get! }
 
-    feature_category :issue_tracking
+    feature_category :team_planning
 
     helpers do
       params :negatable_issue_filter_params do
         optional :labels, type: Array[String], coerce_with: ::API::Validations::Types::CommaSeparatedToArray.coerce, desc: 'Comma-separated list of label names'
         optional :milestone, type: String, desc: 'Milestone title'
+        optional :milestone_id, types: String, values: %w[Any None Upcoming Started],
+                 desc: 'Return issues assigned to milestones without the specified timebox value ("Any", "None", "Upcoming" or "Started")'
+        mutually_exclusive :milestone_id, :milestone
+
         optional :iids, type: Array[Integer], coerce_with: ::API::Validations::Types::CommaSeparatedToIntegerArray.coerce, desc: 'The IID array of issues'
 
         optional :author_id, type: Integer, desc: 'Return issues which are not authored by the user with the given ID'
@@ -32,9 +36,14 @@ module API
       params :issues_stats_params do
         optional :labels, type: Array[String], coerce_with: ::API::Validations::Types::CommaSeparatedToArray.coerce, desc: 'Comma-separated list of label names'
         optional :milestone, type: String, desc: 'Milestone title'
+        # 'milestone_id' only accepts wildcard values 'Any', 'None', 'Upcoming', 'Started'
+        # the param has '_id' in the name to keep consistency (ex. assignee_id accepts id and wildcard values).
+        optional :milestone_id, types: String, values: %w[Any None Upcoming Started],
+                 desc: 'Return issues assigned to milestones with the specified timebox value ("Any", "None", "Upcoming" or "Started")'
         optional :iids, type: Array[Integer], coerce_with: ::API::Validations::Types::CommaSeparatedToIntegerArray.coerce, desc: 'The IID array of issues'
         optional :search, type: String, desc: 'Search issues for text present in the title, description, or any combination of these'
         optional :in, type: String, desc: '`title`, `description`, or a string joining them with comma'
+        mutually_exclusive :milestone_id, :milestone
 
         optional :author_id, type: Integer, desc: 'Return issues which are authored by the user with the given ID'
         optional :author_username, type: String, desc: 'Return issues which are authored by the user with the given username'
@@ -69,12 +78,12 @@ module API
         optional :state, type: String, values: %w[opened closed all], default: 'all',
                  desc: 'Return opened, closed, or all issues'
         optional :order_by, type: String, values: Helpers::IssuesHelpers.sort_options, default: 'created_at',
-                 desc: 'Return issues ordered by `created_at` or `updated_at` fields.'
+                 desc: 'Return issues ordered by `created_at`, `due_date`, `label_priority`, `milestone_due`, `popularity`, `priority`, `relative_position`, `title`, or `updated_at` fields.'
         optional :sort, type: String, values: %w[asc desc], default: 'desc',
                  desc: 'Return issues sorted in `asc` or `desc` order.'
-        optional :due_date, type: String, values: %w[0 overdue week month next_month_and_previous_two_weeks] << '',
+        optional :due_date, type: String, values: %w[0 any today tomorrow overdue week month next_month_and_previous_two_weeks] << '',
                  desc: 'Return issues that have no due date (`0`), or whose due date is this week, this month, between two weeks ago and next month, or which are overdue. Accepts: `overdue`, `week`, `month`, `next_month_and_previous_two_weeks`, `0`'
-        optional :issue_type, type: String, values: WorkItem::Type.base_types.keys, desc: "The type of the issue. Accepts: #{WorkItem::Type.base_types.keys.join(', ')}"
+        optional :issue_type, type: String, values: WorkItems::Type.allowed_types_for_issues, desc: "The type of the issue. Accepts: #{WorkItems::Type.allowed_types_for_issues.join(', ')}"
 
         use :issues_stats_params
         use :pagination
@@ -91,7 +100,7 @@ module API
         optional :due_date, type: String, desc: 'Date string in the format YEAR-MONTH-DAY'
         optional :confidential, type: Boolean, desc: 'Boolean parameter if the issue should be confidential'
         optional :discussion_locked, type: Boolean, desc: " Boolean parameter indicating if the issue's discussion is locked"
-        optional :issue_type, type: String, values: WorkItem::Type.base_types.keys, desc: "The type of the issue. Accepts: #{WorkItem::Type.base_types.keys.join(', ')}"
+        optional :issue_type, type: String, values: WorkItems::Type.allowed_types_for_issues, desc: "The type of the issue. Accepts: #{WorkItems::Type.allowed_types_for_issues.join(', ')}"
 
         use :optional_issue_params_ee
       end
@@ -105,6 +114,7 @@ module API
     end
     get '/issues_statistics' do
       authenticate! unless params[:scope] == 'all'
+      validate_anonymous_search_access! if params[:search].present?
 
       present issues_statistics, with: Grape::Presenters::Presenter
     end
@@ -122,6 +132,7 @@ module API
       end
       get do
         authenticate! unless params[:scope] == 'all'
+        validate_anonymous_search_access! if params[:search].present?
         issues = paginate(find_issues)
 
         options = {
@@ -160,6 +171,7 @@ module API
         optional :non_archived, type: Boolean, desc: 'Return issues from non archived projects', default: true
       end
       get ":id/issues" do
+        validate_anonymous_search_access! if declared_params[:search].present?
         issues = paginate(find_issues(group_id: user_group.id, include_subgroups: true))
 
         options = {
@@ -178,6 +190,8 @@ module API
         use :issues_stats_params
       end
       get ":id/issues_statistics" do
+        validate_anonymous_search_access! if declared_params[:search].present?
+
         present issues_statistics(group_id: user_group.id, include_subgroups: true), with: Grape::Presenters::Presenter
       end
     end
@@ -195,6 +209,7 @@ module API
         use :issues_params
       end
       get ":id/issues" do
+        validate_anonymous_search_access! if declared_params[:search].present?
         issues = paginate(find_issues(project_id: user_project.id))
 
         options = {
@@ -213,6 +228,8 @@ module API
         use :issues_stats_params
       end
       get ":id/issues_statistics" do
+        validate_anonymous_search_access! if declared_params[:search].present?
+
         present issues_statistics(project_id: user_project.id), with: Grape::Presenters::Presenter
       end
 
@@ -246,8 +263,6 @@ module API
       post ':id/issues' do
         Gitlab::QueryLimiting.disable!('https://gitlab.com/gitlab-org/gitlab/-/issues/21140')
 
-        check_rate_limit! :issues_create, [current_user]
-
         authorize! :create_issue, user_project
 
         issue_params = declared_params(include_missing: false)
@@ -261,14 +276,12 @@ module API
                                               params: issue_params,
                                               spam_params: spam_params).execute
 
-          if issue.spam?
-            render_api_error!({ error: 'Spam detected' }, 400)
-          end
-
           if issue.valid?
             present issue, with: Entities::Issue, current_user: current_user, project: user_project
           else
-            render_validation_error!(issue)
+            with_captcha_check_rest_api(spammable: issue) do
+              render_validation_error!(issue)
+            end
           end
         rescue ::ActiveRecord::RecordNotUnique
           render_api_error!('Duplicated issue', 409)
@@ -306,12 +319,12 @@ module API
                                             params: update_params,
                                             spam_params: spam_params).execute(issue)
 
-        render_spam_error! if issue.spam?
-
         if issue.valid?
           present issue, with: Entities::Issue, current_user: current_user, project: user_project
         else
-          render_validation_error!(issue)
+          with_captcha_check_rest_api(spammable: issue) do
+            render_validation_error!(issue)
+          end
         end
       end
       # rubocop: enable CodeReuse/ActiveRecord
@@ -361,6 +374,34 @@ module API
           issue = ::Issues::MoveService.new(project: user_project, current_user: current_user).execute(issue, new_project)
           present issue, with: Entities::Issue, current_user: current_user, project: user_project
         rescue ::Issues::MoveService::MoveError => error
+          render_api_error!(error.message, 400)
+        end
+      end
+      # rubocop: enable CodeReuse/ActiveRecord
+
+      desc 'Clone an existing issue' do
+        success Entities::Issue
+      end
+      params do
+        requires :issue_iid, type: Integer, desc: 'The internal ID of a project issue'
+        requires :to_project_id, type: Integer, desc: 'The ID of the new project'
+        optional :with_notes, type: Boolean, desc: 'Clone issue with notes', default: false
+      end
+      # rubocop: disable CodeReuse/ActiveRecord
+      post ':id/issues/:issue_iid/clone' do
+        Gitlab::QueryLimiting.disable!('https://gitlab.com/gitlab-org/gitlab/-/issues/340252')
+
+        issue = user_project.issues.find_by(iid: params[:issue_iid])
+        not_found!('Issue') unless issue
+
+        target_project = Project.find_by(id: params[:to_project_id])
+        not_found!('Project') unless target_project
+
+        begin
+          issue = ::Issues::CloneService.new(project: user_project, current_user: current_user)
+            .execute(issue, target_project, with_notes: params[:with_notes])
+          present issue, with: Entities::Issue, current_user: current_user, project: target_project
+        rescue ::Issues::CloneService::CloneError => error
           render_api_error!(error.message, 400)
         end
       end
@@ -428,7 +469,7 @@ module API
       end
       get ':id/issues/:issue_iid/participants' do
         issue = find_project_issue(params[:issue_iid])
-        participants = ::Kaminari.paginate_array(issue.participants)
+        participants = ::Kaminari.paginate_array(issue.visible_participants(current_user))
 
         present paginate(participants), with: Entities::UserBasic, current_user: current_user, project: user_project
       end

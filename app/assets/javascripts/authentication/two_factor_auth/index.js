@@ -1,7 +1,43 @@
 import Vue from 'vue';
+import { parseBoolean } from '~/lib/utils/common_utils';
 import { updateHistory, removeParams } from '~/lib/utils/url_utility';
+import ManageTwoFactorForm from './components/manage_two_factor_form.vue';
 import RecoveryCodes from './components/recovery_codes.vue';
 import { SUCCESS_QUERY_PARAM } from './constants';
+
+export const initManageTwoFactorForm = () => {
+  const el = document.querySelector('.js-manage-two-factor-form');
+
+  if (!el) {
+    return false;
+  }
+
+  const {
+    webauthnEnabled = false,
+    currentPasswordRequired,
+    profileTwoFactorAuthPath = '',
+    profileTwoFactorAuthMethod = '',
+    codesProfileTwoFactorAuthPath = '',
+    codesProfileTwoFactorAuthMethod = '',
+  } = el.dataset;
+
+  const isCurrentPasswordRequired = parseBoolean(currentPasswordRequired);
+
+  return new Vue({
+    el,
+    provide: {
+      webauthnEnabled,
+      isCurrentPasswordRequired,
+      profileTwoFactorAuthPath,
+      profileTwoFactorAuthMethod,
+      codesProfileTwoFactorAuthPath,
+      codesProfileTwoFactorAuthMethod,
+    },
+    render(createElement) {
+      return createElement(ManageTwoFactorForm);
+    },
+  });
+};
 
 export const initRecoveryCodes = () => {
   const el = document.querySelector('.js-2fa-recovery-codes');

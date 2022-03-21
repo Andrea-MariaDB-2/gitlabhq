@@ -17,20 +17,27 @@ module Gitlab
         Config::Yaml::Tags::TagError
       ].freeze
 
-      attr_reader :root, :context, :source_ref_path, :source
+      attr_reader :root, :context, :source_ref_path, :source, :logger
 
-      def initialize(config, project: nil, sha: nil, user: nil, parent_pipeline: nil, source_ref_path: nil, source: nil)
-        @context = build_context(project: project, sha: sha, user: user, parent_pipeline: parent_pipeline, ref: source_ref_path)
+      def initialize(config, project: nil, pipeline: nil, sha: nil, user: nil, parent_pipeline: nil, source: nil, logger: nil)
+        @logger = logger || ::Gitlab::Ci::Pipeline::Logger.new(project: project)
+        @source_ref_path = pipeline&.source_ref_path
+
+        @context = self.logger.instrument(:config_build_context) do
+          build_context(project: project, pipeline: pipeline, sha: sha, user: user, parent_pipeline: parent_pipeline)
+        end
+
         @context.set_deadline(TIMEOUT_SECONDS)
 
-        @source_ref_path = source_ref_path
         @source = source
 
-        @config = expand_config(config)
+        @config = self.logger.instrument(:config_expand) do
+          expand_config(config)
+        end
 
-        @root = Entry::Root.new(@config)
-        @root.compose!
-
+        @root = self.logger.instrument(:config_compose) do
+          Entry::Root.new(@config, project: project, user: user).tap(&:compose!)
+        end
       rescue *rescue_errors => e
         raise Config::ConfigError, e.message
       end
@@ -93,11 +100,25 @@ module Gitlab
       end
 
       def build_config(config)
-        initial_config = Config::Yaml.load!(config)
-        initial_config = Config::External::Processor.new(initial_config, @context).perform
-        initial_config = Config::Extendable.new(initial_config).to_hash
-        initial_config = Config::Yaml::Tags::Resolver.new(initial_config).to_hash
-        Config::EdgeStagesInjector.new(initial_config).to_hash
+        initial_config = logger.instrument(:config_yaml_load) do
+          Config::Yaml.load!(config)
+        end
+
+        initial_config = logger.instrument(:config_external_process) do
+          Config::External::Processor.new(initial_config, @context).perform
+        end
+
+        initial_config = logger.instrument(:config_yaml_extend) do
+          Config::Extendable.new(initial_config).to_hash
+        end
+
+        initial_config = logger.instrument(:config_tags_resolve) do
+          Config::Yaml::Tags::Resolver.new(initial_config).to_hash
+        end
+
+        logger.instrument(:config_stages_inject) do
+          Config::EdgeStagesInjector.new(initial_config).to_hash
+        end
       end
 
       def find_sha(project)
@@ -108,16 +129,26 @@ module Gitlab
         end
       end
 
-      def build_context(project:, sha:, user:, parent_pipeline:, ref:)
+      def build_context(project:, pipeline:, sha:, user:, parent_pipeline:)
         Config::External::Context.new(
           project: project,
           sha: sha || find_sha(project),
           user: user,
           parent_pipeline: parent_pipeline,
-          variables: build_variables(project: project, ref: ref))
+          variables: build_variables(project: project, pipeline: pipeline),
+          logger: logger)
       end
 
-      def build_variables(project:, ref:)
+      def build_variables(project:, pipeline:)
+        logger.instrument(:config_build_variables) do
+          build_variables_without_instrumentation(
+            project: project,
+            pipeline: pipeline
+          )
+        end
+      end
+
+      def build_variables_without_instrumentation(project:, pipeline:)
         Gitlab::Ci::Variables::Collection.new.tap do |variables|
           break variables unless project
 
@@ -126,18 +157,20 @@ module Gitlab
           #
           # See more detail in the docs: https://docs.gitlab.com/ee/ci/variables/#cicd-variable-precedence
           variables.concat(project.predefined_variables)
-          variables.concat(pipeline_predefined_variables(ref: ref))
-          variables.concat(project.ci_instance_variables_for(ref: ref))
-          variables.concat(project.group.ci_variables_for(ref, project)) if project.group
-          variables.concat(project.ci_variables_for(ref: ref))
+          variables.concat(pipeline.predefined_variables) if pipeline
+          variables.concat(secret_variables(project: project, pipeline: pipeline))
+          variables.concat(project.group.ci_variables_for(source_ref_path, project)) if project.group
+          variables.concat(project.ci_variables_for(ref: source_ref_path))
+          variables.concat(pipeline.variables) if pipeline
+          variables.concat(pipeline.pipeline_schedule.job_variables) if pipeline&.pipeline_schedule
         end
       end
 
-      # https://gitlab.com/gitlab-org/gitlab/-/issues/337633 aims to add all predefined variables
-      # to this list, but only CI_COMMIT_REF_NAME is available right now to support compliance pipelines.
-      def pipeline_predefined_variables(ref:)
-        Gitlab::Ci::Variables::Collection.new.tap do |v|
-          v.append(key: 'CI_COMMIT_REF_NAME', value: ref)
+      def secret_variables(project:, pipeline:)
+        if pipeline
+          pipeline.variables_builder.secret_instance_variables
+        else
+          Gitlab::Ci::Variables::Builder::Instance.new.secret_variables
         end
       end
 

@@ -9,6 +9,11 @@ module Ci
 
       pipeline.cancel_running if pipeline.cancelable?
 
+      # The pipeline, the builds, job and pipeline artifacts all get destroyed here.
+      # Ci::Pipeline#destroy triggers fast destroy on job_artifacts and
+      # build_trace_chunks to remove the records and data stored in object storage.
+      # ci_builds records are deleted using ON DELETE CASCADE from ci_pipelines
+      #
       pipeline.reset.destroy!
 
       ServiceResponse.success(message: 'Pipeline not found')

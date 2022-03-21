@@ -12,7 +12,8 @@ info: To determine the technical writer assigned to the Stage/Group associated w
 
 WARNING:
 The Debian package registry for GitLab is under development and isn't ready for production use due to
-limited functionality.
+limited functionality. This [epic](https://gitlab.com/groups/gitlab-org/-/epics/6057) details the remaining
+work and timelines to make it production ready.
 
 Publish Debian packages in your project's Package Registry. Then install the
 packages whenever you need to use them as a dependency.
@@ -66,8 +67,8 @@ Creating a Debian package is documented [on the Debian Wiki](https://wiki.debian
 To create a distribution, publish a package, or install a private package, you need one of the
 following:
 
-- [Personal access token](../../../api/index.md#personalproject-access-tokens)
-- [CI/CD job token](../../../api/index.md#gitlab-cicd-job-token)
+- [Personal access token](../../../api/index.md#personalprojectgroup-access-tokens)
+- [CI/CD job token](../../../ci/jobs/ci_job_token.md)
 - [Deploy token](../../project/deploy_tokens/index.md)
 
 ## Create a Distribution
@@ -78,10 +79,10 @@ packages on the group level, create a distribution with the same `codename`.
 To create a project-level distribution:
 
 ```shell
-curl --request POST --header "PRIVATE-TOKEN: <your_access_token>" "https://gitlab.example.com/api/v4/projects/<project_id>/debian_distributions?codename=unstable
+curl --request POST --header "PRIVATE-TOKEN: <your_access_token>" "https://gitlab.example.com/api/v4/projects/<project_id>/debian_distributions?codename=<codename>"
 ```
 
-Example response:
+Example response with `codename=unstable`:
 
 ```json
 {
@@ -138,17 +139,30 @@ To install a package:
 
 1. Configure the repository:
 
-    If you are using a private project, add your [credentials](#authenticate-to-the-package-registry) to your apt config:
+    If you are using a private project, add your [credentials](#authenticate-to-the-package-registry) to your apt configuration:
 
     ```shell
     echo 'machine gitlab.example.com login <username> password <your_access_token>' \
       | sudo tee /etc/apt/auth.conf.d/gitlab_project.conf
     ```
 
+    Download your distribution key:
+
+    ```shell
+    sudo mkdir -p /usr/local/share/keyrings
+    curl --header "PRIVATE-TOKEN: <your_access_token>" \
+         "https://gitlab.example.com/api/v4/projects/<project_id>/debian_distributions/<codename>/key.asc" \
+         | \
+         gpg --dearmor \
+         | \
+         sudo tee /usr/local/share/keyrings/<codename>-archive-keyring.gpg \
+         > /dev/null
+    ```
+
     Add your project as a source:
 
     ```shell
-    echo 'deb [trusted=yes] https://gitlab.example.com/api/v4/projects/<project_id>/packages/debian <codename> <component1> <component2>' \
+    echo 'deb [ signed-by=/usr/local/share/keyrings/<codename>-archive-keyring.gpg ] https://gitlab.example.com/api/v4/projects/<project_id>/packages/debian <codename> <component1> <component2>' \
       | sudo tee /etc/apt/sources.list.d/gitlab_project.list
     sudo apt-get update
     ```

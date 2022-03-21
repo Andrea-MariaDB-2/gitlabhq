@@ -29,7 +29,10 @@ module Types
     field :name,
           type: GraphQL::Types::String,
           null: false,
-          description: 'Human-readable name of the user.'
+          resolver_method: :redacted_name,
+          description: 'Human-readable name of the user. ' \
+          'Returns `****` if the user is a project bot and the requester does not have permission to view the project.'
+
     field :state,
           type: Types::UserStateEnum,
           null: false,
@@ -112,6 +115,19 @@ module Types
           extras: [:lookahead],
           complexity: 5,
           resolver: ::Resolvers::TimelogResolver
+    field :saved_replies,
+          Types::SavedReplyType.connection_type,
+          null: true,
+          description: 'Saved replies authored by the user.'
+
+    field :gitpod_enabled, GraphQL::Types::Boolean, null: true,
+          description: 'Whether Gitpod is enabled at the user level.'
+
+    field :preferences_gitpod_path, GraphQL::Types::String, null: true,
+          description: 'Web path to the Gitpod section within user preferences.'
+
+    field :profile_enable_gitpod_path, GraphQL::Types::String, null: true,
+          description: 'Web path to enable Gitpod for the user.'
 
     definition_methods do
       def resolve_type(object, context)
@@ -119,6 +135,10 @@ module Types
         # the core user type.
         ::Types::UserType
       end
+    end
+
+    def redacted_name
+      object.redacted_name(context[:current_user])
     end
   end
 end

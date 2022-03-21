@@ -192,20 +192,6 @@ RSpec.describe ApplicationHelper do
     end
   end
 
-  describe '#contact_sales_url' do
-    subject { helper.contact_sales_url }
-
-    it 'returns the url' do
-      is_expected.to eq("https://#{helper.promo_host}/sales")
-    end
-
-    it 'changes if promo_url changes' do
-      allow(helper).to receive(:promo_url).and_return('https://somewhere.else')
-
-      is_expected.to eq('https://somewhere.else/sales')
-    end
-  end
-
   describe '#support_url' do
     context 'when alternate support url is specified' do
       let(:alternate_url) { 'http://company.example.com/getting-help' }
@@ -303,7 +289,7 @@ RSpec.describe ApplicationHelper do
 
       it 'returns paths for autocomplete_sources_controller' do
         sources = helper.autocomplete_data_sources(project, noteable_type)
-        expect(sources.keys).to match_array([:members, :issues, :mergeRequests, :labels, :milestones, :commands, :snippets])
+        expect(sources.keys).to match_array([:members, :issues, :mergeRequests, :labels, :milestones, :commands, :snippets, :contacts])
         sources.keys.each do |key|
           expect(sources[key]).not_to be_nil
         end
@@ -489,6 +475,154 @@ RSpec.describe ApplicationHelper do
         helper.gitlab_ui_form_for(user, options, &b)
       end.to yield_with_args(::Gitlab::FormBuilders::GitlabUiFormBuilder)
       expect(helper).to have_received(:form_for).with(user, expected_options)
+    end
+  end
+
+  describe '#page_class' do
+    context 'when logged_out_marketing_header experiment is enabled' do
+      let_it_be(:expected_class) { 'logged-out-marketing-header-candidate' }
+
+      let(:current_user) { nil }
+      let(:variant) { :candidate }
+
+      subject do
+        helper.page_class.flatten
+      end
+
+      before do
+        stub_experiments(logged_out_marketing_header: variant)
+        allow(helper).to receive(:current_user) { current_user }
+      end
+
+      context 'when candidate' do
+        it { is_expected.to include(expected_class) }
+      end
+
+      context 'when candidate (:trial_focused variant)' do
+        let(:variant) { :trial_focused }
+
+        it { is_expected.to include(expected_class) }
+      end
+
+      context 'when control' do
+        let(:variant) { :control }
+
+        it { is_expected.not_to include(expected_class) }
+      end
+
+      context 'when a user is logged in' do
+        let(:current_user) { create(:user) }
+
+        it { is_expected.not_to include(expected_class) }
+      end
+    end
+  end
+
+  describe '#dispensable_render' do
+    context 'when an error occurs in the template to be rendered' do
+      before do
+        allow(helper).to receive(:render).and_raise
+      end
+
+      it 'calls `track_and_raise_for_dev_exception`' do
+        expect(Gitlab::ErrorTracking).to receive(:track_and_raise_for_dev_exception)
+        helper.dispensable_render
+      end
+
+      context 'for development environment' do
+        before do
+          stub_rails_env('development')
+        end
+
+        it 'raises an error' do
+          expect { helper.dispensable_render }.to raise_error(StandardError)
+        end
+      end
+
+      context 'for production environments' do
+        before do
+          stub_rails_env('production')
+        end
+
+        it 'returns nil' do
+          expect(helper.dispensable_render).to be_nil
+        end
+
+        context 'when the feature flag is disabled' do
+          before do
+            stub_feature_flags(dispensable_render: false)
+          end
+
+          it 'raises an error' do
+            expect { helper.dispensable_render }.to raise_error(StandardError)
+          end
+        end
+      end
+    end
+
+    context 'when no error occurs in the template to be rendered' do
+      before do
+        allow(helper).to receive(:render).and_return('foo')
+      end
+
+      it 'does not track or raise and returns the rendered content' do
+        expect(Gitlab::ErrorTracking).not_to receive(:track_and_raise_for_dev_exception)
+        expect(helper.dispensable_render).to eq('foo')
+      end
+    end
+  end
+
+  describe '#dispensable_render_if_exists' do
+    context 'when an error occurs in the template to be rendered' do
+      before do
+        allow(helper).to receive(:render_if_exists).and_raise
+      end
+
+      it 'calls `track_and_raise_for_dev_exception`' do
+        expect(Gitlab::ErrorTracking).to receive(:track_and_raise_for_dev_exception)
+        helper.dispensable_render_if_exists
+      end
+
+      context 'for development environment' do
+        before do
+          stub_rails_env('development')
+        end
+
+        it 'raises an error' do
+          expect { helper.dispensable_render_if_exists }.to raise_error(StandardError)
+        end
+      end
+
+      context 'for production environments' do
+        before do
+          stub_rails_env('production')
+        end
+
+        it 'returns nil' do
+          expect(helper.dispensable_render_if_exists).to be_nil
+        end
+
+        context 'when the feature flag is disabled' do
+          before do
+            stub_feature_flags(dispensable_render: false)
+          end
+
+          it 'raises an error' do
+            expect { helper.dispensable_render_if_exists }.to raise_error(StandardError)
+          end
+        end
+      end
+    end
+
+    context 'when no error occurs in the template to be rendered' do
+      before do
+        allow(helper).to receive(:render_if_exists).and_return('foo')
+      end
+
+      it 'does not track or raise' do
+        expect(Gitlab::ErrorTracking).not_to receive(:track_and_raise_for_dev_exception)
+        expect(helper.dispensable_render_if_exists).to eq('foo')
+      end
     end
   end
 end

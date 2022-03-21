@@ -1,0 +1,18 @@
+#import './widget.fragment.graphql'
+
+mutation createWorkItem($input: WorkItemCreateInput!) {
+  workItemCreate(input: $input) {
+    workItem {
+      id
+      title
+      workItemType {
+        id
+      }
+      widgets @client {
+        nodes {
+          ...WidgetBase
+        }
+      }
+    }
+  }
+}

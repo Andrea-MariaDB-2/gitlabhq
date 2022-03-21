@@ -27,6 +27,7 @@ module API
 
         PACKAGE_COMPONENT_REGEX = Gitlab::Regex.conan_recipe_component_regex
         CONAN_REVISION_REGEX = Gitlab::Regex.conan_revision_regex
+        CONAN_REVISION_USER_CHANNEL_REGEX = Gitlab::Regex.conan_recipe_user_channel_regex
 
         CONAN_FILES = (Gitlab::Regex::Packages::CONAN_RECIPE_FILES + Gitlab::Regex::Packages::CONAN_PACKAGE_FILES).freeze
 
@@ -36,6 +37,10 @@ module API
           helpers ::API::Helpers::PackagesManagerClientsHelpers
           helpers ::API::Helpers::Packages::Conan::ApiHelpers
           helpers ::API::Helpers::RelatedResourcesHelpers
+
+          rescue_from ActiveRecord::RecordInvalid do |e|
+            render_api_error!(e.message, 400)
+          end
 
           before do
             require_packages_enabled!
@@ -105,10 +110,14 @@ module API
           params do
             requires :package_name, type: String, regexp: PACKAGE_COMPONENT_REGEX, desc: 'Package name'
             requires :package_version, type: String, regexp: PACKAGE_COMPONENT_REGEX, desc: 'Package version'
-            requires :package_username, type: String, regexp: PACKAGE_COMPONENT_REGEX, desc: 'Package username'
-            requires :package_channel, type: String, regexp: PACKAGE_COMPONENT_REGEX, desc: 'Package channel'
+            requires :package_username, type: String, regexp: CONAN_REVISION_USER_CHANNEL_REGEX, desc: 'Package username'
+            requires :package_channel, type: String, regexp: CONAN_REVISION_USER_CHANNEL_REGEX, desc: 'Package channel'
           end
           namespace 'conans/:package_name/:package_version/:package_username/:package_channel', requirements: PACKAGE_REQUIREMENTS do
+            after_validation do
+              check_username_channel
+            end
+
             # Get the snapshot
             #
             # the snapshot is a hash of { filename: md5 hash }
@@ -264,8 +273,8 @@ module API
           params do
             requires :package_name, type: String, regexp: PACKAGE_COMPONENT_REGEX, desc: 'Package name'
             requires :package_version, type: String, regexp: PACKAGE_COMPONENT_REGEX, desc: 'Package version'
-            requires :package_username, type: String, regexp: PACKAGE_COMPONENT_REGEX, desc: 'Package username'
-            requires :package_channel, type: String, regexp: PACKAGE_COMPONENT_REGEX, desc: 'Package channel'
+            requires :package_username, type: String, regexp: CONAN_REVISION_USER_CHANNEL_REGEX, desc: 'Package username'
+            requires :package_channel, type: String, regexp: CONAN_REVISION_USER_CHANNEL_REGEX, desc: 'Package channel'
             requires :recipe_revision, type: String, regexp: CONAN_REVISION_REGEX, desc: 'Conan Recipe Revision'
           end
           namespace 'files/:package_name/:package_version/:package_username/:package_channel/:recipe_revision', requirements: PACKAGE_REQUIREMENTS do
@@ -273,9 +282,14 @@ module API
               authenticate_non_get!
             end
 
+            after_validation do
+              check_username_channel
+            end
+
             params do
               requires :file_name, type: String, desc: 'Package file name', values: CONAN_FILES
             end
+
             namespace 'export/:file_name', requirements: FILE_NAME_REQUIREMENTS do
               desc 'Download recipe files' do
                 detail 'This feature was introduced in GitLab 12.6'

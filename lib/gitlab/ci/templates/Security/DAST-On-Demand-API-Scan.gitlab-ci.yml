@@ -1,0 +1,25 @@
+stages:
+  - build
+  - test
+  - deploy
+  - dast
+
+variables:
+  SECURE_ANALYZERS_PREFIX: "registry.gitlab.com/security-products"
+  DAST_API_VERSION: "1"
+  DAST_API_IMAGE: $SECURE_ANALYZERS_PREFIX/api-fuzzing:$DAST_API_VERSION
+
+dast:
+  stage: dast
+  image: $DAST_API_IMAGE
+  allow_failure: true
+  script:
+    - /peach/analyzer-dast-api
+  artifacts:
+    when: always
+    paths:
+      - gl-assets
+      - gl-dast-api-report.json
+      - gl-*.log
+    reports:
+      dast: gl-dast-api-report.json

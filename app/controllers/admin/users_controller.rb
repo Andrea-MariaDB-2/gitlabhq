@@ -2,6 +2,7 @@
 
 class Admin::UsersController < Admin::ApplicationController
   include RoutableActions
+  include SortingHelper
 
   before_action :user, except: [:index, :new, :create]
   before_action :check_impersonation_availability, only: :impersonate
@@ -16,9 +17,10 @@ class Admin::UsersController < Admin::ApplicationController
     return redirect_to admin_cohorts_path if params[:tab] == 'cohorts'
 
     @users = User.filter_items(params[:filter]).order_name_asc
-    @users = @users.search_with_secondary_emails(params[:search_query]) if params[:search_query].present?
+    @users = @users.search(params[:search_query], with_private_emails: true) if params[:search_query].present?
     @users = users_with_included_associations(@users)
-    @users = @users.sort_by_attribute(@sort = params[:sort])
+    @sort = params[:sort].presence || sort_value_name
+    @users = @users.sort_by_attribute(@sort)
     @users = @users.page(params[:page])
     @users = @users.without_count if paginate_without_count?
   end
@@ -45,10 +47,11 @@ class Admin::UsersController < Admin::ApplicationController
   end
 
   def impersonate
-    if can?(user, :log_in)
+    if can?(user, :log_in) && !impersonation_in_progress?
       session[:impersonator_id] = current_user.id
 
       warden.set_user(user, scope: :user)
+      clear_access_token_session_keys!
 
       log_impersonation_event
 
@@ -57,7 +60,9 @@ class Admin::UsersController < Admin::ApplicationController
       redirect_to root_path
     else
       flash[:alert] =
-        if user.blocked?
+        if impersonation_in_progress?
+          _("You are already impersonating another user")
+        elsif user.blocked?
           _("You cannot impersonate a blocked user")
         elsif user.internal?
           _("You cannot impersonate an internal user")
@@ -155,7 +160,7 @@ class Admin::UsersController < Admin::ApplicationController
   end
 
   def confirm
-    if update_user { |user| user.confirm }
+    if update_user { |user| user.force_confirm }
       redirect_back_or_admin_user(notice: _("Successfully confirmed"))
     else
       redirect_back_or_admin_user(alert: _("Error occurred. User was not confirmed"))
@@ -367,7 +372,7 @@ class Admin::UsersController < Admin::ApplicationController
   end
 
   def check_ban_user_feature_flag
-    access_denied! unless Feature.enabled?(:ban_user_feature_flag)
+    access_denied! unless Feature.enabled?(:ban_user_feature_flag, default_enabled: :yaml)
   end
 
   def log_impersonation_event

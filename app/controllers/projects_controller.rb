@@ -9,16 +9,19 @@ class ProjectsController < Projects::ApplicationController
   include RecordUserLastActivity
   include ImportUrlParams
   include FiltersEvents
+  include SourcegraphDecorator
+  include PlanningHierarchy
 
   prepend_before_action(only: [:show]) { authenticate_sessionless_user!(:rss) }
 
   around_action :allow_gitaly_ref_name_caching, only: [:index, :show]
 
   before_action :disable_query_limiting, only: [:show, :create]
-  before_action :authenticate_user!, except: [:index, :show, :activity, :refs, :resolve, :unfoldered_environment_names]
+  before_action :authenticate_user!, except: [:index, :show, :activity, :refs, :unfoldered_environment_names]
   before_action :redirect_git_extension, only: [:show]
-  before_action :project, except: [:index, :new, :create, :resolve]
-  before_action :repository, except: [:index, :new, :create, :resolve]
+  before_action :project, except: [:index, :new, :create]
+  before_action :repository, except: [:index, :new, :create]
+  before_action :verify_git_import_enabled, only: [:create]
   before_action :project_export_enabled, only: [:export, :download_export, :remove_export, :generate_new_export]
   before_action :present_project, only: [:edit]
   before_action :authorize_download_code!, only: [:refs]
@@ -29,24 +32,33 @@ class ProjectsController < Projects::ApplicationController
   before_action :event_filter, only: [:show, :activity]
 
   # Project Export Rate Limit
-  before_action :export_rate_limit, only: [:export, :download_export, :generate_new_export]
+  before_action :check_export_rate_limit!, only: [:export, :download_export, :generate_new_export]
 
   before_action do
+    push_frontend_feature_flag(:lazy_load_commits, @project, default_enabled: :yaml)
     push_frontend_feature_flag(:refactor_blob_viewer, @project, default_enabled: :yaml)
+    push_frontend_feature_flag(:highlight_js, @project, default_enabled: :yaml)
     push_frontend_feature_flag(:increase_page_size_exponentially, @project, default_enabled: :yaml)
+    push_frontend_feature_flag(:new_dir_modal, @project, default_enabled: :yaml)
+    push_licensed_feature(:file_locks) if @project.present? && @project.licensed_feature_available?(:file_locks)
+    push_frontend_feature_flag(:work_items, @project, default_enabled: :yaml)
   end
 
   layout :determine_layout
 
   feature_category :projects, [
                      :index, :show, :new, :create, :edit, :update, :transfer,
-                     :destroy, :resolve, :archive, :unarchive, :toggle_star, :activity
+                     :destroy, :archive, :unarchive, :toggle_star, :activity
                    ]
 
   feature_category :source_code_management, [:remove_fork, :housekeeping, :refs]
-  feature_category :issue_tracking, [:preview_markdown, :new_issuable_address]
+  feature_category :team_planning, [:preview_markdown, :new_issuable_address]
   feature_category :importers, [:export, :remove_export, :generate_new_export, :download_export]
   feature_category :code_review, [:unfoldered_environment_names]
+  feature_category :portfolio_management, [:planning_hierarchy]
+
+  urgency :low, [:refs]
+  urgency :high, [:unfoldered_environment_names]
 
   def index
     redirect_to(current_user ? root_path : explore_root_path)
@@ -70,6 +82,13 @@ class ProjectsController < Projects::ApplicationController
     @project = ::Projects::CreateService.new(current_user, project_params(attributes: project_params_create_attributes)).execute
 
     if @project.saved?
+      experiment(:new_project_sast_enabled, user: current_user).track(:created,
+        property: active_new_project_tab,
+        checked: Gitlab::Utils.to_boolean(project_params[:initialize_with_sast]),
+        project: @project,
+        namespace: @project.namespace
+      )
+
       redirect_to(
         project_path(@project, custom_import_params),
         notice: _("Project '%{project_name}' was successfully created.") % { project_name: @project.name }
@@ -104,7 +123,10 @@ class ProjectsController < Projects::ApplicationController
 
     if @project.errors[:new_namespace].present?
       flash[:alert] = @project.errors[:new_namespace].first
+      return redirect_to edit_project_path(@project)
     end
+
+    redirect_to edit_project_path(@project)
   end
   # rubocop: enable CodeReuse/ActiveRecord
 
@@ -114,6 +136,8 @@ class ProjectsController < Projects::ApplicationController
     if ::Projects::UnlinkForkService.new(@project, current_user).execute
       flash[:notice] = _('The fork relationship has been removed.')
     end
+
+    redirect_to edit_project_path(@project)
   end
 
   def activity
@@ -149,7 +173,7 @@ class ProjectsController < Projects::ApplicationController
       format.atom do
         load_events
         @events = @events.select { |event| event.visible_to_user?(current_user) }
-        render layout: 'xml.atom'
+        render layout: 'xml'
       end
     end
   end
@@ -261,7 +285,7 @@ class ProjectsController < Projects::ApplicationController
 
   # rubocop: disable CodeReuse/ActiveRecord
   def refs
-    find_refs = params['find']
+    find_refs = refs_params['find']
 
     find_branches = true
     find_tags = true
@@ -276,18 +300,22 @@ class ProjectsController < Projects::ApplicationController
     options = {}
 
     if find_branches
-      branches = BranchesFinder.new(@repository, params).execute.take(100).map(&:name)
+      branches = BranchesFinder.new(@repository, refs_params).execute.take(100).map(&:name)
       options['Branches'] = branches
     end
 
     if find_tags && @repository.tag_count.nonzero?
-      tags = TagsFinder.new(@repository, params).execute.take(100).map(&:name)
+      tags = begin
+        TagsFinder.new(@repository, refs_params).execute
+      rescue Gitlab::Git::CommandError
+        []
+      end
 
-      options['Tags'] = tags
+      options['Tags'] = tags.take(100).map(&:name)
     end
 
     # If reference is commit id - we should add it to branch/tag selectbox
-    ref = Addressable::URI.unescape(params[:ref])
+    ref = Addressable::URI.unescape(refs_params[:ref])
     if find_commits && ref && options.flatten(2).exclude?(ref) && ref =~ /\A[0-9a-zA-Z]{6,52}\z/
       options['Commits'] = [ref]
     end
@@ -295,16 +323,6 @@ class ProjectsController < Projects::ApplicationController
     render json: options.to_json
   end
   # rubocop: enable CodeReuse/ActiveRecord
-
-  def resolve
-    @project = Project.find(params[:id])
-
-    if can?(current_user, :read_project, @project)
-      redirect_to @project
-    else
-      render_404
-    end
-  end
 
   def unfoldered_environment_names
     respond_to do |format|
@@ -316,6 +334,10 @@ class ProjectsController < Projects::ApplicationController
 
   private
 
+  def refs_params
+    params.permit(:search, :sort, :ref, find: [])
+  end
+
   # Render project landing depending of which features are available
   # So if page is not available in the list it renders the next page
   #
@@ -323,11 +345,6 @@ class ProjectsController < Projects::ApplicationController
   def render_landing_page
     if can?(current_user, :download_code, @project)
       return render 'projects/no_repo' unless @project.repository_exists?
-
-      if @project.can_current_user_push_to_default_branch?
-        property = @project.empty_repo? ? 'empty' : 'nonempty'
-        experiment(:empty_repo_upload, project: @project).track(:view_project_show, property: property)
-      end
 
       render 'projects/empty' if @project.empty_repo?
     else
@@ -397,6 +414,7 @@ class ProjectsController < Projects::ApplicationController
       show_default_award_emojis
       squash_option
       mr_default_target_self
+      warn_about_potentially_unwanted_characters
     ]
   end
 
@@ -433,11 +451,14 @@ class ProjectsController < Projects::ApplicationController
       :template_name,
       :template_project_id,
       :merge_method,
+      :initialize_with_sast,
       :initialize_with_readme,
       :autoclose_referenced_issues,
       :suggestion_commit_message,
       :packages_enabled,
       :service_desk_enabled,
+      :merge_commit_template_or_default,
+      :squash_commit_template_or_default,
       project_setting_attributes: project_setting_attributes
     ] + [project_feature_attributes: project_feature_attributes]
   end
@@ -494,6 +515,10 @@ class ProjectsController < Projects::ApplicationController
     url_for(safe_params)
   end
 
+  def verify_git_import_enabled
+    render_404 if project_params[:import_url] && !git_import_enabled?
+  end
+
   def project_export_enabled
     render_404 unless Gitlab::CurrentSettings.project_export_enabled?
   end
@@ -517,20 +542,12 @@ class ProjectsController < Projects::ApplicationController
     @project = @project.present(current_user: current_user)
   end
 
-  def export_rate_limit
+  def check_export_rate_limit!
     prefixed_action = "project_#{params[:action]}".to_sym
 
     project_scope = params[:action] == 'download_export' ? @project : nil
 
-    if rate_limiter.throttled?(prefixed_action, scope: [current_user, project_scope].compact)
-      rate_limiter.log_request(request, "#{prefixed_action}_request_limit".to_sym, current_user)
-
-      render plain: _('This endpoint has been requested too many times. Try again later.'), status: :too_many_requests
-    end
-  end
-
-  def rate_limiter
-    ::Gitlab::ApplicationRateLimiter
+    check_rate_limit!(prefixed_action, scope: [current_user, project_scope].compact)
   end
 
   def render_edit

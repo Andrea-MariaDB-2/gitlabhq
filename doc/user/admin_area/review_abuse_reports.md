@@ -1,6 +1,6 @@
 ---
 stage: Manage
-group: Access
+group: Authentication and Authorization
 info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
 type: reference, howto
 ---
@@ -12,14 +12,14 @@ View and resolve abuse reports from GitLab users.
 GitLab administrators can view and [resolve](#resolving-abuse-reports) abuse
 reports in the Admin Area.
 
-## Receiving notifications of abuse reports
+## Receive notification of abuse reports by email
 
-To receive notifications of new abuse reports by email, follow these steps:
+To receive notifications of new abuse reports by email:
 
 1. On the top bar, select **Menu > Admin**.
 1. On the left sidebar, select **Settings > Reporting**.
 1. Expand the **Abuse reports** section.
-1. Provide an email address.
+1. Provide an email address and select **Save changes**.
 
 The notification email address can also be set and retrieved
 [using the API](../../api/settings.md#list-of-settings-that-can-be-accessed-via-api-calls).

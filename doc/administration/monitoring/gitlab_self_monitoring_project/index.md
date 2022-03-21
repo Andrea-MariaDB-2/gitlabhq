@@ -1,28 +1,32 @@
 ---
 stage: Monitor
-group: Monitor
+group: Respond
 info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
 ---
 
-# Self monitoring project **(FREE SELF)**
+# Self-monitoring project (DEPRECATED) **(FREE SELF)**
 
-> - [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/32351) in GitLab 12.7, behind a disabled feature flag (`self_monitoring_project`).
-> - The feature flag was removed and the self monitoring project was [made generally available](https://gitlab.com/gitlab-org/gitlab/-/issues/198511) in GitLab 12.8.
+> - [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/32351) in GitLab 12.7 [with a flag](../../feature_flags.md) named `self_monitoring_project`. Disabled by default.
+> - Generally available in GitLab 12.8. [Feature flag `self_monitoring_project`](https://gitlab.com/gitlab-org/gitlab/-/issues/198511) removed.
+> - [Deprecated](https://gitlab.com/gitlab-org/gitlab/-/issues/348909) in GitLab 14.9. Planned for removal in GitLab 15.0.
+
+WARNING:
+This feature is in its end-of-life process. It is [deprecated](https://gitlab.com/gitlab-org/gitlab/-/issues/348909)
+for use in GitLab 14.9, and is planned for removal in GitLab 15.0.
 
 GitLab provides administrators insights into the health of their GitLab instance.
 
 To provide a native experience (similar interacting with an application deployed using GitLab), a
 project called **Monitoring** is created:
 
-- With [internal visibility](../../../public_access/public_access.md#internal-projects).
+- With [internal visibility](../../../user/public_access.md#internal-projects-and-groups).
 - Under a group called **GitLab Instance**.
 
 The project is created specifically for visualizing and configuring the monitoring of your GitLab
 instance.
 
-When the project and group are created, all administrators are added as maintainers. As an
-administrator, you can add new members to the group to give them the
-[Maintainer role](../../../user/permissions.md) for the project.
+When the project and group are created, all administrators are given the [Maintainer role](../../../user/permissions.md).
+As an administrator, you can add new members to the group to give them the Maintainer role for the project.
 
 This project can be used to:
 

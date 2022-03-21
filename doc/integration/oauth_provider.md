@@ -1,21 +1,19 @@
 ---
 stage: Manage
-group: Access
+group: Authentication and Authorization
 info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
 ---
 
-# GitLab as an OAuth 2.0 authentication service provider
+# Configure GitLab as an OAuth 2.0 authentication identity provider
 
-This document describes how you can use GitLab as an OAuth 2.0
-authentication service provider.
+This document describes how you can use GitLab as an OAuth 2.0 authentication identity provider.
 
-If you want to use:
-
-- The [OAuth 2.0](https://oauth.net/2/) protocol to access GitLab resources on
-  a user's behalf, see [OAuth 2.0 provider](../api/oauth2.md).
-- Other OAuth 2.0 authentication service providers to sign in to
-  GitLab, see the [OAuth 2.0 client documentation](omniauth.md).
-- The related API, see [Applications API](../api/applications.md).
+- OAuth 2 applications can be created and managed using the GitLab UI (described below)
+  or managed using the [Applications API](../api/applications.md).
+- After an application is created, external services can manage access tokens using the
+  [OAuth 2 API](../api/oauth2.md).
+- To allow users to sign in to GitLab using third-party OAuth 2 providers, see
+  [OmniAuth documentation](omniauth.md).
 
 ## Introduction to OAuth
 
@@ -48,7 +46,7 @@ To add a new application for your user:
 
 1. In the top-right corner, select your avatar.
 1. Select **Edit profile**.
-1. In the left sidebar, select **Applications**.
+1. On the left sidebar, select **Applications**.
 1. Enter a **Name**, **Redirect URI** and OAuth 2 scopes as defined in [Authorized Applications](#authorized-applications).
    The **Redirect URI** is the URL where users are sent after they authorize with GitLab.
 1. Select **Save application**. GitLab provides:
@@ -87,6 +85,24 @@ To create an application for your GitLab instance:
 
 When creating application in the **Admin Area** , you can mark it as _trusted_.
 The user authorization step is automatically skipped for this application.
+
+## Expiring access tokens
+
+> [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/21745) in GitLab 14.3.
+
+WARNING:
+The ability to opt-out of expiring access tokens [is deprecated](https://gitlab.com/gitlab-org/gitlab/-/issues/340848).
+All existing integrations should be updated to support access token refresh.
+
+Access tokens expire in two hours which means that integrations that use them must support generating new access
+tokens at least every two hours. Existing:
+
+- Applications can have expiring access tokens:
+  1. Edit the application.
+  1. Select **Expire access tokens**.
+- Tokens must be [revoked](../api/oauth2.md#revoke-a-token) or they don't expire.
+
+When applications are deleted, all grants and tokens associated with the application are also deleted.
 
 ## Authorized applications
 

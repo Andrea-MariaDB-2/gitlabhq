@@ -5,15 +5,13 @@ info: To determine the technical writer assigned to the Stage/Group associated w
 type: howto
 ---
 
-# Reduce repository size
+# Reduce repository size **(FREE)**
 
 Git repositories become larger over time. When large files are added to a Git repository:
 
 - Fetching the repository becomes slower because everyone must download the files.
 - They take up a large amount of storage space on the server.
 - Git repository storage limits [can be reached](#storage-limits).
-
-Such problems can be detected with [git-sizer](https://github.com/github/git-sizer#getting-started).
 
 Rewriting a repository can remove unwanted history to make the repository smaller.
 We **recommend [`git filter-repo`](https://github.com/newren/git-filter-repo/blob/main/README.md)**
@@ -40,7 +38,8 @@ These refs are not automatically downloaded and hidden refs are not advertised, 
 
 To purge files from a GitLab repository:
 
-1. [Install `git filter-repo`](https://github.com/newren/git-filter-repo/blob/main/INSTALL.md)
+1. Install either [`git filter-repo`](https://github.com/newren/git-filter-repo/blob/main/INSTALL.md) or
+   [`git-sizer`](https://github.com/github/git-sizer#getting-started)
    using a supported package manager or from source.
 
 1. Generate a fresh [export from the
@@ -63,25 +62,43 @@ To purge files from a GitLab repository:
    git clone --bare --mirror /path/to/project.bundle
    ```
 
-1. Using `git filter-repo`, purge any files from the history of your repository. Because we are
+1. Go to the `project.git` directory:
+
+   ```shell
+   cd project.git
+   ```
+
+1. Using either `git filter-repo` or `git-sizer`, analyze your repository
+   and review the results to determine which items you want to purge:
+
+   ```shell
+   # Using git filter-repo
+   git filter-repo --analyze
+   head .git/filter-repo/analysis/*-{all,deleted}-sizes.txt
+
+   # Using git-sizer
+   git-sizer
+   ```
+
+1. Proceed to purging any files from the history of your repository. Because we are
    trying to remove internal refs, we rely on the `commit-map` produced by each run to tell us
    which internal refs to remove.
 
    NOTE:
-   `git filter-repo` creates a new `commit-map` file every run, and overwrite the `commit-map` from
+   `git filter-repo` creates a new `commit-map` file every run, and overwrites the `commit-map` from
    the previous run. You need this file from **every** run. Do the next step every time you run
    `git filter-repo`.
 
-   To purge all files larger than 10M, the `--strip-blobs-bigger-than` option can be used:
+   To purge specific files, the `--path` and `--invert-paths` options can be combined:
+
+   ```shell
+   git filter-repo --path path/to/file.ext --invert-paths
+   ```
+
+   To generally purge all files larger than 10M, the `--strip-blobs-bigger-than` option can be used:
 
    ```shell
    git filter-repo --strip-blobs-bigger-than 10M
-   ```
-
-   To purge specific large files by path, the `--path` and `--invert-paths` options can be combined.
-
-   ```shell
-   git filter-repo --path path/to/big/file.m4v --invert-paths
    ```
 
    See the
@@ -121,7 +138,8 @@ To purge files from a GitLab repository:
 
    Refer to the Git [`replace`](https://git-scm.com/book/en/v2/Git-Tools-Replace) documentation for information on how this works.
 
-1. Run a [repository cleanup](#repository-cleanup).
+1. Wait at least 30 minutes, because the repository cleanup process only processes object older than 30 minutes.
+1. Run [repository cleanup](#repository-cleanup).
 
 ## Repository cleanup
 
@@ -141,7 +159,7 @@ operations before continuing.
 To clean up a repository:
 
 1. Go to the project for the repository.
-1. Navigate to **Settings > Repository**.
+1. Go to **Settings > Repository**.
 1. Upload a list of objects. For example, a `commit-map` file created by `git filter-repo` which is located in the
    `filter-repo` directory.
 
@@ -151,7 +169,7 @@ To clean up a repository:
    split -l 3000 filter-repo/commit-map filter-repo/commit-map-
    ```
 
-1. Click **Start cleanup**.
+1. Select **Start cleanup**.
 
 This:
 
@@ -186,7 +204,7 @@ When using repository cleanup, note:
 Repository size limits:
 
 - Can [be set by an administrator](../../admin_area/settings/account_and_limit_settings.md#account-and-limit-settings)
-  on self-managed instances. **(PREMIUM SELF)**
+- Can [be set by an administrator](../../admin_area/settings/account_and_limit_settings.md) on self-managed instances.
 - Are [set for GitLab.com](../../gitlab_com/index.md#account-and-limit-settings).
 
 When a project has reached its size limit, you cannot:
@@ -222,7 +240,7 @@ Until `git gc` runs on the GitLab side, the "removed" commits and blobs still ex
 must be able to push the rewritten history to GitLab, which may be impossible if you've already
 exceeded the maximum size limit.
 
-In order to lift these restrictions, the administrator of the self-managed GitLab instance must
+To lift these restrictions, the Administrator of the self-managed GitLab instance must
 increase the limit on the particular project that exceeded it. Therefore, it's always better to
 proactively stay underneath the limit. If you hit the limit, and can't have it temporarily
 increased, your only option is to:

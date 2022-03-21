@@ -20,7 +20,7 @@ A DAST job has two executing processes:
 
 Enable the `DAST_DEBUG` CI/CD variable to debug scripts. This can help when troubleshooting the job,
 and outputs statements indicating what percentage of the scan is complete.
-For details on using variables, see [Overriding the DAST template](index.md#customizing-the-dast-settings).
+For details on using variables, see [Overriding the DAST template](index.md#customize-dast-settings).
 
 Debug mode of the ZAP server can be enabled using the `DAST_ZAP_LOG_CONFIGURATION` variable.
 The following table outlines examples of values that can be set and the effect that they have on the output that is logged.
@@ -88,3 +88,7 @@ stages:
 include:
   - template: DAST.latest.gitlab-ci.yml
 ```
+
+## Lack of IPv6 support
+
+Due to the underlying [ZAProxy engine not supporting IPv6](https://github.com/zaproxy/zaproxy/issues/3705), DAST is unable to scan or crawl IPv6-based applications.

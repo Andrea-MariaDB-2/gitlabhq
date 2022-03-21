@@ -22,7 +22,7 @@ RSpec.describe API::Repositories do
 
         expect(response).to have_gitlab_http_status(:ok)
         expect(response).to include_pagination_headers
-        expect(json_response).to be_an Array
+        expect(json_response).to be_an(Array)
 
         first_commit = json_response.first
         expect(first_commit['name']).to eq('bar')
@@ -71,6 +71,25 @@ RSpec.describe API::Repositories do
             let(:request) { get api("#{route}?recursive=1&ref=foo", current_user) }
             let(:message) { '404 Tree Not Found' }
           end
+        end
+      end
+
+      context 'keyset pagination mode' do
+        let(:first_response) do
+          get api(route, current_user), params: { pagination: "keyset" }
+
+          Gitlab::Json.parse(response.body)
+        end
+
+        it 'paginates using keysets' do
+          page_token = first_response.last["id"]
+
+          get api(route, current_user), params: { pagination: "keyset", page_token: page_token }
+
+          expect(response).to have_gitlab_http_status(:ok)
+          expect(json_response).to be_an(Array)
+          expect(json_response).not_to eq(first_response)
+          expect(json_response.map { |t| t["id"] }).not_to include(page_token)
         end
       end
     end
@@ -178,6 +197,7 @@ RSpec.describe API::Repositories do
 
         expect(response).to have_gitlab_http_status(:ok)
         expect(headers[Gitlab::Workhorse::DETECT_HEADER]).to eq "true"
+        expect(response.parsed_body).to be_empty
       end
 
       it 'sets inline content disposition by default' do
@@ -255,6 +275,7 @@ RSpec.describe API::Repositories do
 
         expect(type).to eq('git-archive')
         expect(params['ArchivePath']).to match(/#{project.path}\-[^\.]+\.tar.gz/)
+        expect(response.parsed_body).to be_empty
       end
 
       it 'returns the repository archive archive.zip' do
@@ -284,6 +305,18 @@ RSpec.describe API::Repositories do
           let(:request) { get api("#{route}?sha=xxx", current_user) }
           let(:message) { '404 File Not Found' }
         end
+      end
+
+      it 'returns only a part of the repository with path set' do
+        path = 'bar'
+        get api("#{route}?path=#{path}", current_user)
+
+        expect(response).to have_gitlab_http_status(:ok)
+
+        type, params = workhorse_send_data
+
+        expect(type).to eq('git-archive')
+        expect(params['ArchivePath']).to match(/#{project.path}\-[^\.]+\-#{path}\.tar.gz/)
       end
 
       it 'rate limits user when thresholds hit' do
@@ -419,7 +452,7 @@ RSpec.describe API::Repositories do
 
       it "compare commits between different projects" do
         group = create(:group)
-        group.add_owner(current_user)
+        group.add_owner(current_user) if current_user
 
         forked_project = fork_project(project, current_user, repository: true, namespace: group)
         forked_project.repository.create_ref('refs/heads/improve/awesome', 'refs/heads/improve/more-awesome')
@@ -464,6 +497,43 @@ RSpec.describe API::Repositories do
 
         expect(response).to have_gitlab_http_status(:not_found)
       end
+
+      it "returns a newly created commit", :use_clean_rails_redis_caching do
+        # Parse the commits ourselves because json_response is cached
+        def commit_messages(response)
+          Gitlab::Json.parse(response.body)["commits"].map do |commit|
+            commit["message"]
+          end
+        end
+
+        # First trigger the rate limit cache
+        get api(route, current_user), params: { from: 'master', to: 'feature' }
+
+        expect(response).to have_gitlab_http_status(:ok)
+        expect(commit_messages(response)).not_to include("Cool new commit")
+
+        # Then create a new commit via the API
+        post api("/projects/#{project.id}/repository/commits", user), params: {
+          branch: "feature",
+          commit_message: "Cool new commit",
+          actions: [
+            {
+              action: "create",
+              file_path: "foo/bar/baz.txt",
+              content: "puts 8"
+            }
+          ]
+        }
+
+        expect(response).to have_gitlab_http_status(:created)
+
+        # Now perform the same query as before, but the cache should have expired
+        # and our new commit should exist
+        get api(route, current_user), params: { from: 'master', to: 'feature' }
+
+        expect(response).to have_gitlab_http_status(:ok)
+        expect(commit_messages(response)).to include("Cool new commit")
+      end
     end
 
     context 'when unauthenticated', 'and project is public' do
@@ -489,17 +559,6 @@ RSpec.describe API::Repositories do
     context 'when authenticated', 'as a guest' do
       it_behaves_like '403 response' do
         let(:request) { get api(route, guest) }
-      end
-    end
-
-    context 'api_caching_rate_limit_repository_compare is disabled' do
-      before do
-        stub_feature_flags(api_caching_rate_limit_repository_compare: false)
-      end
-
-      it_behaves_like 'repository compare' do
-        let(:project) { create(:project, :public, :repository) }
-        let(:current_user) { nil }
       end
     end
   end
@@ -661,6 +720,78 @@ RSpec.describe API::Repositories do
     end
   end
 
+  describe 'GET /projects/:id/repository/changelog' do
+    it 'generates the changelog for a version' do
+      spy = instance_spy(Repositories::ChangelogService)
+      release_notes = 'Release notes'
+
+      allow(Repositories::ChangelogService)
+        .to receive(:new)
+        .with(
+          project,
+          user,
+          version: '1.0.0',
+          from: 'foo',
+          to: 'bar',
+          date: DateTime.new(2020, 1, 1),
+          trailer: 'Foo'
+        )
+        .and_return(spy)
+
+      expect(spy).to receive(:execute).with(commit_to_changelog: false).and_return(release_notes)
+
+      get(
+        api("/projects/#{project.id}/repository/changelog", user),
+        params: {
+          version: '1.0.0',
+          from: 'foo',
+          to: 'bar',
+          date: '2020-01-01',
+          trailer: 'Foo'
+        }
+      )
+
+      expect(response).to have_gitlab_http_status(:ok)
+      expect(json_response['notes']).to eq(release_notes)
+    end
+
+    it 'supports leaving out the from and to attribute' do
+      spy = instance_spy(Repositories::ChangelogService)
+
+      allow(Repositories::ChangelogService)
+        .to receive(:new)
+        .with(
+          project,
+          user,
+          version: '1.0.0',
+          date: DateTime.new(2020, 1, 1),
+          trailer: 'Foo'
+        )
+        .and_return(spy)
+
+      expect(spy).to receive(:execute).with(commit_to_changelog: false)
+
+      get(
+        api("/projects/#{project.id}/repository/changelog", user),
+        params: {
+          version: '1.0.0',
+          date: '2020-01-01',
+          trailer: 'Foo'
+        }
+      )
+
+      expect(response).to have_gitlab_http_status(:ok)
+      expect(json_response['notes']).to be_present
+    end
+
+    context 'when previous tag version does not exist' do
+      it_behaves_like '422 response' do
+        let(:request) { get api("/projects/#{project.id}/repository/changelog", user), params: { version: 'v0.0.0' } }
+        let(:message) { 'Failed to generate the changelog: The commit start range is unspecified, and no previous tag could be found to use instead' }
+      end
+    end
+  end
+
   describe 'POST /projects/:id/repository/changelog' do
     it 'generates the changelog for a version' do
       spy = instance_spy(Repositories::ChangelogService)
@@ -681,7 +812,7 @@ RSpec.describe API::Repositories do
         )
         .and_return(spy)
 
-      allow(spy).to receive(:execute)
+      allow(spy).to receive(:execute).with(commit_to_changelog: true)
 
       post(
         api("/projects/#{project.id}/repository/changelog", user),
@@ -717,7 +848,7 @@ RSpec.describe API::Repositories do
         )
         .and_return(spy)
 
-      expect(spy).to receive(:execute)
+      expect(spy).to receive(:execute).with(commit_to_changelog: true)
 
       post(
         api("/projects/#{project.id}/repository/changelog", user),

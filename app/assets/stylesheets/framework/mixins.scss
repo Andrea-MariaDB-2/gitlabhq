@@ -239,7 +239,7 @@
 /*
 * Mixin that handles the container for the job logs (CI/CD and kubernetes pod logs)
 */
-@mixin build-trace($background: $black) {
+@mixin build-log($background: $black) {
   background: $background;
   color: $gray-darkest;
   white-space: pre;
@@ -253,13 +253,13 @@
     display: block;
   }
 
-  &.build-trace-rounded {
+  &.build-log-rounded {
     border-radius: $gl-border-radius-base;
   }
 }
 
 // Used in EE for Web Terminal
-@mixin build-trace-bar($height) {
+@mixin build-log-bar($height) {
   height: $height;
   min-height: $height;
   background: var(--gray-50, $gray-50);
@@ -268,15 +268,15 @@
   padding: $grid-size;
 }
 
-@mixin build-trace-top-bar($height) {
-  @include build-trace-bar($height);
+@mixin build-log-top-bar($height) {
+  @include build-log-bar($height);
 
   position: -webkit-sticky;
   position: sticky;
   top: $header-height;
 
   .with-performance-bar & {
-    top: $header-height + $performance-bar-height;
+    top: calc(#{$header-height} + #{$performance-bar-height});
   }
 }
 
@@ -417,6 +417,36 @@
 @mixin code-icon-size() {
   width: $gl-font-size * $code-line-height * 0.9;
   height: $gl-font-size * $code-line-height * 0.9;
+}
+
+@mixin email-code-block {
+  .code.language-email {
+    font-family: inherit;
+    font-size: inherit;
+
+    code {
+      white-space: pre-wrap;
+      font-family: inherit;
+
+      // Rouge `Name.Tag` and `Operator` token (email header key + ':')
+      .nt,
+      .o {
+        color: inherit;
+        font-weight: bold;
+      }
+
+      // Rouge `Name.Attribute` token (email header value)
+      .na {
+        color: inherit;
+      }
+
+      // Rouge `Comment` token (quoted text in email body)
+      .c {
+        color: $gl-grayish-blue;
+        font-style: italic;
+      }
+    }
+  }
 }
 
 @mixin avatar-counter($border-radius: 1em) {

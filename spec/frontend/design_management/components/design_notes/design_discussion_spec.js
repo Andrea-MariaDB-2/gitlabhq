@@ -1,7 +1,10 @@
 import { GlLoadingIcon } from '@gitlab/ui';
 import { mount } from '@vue/test-utils';
+import { ApolloMutation } from 'vue-apollo';
+import { nextTick } from 'vue';
 import DesignDiscussion from '~/design_management/components/design_notes/design_discussion.vue';
 import DesignNote from '~/design_management/components/design_notes/design_note.vue';
+import DesignNoteSignedOut from '~/design_management/components/design_notes/design_note_signed_out.vue';
 import DesignReplyForm from '~/design_management/components/design_notes/design_reply_form.vue';
 import ToggleRepliesWidget from '~/design_management/components/design_notes/toggle_replies_widget.vue';
 import createNoteMutation from '~/design_management/graphql/mutations/create_note.mutation.graphql';
@@ -20,6 +23,7 @@ const defaultMockDiscussion = {
 const DEFAULT_TODO_COUNT = 2;
 
 describe('Design discussions component', () => {
+  const originalGon = window.gon;
   let wrapper;
 
   const findDesignNotes = () => wrapper.findAll(DesignNote);
@@ -31,6 +35,7 @@ describe('Design discussions component', () => {
   const findResolvedMessage = () => wrapper.find('[data-testid="resolved-message"]');
   const findResolveLoadingIcon = () => wrapper.find(GlLoadingIcon);
   const findResolveCheckbox = () => wrapper.find('[data-testid="resolve-checkbox"]');
+  const findApolloMutation = () => wrapper.findComponent(ApolloMutation);
 
   const mutationVariables = {
     mutation: createNoteMutation,
@@ -42,6 +47,8 @@ describe('Design discussions component', () => {
       },
     },
   };
+  const registerPath = '/users/sign_up?redirect_to_referer=yes';
+  const signInPath = '/users/sign_in?redirect_to_referer=yes';
   const mutate = jest.fn().mockResolvedValue({ data: { createNote: { errors: [] } } });
   const readQuery = jest.fn().mockReturnValue({
     project: {
@@ -62,6 +69,8 @@ describe('Design discussions component', () => {
         designId: 'design-id',
         discussionIndex: 1,
         discussionWithOpenForm: '',
+        registerPath,
+        signInPath,
         ...props,
       },
       data() {
@@ -88,8 +97,13 @@ describe('Design discussions component', () => {
     });
   }
 
+  beforeEach(() => {
+    window.gon = { current_user_id: 1 };
+  });
+
   afterEach(() => {
     wrapper.destroy();
+    window.gon = originalGon;
   });
 
   describe('when discussion is not resolvable', () => {
@@ -106,12 +120,11 @@ describe('Design discussions component', () => {
       expect(findResolveIcon().exists()).toBe(false);
     });
 
-    it('does not render a checkbox in reply form', () => {
+    it('does not render a checkbox in reply form', async () => {
       findReplyPlaceholder().vm.$emit('focus');
 
-      return wrapper.vm.$nextTick().then(() => {
-        expect(findResolveCheckbox().exists()).toBe(false);
-      });
+      await nextTick();
+      expect(findResolveCheckbox().exists()).toBe(false);
     });
   });
 
@@ -137,13 +150,12 @@ describe('Design discussions component', () => {
       expect(findResolveIcon().props('name')).toBe('check-circle');
     });
 
-    it('renders a checkbox with Resolve thread text in reply form', () => {
+    it('renders a checkbox with Resolve thread text in reply form', async () => {
       findReplyPlaceholder().vm.$emit('focus');
       wrapper.setProps({ discussionWithOpenForm: defaultMockDiscussion.id });
 
-      return wrapper.vm.$nextTick().then(() => {
-        expect(findResolveCheckbox().text()).toBe('Resolve thread');
-      });
+      await nextTick();
+      expect(findResolveCheckbox().text()).toBe('Resolve thread');
     });
 
     it('does not render resolved message', () => {
@@ -203,7 +215,7 @@ describe('Design discussions component', () => {
       findReplyForm().vm.$emit('submitForm');
 
       await mutate();
-      await wrapper.vm.$nextTick();
+      await nextTick();
 
       const dispatchedEvent = dispatchEventSpy.mock.calls[0][0];
 
@@ -213,9 +225,9 @@ describe('Design discussions component', () => {
     });
 
     describe('when replies are expanded', () => {
-      beforeEach(() => {
+      beforeEach(async () => {
         findRepliesWidget().vm.$emit('toggle');
-        return wrapper.vm.$nextTick();
+        await nextTick();
       });
 
       it('renders replies widget with collapsed prop equal to false', () => {
@@ -230,26 +242,24 @@ describe('Design discussions component', () => {
         expect(findReplyPlaceholder().isVisible()).toBe(true);
       });
 
-      it('renders a checkbox with Unresolve thread text in reply form', () => {
+      it('renders a checkbox with Unresolve thread text in reply form', async () => {
         findReplyPlaceholder().vm.$emit('focus');
         wrapper.setProps({ discussionWithOpenForm: defaultMockDiscussion.id });
 
-        return wrapper.vm.$nextTick().then(() => {
-          expect(findResolveCheckbox().text()).toBe('Unresolve thread');
-        });
+        await nextTick();
+        expect(findResolveCheckbox().text()).toBe('Unresolve thread');
       });
     });
   });
 
-  it('hides reply placeholder and opens form on placeholder click', () => {
+  it('hides reply placeholder and opens form on placeholder click', async () => {
     createComponent();
     findReplyPlaceholder().vm.$emit('focus');
     wrapper.setProps({ discussionWithOpenForm: defaultMockDiscussion.id });
 
-    return wrapper.vm.$nextTick().then(() => {
-      expect(findReplyPlaceholder().exists()).toBe(false);
-      expect(findReplyForm().exists()).toBe(true);
-    });
+    await nextTick();
+    expect(findReplyPlaceholder().exists()).toBe(false);
+    expect(findReplyForm().exists()).toBe(true);
   });
 
   it('calls mutation on submitting form and closes the form', async () => {
@@ -262,28 +272,24 @@ describe('Design discussions component', () => {
     expect(mutate).toHaveBeenCalledWith(mutationVariables);
 
     await mutate();
-    await wrapper.vm.$nextTick();
+    await nextTick();
 
     expect(findReplyForm().exists()).toBe(false);
   });
 
-  it('clears the discussion comment on closing comment form', () => {
+  it('clears the discussion comment on closing comment form', async () => {
     createComponent(
       { discussionWithOpenForm: defaultMockDiscussion.id },
       { discussionComment: 'test', isFormRendered: true },
     );
 
-    return wrapper.vm
-      .$nextTick()
-      .then(() => {
-        findReplyForm().vm.$emit('cancel-form');
+    await nextTick();
+    findReplyForm().vm.$emit('cancel-form');
 
-        expect(wrapper.vm.discussionComment).toBe('');
-        return wrapper.vm.$nextTick();
-      })
-      .then(() => {
-        expect(findReplyForm().exists()).toBe(false);
-      });
+    expect(wrapper.vm.discussionComment).toBe('');
+
+    await nextTick();
+    expect(findReplyForm().exists()).toBe(false);
   });
 
   describe('when any note from a discussion is active', () => {
@@ -309,7 +315,7 @@ describe('Design discussions component', () => {
     );
   });
 
-  it('calls toggleResolveDiscussion mutation on resolve thread button click', () => {
+  it('calls toggleResolveDiscussion mutation on resolve thread button click', async () => {
     createComponent();
     findResolveButton().trigger('click');
     expect(mutate).toHaveBeenCalledWith({
@@ -319,9 +325,8 @@ describe('Design discussions component', () => {
         resolve: true,
       },
     });
-    return wrapper.vm.$nextTick(() => {
-      expect(findResolveLoadingIcon().exists()).toBe(true);
-    });
+    await nextTick();
+    expect(findResolveLoadingIcon().exists()).toBe(true);
   });
 
   it('calls toggleResolveDiscussion mutation after adding a note if checkbox was checked', () => {
@@ -348,5 +353,42 @@ describe('Design discussions component', () => {
     findReplyPlaceholder().vm.$emit('focus');
 
     expect(wrapper.emitted('open-form')).toBeTruthy();
+  });
+
+  describe('when user is not logged in', () => {
+    const findDesignNoteSignedOut = () => wrapper.findComponent(DesignNoteSignedOut);
+
+    beforeEach(() => {
+      window.gon = { current_user_id: null };
+      createComponent(
+        {
+          discussion: {
+            ...defaultMockDiscussion,
+          },
+          discussionWithOpenForm: defaultMockDiscussion.id,
+        },
+        { discussionComment: 'test', isFormRendered: true },
+      );
+    });
+
+    it('does not render resolve discussion button', () => {
+      expect(findResolveButton().exists()).toBe(false);
+    });
+
+    it('does not render replace-placeholder component', () => {
+      expect(findReplyPlaceholder().exists()).toBe(false);
+    });
+
+    it('does not render apollo-mutation component', () => {
+      expect(findApolloMutation().exists()).toBe(false);
+    });
+
+    it('renders design-note-signed-out component', () => {
+      expect(findDesignNoteSignedOut().exists()).toBe(true);
+      expect(findDesignNoteSignedOut().props()).toMatchObject({
+        registerPath,
+        signInPath,
+      });
+    });
   });
 });

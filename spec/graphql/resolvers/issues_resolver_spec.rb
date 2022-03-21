@@ -6,6 +6,7 @@ RSpec.describe Resolvers::IssuesResolver do
   include GraphqlHelpers
 
   let_it_be(:current_user) { create(:user) }
+  let_it_be(:reporter) { create(:user) }
 
   let_it_be(:group)         { create(:group) }
   let_it_be(:project)       { create(:project, group: group) }
@@ -19,6 +20,7 @@ RSpec.describe Resolvers::IssuesResolver do
   let_it_be(:issue4)    { create(:issue) }
   let_it_be(:label1)    { create(:label, project: project) }
   let_it_be(:label2)    { create(:label, project: project) }
+  let_it_be(:upvote_award) { create(:award_emoji, :upvote, user: current_user, awardable: issue1) }
 
   specify do
     expect(described_class).to have_nullable_graphql_type(Types::IssueType.connection_type)
@@ -27,6 +29,7 @@ RSpec.describe Resolvers::IssuesResolver do
   context "with a project" do
     before_all do
       project.add_developer(current_user)
+      project.add_reporter(reporter)
       create(:label_link, label: label1, target: issue1)
       create(:label_link, label: label1, target: issue2)
       create(:label_link, label: label2, target: issue2)
@@ -75,10 +78,10 @@ RSpec.describe Resolvers::IssuesResolver do
           expect(resolve_issues(milestone_wildcard_id: wildcard_none)).to contain_exactly(issue2)
         end
 
-        it 'raises a mutually exclusive filter error when wildcard and title are provided' do
-          expect do
+        it 'generates a mutually exclusive filter error when wildcard and title are provided' do
+          expect_graphql_error_to_be_created(Gitlab::Graphql::Errors::ArgumentError, 'only one of [milestoneTitle, milestoneWildcardId] arguments is allowed at the same time.') do
             resolve_issues(milestone_title: ["started milestone"], milestone_wildcard_id: wildcard_started)
-          end.to raise_error(Gitlab::Graphql::Errors::ArgumentError, 'only one of [milestoneTitle, milestoneWildcardId] arguments is allowed at the same time.')
+          end
         end
 
         context 'negated filtering' do
@@ -94,10 +97,58 @@ RSpec.describe Resolvers::IssuesResolver do
             expect(resolve_issues(not: { milestone_wildcard_id: wildcard_upcoming })).to contain_exactly(issue6)
           end
 
-          it 'raises a mutually exclusive filter error when wildcard and title are provided as negated filters' do
-            expect do
+          it 'generates a mutually exclusive filter error when wildcard and title are provided as negated filters' do
+            expect_graphql_error_to_be_created(Gitlab::Graphql::Errors::ArgumentError, 'only one of [milestoneTitle, milestoneWildcardId] arguments is allowed at the same time.') do
               resolve_issues(not: { milestone_title: ["started milestone"], milestone_wildcard_id: wildcard_started })
-            end.to raise_error(Gitlab::Graphql::Errors::ArgumentError, 'only one of [milestoneTitle, milestoneWildcardId] arguments is allowed at the same time.')
+            end
+          end
+        end
+      end
+
+      describe 'filter by release' do
+        let_it_be(:milestone1) { create(:milestone, project: project, start_date: 1.day.from_now, title: 'Version 1') }
+        let_it_be(:milestone2) { create(:milestone, project: project, start_date: 1.day.from_now, title: 'Version 2') }
+        let_it_be(:milestone3) { create(:milestone, project: project, start_date: 1.day.from_now, title: 'Version 3') }
+        let_it_be(:release1) { create(:release, tag: 'v1.0', milestones: [milestone1], project: project) }
+        let_it_be(:release2) { create(:release, tag: 'v2.0', milestones: [milestone2], project: project) }
+        let_it_be(:release3) { create(:release, tag: 'v3.0', milestones: [milestone3], project: project) }
+        let_it_be(:release_issue1) { create(:issue, project: project, milestone: milestone1) }
+        let_it_be(:release_issue2) { create(:issue, project: project, milestone: milestone2) }
+        let_it_be(:release_issue3) { create(:issue, project: project, milestone: milestone3) }
+
+        describe 'filter by release_tag' do
+          it 'returns all issues associated with the specified tags' do
+            expect(resolve_issues(release_tag: [release1.tag, release3.tag])).to contain_exactly(release_issue1, release_issue3)
+          end
+
+          context 'when release_tag_wildcard_id is also provided' do
+            it 'generates a mutually eclusive argument error' do
+              expect_graphql_error_to_be_created(Gitlab::Graphql::Errors::ArgumentError, 'only one of [releaseTag, releaseTagWildcardId] arguments is allowed at the same time.') do
+                resolve_issues(release_tag: [release1.tag], release_tag_wildcard_id: 'ANY')
+              end
+            end
+          end
+        end
+
+        describe 'filter by negated release_tag' do
+          it 'returns all issues not associated with the specified tags' do
+            expect(resolve_issues(not: { release_tag: [release1.tag, release3.tag] })).to contain_exactly(release_issue2)
+          end
+        end
+
+        describe 'filter by release_tag_wildcard_id' do
+          subject { resolve_issues(release_tag_wildcard_id: wildcard_id) }
+
+          context 'when filtering by ANY' do
+            let(:wildcard_id) { 'ANY' }
+
+            it { is_expected.to contain_exactly(release_issue1, release_issue2, release_issue3) }
+          end
+
+          context 'when filtering by NONE' do
+            let(:wildcard_id) { 'NONE' }
+
+            it { is_expected.to contain_exactly(issue1, issue2) }
           end
         end
       end
@@ -140,10 +191,10 @@ RSpec.describe Resolvers::IssuesResolver do
         end
 
         context 'when both assignee_username and assignee_usernames are provided' do
-          it 'raises a mutually exclusive filter error' do
-            expect do
+          it 'generates a mutually exclusive filter error' do
+            expect_graphql_error_to_be_created(Gitlab::Graphql::Errors::ArgumentError, 'only one of [assigneeUsernames, assigneeUsername] arguments is allowed at the same time.') do
               resolve_issues(assignee_usernames: [assignee.username], assignee_username: assignee.username)
-            end.to raise_error(Gitlab::Graphql::Errors::ArgumentError, 'only one of [assigneeUsernames, assigneeUsername] arguments is allowed at the same time.')
+            end
           end
         end
       end
@@ -198,6 +249,64 @@ RSpec.describe Resolvers::IssuesResolver do
         end
       end
 
+      context 'filtering by reaction emoji' do
+        let_it_be(:downvoted_issue) { create(:issue, project: project) }
+        let_it_be(:downvote_award) { create(:award_emoji, :downvote, user: current_user, awardable: downvoted_issue) }
+
+        it 'filters by reaction emoji' do
+          expect(resolve_issues(my_reaction_emoji: upvote_award.name)).to contain_exactly(issue1)
+        end
+
+        it 'filters by reaction emoji wildcard "none"' do
+          expect(resolve_issues(my_reaction_emoji: 'none')).to contain_exactly(issue2)
+        end
+
+        it 'filters by reaction emoji wildcard "any"' do
+          expect(resolve_issues(my_reaction_emoji: 'any')).to contain_exactly(issue1, downvoted_issue)
+        end
+
+        it 'filters by negated reaction emoji' do
+          expect(resolve_issues(not: { my_reaction_emoji: downvote_award.name })).to contain_exactly(issue1, issue2)
+        end
+      end
+
+      context 'confidential issues' do
+        let_it_be(:confidential_issue1) { create(:issue, project: project, confidential: true) }
+        let_it_be(:confidential_issue2) { create(:issue, project: other_project, confidential: true) }
+
+        context "when user is allowed to view confidential issues" do
+          it 'returns all viewable issues by default' do
+            expect(resolve_issues).to contain_exactly(issue1, issue2, confidential_issue1)
+          end
+
+          it 'returns only the non-confidential issues for the project when filter is set to false' do
+            expect(resolve_issues({ confidential: false })).to contain_exactly(issue1, issue2)
+          end
+
+          it "returns only the confidential issues for the project when filter is set to true" do
+            expect(resolve_issues({ confidential: true })).to contain_exactly(confidential_issue1)
+          end
+        end
+
+        context "when user is not allowed to see confidential issues" do
+          before do
+            project.add_guest(current_user)
+          end
+
+          it 'returns all viewable issues by default' do
+            expect(resolve_issues).to contain_exactly(issue1, issue2)
+          end
+
+          it 'does not return the confidential issues when filter is set to false' do
+            expect(resolve_issues({ confidential: false })).to contain_exactly(issue1, issue2)
+          end
+
+          it 'does not return the confidential issues when filter is set to true' do
+            expect(resolve_issues({ confidential: true })).to be_empty
+          end
+        end
+      end
+
       context 'when searching issues' do
         it 'returns correct issues' do
           expect(resolve_issues(search: 'foo')).to contain_exactly(issue2)
@@ -211,6 +320,37 @@ RSpec.describe Resolvers::IssuesResolver do
           expect(IssuesFinder).to receive(:new).with(anything, expected_arguments).and_call_original
 
           resolve_issues(search: 'foo')
+        end
+
+        context 'with anonymous user' do
+          let_it_be(:public_project) { create(:project, :public) }
+          let_it_be(:public_issue) { create(:issue, project: public_project, title: 'Test issue') }
+
+          context 'with disable_anonymous_search enabled' do
+            before do
+              stub_feature_flags(disable_anonymous_search: true)
+            end
+
+            it 'generates an error' do
+              error_message = "User must be authenticated to include the `search` argument."
+
+              expect_graphql_error_to_be_created(Gitlab::Graphql::Errors::ArgumentError, error_message) do
+                resolve(described_class, obj: public_project, args: { search: 'test' }, ctx: { current_user: nil })
+              end
+            end
+          end
+
+          context 'with disable_anonymous_search disabled' do
+            before do
+              stub_feature_flags(disable_anonymous_search: false)
+            end
+
+            it 'returns correct issues' do
+              expect(
+                resolve(described_class, obj: public_project, args: { search: 'test' }, ctx: { current_user: nil })
+              ).to contain_exactly(public_issue)
+            end
+          end
         end
       end
 
@@ -234,6 +374,18 @@ RSpec.describe Resolvers::IssuesResolver do
 
         it 'returns issues without the specified assignee_id' do
           expect(resolve_issues(not: { assignee_id: [assignee.id] })).to contain_exactly(issue1)
+        end
+
+        it 'returns issues without the specified issue_type' do
+          expect(resolve_issues(not: { types: ['issue'] })).to contain_exactly(issue1)
+        end
+
+        context 'when filtering by negated author' do
+          let_it_be(:issue_by_reporter) { create(:issue, author: reporter, project: project, state: :opened) }
+
+          it 'returns issues without the specified author_username' do
+            expect(resolve_issues(not: { author_username: issue1.author.username })).to contain_exactly(issue_by_reporter)
+          end
         end
       end
 
@@ -272,7 +424,7 @@ RSpec.describe Resolvers::IssuesResolver do
           let_it_be(:relative_issue4) { create(:issue, project: project, relative_position: nil) }
 
           it 'sorts issues ascending' do
-            expect(resolve_issues(sort: :relative_position_asc).to_a).to eq [relative_issue3, relative_issue1, relative_issue4, relative_issue2]
+            expect(resolve_issues(sort: :relative_position_asc).to_a).to eq [relative_issue3, relative_issue1, relative_issue2, relative_issue4]
           end
         end
 
@@ -370,16 +522,74 @@ RSpec.describe Resolvers::IssuesResolver do
           end
         end
 
+        context 'when sorting by escalation status' do
+          let_it_be(:project) { create(:project, :public) }
+          let_it_be(:triggered_incident) { create(:incident, :with_escalation_status, project: project) }
+          let_it_be(:issue_no_status) { create(:issue, project: project) }
+          let_it_be(:resolved_incident) do
+            create(:incident, :with_escalation_status, project: project)
+              .tap { |issue| issue.escalation_status.resolve }
+          end
+
+          it 'sorts issues ascending' do
+            issues = resolve_issues(sort: :escalation_status_asc).to_a
+            expect(issues).to eq([triggered_incident, resolved_incident, issue_no_status])
+          end
+
+          it 'sorts issues descending' do
+            issues = resolve_issues(sort: :escalation_status_desc).to_a
+            expect(issues).to eq([resolved_incident, triggered_incident, issue_no_status])
+          end
+
+          it 'sorts issues created_at' do
+            issues = resolve_issues(sort: :created_desc).to_a
+            expect(issues).to eq([resolved_incident, issue_no_status, triggered_incident])
+          end
+
+          context 'when incident_escalations feature flag is disabled' do
+            before do
+              stub_feature_flags(incident_escalations: false)
+            end
+
+            it 'defaults ascending status sort to created_desc' do
+              issues = resolve_issues(sort: :escalation_status_asc).to_a
+              expect(issues).to eq([resolved_incident, issue_no_status, triggered_incident])
+            end
+
+            it 'defaults descending status sort to created_desc' do
+              issues = resolve_issues(sort: :escalation_status_desc).to_a
+              expect(issues).to eq([resolved_incident, issue_no_status, triggered_incident])
+            end
+          end
+        end
+
         context 'when sorting with non-stable cursors' do
           %i[priority_asc priority_desc
              popularity_asc popularity_desc
              label_priority_asc label_priority_desc
-             milestone_due_asc milestone_due_desc].each do |sort_by|
+             milestone_due_asc milestone_due_desc
+             escalation_status_asc escalation_status_desc].each do |sort_by|
             it "uses offset-pagination when sorting by #{sort_by}" do
               resolved = resolve_issues(sort: sort_by)
 
               expect(resolved).to be_a(::Gitlab::Graphql::Pagination::OffsetActiveRecordRelationConnection)
             end
+          end
+        end
+
+        context 'when sorting by title' do
+          let_it_be(:project) { create(:project, :public) }
+          let_it_be(:issue1) { create(:issue, project: project, title: 'foo') }
+          let_it_be(:issue2) { create(:issue, project: project, title: 'bar') }
+          let_it_be(:issue3) { create(:issue, project: project, title: 'baz') }
+          let_it_be(:issue4) { create(:issue, project: project, title: 'Baz 2') }
+
+          it 'sorts issues ascending' do
+            expect(resolve_issues(sort: :title_asc).to_a).to eq [issue2, issue3, issue4, issue1]
+          end
+
+          it 'sorts issues descending' do
+            expect(resolve_issues(sort: :title_desc).to_a).to eq [issue1, issue4, issue3, issue2]
           end
         end
       end
@@ -393,13 +603,13 @@ RSpec.describe Resolvers::IssuesResolver do
       end
 
       it 'finds a specific issue with iid', :request_store do
-        result = batch_sync(max_queries: 5) { resolve_issues(iid: issue1.iid).to_a }
+        result = batch_sync(max_queries: 6) { resolve_issues(iid: issue1.iid).to_a }
 
         expect(result).to contain_exactly(issue1)
       end
 
       it 'batches queries that only include IIDs', :request_store do
-        result = batch_sync(max_queries: 5) do
+        result = batch_sync(max_queries: 6) do
           [issue1, issue2]
             .map { |issue| resolve_issues(iid: issue.iid.to_s) }
             .flat_map(&:to_a)
@@ -409,7 +619,7 @@ RSpec.describe Resolvers::IssuesResolver do
       end
 
       it 'finds a specific issue with iids', :request_store do
-        result = batch_sync(max_queries: 5) do
+        result = batch_sync(max_queries: 6) do
           resolve_issues(iids: [issue1.iid]).to_a
         end
 
@@ -436,22 +646,8 @@ RSpec.describe Resolvers::IssuesResolver do
     end
   end
 
-  context "with a group" do
-    before do
-      group.add_developer(current_user)
-    end
-
-    describe '#resolve' do
-      it 'finds all group issues' do
-        result = resolve(described_class, obj: group, ctx: { current_user: current_user })
-
-        expect(result).to contain_exactly(issue1, issue2, issue3)
-      end
-    end
-  end
-
   context "when passing a non existent, batch loaded project" do
-    let(:project) do
+    let!(:project) do
       BatchLoader::GraphQL.for("non-existent-path").batch do |_fake_paths, loader, _|
         loader.call("non-existent-path", nil)
       end
@@ -465,8 +661,8 @@ RSpec.describe Resolvers::IssuesResolver do
   it 'increases field complexity based on arguments' do
     field = Types::BaseField.new(name: 'test', type: GraphQL::Types::String.connection_type, resolver_class: described_class, null: false, max_page_size: 100)
 
-    expect(field.to_graphql.complexity.call({}, {}, 1)).to eq 4
-    expect(field.to_graphql.complexity.call({}, { labelName: 'foo' }, 1)).to eq 8
+    expect(field.complexity.call({}, {}, 1)).to eq 4
+    expect(field.complexity.call({}, { labelName: 'foo' }, 1)).to eq 8
   end
 
   def create_issue_with_severity(project, severity:)

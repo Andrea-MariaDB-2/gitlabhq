@@ -1,55 +1,81 @@
-import { shallowMount, createLocalVue } from '@vue/test-utils';
-import Vuex from 'vuex';
+import { shallowMount } from '@vue/test-utils';
+import Vue, { nextTick } from 'vue';
+import VueApollo from 'vue-apollo';
+import createMockApollo from 'helpers/mock_apollo_helper';
+import waitForPromises from 'helpers/wait_for_promises';
+import createFlash from '~/flash';
+import { IssuableType } from '~/issues/constants';
 import SidebarEditableItem from '~/sidebar/components/sidebar_editable_item.vue';
 import DropdownContents from '~/vue_shared/components/sidebar/labels_select_widget/dropdown_contents.vue';
 import DropdownValue from '~/vue_shared/components/sidebar/labels_select_widget/dropdown_value.vue';
-import DropdownValueCollapsed from '~/vue_shared/components/sidebar/labels_select_widget/dropdown_value_collapsed.vue';
+import issueLabelsQuery from '~/vue_shared/components/sidebar/labels_select_widget/graphql/issue_labels.query.graphql';
+import updateIssueLabelsMutation from '~/boards/graphql/issue_set_labels.mutation.graphql';
+import updateMergeRequestLabelsMutation from '~/sidebar/queries/update_merge_request_labels.mutation.graphql';
+import updateEpicLabelsMutation from '~/vue_shared/components/sidebar/labels_select_widget/graphql/epic_update_labels.mutation.graphql';
 import LabelsSelectRoot from '~/vue_shared/components/sidebar/labels_select_widget/labels_select_root.vue';
+import { mockConfig, issuableLabelsQueryResponse, updateLabelsMutationResponse } from './mock_data';
 
-import labelsSelectModule from '~/vue_shared/components/sidebar/labels_select_widget/store';
+jest.mock('~/flash');
 
-import { mockConfig } from './mock_data';
+Vue.use(VueApollo);
 
-jest.mock('~/lib/utils/common_utils', () => ({
-  isInViewport: jest.fn().mockReturnValue(true),
-}));
+const successfulQueryHandler = jest.fn().mockResolvedValue(issuableLabelsQueryResponse);
+const successfulMutationHandler = jest.fn().mockResolvedValue(updateLabelsMutationResponse);
+const errorQueryHandler = jest.fn().mockRejectedValue('Houston, we have a problem');
 
-const localVue = createLocalVue();
-localVue.use(Vuex);
+const updateLabelsMutation = {
+  [IssuableType.Issue]: updateIssueLabelsMutation,
+  [IssuableType.MergeRequest]: updateMergeRequestLabelsMutation,
+  [IssuableType.Epic]: updateEpicLabelsMutation,
+};
 
 describe('LabelsSelectRoot', () => {
   let wrapper;
-  let store;
 
-  const createComponent = (config = mockConfig, slots = {}) => {
+  const findSidebarEditableItem = () => wrapper.findComponent(SidebarEditableItem);
+  const findDropdownValue = () => wrapper.findComponent(DropdownValue);
+  const findDropdownContents = () => wrapper.findComponent(DropdownContents);
+
+  const createComponent = ({
+    config = mockConfig,
+    slots = {},
+    issuableType = IssuableType.Issue,
+    queryHandler = successfulQueryHandler,
+    mutationHandler = successfulMutationHandler,
+  } = {}) => {
+    const mockApollo = createMockApollo([
+      [issueLabelsQuery, queryHandler],
+      [updateLabelsMutation[issuableType], mutationHandler],
+    ]);
+
     wrapper = shallowMount(LabelsSelectRoot, {
-      localVue,
       slots,
-      store,
-      propsData: config,
+      apolloProvider: mockApollo,
+      propsData: {
+        ...config,
+        issuableType,
+        labelCreateType: 'project',
+        workspaceType: 'project',
+      },
       stubs: {
-        DropdownContents,
         SidebarEditableItem,
       },
       provide: {
-        iid: '1',
-        projectPath: 'test',
         canUpdate: true,
+        allowLabelEdit: true,
+        allowLabelCreate: true,
+        labelsManagePath: 'test',
       },
     });
   };
-
-  beforeEach(() => {
-    store = new Vuex.Store(labelsSelectModule());
-  });
 
   afterEach(() => {
     wrapper.destroy();
   });
 
-  it('renders component with classes `labels-select-wrapper position-relative`', () => {
+  it('renders component with classes `labels-select-wrapper gl-relative`', () => {
     createComponent();
-    expect(wrapper.classes()).toEqual(['labels-select-wrapper', 'position-relative']);
+    expect(wrapper.classes()).toEqual(['labels-select-wrapper', 'gl-relative']);
   });
 
   it.each`
@@ -58,33 +84,111 @@ describe('LabelsSelectRoot', () => {
     ${'embedded'}   | ${'is-embedded'}
   `(
     'renders component root element with CSS class `$cssClass` when `state.variant` is "$variant"',
-    ({ variant, cssClass }) => {
+    async ({ variant, cssClass }) => {
       createComponent({
-        ...mockConfig,
-        variant,
+        config: { ...mockConfig, variant },
       });
 
-      return wrapper.vm.$nextTick(() => {
-        expect(wrapper.classes()).toContain(cssClass);
-      });
+      await nextTick();
+      expect(wrapper.classes()).toContain(cssClass);
     },
   );
 
-  it('renders `dropdown-value-collapsed` component when `allowLabelCreate` prop is `true`', async () => {
-    createComponent();
-    await wrapper.vm.$nextTick;
-    expect(wrapper.find(DropdownValueCollapsed).exists()).toBe(true);
+  describe('if dropdown variant is `sidebar`', () => {
+    it('renders sidebar editable item', () => {
+      createComponent();
+      expect(findSidebarEditableItem().exists()).toBe(true);
+    });
+
+    it('passes true `loading` prop to sidebar editable item when loading labels', () => {
+      createComponent();
+      expect(findSidebarEditableItem().props('loading')).toBe(true);
+    });
+
+    describe('when labels are fetched successfully', () => {
+      beforeEach(async () => {
+        createComponent();
+        await waitForPromises();
+      });
+
+      it('passes true `loading` prop to sidebar editable item', () => {
+        expect(findSidebarEditableItem().props('loading')).toBe(false);
+      });
+
+      it('renders dropdown value component when query labels is resolved', () => {
+        expect(findDropdownValue().exists()).toBe(true);
+        expect(findDropdownValue().props('selectedLabels')).toEqual([
+          {
+            color: '#330066',
+            description: null,
+            id: 'gid://gitlab/ProjectLabel/1',
+            title: 'Label1',
+            textColor: '#000000',
+          },
+        ]);
+      });
+
+      it('emits `onLabelRemove` event on dropdown value label remove event', () => {
+        const label = { id: 'gid://gitlab/ProjectLabel/1' };
+        findDropdownValue().vm.$emit('onLabelRemove', label);
+        expect(wrapper.emitted('onLabelRemove')).toEqual([[label]]);
+      });
+    });
+
+    it('creates flash with error message when query is rejected', async () => {
+      createComponent({ queryHandler: errorQueryHandler });
+      await waitForPromises();
+      expect(createFlash).toHaveBeenCalledWith({ message: 'Error fetching labels.' });
+    });
   });
 
-  it('renders `dropdown-value` component', async () => {
-    createComponent(mockConfig, {
-      default: 'None',
+  it('emits `updateSelectedLabels` event on dropdown contents `setLabels` event if iid is not set', async () => {
+    const label = { id: 'gid://gitlab/ProjectLabel/1' };
+    createComponent({ config: { ...mockConfig, iid: undefined } });
+
+    findDropdownContents().vm.$emit('setLabels', [label]);
+    expect(wrapper.emitted('updateSelectedLabels')).toEqual([[{ labels: [label] }]]);
+  });
+
+  describe.each`
+    issuableType
+    ${IssuableType.Issue}
+    ${IssuableType.MergeRequest}
+    ${IssuableType.Epic}
+  `('when updating labels for $issuableType', ({ issuableType }) => {
+    const label = { id: 'gid://gitlab/ProjectLabel/2' };
+
+    it('sets the loading state', async () => {
+      createComponent({ issuableType });
+      await nextTick();
+      findDropdownContents().vm.$emit('setLabels', [label]);
+      await nextTick();
+
+      expect(findSidebarEditableItem().props('loading')).toBe(true);
     });
-    await wrapper.vm.$nextTick;
 
-    const valueComp = wrapper.find(DropdownValue);
+    it('updates labels correctly after successful mutation', async () => {
+      createComponent({ issuableType });
+      await nextTick();
+      findDropdownContents().vm.$emit('setLabels', [label]);
+      await waitForPromises();
 
-    expect(valueComp.exists()).toBe(true);
-    expect(valueComp.text()).toBe('None');
+      expect(findDropdownValue().props('selectedLabels')).toEqual(
+        updateLabelsMutationResponse.data.updateIssuableLabels.issuable.labels.nodes,
+      );
+    });
+
+    it('displays an error if mutation was rejected', async () => {
+      createComponent({ issuableType, mutationHandler: errorQueryHandler });
+      await nextTick();
+      findDropdownContents().vm.$emit('setLabels', [label]);
+      await waitForPromises();
+
+      expect(createFlash).toHaveBeenCalledWith({
+        captureError: true,
+        error: expect.anything(),
+        message: 'An error occurred while updating labels.',
+      });
+    });
   });
 });

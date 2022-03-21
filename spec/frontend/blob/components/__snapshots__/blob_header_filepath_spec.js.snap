@@ -20,12 +20,6 @@ exports[`Blob Header Filepath rendering matches the snapshot 1`] = `
     foo/bar/dummy.md
   </strong>
    
-  <small
-    class="mr-2"
-  >
-    a lot
-  </small>
-   
   <clipboard-button-stub
     category="tertiary"
     cssclass="btn-clipboard btn-transparent lh-100 position-static"
@@ -34,6 +28,15 @@ exports[`Blob Header Filepath rendering matches the snapshot 1`] = `
     text="foo/bar/dummy.md"
     title="Copy file path"
     tooltipplacement="top"
+    variant="default"
   />
+   
+  <small
+    class="mr-2"
+  >
+    a lot
+  </small>
+   
+  <!---->
 </div>
 `;

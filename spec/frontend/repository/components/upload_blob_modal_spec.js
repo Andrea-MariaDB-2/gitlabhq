@@ -2,15 +2,14 @@ import { GlModal, GlFormInput, GlFormTextarea, GlToggle, GlAlert } from '@gitlab
 import { shallowMount } from '@vue/test-utils';
 import axios from 'axios';
 import MockAdapter from 'axios-mock-adapter';
+import { nextTick } from 'vue';
 import waitForPromises from 'helpers/wait_for_promises';
 import createFlash from '~/flash';
 import httpStatusCodes from '~/lib/utils/http_status';
 import { visitUrl } from '~/lib/utils/url_utility';
-import { trackFileUploadEvent } from '~/projects/upload_file_experiment_tracking';
 import UploadBlobModal from '~/repository/components/upload_blob_modal.vue';
 import UploadDropzone from '~/vue_shared/components/upload_dropzone/upload_dropzone.vue';
 
-jest.mock('~/projects/upload_file_experiment_tracking');
 jest.mock('~/flash');
 jest.mock('~/lib/utils/url_utility', () => ({
   visitUrl: jest.fn(),
@@ -111,9 +110,11 @@ describe('UploadBlobModal', () => {
       if (canPushCode) {
         describe('when changing the branch name', () => {
           it('displays the MR toggle', async () => {
+            // setData usage is discouraged. See https://gitlab.com/groups/gitlab-org/-/epics/7330 for details
+            // eslint-disable-next-line no-restricted-syntax
             wrapper.setData({ target: 'Not main' });
 
-            await wrapper.vm.$nextTick();
+            await nextTick();
 
             expect(findMrToggle().exists()).toBe(true);
           });
@@ -122,6 +123,8 @@ describe('UploadBlobModal', () => {
 
       describe('completed form', () => {
         beforeEach(() => {
+          // setData usage is discouraged. See https://gitlab.com/groups/gitlab-org/-/epics/7330 for details
+          // eslint-disable-next-line no-restricted-syntax
           wrapper.setData({
             file: { type: 'jpg' },
             filePreviewURL: 'http://file.com?format=jpg',
@@ -162,10 +165,6 @@ describe('UploadBlobModal', () => {
             await waitForPromises();
           });
 
-          it('tracks the click_upload_modal_trigger event when opening the modal', () => {
-            expect(trackFileUploadEvent).toHaveBeenCalledWith('click_upload_modal_form_submit');
-          });
-
           it('redirects to the uploaded file', () => {
             expect(visitUrl).toHaveBeenCalled();
           });
@@ -183,10 +182,6 @@ describe('UploadBlobModal', () => {
             findModal().vm.$emit('primary', mockEvent);
 
             await waitForPromises();
-          });
-
-          it('does not track an event', () => {
-            expect(trackFileUploadEvent).not.toHaveBeenCalled();
           });
 
           it('creates a flash error', () => {
@@ -208,7 +203,7 @@ describe('UploadBlobModal', () => {
       wrapper.vm.uploadFile = jest.fn();
       wrapper.vm.replaceFile = jest.fn();
       wrapper.vm.submitForm();
-      await wrapper.vm.$nextTick();
+      await nextTick();
     };
 
     const submitRequest = async () => {
@@ -222,8 +217,8 @@ describe('UploadBlobModal', () => {
         createComponent();
       });
 
-      it('displays the default "Upload New File" modal title  ', () => {
-        expect(findModal().props('title')).toBe('Upload New File');
+      it('displays the default "Upload new file" modal title  ', () => {
+        expect(findModal().props('title')).toBe('Upload new file');
       });
 
       it('display the defaul primary button text', () => {

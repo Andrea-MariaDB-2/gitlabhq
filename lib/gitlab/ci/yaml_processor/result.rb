@@ -80,7 +80,6 @@ module Gitlab
             cache: job[:cache],
             resource_group_key: job[:resource_group],
             scheduling_type: job[:scheduling_type],
-            secrets: job[:secrets],
             options: {
               image: job[:image],
               services: job[:services],
@@ -93,6 +92,7 @@ module Gitlab
               script: job[:script],
               after_script: job[:after_script],
               environment: job[:environment],
+              resource_group_key: job[:resource_group],
               retry: job[:retry],
               parallel: job[:parallel],
               instance: job[:instance],

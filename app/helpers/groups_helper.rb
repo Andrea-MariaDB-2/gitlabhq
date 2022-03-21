@@ -25,15 +25,6 @@ module GroupsHelper
     Ability.allowed?(current_user, :admin_group_member, group)
   end
 
-  def group_dependency_proxy_image_prefix(group)
-    # The namespace path can include uppercase letters, which
-    # Docker doesn't allow. The proxy expects it to be downcased.
-    url = "#{group_url(group).downcase}#{DependencyProxy::URL_SUFFIX}"
-
-    # Docker images do not include the protocol
-    url.partition('//').last
-  end
-
   def group_icon_url(group, options = {})
     if group.is_a?(String)
       group = Group.find_by_full_path(group)
@@ -48,7 +39,7 @@ module GroupsHelper
 
     sorted_ancestors(group).with_route.reverse_each.with_index do |parent, index|
       if index > 0
-        add_to_breadcrumb_dropdown(group_title_link(parent, hidable: false, show_avatar: true, for_dropdown: true), location: :before)
+        add_to_breadcrumb_collapsed_links(group_title_link(parent), location: :before)
       else
         full_title << breadcrumb_list_item(group_title_link(parent, hidable: false))
       end
@@ -56,7 +47,7 @@ module GroupsHelper
       push_to_schema_breadcrumb(simple_sanitize(parent.name), group_path(parent))
     end
 
-    full_title << render("layouts/nav/breadcrumbs/collapsed_dropdown", location: :before, title: _("Show parent subgroups"))
+    full_title << render("layouts/nav/breadcrumbs/collapsed_inline_list", location: :before, title: _("Show all breadcrumbs"))
 
     full_title << breadcrumb_list_item(group_title_link(group))
     push_to_schema_breadcrumb(simple_sanitize(group.name), group_path(group))
@@ -118,7 +109,7 @@ module GroupsHelper
   end
 
   def prevent_sharing_groups_outside_hierarchy_help_text(group)
-    s_("GroupSettings|This setting is only available on the top-level group and it applies to all subgroups. Groups that have already been shared with a group outside %{group} will still be shared, and this access will have to be revoked manually.").html_safe % { group: link_to_group(group) }
+    s_("GroupSettings|Available only on the top-level group. Applies to all subgroups. Groups already shared with a group outside %{group} are still shared unless removed manually.").html_safe % { group: link_to_group(group) }
   end
 
   def parent_group_options(current_group)
@@ -129,12 +120,6 @@ module GroupsHelper
     end
 
     groups.to_json
-  end
-
-  def show_invite_banner?(group)
-    can?(current_user, :admin_group, group) &&
-    !just_created? &&
-    !multiple_members?(group)
   end
 
   def render_setting_to_allow_project_access_token_creation?(group)
@@ -149,15 +134,17 @@ module GroupsHelper
     @group_projects_sort || @sort || params[:sort] || sort_value_recently_created
   end
 
+  def verification_for_group_creation_data
+    # overridden in EE
+    {}
+  end
+
+  def require_verification_for_namespace_creation_enabled?
+    # overridden in EE
+    false
+  end
+
   private
-
-  def just_created?
-    flash[:notice] =~ /successfully created/
-  end
-
-  def multiple_members?(group)
-    group.member_count > 1 || group.members_with_parents.count > 1
-  end
 
   def group_title_link(group, hidable: false, show_avatar: false, for_dropdown: false)
     link_to(group_path(group), class: "group-path #{'breadcrumb-item-text' unless for_dropdown} js-breadcrumb-item-text #{'hidable' if hidable}") do
@@ -201,7 +188,7 @@ module GroupsHelper
   end
 
   def default_help
-    s_("GroupSettings|This setting will be applied to all subgroups unless overridden by a group owner. Groups that already have access to the project will continue to have access unless removed manually.")
+    s_("GroupSettings|Applied to all subgroups unless overridden by a group owner. Groups already added to the project lose access.")
   end
 
   def ancestor_locked_but_you_can_override(group)
@@ -217,7 +204,7 @@ module GroupsHelper
   end
 
   def group_url_error_message
-    s_('GroupSettings|Please choose a group URL with no special characters or spaces.')
+    s_('GroupSettings|Choose a group path that does not start with a dash or end with a period. It can also contain alphanumeric characters and underscores.')
   end
 
   # Maps `jobs_to_be_done` values to option texts

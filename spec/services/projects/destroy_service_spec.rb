@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-RSpec.describe Projects::DestroyService, :aggregate_failures do
+RSpec.describe Projects::DestroyService, :aggregate_failures, :event_store_publisher do
   include ProjectForksHelper
 
   let_it_be(:user) { create(:user) }
@@ -18,16 +18,19 @@ RSpec.describe Projects::DestroyService, :aggregate_failures do
   end
 
   shared_examples 'deleting the project' do
-    before do
-      # Run sidekiq immediately to check that renamed repository will be removed
-      destroy_project(project, user, {})
-    end
-
     it 'deletes the project', :sidekiq_inline do
+      destroy_project(project, user, {})
+
       expect(Project.unscoped.all).not_to include(project)
 
       expect(project.gitlab_shell.repository_exists?(project.repository_storage, path + '.git')).to be_falsey
       expect(project.gitlab_shell.repository_exists?(project.repository_storage, remove_path + '.git')).to be_falsey
+    end
+
+    it 'publishes a ProjectDeleted event with project id and namespace id' do
+      expected_data = { project_id: project.id, namespace_id: project.namespace_id }
+
+      expect { destroy_project(project, user, {}) }.to publish_event(Projects::ProjectDeletedEvent).with(expected_data)
     end
   end
 
@@ -39,26 +42,34 @@ RSpec.describe Projects::DestroyService, :aggregate_failures do
       let!(:job_variables) { create(:ci_job_variable, job: build) }
       let!(:report_result) { create(:ci_build_report_result, build: build) }
       let!(:pending_state) { create(:ci_build_pending_state, build: build) }
+      let!(:pipeline_artifact) { create(:ci_pipeline_artifact, pipeline: pipeline) }
+      let!(:secure_file) { create(:ci_secure_file, project: project) }
 
-      it 'deletes build related records' do
-        expect { destroy_project(project, user, {}) }.to change { Ci::Build.count }.by(-1)
+      it 'deletes build and pipeline related records' do
+        expect { destroy_project(project, user, {}) }
+          .to  change { Ci::Build.count }.by(-1)
           .and change { Ci::BuildTraceChunk.count }.by(-1)
           .and change { Ci::JobArtifact.count }.by(-2)
+          .and change { Ci::DeletedObject.count }.by(2)
+          .and change { Ci::PipelineArtifact.count }.by(-1)
           .and change { Ci::JobVariable.count }.by(-1)
           .and change { Ci::BuildPendingState.count }.by(-1)
           .and change { Ci::BuildReportResult.count }.by(-1)
           .and change { Ci::BuildRunnerSession.count }.by(-1)
+          .and change { Ci::Pipeline.count }.by(-1)
+          .and change { Ci::SecureFile.count }.by(-1)
       end
 
-      it 'avoids N+1 queries', skip: 'skipped until fixed in https://gitlab.com/gitlab-org/gitlab/-/issues/24644' do
+      it 'avoids N+1 queries' do
         recorder = ActiveRecord::QueryRecorder.new { destroy_project(project, user, {}) }
 
         project = create(:project, :repository, namespace: user.namespace)
         pipeline = create(:ci_pipeline, project: project)
         builds = create_list(:ci_build, 3, :artifacts, pipeline: pipeline)
+        create(:ci_pipeline_artifact, pipeline: pipeline)
         create_list(:ci_build_trace_chunk, 3, build: builds[0])
 
-        expect { destroy_project(project, project.owner, {}) }.not_to exceed_query_limit(recorder)
+        expect { destroy_project(project, project.first_owner, {}) }.not_to exceed_query_limit(recorder)
       end
 
       it_behaves_like 'deleting the project'
@@ -70,6 +81,11 @@ RSpec.describe Projects::DestroyService, :aggregate_failures do
       expect do
         destroy_project(project, user, {})
       end.not_to raise_error
+    end
+
+    it 'reports the error' do
+      expect(Gitlab::ErrorTracking).to receive(:track_exception).and_call_original
+      destroy_project(project, user, {})
     end
 
     it 'unmarks the project as "pending deletion"' do
@@ -86,6 +102,24 @@ RSpec.describe Projects::DestroyService, :aggregate_failures do
     end
   end
 
+  context "deleting a project with merge requests" do
+    let!(:merge_request) { create(:merge_request, source_project: project) }
+
+    before do
+      allow(project).to receive(:destroy!).and_return(true)
+    end
+
+    it "deletes merge request and related records" do
+      merge_request_diffs = merge_request.merge_request_diffs
+      expect(merge_request_diffs.size).to eq(1)
+
+      mrdc_count = MergeRequestDiffCommit.where(merge_request_diff_id: merge_request_diffs.first.id).count
+
+      expect { destroy_project(project, user, {}) }
+      .to change { MergeRequestDiffCommit.count }.by(-mrdc_count)
+    end
+  end
+
   it_behaves_like 'deleting the project'
 
   it 'invalidates personal_project_count cache' do
@@ -94,23 +128,20 @@ RSpec.describe Projects::DestroyService, :aggregate_failures do
     destroy_project(project, user, {})
   end
 
-  context 'with abort_deleted_project_pipelines feature disabled' do
-    it 'does not cancel project ci pipelines' do
-      stub_feature_flags(abort_deleted_project_pipelines: false)
+  context 'with running pipelines' do
+    let!(:pipelines)               { create_list(:ci_pipeline, 3, :running, project: project) }
+    let(:destroy_pipeline_service) { double('DestroyPipelineService', execute: nil) }
 
-      expect(::Ci::AbortPipelinesService).not_to receive(:new)
+    it 'bulks-fails with AbortPipelineService and then executes DestroyPipelineService for each pipelines' do
+      allow(::Ci::DestroyPipelineService).to receive(:new).and_return(destroy_pipeline_service)
 
-      destroy_project(project, user, {})
-    end
-  end
+      expect(::Ci::AbortPipelinesService)
+        .to receive_message_chain(:new, :execute)
+        .with(project.all_pipelines, :project_deleted)
 
-  context 'with abort_deleted_project_pipelines feature enabled' do
-    it 'performs cancel for project ci pipelines' do
-      stub_feature_flags(abort_deleted_project_pipelines: true)
-      pipelines = build_list(:ci_pipeline, 3, :running)
-      allow(project).to receive(:all_pipelines).and_return(pipelines)
-
-      expect(::Ci::AbortPipelinesService).to receive_message_chain(:new, :execute).with(pipelines, :project_deleted)
+      pipelines.each do |pipeline|
+        expect(destroy_pipeline_service).to receive(:execute).with(pipeline)
+      end
 
       destroy_project(project, user, {})
     end
@@ -254,6 +285,14 @@ RSpec.describe Projects::DestroyService, :aggregate_failures do
         end
       end
     end
+
+    context 'for an archived project' do
+      before do
+        project.update!(archived: true)
+      end
+
+      it_behaves_like 'deleting the project with pipeline and build'
+    end
   end
 
   describe 'container registry' do
@@ -396,11 +435,12 @@ RSpec.describe Projects::DestroyService, :aggregate_failures do
       destroy_project(project, user)
     end
 
-    it 'calls the bulk snippet destroy service' do
+    it 'calls the bulk snippet destroy service with the hard_delete param set to true' do
       expect(project.snippets.count).to eq 2
 
-      expect(Snippets::BulkDestroyService).to receive(:new)
-        .with(user, project.snippets).and_call_original
+      expect_next_instance_of(Snippets::BulkDestroyService, user, project.snippets) do |instance|
+        expect(instance).to receive(:execute).with(hard_delete: true).and_call_original
+      end
 
       expect do
         destroy_project(project, user)
@@ -408,11 +448,15 @@ RSpec.describe Projects::DestroyService, :aggregate_failures do
     end
 
     context 'when an error is raised deleting snippets' do
+      let(:error_message) { 'foo' }
+
       it 'does not delete project' do
         allow_next_instance_of(Snippets::BulkDestroyService) do |instance|
-          allow(instance).to receive(:execute).and_return(ServiceResponse.error(message: 'foo'))
+          allow(instance).to receive(:execute).and_return(ServiceResponse.error(message: error_message))
         end
 
+        expect(Gitlab::AppLogger).to receive(:error).with("Snippet deletion failed on #{project.full_path} with the following message: #{error_message}")
+        expect(Gitlab::AppLogger).to receive(:error).with(/Failed to remove project snippets/)
         expect(destroy_project(project, user)).to be_falsey
         expect(project.gitlab_shell.repository_exists?(project.repository_storage, path + '.git')).to be_truthy
       end
@@ -447,6 +491,37 @@ RSpec.describe Projects::DestroyService, :aggregate_failures do
       end
 
       it_behaves_like 'handles errors thrown during async destroy', "Failed to remove webhooks"
+    end
+  end
+
+  context 'when project has project bots' do
+    let!(:project_bot) { create(:user, :project_bot).tap { |user| project.add_maintainer(user) } }
+
+    it 'deletes bot user as well' do
+      expect do
+        destroy_project(project, user)
+      end.to change { User.find_by(id: project_bot.id) }.to(nil)
+    end
+  end
+
+  context 'when project has events' do
+    let!(:event) { create(:event, :created, project: project, target: project, author: user) }
+
+    it 'deletes events from the project' do
+      expect do
+        destroy_project(project, user)
+      end.to change(Event, :count).by(-1)
+    end
+
+    context 'when an error is returned while deleting events' do
+      it 'does not delete project' do
+        allow_next_instance_of(Events::DestroyService) do |instance|
+          allow(instance).to receive(:execute).and_return(ServiceResponse.error(message: 'foo'))
+        end
+
+        expect(destroy_project(project, user)).to be_falsey
+        expect(project.delete_error).to include('Failed to remove events')
+      end
     end
   end
 

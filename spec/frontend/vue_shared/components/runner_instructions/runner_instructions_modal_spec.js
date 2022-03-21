@@ -1,7 +1,7 @@
-import { GlAlert, GlButton, GlLoadingIcon, GlSkeletonLoader } from '@gitlab/ui';
+import { GlAlert, GlModal, GlButton, GlLoadingIcon, GlSkeletonLoader } from '@gitlab/ui';
 import { GlBreakpointInstance as bp } from '@gitlab/ui/dist/utils';
-import { shallowMount, createLocalVue } from '@vue/test-utils';
-import { nextTick } from 'vue';
+import { shallowMount } from '@vue/test-utils';
+import Vue, { nextTick } from 'vue';
 import VueApollo from 'vue-apollo';
 import createMockApollo from 'helpers/mock_apollo_helper';
 import { extendedWrapper } from 'helpers/vue_test_utils_helper';
@@ -16,8 +16,7 @@ import {
   mockGraphqlInstructionsWindows,
 } from './mock_data';
 
-const localVue = createLocalVue();
-localVue.use(VueApollo);
+Vue.use(VueApollo);
 
 let resizeCallback;
 const MockResizeObserver = {
@@ -33,7 +32,7 @@ const MockResizeObserver = {
   },
 };
 
-localVue.directive('gl-resize-observer', MockResizeObserver);
+Vue.directive('gl-resize-observer', MockResizeObserver);
 
 jest.mock('@gitlab/ui/dist/utils');
 
@@ -52,7 +51,7 @@ describe('RunnerInstructionsModal component', () => {
   const findBinaryInstructions = () => wrapper.findByTestId('binary-instructions');
   const findRegisterCommand = () => wrapper.findByTestId('register-command');
 
-  const createComponent = () => {
+  const createComponent = ({ props, ...options } = {}) => {
     const requestHandlers = [
       [getRunnerPlatformsQuery, runnerPlatformsHandler],
       [getRunnerSetupInstructionsQuery, runnerSetupInstructionsHandler],
@@ -64,9 +63,11 @@ describe('RunnerInstructionsModal component', () => {
       shallowMount(RunnerInstructionsModal, {
         propsData: {
           modalId: 'runner-instructions-modal',
+          registrationToken: 'MY_TOKEN',
+          ...props,
         },
-        localVue,
         apolloProvider: fakeApollo,
+        ...options,
       }),
     );
   };
@@ -76,8 +77,7 @@ describe('RunnerInstructionsModal component', () => {
     runnerSetupInstructionsHandler = jest.fn().mockResolvedValue(mockGraphqlInstructions);
 
     createComponent();
-
-    await nextTick();
+    await waitForPromises();
   });
 
   afterEach(() => {
@@ -112,24 +112,38 @@ describe('RunnerInstructionsModal component', () => {
       });
     });
 
-    it('binary instructions are shown', () => {
+    it('binary instructions are shown', async () => {
+      await waitForPromises();
       const instructions = findBinaryInstructions().text();
 
       expect(instructions).toBe(installInstructions);
     });
 
-    it('register command is shown', () => {
+    it('register command is shown with a replaced token', async () => {
+      await waitForPromises();
       const instructions = findRegisterCommand().text();
 
-      expect(instructions).toBe(registerInstructions);
+      expect(instructions).toBe(
+        'sudo gitlab-runner register --url http://gdk.test:3000/ --registration-token MY_TOKEN',
+      );
+    });
+
+    describe('when a register token is not shown', () => {
+      beforeEach(async () => {
+        createComponent({ props: { registrationToken: undefined } });
+        await waitForPromises();
+      });
+
+      it('register command is shown without a defined registration token', () => {
+        const instructions = findRegisterCommand().text();
+
+        expect(instructions).toBe(registerInstructions);
+      });
     });
   });
 
   describe('after a platform and architecture are selected', () => {
-    const {
-      installInstructions,
-      registerInstructions,
-    } = mockGraphqlInstructionsWindows.data.runnerSetup;
+    const { installInstructions } = mockGraphqlInstructionsWindows.data.runnerSetup;
 
     beforeEach(async () => {
       runnerSetupInstructionsHandler.mockResolvedValue(mockGraphqlInstructionsWindows);
@@ -157,7 +171,9 @@ describe('RunnerInstructionsModal component', () => {
     it('register command is shown', () => {
       const command = findRegisterCommand().text();
 
-      expect(command).toBe(registerInstructions);
+      expect(command).toBe(
+        './gitlab-runner.exe register --url http://gdk.test:3000/ --registration-token MY_TOKEN',
+      );
     });
   });
 
@@ -183,16 +199,17 @@ describe('RunnerInstructionsModal component', () => {
       expect(findSkeletonLoader().exists()).toBe(true);
       expect(findGlLoadingIcon().exists()).toBe(false);
 
-      await nextTick(); // wait for platforms
+      await nextTick();
+      jest.runOnlyPendingTimers();
+      await nextTick();
+      await nextTick();
 
       expect(findGlLoadingIcon().exists()).toBe(true);
     });
 
     it('once loaded, should not show a loading state', async () => {
       createComponent();
-
-      await nextTick(); // wait for platforms
-      await nextTick(); // wait for architectures
+      await waitForPromises();
 
       expect(findSkeletonLoader().exists()).toBe(false);
       expect(findGlLoadingIcon().exists()).toBe(false);
@@ -215,6 +232,38 @@ describe('RunnerInstructionsModal component', () => {
     it('should not show instructions', () => {
       expect(findBinaryInstructions().exists()).toBe(false);
       expect(findRegisterCommand().exists()).toBe(false);
+    });
+  });
+
+  describe('GlModal API', () => {
+    const getGlModalStub = (methods) => {
+      return {
+        ...GlModal,
+        methods: {
+          ...GlModal.methods,
+          ...methods,
+        },
+      };
+    };
+
+    describe('show()', () => {
+      let mockShow;
+
+      beforeEach(() => {
+        mockShow = jest.fn();
+
+        createComponent({
+          stubs: {
+            GlModal: getGlModalStub({ show: mockShow }),
+          },
+        });
+      });
+
+      it('delegates show()', () => {
+        wrapper.vm.show();
+
+        expect(mockShow).toHaveBeenCalledTimes(1);
+      });
     });
   });
 });

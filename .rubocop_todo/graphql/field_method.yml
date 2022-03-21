@@ -1,0 +1,4 @@
+---
+GraphQL/FieldMethod:
+  Exclude:
+  - app/graphql/types/packages/package_details_type.rb

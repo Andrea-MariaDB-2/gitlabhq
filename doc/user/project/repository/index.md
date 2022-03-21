@@ -2,7 +2,6 @@
 stage: Create
 group: Source Code
 info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
-type: concepts, howto
 ---
 
 # Repository **(FREE)**
@@ -34,14 +33,14 @@ You can [commit your changes](https://git-scm.com/book/en/v2/Git-Basics-Recordin
 to a branch in the repository. When you use the command line, you can commit multiple times before you push.
 
 - **Commit message:**
-  A commit message identities what is being changed and why.
+  A commit message identifies what is being changed and why.
   In GitLab, you can add keywords to the commit
   message to perform one of the following actions:
   - **Trigger a GitLab CI/CD pipeline:**
   If the project is configured with [GitLab CI/CD](../../../ci/index.md),
   you trigger a pipeline per push, not per commit.
   - **Skip pipelines:**
-  Add the [`ci skip`](../../../ci/yaml/index.md#skip-pipeline) keyword to
+  Add the [`ci skip`](../../../ci/pipelines/index.md#skip-a-pipeline) keyword to
   your commit message to make GitLab CI/CD skip the pipeline.
   - **Cross-link issues and merge requests:**
   Use [cross-linking](../issues/crosslinking_issues.md#from-commit-messages)
@@ -66,8 +65,6 @@ Alternatively, you can clone directly into a code editor.
 
 ### Clone and open in Apple Xcode
 
-> [Introduced](https://gitlab.com/gitlab-org/gitlab-foss/-/issues/45820) in GitLab 11.0.
-
 Projects that contain a `.xcodeproj` or `.xcworkspace` directory can be cloned
 into Xcode on macOS.
 
@@ -82,19 +79,23 @@ prompted to open XCode.
 
 > [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/220957) in GitLab 13.10.
 
-All projects can be cloned into Visual Studio Code. To do that:
+All projects can be cloned into Visual Studio Code from the GitLab user interface, but you
+can also install the [GitLab Workflow VS Code extension](vscode.md) to clone from
+Visual Studio Code:
 
-1. From the GitLab UI, go to the project's overview page.
-1. Click **Clone**.
-1. Select **Clone with Visual Studio Code** under either HTTPS or SSH method.
-1. Select a folder to clone the project into.
+- From the GitLab interface:
+  1. Go to the project's overview page.
+  1. Select **Clone**.
+  1. Under either the **HTTPS** or **SSH** method, select **Clone with Visual Studio Code**.
+  1. Select a folder to clone the project into.
 
-When VS Code has successfully cloned your project, it opens the folder.
+     After Visual Studio Code clones your project, it opens the folder.
+- From Visual Studio Code, with the [extension](vscode.md) installed, use the
+  extension's [`Git: Clone` command](https://marketplace.visualstudio.com/items?itemName=GitLab.gitlab-workflow#clone-gitlab-projects).
 
 ## Download the code in a repository
 
-> - Support for directory download was [introduced](https://gitlab.com/gitlab-org/gitlab-foss/-/issues/24704) in GitLab 11.11.
-> - Support for [including Git LFS blobs](../../../topics/git/lfs#lfs-objects-in-project-archives) was [introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/15079) in GitLab 13.5.
+> Support for [including Git LFS blobs](../../../topics/git/lfs#lfs-objects-in-project-archives) was [introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/15079) in GitLab 13.5.
 
 You can download the source code that's stored in a repository.
 
@@ -243,6 +244,20 @@ When you [rename a user](../../profile/index.md#change-your-username),
 - The redirects are available as long as the original path is not claimed by
   another group, user, or project.
 
+## Related topics
+
+- [GitLab Workflow VS Code extension](vscode.md).
+- To lock files and prevent change conflicts, use [file locking](../file_lock.md).
+- [Repository API](../../../api/repositories.md).
+- [Find files](file_finder.md) in a repository.
+- [Branches](branches/index.md).
+- [File templates](web_editor.md#template-dropdowns).
+- [Create a directory](web_editor.md#create-a-directory).
+- [Start a merge request](web_editor.md#tips).
+- [Find file history](git_history.md).
+- [Identify changes by line (Git blame)](git_blame.md).
+- [Use Jupyter notebooks with GitLab](jupyter_notebooks/index.md).
+
 ## Troubleshooting
 
 ### Repository Languages: excessive CPU use
@@ -278,16 +293,3 @@ The same approach should also allow misidentified file types to be fixed.
    ```
 
   `*.txt` files have an entry in the heuristics file. This example prevents parsing of these files.
-
-## Related topics
-
-- To lock files and prevent change conflicts, use [file locking](../file_lock.md).
-- [Repository API](../../../api/repositories.md).
-- [Find files](file_finder.md) in a repository.
-- [Branches](branches/index.md).
-- [File templates](web_editor.md#template-dropdowns).
-- [Create a directory](web_editor.md#create-a-directory).
-- [Start a merge request](web_editor.md#tips).
-- [Find file history](git_history.md).
-- [Identify changes by line (Git blame)](git_blame.md).
-- [Use Jupyter notebooks with GitLab](jupyter_notebooks/index.md).

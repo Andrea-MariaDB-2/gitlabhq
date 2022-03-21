@@ -38,10 +38,56 @@ RSpec.describe GraphqlController do
         sign_in(user)
       end
 
+      it 'sets feature category in ApplicationContext from request' do
+        request.headers["HTTP_X_GITLAB_FEATURE_CATEGORY"] = "web_ide"
+
+        post :execute
+
+        expect(::Gitlab::ApplicationContext.current_context_attribute(:feature_category)).to eq('web_ide')
+      end
+
       it 'returns 200 when user can access API' do
         post :execute
 
         expect(response).to have_gitlab_http_status(:ok)
+      end
+
+      it 'executes a simple query with no errors' do
+        post :execute, params: { query: '{ __typename }' }
+
+        expect(response).to have_gitlab_http_status(:ok)
+        expect(json_response).to eq({ 'data' => { '__typename' => 'Query' } })
+      end
+
+      it 'executes a simple multiplexed query with no errors' do
+        multiplex = [{ query: '{ __typename }' }] * 2
+
+        post :execute, params: { _json: multiplex }
+
+        expect(response).to have_gitlab_http_status(:ok)
+        expect(json_response).to eq([
+          { 'data' => { '__typename' => 'Query' } },
+          { 'data' => { '__typename' => 'Query' } }
+        ])
+      end
+
+      it 'sets a limit on the total query size' do
+        graphql_query = "{#{(['__typename'] * 1000).join(' ')}}"
+
+        post :execute, params: { query: graphql_query }
+
+        expect(response).to have_gitlab_http_status(:unprocessable_entity)
+        expect(json_response).to eq({ 'errors' => [{ 'message' => 'Query too large' }] })
+      end
+
+      it 'sets a limit on the total query size for multiplex queries' do
+        graphql_query = "{#{(['__typename'] * 200).join(' ')}}"
+        multiplex = [{ query: graphql_query }] * 5
+
+        post :execute, params: { _json: multiplex }
+
+        expect(response).to have_gitlab_http_status(:unprocessable_entity)
+        expect(json_response).to eq({ 'errors' => [{ 'message' => 'Query too large' }] })
       end
 
       it 'returns forbidden when user cannot access API' do
@@ -78,13 +124,60 @@ RSpec.describe GraphqlController do
 
         post :execute
       end
+
+      it 'calls the track jetbrains api when trackable method' do
+        agent = 'gitlab-jetbrains-plugin/0.0.1 intellij-idea/2021.2.4 java/11.0.13 mac-os-x/aarch64/12.1'
+        request.env['HTTP_USER_AGENT'] = agent
+
+        expect(Gitlab::UsageDataCounters::JetBrainsPluginActivityUniqueCounter)
+          .to receive(:track_api_request_when_trackable).with(user_agent: agent, user: user)
+
+        post :execute
+      end
     end
 
     context 'when user uses an API token' do
       let(:user) { create(:user, last_activity_on: Date.yesterday) }
       let(:token) { create(:personal_access_token, user: user, scopes: [:api]) }
+      let(:query) { '{ __typename }' }
 
-      subject { post :execute, params: { access_token: token.token } }
+      subject { post :execute, params: { query: query, access_token: token.token } }
+
+      context 'when the user is a project bot' do
+        let(:user) { create(:user, :project_bot, last_activity_on: Date.yesterday) }
+
+        it 'updates the users last_activity_on field' do
+          expect { subject }.to change { user.reload.last_activity_on }
+        end
+
+        it "sets context's sessionless value as true" do
+          subject
+
+          expect(assigns(:context)[:is_sessionless_user]).to be true
+        end
+
+        it 'executes a simple query with no errors' do
+          subject
+
+          expect(response).to have_gitlab_http_status(:ok)
+          expect(json_response).to eq({ 'data' => { '__typename' => 'Query' } })
+        end
+
+        it 'can access resources the project_bot has access to' do
+          project_a, project_b = create_list(:project, 2, :private)
+          project_a.add_developer(user)
+
+          post :execute, params: { query: <<~GQL, access_token: token.token }
+            query {
+              a: project(fullPath: "#{project_a.full_path}") { name }
+              b: project(fullPath: "#{project_b.full_path}") { name }
+            }
+          GQL
+
+          expect(response).to have_gitlab_http_status(:ok)
+          expect(json_response).to eq({ 'data' => { 'a' => { 'name' => project_a.name }, 'b' => nil } })
+        end
+      end
 
       it 'updates the users last_activity_on field' do
         expect { subject }.to change { user.reload.last_activity_on }
@@ -101,6 +194,16 @@ RSpec.describe GraphqlController do
         request.env['HTTP_USER_AGENT'] = agent
 
         expect(Gitlab::UsageDataCounters::VSCodeExtensionActivityUniqueCounter)
+          .to receive(:track_api_request_when_trackable).with(user_agent: agent, user: user)
+
+        subject
+      end
+
+      it 'calls the track jetbrains api when trackable method' do
+        agent = 'gitlab-jetbrains-plugin/0.0.1 intellij-idea/2021.2.4 java/11.0.13 mac-os-x/aarch64/12.1'
+        request.env['HTTP_USER_AGENT'] = agent
+
+        expect(Gitlab::UsageDataCounters::JetBrainsPluginActivityUniqueCounter)
           .to receive(:track_api_request_when_trackable).with(user_agent: agent, user: user)
 
         subject
@@ -215,6 +318,17 @@ RSpec.describe GraphqlController do
 
       expect(controller).to have_received(:append_info_to_payload)
       expect(log_payload.dig(:metadata, :graphql)).to match_array(expected_logs)
+    end
+
+    it 'appends the exception in case of errors' do
+      exception = StandardError.new('boom')
+
+      expect(controller).to receive(:execute).and_raise(exception)
+
+      post :execute, params: { _json: graphql_queries }
+
+      expect(controller).to have_received(:append_info_to_payload)
+      expect(log_payload.dig(:exception_object)).to eq(exception)
     end
   end
 end

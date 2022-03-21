@@ -3,11 +3,15 @@
 require 'spec_helper'
 
 RSpec.describe NamespaceSetting, type: :model do
+  it_behaves_like 'sanitizable', :namespace_settings, %i[default_branch_name]
+
   # Relationships
   #
   describe "Associations" do
     it { is_expected.to belong_to(:namespace) }
   end
+
+  it { is_expected.to define_enum_for(:jobs_to_be_done).with_values([:basics, :move_repository, :code_storage, :exploring, :ci, :other]).with_suffix }
 
   describe "validations" do
     describe "#default_branch_name_content" do
@@ -40,14 +44,6 @@ RSpec.describe NamespaceSetting, type: :model do
         end
 
         it_behaves_like "doesn't return an error"
-      end
-
-      context "when it contains javascript tags" do
-        it "gets sanitized properly" do
-          namespace_settings.update!(default_branch_name: "hello<script>alert(1)</script>")
-
-          expect(namespace_settings.default_branch_name).to eq('hello')
-        end
       end
     end
 
@@ -127,59 +123,6 @@ RSpec.describe NamespaceSetting, type: :model do
       it 'returns the value stored for the parent settings' do
         expect(group_sharing_setting).to eq(parent.namespace_settings.prevent_sharing_groups_outside_hierarchy)
         expect(group_sharing_setting).to be_falsey
-      end
-    end
-  end
-
-  describe 'hooks related to group user cap update' do
-    let(:settings) { create(:namespace_settings, new_user_signups_cap: user_cap) }
-    let(:group) { create(:group, namespace_settings: settings) }
-
-    before do
-      allow(group).to receive(:root?).and_return(true)
-    end
-
-    context 'when updating a group with a user cap' do
-      let(:user_cap) { nil }
-
-      it 'also sets share_with_group_lock and prevent_sharing_groups_outside_hierarchy to true' do
-        expect(group.new_user_signups_cap).to be_nil
-        expect(group.share_with_group_lock).to be_falsey
-        expect(settings.prevent_sharing_groups_outside_hierarchy).to be_falsey
-
-        settings.update!(new_user_signups_cap: 10)
-        group.reload
-
-        expect(group.new_user_signups_cap).to eq(10)
-        expect(group.share_with_group_lock).to be_truthy
-        expect(settings.reload.prevent_sharing_groups_outside_hierarchy).to be_truthy
-      end
-
-      it 'has share_with_group_lock and prevent_sharing_groups_outside_hierarchy returning true for descendent groups' do
-        descendent = create(:group, parent: group)
-        desc_settings = descendent.namespace_settings
-
-        expect(descendent.share_with_group_lock).to be_falsey
-        expect(desc_settings.prevent_sharing_groups_outside_hierarchy).to be_falsey
-
-        settings.update!(new_user_signups_cap: 10)
-
-        expect(descendent.reload.share_with_group_lock).to be_truthy
-        expect(desc_settings.reload.prevent_sharing_groups_outside_hierarchy).to be_truthy
-      end
-    end
-
-    context 'when removing a user cap from namespace settings' do
-      let(:user_cap) { 10 }
-
-      it 'leaves share_with_group_lock and prevent_sharing_groups_outside_hierarchy set to true to the related group' do
-        expect(group.share_with_group_lock).to be_truthy
-        expect(settings.prevent_sharing_groups_outside_hierarchy).to be_truthy
-
-        settings.update!(new_user_signups_cap: nil)
-
-        expect(group.reload.share_with_group_lock).to be_truthy
-        expect(settings.reload.prevent_sharing_groups_outside_hierarchy).to be_truthy
       end
     end
   end

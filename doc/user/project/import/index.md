@@ -28,7 +28,7 @@ See these documents to migrate to GitLab:
 You can also import any Git repository through HTTP from the **New Project** page. Note that if the
 repository is too large, the import can timeout.
 
-You can also [connect your external repository to get CI/CD benefits](../../../ci/ci_cd_for_external_repos/index.md). **(PREMIUM)**
+You can also [connect your external repository to get CI/CD benefits](../../../ci/ci_cd_for_external_repos/index.md).
 
 ## LFS authentication
 
@@ -42,7 +42,10 @@ However, you can't import issues and merge requests this way. To retain all meta
 merge requests, use the [import/export feature](../settings/import_export.md)
 to export projects from self-managed GitLab and import those projects into GitLab.com. All GitLab
 user associations (such as comment author) are changed to the user importing the project. For more
-information, see [the import notes](../settings/import_export.md#important-notes).
+information, see the prerequisites and important notes in these sections:
+
+- [Export a project and its data](../settings/import_export.md#export-a-project-and-its-data).
+- [Import the project](../settings/import_export.md#import-a-project-and-its-data).
 
 NOTE:
 When migrating to GitLab.com, you must create users manually unless [SCIM](../../../user/group/saml_sso/scim_setup.md)
@@ -56,7 +59,7 @@ Migrate the assets in this order:
 1. [Projects](../../../api/projects.md)
 1. [Project variables](../../../api/project_level_variables.md)
 
-Keep in mind the limitations of the [import/export feature](../settings/import_export.md#exported-contents).
+Keep in mind the limitations of the [import/export feature](../settings/import_export.md#items-that-are-exported).
 
 You must still migrate your [Container Registry](../../packages/container_registry/)
 over a series of Docker pulls and pushes. Re-run any CI pipelines to retrieve any build artifacts.
@@ -76,7 +79,7 @@ a self-managed instance from an old server to a new server.
 
 The backups produced don't depend on the operating system running GitLab. You can therefore use
 the restore method to switch between different operating system distributions or versions, as long
-as the same GitLab version [is available for installation](https://docs.gitlab.com/omnibus/package-information/deprecated_os.html).
+as the same GitLab version [is available for installation](../../../administration/package_information/supported_os.md).
 
 To instead merge two self-managed GitLab instances together, use the instructions in
 [Migrate from self-managed GitLab to GitLab.com](#migrate-from-self-managed-gitlab-to-gitlabcom).
@@ -87,7 +90,7 @@ to migrate users.
 
 ## Project aliases **(PREMIUM SELF)**
 
-> [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/3264) in GitLab Premium 12.1.
+> [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/3264) in GitLab 12.1.
 
 GitLab repositories are usually accessed with a namespace and a project name. When migrating
 frequently accessed repositories to GitLab, however, you can use project aliases to access those
@@ -102,3 +105,18 @@ After an administrator creates an alias for a project, you can use the alias to 
 repository. For example, if an administrator creates the alias `gitlab` for the project
 `https://gitlab.com/gitlab-org/gitlab`, you can clone the project with
 `git clone git@gitlab.com:gitlab.git` instead of `git clone git@gitlab.com:gitlab-org/gitlab.git`.
+
+## Automate group and project import **(PREMIUM)**
+
+The GitLab Professional Services team uses [Congregate](https://gitlab.com/gitlab-org/professional-services-automation/tools/migration/congregate)
+to orchestrate user, group, and project import API calls. With Congregate, you can migrate data to
+GitLab from:
+
+- Other GitLab instances
+- GitHub Enterprise
+- GitHub.com
+- Bitbucket Server
+- Bitbucket Data Center
+
+See the [Quick Start Guide](https://gitlab.com/gitlab-org/professional-services-automation/tools/migration/congregate/-/blob/master/docs/using-congregate.md#quick-start)
+to learn how to use this approach for migrating users, groups, and projects at scale.

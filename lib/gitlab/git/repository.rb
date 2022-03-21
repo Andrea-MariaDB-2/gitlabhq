@@ -20,6 +20,7 @@ module Gitlab
       EMPTY_REPOSITORY_CHECKSUM = '0000000000000000000000000000000000000000'
 
       NoRepository = Class.new(::Gitlab::Git::BaseError)
+      RepositoryExists = Class.new(::Gitlab::Git::BaseError)
       InvalidRepository = Class.new(::Gitlab::Git::BaseError)
       InvalidBlobName = Class.new(::Gitlab::Git::BaseError)
       InvalidRef = Class.new(::Gitlab::Git::BaseError)
@@ -98,9 +99,11 @@ module Gitlab
         gitaly_repository_client.exists?
       end
 
-      def create_repository
+      def create_repository(default_branch = nil)
         wrapped_gitaly_errors do
-          gitaly_repository_client.create_repository
+          gitaly_repository_client.create_repository(default_branch)
+        rescue GRPC::AlreadyExists => e
+          raise RepositoryExists, e.message
         end
       end
 
@@ -127,6 +130,13 @@ module Gitlab
         end
       end
 
+      def find_tag(name)
+        wrapped_gitaly_errors do
+          gitaly_ref_client.find_tag(name)
+        end
+      rescue CommandError
+      end
+
       def local_branches(sort_by: nil, pagination_params: nil)
         wrapped_gitaly_errors do
           gitaly_ref_client.local_branches(sort_by: sort_by, pagination_params: pagination_params)
@@ -150,6 +160,8 @@ module Gitlab
         wrapped_gitaly_errors do
           gitaly_repository_client.remove
         end
+      rescue NoRepository
+        nil
       end
 
       def replicate(source_repository)
@@ -191,9 +203,9 @@ module Gitlab
 
       # Returns an Array of Tags
       #
-      def tags
+      def tags(sort_by: nil, pagination_params: nil)
         wrapped_gitaly_errors do
-          gitaly_ref_client.tags
+          gitaly_ref_client.tags(sort_by: sort_by, pagination_params: pagination_params)
         end
       end
 
@@ -360,18 +372,17 @@ module Gitlab
         end
       end
 
-      def new_blobs(newrev, dynamic_timeout: nil)
-        return [] if newrev.blank? || newrev == ::Gitlab::Git::BLANK_SHA
+      def new_blobs(newrevs, dynamic_timeout: nil)
+        newrevs = Array.wrap(newrevs).reject { |rev| rev.blank? || rev == ::Gitlab::Git::BLANK_SHA }
+        return [] if newrevs.empty?
 
-        strong_memoize("new_blobs_#{newrev}") do
-          if Feature.enabled?(:new_blobs_via_list_blobs)
-            blobs(['--not', '--all', '--not', newrev], with_paths: true, dynamic_timeout: dynamic_timeout)
-          else
-            wrapped_gitaly_errors do
-              gitaly_ref_client.list_new_blobs(newrev, REV_LIST_COMMIT_LIMIT, dynamic_timeout: dynamic_timeout)
-            end
-          end
+        newrevs = newrevs.uniq.sort
+
+        @new_blobs ||= Hash.new do |h, revs|
+          h[revs] = blobs(['--not', '--all', '--not'] + newrevs, with_paths: true, dynamic_timeout: dynamic_timeout)
         end
+
+        @new_blobs[newrevs]
       end
 
       # List blobs reachable via a set of revisions. Supports the
@@ -513,6 +524,17 @@ module Gitlab
         @refs_hash
       end
 
+      # Returns matching refs for OID
+      #
+      # Limit of 0 means there is no limit.
+      def refs_by_oid(oid:, limit: 0)
+        wrapped_gitaly_errors do
+          gitaly_ref_client.find_refs_by_oid(oid: oid, limit: limit)
+        end
+      rescue CommandError, TypeError, NoRepository
+        nil
+      end
+
       # Returns url for submodule
       #
       # Ex.
@@ -603,10 +625,6 @@ module Gitlab
         wrapped_gitaly_errors do
           gitaly_operation_client.rm_tag(tag_name, user)
         end
-      end
-
-      def find_tag(name)
-        tags.find { |tag| tag.name == name }
       end
 
       def merge_to_ref(user, **kwargs)
@@ -782,6 +800,12 @@ module Gitlab
         end
       end
 
+      def list_refs
+        wrapped_gitaly_errors do
+          gitaly_ref_client.list_refs
+        end
+      end
+
       # Refactoring aid; allows us to copy code from app/models/repository.rb
       def commit(ref = 'HEAD')
         Gitlab::Git::Commit.find(self, ref)
@@ -868,9 +892,9 @@ module Gitlab
         end
       end
 
-      def squash(user, squash_id, start_sha:, end_sha:, author:, message:)
+      def squash(user, start_sha:, end_sha:, author:, message:)
         wrapped_gitaly_errors do
-          gitaly_operation_client.user_squash(user, squash_id, start_sha, end_sha, author, message)
+          gitaly_operation_client.user_squash(user, start_sha, end_sha, author, message)
         end
       end
 
@@ -946,18 +970,6 @@ module Gitlab
 
       def praefect_info_client
         @praefect_info_client ||= Gitlab::GitalyClient::PraefectInfoService.new(self)
-      end
-
-      def clean_stale_repository_files
-        wrapped_gitaly_errors do
-          gitaly_repository_client.cleanup if exists?
-        end
-      rescue Gitlab::Git::CommandError => e # Don't fail if we can't cleanup
-        Gitlab::AppLogger.error("Unable to clean repository on storage #{storage} with relative path #{relative_path}: #{e.message}")
-        Gitlab::Metrics.counter(
-          :failed_repository_cleanup_total,
-          'Number of failed repository cleanup events'
-        ).increment
       end
 
       def branch_names_contains_sha(sha)

@@ -146,19 +146,22 @@
      *  Blame file
      */
     &.blame {
-      //
-      // IMPORTANT PERFORMANCE OPTIMIZATION
-      //
-      // When viewinng a blame with many commits a lot of content is rendered on the page.
-      // The line below ensures that we only render what is visible to the user, thus reducing TBT in the browser.
-      content-visibility: auto;
-
       table {
         border: 0;
         margin: 0;
       }
 
+      //
+      // IMPORTANT PERFORMANCE OPTIMIZATION
+      //
+      // When viewinng a blame with many commits a lot of content is rendered on the page.
+      // content-visibility rule below ensure that we only render what is visible to the user,
+      // thus reducing TBT in the browser.
+      // Grid is used instead of table layout because content-visibility performs better with it.
       tr {
+        content-visibility: auto;
+        display: grid;
+        grid-template-columns: 400px max-content auto;
         border-bottom: 1px solid $gray-darker;
 
         &:last-child {
@@ -167,12 +170,6 @@
       }
 
       td {
-        //
-        // IMPORTANT PERFORMANCE OPTIMIZATION
-        //
-        // When viewinng a blame with many commits a lot of content is rendered on the page.
-        // The line below ensures that we only render what is visible to the user, thus reducing TBT in the browser.
-        content-visibility: auto;
         border-top: 0;
         border-bottom: 0;
 
@@ -213,6 +210,10 @@
 
         &.lines {
           padding: 0;
+        }
+
+        .code {
+          height: 100%;
         }
       }
 
@@ -376,10 +377,6 @@ span.idiff {
     color: $gl-text-color;
   }
 
-  .file-actions .ide-edit-button {
-    z-index: 2;
-  }
-
   @include media-breakpoint-down(md) {
     .file-actions {
       margin-top: $gl-padding-8;
@@ -408,11 +405,6 @@ span.idiff {
 
 .file-fork-suggestion-note {
   margin-right: 1.5em;
-}
-
-.label-lfs {
-  color: $common-gray-light;
-  border: 1px solid $common-gray-light;
 }
 
 .preview-container {

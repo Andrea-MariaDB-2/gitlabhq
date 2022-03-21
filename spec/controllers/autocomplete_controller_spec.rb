@@ -4,7 +4,7 @@ require 'spec_helper'
 
 RSpec.describe AutocompleteController do
   let(:project) { create(:project) }
-  let(:user) { project.owner }
+  let(:user) { project.first_owner }
 
   context 'GET users' do
     let!(:user2) { create(:user) }
@@ -232,6 +232,18 @@ RSpec.describe AutocompleteController do
         get(:users, params: { merge_request_iid: merge_request.iid, project_id: project.id })
 
         expect(json_response.first).to have_key('can_merge')
+      end
+    end
+
+    it_behaves_like 'rate limited endpoint', rate_limit_key: :search_rate_limit do
+      let(:current_user) { user }
+
+      def request
+        get(:users, params: { search: 'foo@bar.com' })
+      end
+
+      before do
+        sign_in(current_user)
       end
     end
   end

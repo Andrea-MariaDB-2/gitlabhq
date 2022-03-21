@@ -1,9 +1,11 @@
-import { mount } from '@vue/test-utils';
+import { nextTick } from 'vue';
 import AxiosMockAdapter from 'axios-mock-adapter';
 import $ from 'jquery';
 import { TEST_HOST, FIXTURES_PATH } from 'spec/test_constants';
 import axios from '~/lib/utils/axios_utils';
 import MarkdownField from '~/vue_shared/components/markdown/field.vue';
+import MarkdownFieldHeader from '~/vue_shared/components/markdown/header.vue';
+import { mountExtended } from 'helpers/vue_test_utils_helper';
 
 const markdownPreviewPath = `${TEST_HOST}/preview`;
 const markdownDocsPath = `${TEST_HOST}/docs`;
@@ -11,8 +13,8 @@ const textareaValue = 'testing\n123';
 const uploadsPath = 'test/uploads';
 
 function assertMarkdownTabs(isWrite, writeLink, previewLink, wrapper) {
-  expect(writeLink.element.parentNode.classList.contains('active')).toBe(isWrite);
-  expect(previewLink.element.parentNode.classList.contains('active')).toBe(!isWrite);
+  expect(writeLink.element.children[0].classList.contains('active')).toBe(isWrite);
+  expect(previewLink.element.children[0].classList.contains('active')).toBe(!isWrite);
   expect(wrapper.find('.md-preview-holder').element.style.display).toBe(isWrite ? 'none' : '');
 }
 
@@ -28,14 +30,13 @@ describe('Markdown field component', () => {
 
   afterEach(() => {
     subject.destroy();
-    subject = null;
     axiosMock.restore();
   });
 
-  function createSubject(lines = []) {
+  function createSubject({ lines = [], enablePreview = true } = {}) {
     // We actually mount a wrapper component so that we can force Vue to rerender classes in order to test a regression
     // caused by mixing Vanilla JS and Vue.
-    subject = mount(
+    subject = mountExtended(
       {
         components: {
           MarkdownField,
@@ -61,15 +62,21 @@ describe('Markdown field component', () => {
           isSubmitting: false,
           textareaValue,
           lines,
+          enablePreview,
+        },
+        provide: {
+          glFeatures: {
+            contactsAutocomplete: true,
+          },
         },
       },
     );
   }
 
-  const getPreviewLink = () => subject.find('.nav-links .js-preview-link');
-  const getWriteLink = () => subject.find('.nav-links .js-write-link');
+  const getPreviewLink = () => subject.findByTestId('preview-tab');
+  const getWriteLink = () => subject.findByTestId('write-tab');
   const getMarkdownButton = () => subject.find('.js-md');
-  const getAllMarkdownButtons = () => subject.findAll('.js-md');
+  const getListBulletedButton = () => subject.findAll('.js-md[title="Add a bullet list"]');
   const getVideo = () => subject.find('video');
   const getAttachButton = () => subject.find('.button-attach-file');
   const clickAttachButton = () => getAttachButton().trigger('click');
@@ -99,115 +106,100 @@ describe('Markdown field component', () => {
         axiosMock.onPost(markdownPreviewPath).reply(200, { body: previewHTML });
       });
 
-      it('sets preview link as active', () => {
+      it('sets preview link as active', async () => {
         previewLink = getPreviewLink();
-        previewLink.trigger('click');
+        previewLink.vm.$emit('click', { target: {} });
 
-        return subject.vm.$nextTick().then(() => {
-          expect(previewLink.element.parentNode.classList.contains('active')).toBeTruthy();
-        });
+        await nextTick();
+        expect(previewLink.element.children[0].classList.contains('active')).toBe(true);
       });
 
-      it('shows preview loading text', () => {
+      it('shows preview loading text', async () => {
         previewLink = getPreviewLink();
-        previewLink.trigger('click');
+        previewLink.vm.$emit('click', { target: {} });
 
-        return subject.vm.$nextTick(() => {
-          expect(subject.find('.md-preview-holder').element.textContent.trim()).toContain(
-            'Loading…',
-          );
-        });
+        await nextTick();
+        expect(subject.find('.md-preview-holder').element.textContent.trim()).toContain('Loading…');
       });
 
-      it('renders markdown preview and GFM', () => {
+      it('renders markdown preview and GFM', async () => {
         const renderGFMSpy = jest.spyOn($.fn, 'renderGFM');
 
         previewLink = getPreviewLink();
 
-        previewLink.trigger('click');
+        previewLink.vm.$emit('click', { target: {} });
 
-        return axios.waitFor(markdownPreviewPath).then(() => {
-          expect(subject.find('.md-preview-holder').element.innerHTML).toContain(previewHTML);
-          expect(renderGFMSpy).toHaveBeenCalled();
-        });
+        await axios.waitFor(markdownPreviewPath);
+        expect(subject.find('.md-preview-holder').element.innerHTML).toContain(previewHTML);
+        expect(renderGFMSpy).toHaveBeenCalled();
       });
 
-      it('calls video.pause() on comment input when isSubmitting is changed to true', () => {
+      it('calls video.pause() on comment input when isSubmitting is changed to true', async () => {
         previewLink = getPreviewLink();
-        previewLink.trigger('click');
+        previewLink.vm.$emit('click', { target: {} });
 
-        let callPause;
+        await axios.waitFor(markdownPreviewPath);
+        const video = getVideo();
+        const callPause = jest.spyOn(video.element, 'pause').mockImplementation(() => true);
 
-        return axios
-          .waitFor(markdownPreviewPath)
-          .then(() => {
-            const video = getVideo();
-            callPause = jest.spyOn(video.element, 'pause').mockImplementation(() => true);
+        subject.setProps({ isSubmitting: true });
 
-            subject.setProps({ isSubmitting: true });
-
-            return subject.vm.$nextTick();
-          })
-          .then(() => {
-            expect(callPause).toHaveBeenCalled();
-          });
+        await nextTick();
+        expect(callPause).toHaveBeenCalled();
       });
 
       it('clicking already active write or preview link does nothing', async () => {
         writeLink = getWriteLink();
         previewLink = getPreviewLink();
 
-        writeLink.trigger('click');
-        await subject.vm.$nextTick();
+        writeLink.vm.$emit('click', { target: {} });
+        await nextTick();
 
         assertMarkdownTabs(true, writeLink, previewLink, subject);
-        writeLink.trigger('click');
-        await subject.vm.$nextTick();
+        writeLink.vm.$emit('click', { target: {} });
+        await nextTick();
 
         assertMarkdownTabs(true, writeLink, previewLink, subject);
-        previewLink.trigger('click');
-        await subject.vm.$nextTick();
+        previewLink.vm.$emit('click', { target: {} });
+        await nextTick();
 
         assertMarkdownTabs(false, writeLink, previewLink, subject);
-        previewLink.trigger('click');
-        await subject.vm.$nextTick();
+        previewLink.vm.$emit('click', { target: {} });
+        await nextTick();
 
         assertMarkdownTabs(false, writeLink, previewLink, subject);
       });
     });
 
     describe('markdown buttons', () => {
-      it('converts single words', () => {
+      it('converts single words', async () => {
         const textarea = subject.find('textarea').element;
         textarea.setSelectionRange(0, 7);
         const markdownButton = getMarkdownButton();
         markdownButton.trigger('click');
 
-        return subject.vm.$nextTick(() => {
-          expect(textarea.value).toContain('**testing**');
-        });
+        await nextTick();
+        expect(textarea.value).toContain('**testing**');
       });
 
-      it('converts a line', () => {
+      it('converts a line', async () => {
         const textarea = subject.find('textarea').element;
         textarea.setSelectionRange(0, 0);
-        const markdownButton = getAllMarkdownButtons().wrappers[5];
+        const markdownButton = getListBulletedButton();
         markdownButton.trigger('click');
 
-        return subject.vm.$nextTick(() => {
-          expect(textarea.value).toContain('- testing');
-        });
+        await nextTick();
+        expect(textarea.value).toContain('- testing');
       });
 
-      it('converts multiple lines', () => {
+      it('converts multiple lines', async () => {
         const textarea = subject.find('textarea').element;
         textarea.setSelectionRange(0, 50);
-        const markdownButton = getAllMarkdownButtons().wrappers[5];
+        const markdownButton = getListBulletedButton();
         markdownButton.trigger('click');
 
-        return subject.vm.$nextTick(() => {
-          expect(textarea.value).toContain('- testing\n- 123');
-        });
+        await nextTick();
+        expect(textarea.value).toContain('- testing\n- 123');
       });
     });
 
@@ -228,7 +220,7 @@ describe('Markdown field component', () => {
         // Do something to trigger rerendering the class
         subject.setProps({ wrapperClasses: 'foo' });
 
-        await subject.vm.$nextTick();
+        await nextTick();
       });
 
       it('should have rerendered classes and kept gfm-form', () => {
@@ -242,16 +234,80 @@ describe('Markdown field component', () => {
 
         expect(dropzoneSpy).toHaveBeenCalled();
       });
+
+      describe('mentioning all users', () => {
+        const users = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11].map((i) => `user_${i}`);
+
+        it('shows warning on mention of all users', async () => {
+          axiosMock.onPost(markdownPreviewPath).reply(200, { references: { users } });
+
+          subject.setProps({ textareaValue: 'hello @all' });
+
+          await axios.waitFor(markdownPreviewPath).then(() => {
+            expect(subject.text()).toContain(
+              'You are about to add 11 people to the discussion. They will all receive a notification.',
+            );
+          });
+        });
+
+        it('removes warning when all mention is removed', async () => {
+          axiosMock.onPost(markdownPreviewPath).reply(200, { references: { users } });
+
+          subject.setProps({ textareaValue: 'hello @all' });
+
+          await axios.waitFor(markdownPreviewPath);
+
+          jest.spyOn(axios, 'post');
+
+          subject.setProps({ textareaValue: 'hello @allan' });
+
+          await nextTick();
+
+          expect(axios.post).not.toHaveBeenCalled();
+          expect(subject.text()).not.toContain(
+            'You are about to add 11 people to the discussion. They will all receive a notification.',
+          );
+        });
+
+        it('removes warning when all mention is removed while endpoint is loading', async () => {
+          axiosMock.onPost(markdownPreviewPath).reply(200, { references: { users } });
+          jest.spyOn(axios, 'post');
+
+          subject.setProps({ textareaValue: 'hello @all' });
+
+          await nextTick();
+
+          subject.setProps({ textareaValue: 'hello @allan' });
+
+          await axios.waitFor(markdownPreviewPath);
+
+          expect(axios.post).toHaveBeenCalled();
+          expect(subject.text()).not.toContain(
+            'You are about to add 11 people to the discussion. They will all receive a notification.',
+          );
+        });
+      });
     });
   });
 
   describe('suggestions', () => {
     it('escapes new line characters', () => {
-      createSubject([{ rich_text: 'hello world\\n' }]);
+      createSubject({ lines: [{ rich_text: 'hello world\\n' }] });
 
       expect(subject.find('[data-testid="markdownHeader"]').props('lineContent')).toBe(
         'hello world%br',
       );
     });
+  });
+
+  it('allows enabling and disabling Markdown Preview', () => {
+    createSubject({ enablePreview: false });
+
+    expect(subject.findComponent(MarkdownFieldHeader).props('enablePreview')).toBe(false);
+
+    subject.destroy();
+    createSubject({ enablePreview: true });
+
+    expect(subject.findComponent(MarkdownFieldHeader).props('enablePreview')).toBe(true);
   });
 });

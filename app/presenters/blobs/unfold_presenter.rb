@@ -6,6 +6,8 @@ module Blobs
     include ActiveModel::AttributeAssignment
     include Gitlab::Utils::StrongMemoize
 
+    presents ::Blob
+
     attribute :full, :boolean, default: false
     attribute :since, :integer, default: 1
     attribute :to, :integer, default: 1
@@ -106,7 +108,7 @@ module Blobs
     def limit(lines)
       return lines if full?
 
-      lines[since - 1..to - 1]
+      lines[since - 1..to - 1] || []
     end
   end
 end

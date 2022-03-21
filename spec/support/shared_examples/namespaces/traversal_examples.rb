@@ -22,6 +22,8 @@ RSpec.shared_examples 'namespace traversal' do
   let_it_be(:deep_nested_group) { create(:group, parent: nested_group) }
   let_it_be(:very_deep_nested_group) { create(:group, parent: deep_nested_group) }
   let_it_be(:groups) { [group, nested_group, deep_nested_group, very_deep_nested_group] }
+  let_it_be(:project) { create(:project, group: nested_group) }
+  let_it_be(:project_namespace) { project.project_namespace }
 
   describe '#root_ancestor' do
     it 'returns the correct root ancestor' do
@@ -65,6 +67,7 @@ RSpec.shared_examples 'namespace traversal' do
       expect(deep_nested_group.ancestors).to contain_exactly(group, nested_group)
       expect(nested_group.ancestors).to contain_exactly(group)
       expect(group.ancestors).to eq([])
+      expect(project_namespace.ancestors).to be_empty
     end
 
     context 'with asc hierarchy_order' do
@@ -73,6 +76,7 @@ RSpec.shared_examples 'namespace traversal' do
         expect(deep_nested_group.ancestors(hierarchy_order: :asc)).to eq [nested_group, group]
         expect(nested_group.ancestors(hierarchy_order: :asc)).to eq [group]
         expect(group.ancestors(hierarchy_order: :asc)).to eq([])
+        expect(project_namespace.ancestors(hierarchy_order: :asc)).to be_empty
       end
     end
 
@@ -82,6 +86,7 @@ RSpec.shared_examples 'namespace traversal' do
         expect(deep_nested_group.ancestors(hierarchy_order: :desc)).to eq [group, nested_group]
         expect(nested_group.ancestors(hierarchy_order: :desc)).to eq [group]
         expect(group.ancestors(hierarchy_order: :desc)).to eq([])
+        expect(project_namespace.ancestors(hierarchy_order: :desc)).to be_empty
       end
     end
 
@@ -98,6 +103,7 @@ RSpec.shared_examples 'namespace traversal' do
       expect(deep_nested_group.ancestor_ids).to contain_exactly(group.id, nested_group.id)
       expect(nested_group.ancestor_ids).to contain_exactly(group.id)
       expect(group.ancestor_ids).to be_empty
+      expect(project_namespace.ancestor_ids).to be_empty
     end
 
     context 'with asc hierarchy_order' do
@@ -106,6 +112,7 @@ RSpec.shared_examples 'namespace traversal' do
         expect(deep_nested_group.ancestor_ids(hierarchy_order: :asc)).to eq [nested_group.id, group.id]
         expect(nested_group.ancestor_ids(hierarchy_order: :asc)).to eq [group.id]
         expect(group.ancestor_ids(hierarchy_order: :asc)).to eq([])
+        expect(project_namespace.ancestor_ids(hierarchy_order: :asc)).to eq([])
       end
     end
 
@@ -115,6 +122,7 @@ RSpec.shared_examples 'namespace traversal' do
         expect(deep_nested_group.ancestor_ids(hierarchy_order: :desc)).to eq [group.id, nested_group.id]
         expect(nested_group.ancestor_ids(hierarchy_order: :desc)).to eq [group.id]
         expect(group.ancestor_ids(hierarchy_order: :desc)).to eq([])
+        expect(project_namespace.ancestor_ids(hierarchy_order: :desc)).to eq([])
       end
     end
 
@@ -131,6 +139,7 @@ RSpec.shared_examples 'namespace traversal' do
       expect(deep_nested_group.self_and_ancestors).to contain_exactly(group, nested_group, deep_nested_group)
       expect(nested_group.self_and_ancestors).to contain_exactly(group, nested_group)
       expect(group.self_and_ancestors).to contain_exactly(group)
+      expect(project_namespace.self_and_ancestors).to contain_exactly(project_namespace)
     end
 
     context 'with asc hierarchy_order' do
@@ -139,6 +148,7 @@ RSpec.shared_examples 'namespace traversal' do
         expect(deep_nested_group.self_and_ancestors(hierarchy_order: :asc)).to eq [deep_nested_group, nested_group, group]
         expect(nested_group.self_and_ancestors(hierarchy_order: :asc)).to eq [nested_group, group]
         expect(group.self_and_ancestors(hierarchy_order: :asc)).to eq([group])
+        expect(project_namespace.self_and_ancestors(hierarchy_order: :asc)).to eq([project_namespace])
       end
     end
 
@@ -148,6 +158,7 @@ RSpec.shared_examples 'namespace traversal' do
         expect(deep_nested_group.self_and_ancestors(hierarchy_order: :desc)).to eq [group, nested_group, deep_nested_group]
         expect(nested_group.self_and_ancestors(hierarchy_order: :desc)).to eq [group, nested_group]
         expect(group.self_and_ancestors(hierarchy_order: :desc)).to eq([group])
+        expect(project_namespace.self_and_ancestors(hierarchy_order: :desc)).to eq([project_namespace])
       end
     end
 
@@ -164,6 +175,7 @@ RSpec.shared_examples 'namespace traversal' do
       expect(deep_nested_group.self_and_ancestor_ids).to contain_exactly(group.id, nested_group.id, deep_nested_group.id)
       expect(nested_group.self_and_ancestor_ids).to contain_exactly(group.id, nested_group.id)
       expect(group.self_and_ancestor_ids).to contain_exactly(group.id)
+      expect(project_namespace.self_and_ancestor_ids).to contain_exactly(project_namespace.id)
     end
 
     context 'with asc hierarchy_order' do
@@ -172,6 +184,7 @@ RSpec.shared_examples 'namespace traversal' do
         expect(deep_nested_group.self_and_ancestor_ids(hierarchy_order: :asc)).to eq [deep_nested_group.id, nested_group.id, group.id]
         expect(nested_group.self_and_ancestor_ids(hierarchy_order: :asc)).to eq [nested_group.id, group.id]
         expect(group.self_and_ancestor_ids(hierarchy_order: :asc)).to eq([group.id])
+        expect(project_namespace.self_and_ancestor_ids(hierarchy_order: :asc)).to eq([project_namespace.id])
       end
     end
 
@@ -181,6 +194,7 @@ RSpec.shared_examples 'namespace traversal' do
         expect(deep_nested_group.self_and_ancestor_ids(hierarchy_order: :desc)).to eq [group.id, nested_group.id, deep_nested_group.id]
         expect(nested_group.self_and_ancestor_ids(hierarchy_order: :desc)).to eq [group.id, nested_group.id]
         expect(group.self_and_ancestor_ids(hierarchy_order: :desc)).to eq([group.id])
+        expect(project_namespace.self_and_ancestor_ids(hierarchy_order: :desc)).to eq([project_namespace.id])
       end
     end
 
@@ -188,6 +202,58 @@ RSpec.shared_examples 'namespace traversal' do
       let_it_be(:groups) { [nested_group, deep_nested_group, very_deep_nested_group] }
 
       it_behaves_like 'recursive version', :self_and_ancestor_ids
+    end
+  end
+
+  shared_examples '#ancestors_upto' do
+    let(:parent) { create(:group) }
+    let(:child) { create(:group, parent: parent) }
+    let(:child2) { create(:group, parent: child) }
+
+    it 'returns all ancestors when no namespace is given' do
+      expect(child2.ancestors_upto).to contain_exactly(child, parent)
+    end
+
+    it 'includes ancestors upto but excluding the given ancestor' do
+      expect(child2.ancestors_upto(parent)).to contain_exactly(child)
+    end
+
+    context 'with asc hierarchy_order' do
+      it 'returns the correct ancestor ids' do
+        expect(child2.ancestors_upto(hierarchy_order: :asc)).to eq([child, parent])
+      end
+    end
+
+    context 'with desc hierarchy_order' do
+      it 'returns the correct ancestor ids' do
+        expect(child2.ancestors_upto(hierarchy_order: :desc)).to eq([parent, child])
+      end
+    end
+
+    describe '#recursive_self_and_ancestor_ids' do
+      it 'is equivalent to ancestors_upto' do
+        recursive_result = child2.recursive_ancestors_upto(parent)
+        linear_result = child2.ancestors_upto(parent)
+        expect(linear_result).to match_array recursive_result
+      end
+
+      it 'makes a recursive query' do
+        expect { child2.recursive_ancestors_upto.try(:load) }.to make_queries_matching(/WITH RECURSIVE/)
+      end
+    end
+  end
+
+  describe '#ancestors_upto' do
+    context 'with use_traversal_ids_for_ancestors_upto enabled' do
+      include_examples '#ancestors_upto'
+    end
+
+    context 'with use_traversal_ids_for_ancestors_upto disabled' do
+      before do
+        stub_feature_flags(use_traversal_ids_for_ancestors_upto: false)
+      end
+
+      include_examples '#ancestors_upto'
     end
   end
 
@@ -204,6 +270,10 @@ RSpec.shared_examples 'namespace traversal' do
 
     describe '#recursive_descendants' do
       it_behaves_like 'recursive version', :descendants
+    end
+
+    it 'does not include project namespaces' do
+      expect(group.descendants.to_a).not_to include(project_namespace)
     end
   end
 
@@ -222,6 +292,10 @@ RSpec.shared_examples 'namespace traversal' do
       let_it_be(:groups) { [group, nested_group, deep_nested_group] }
 
       it_behaves_like 'recursive version', :self_and_descendants
+    end
+
+    it 'does not include project namespaces' do
+      expect(group.self_and_descendants.to_a).not_to include(project_namespace)
     end
   end
 

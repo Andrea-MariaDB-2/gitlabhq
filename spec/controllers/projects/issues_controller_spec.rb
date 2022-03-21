@@ -72,7 +72,21 @@ RSpec.describe Projects::IssuesController do
         project.add_developer(user)
       end
 
-      it_behaves_like "issuables list meta-data", :issue
+      context 'when issues_full_text_search is disabled' do
+        before do
+          stub_feature_flags(issues_full_text_search: false)
+        end
+
+        it_behaves_like 'issuables list meta-data', :issue
+      end
+
+      context 'when issues_full_text_search is enabled' do
+        before do
+          stub_feature_flags(issues_full_text_search: true)
+        end
+
+        it_behaves_like 'issuables list meta-data', :issue
+      end
 
       it_behaves_like 'set sort order from user preference' do
         let(:sorting_param) { 'updated_asc' }
@@ -106,6 +120,14 @@ RSpec.describe Projects::IssuesController do
 
         get :index, params: { namespace_id: project.namespace, project_id: project }
         expect(response).to have_gitlab_http_status(:not_found)
+      end
+    end
+
+    it_behaves_like 'issuable list with anonymous search disabled' do
+      let(:params) { { namespace_id: project.namespace, project_id: project } }
+
+      before do
+        project.update!(visibility_level: Gitlab::VisibilityLevel::PUBLIC)
       end
     end
 
@@ -193,32 +215,6 @@ RSpec.describe Projects::IssuesController do
       expect(response).to have_gitlab_http_status(:ok)
       expect(json_response['issue_email_participants']).to contain_exactly({ "email" => participants[0].email }, { "email" => participants[1].email })
     end
-
-    context 'with the invite_members_in_comment experiment', :experiment do
-      context 'when user can invite' do
-        before do
-          stub_experiments(invite_members_in_comment: :invite_member_link)
-          project.add_maintainer(user)
-        end
-
-        it 'assigns the candidate experience and tracks the event' do
-          expect(experiment(:invite_members_in_comment)).to track(:view, property: project.root_ancestor.id.to_s)
-            .for(:invite_member_link)
-            .with_context(namespace: project.root_ancestor)
-            .on_next_instance
-
-          get :show, params: { namespace_id: project.namespace, project_id: project, id: issue.iid }
-        end
-      end
-
-      context 'when user can not invite' do
-        it 'does not track the event' do
-          expect(experiment(:invite_members_in_comment)).not_to track(:view)
-
-          get :show, params: { namespace_id: project.namespace, project_id: project, id: issue.iid }
-        end
-      end
-    end
   end
 
   describe 'GET #new' do
@@ -300,6 +296,8 @@ RSpec.describe Projects::IssuesController do
 
       it 'fills in an issue for a discussion' do
         note = create(:note_on_merge_request, project: project)
+
+        expect(Gitlab::UsageDataCounters::MergeRequestActivityUniqueCounter).to receive(:track_resolve_thread_in_issue_action).with(user: user)
 
         get :new, params: { namespace_id: project.namespace.path, project_id: project, merge_request_to_resolve_discussions_of: note.noteable.iid, discussion_to_resolve: note.discussion_id }
 
@@ -518,10 +516,7 @@ RSpec.describe Projects::IssuesController do
 
       context 'with valid params' do
         it 'reorders issues and returns a successful 200 response' do
-          reorder_issue(issue1,
-            move_after_id: issue2.id,
-            move_before_id: issue3.id,
-            group_full_path: group.full_path)
+          reorder_issue(issue1, move_after_id: issue2.id, move_before_id: issue3.id)
 
           [issue1, issue2, issue3].map(&:reload)
 
@@ -547,12 +542,10 @@ RSpec.describe Projects::IssuesController do
         end
 
         it 'returns a unprocessable entity 422 response for issues not in group' do
-          another_group = create(:group)
+          other_group_project = create(:project, group: create(:group))
+          other_group_issue = create(:issue, project: other_group_project)
 
-          reorder_issue(issue1,
-            move_after_id: issue2.id,
-            move_before_id: issue3.id,
-            group_full_path: another_group.full_path)
+          reorder_issue(issue1, move_after_id: issue2.id, move_before_id: other_group_issue.id)
 
           expect(response).to have_gitlab_http_status(:unprocessable_entity)
         end
@@ -571,15 +564,14 @@ RSpec.describe Projects::IssuesController do
       end
     end
 
-    def reorder_issue(issue, move_after_id: nil, move_before_id: nil, group_full_path: nil)
+    def reorder_issue(issue, move_after_id: nil, move_before_id: nil)
       put :reorder,
            params: {
                namespace_id: project.namespace.to_param,
                project_id: project,
                id: issue.iid,
                move_after_id: move_after_id,
-               move_before_id: move_before_id,
-               group_full_path: group_full_path
+               move_before_id: move_before_id
            },
            format: :json
     end
@@ -627,11 +619,11 @@ RSpec.describe Projects::IssuesController do
         end
       end
 
-      context 'when the SpamVerdictService disallows' do
+      context 'when an issue is identified as spam' do
         before do
           stub_application_setting(recaptcha_enabled: true)
-          expect_next_instance_of(Spam::SpamVerdictService) do |verdict_service|
-            expect(verdict_service).to receive(:execute).and_return(CONDITIONAL_ALLOW)
+          allow_next_instance_of(Spam::AkismetService) do |akismet_service|
+            allow(akismet_service).to receive(:spam?).and_return(true)
           end
         end
 
@@ -948,8 +940,8 @@ RSpec.describe Projects::IssuesController do
         context 'when an issue is identified as spam' do
           context 'when recaptcha is not verified' do
             before do
-              expect_next_instance_of(Spam::SpamVerdictService) do |verdict_service|
-                expect(verdict_service).to receive(:execute).and_return(CONDITIONAL_ALLOW)
+              allow_next_instance_of(Spam::AkismetService) do |akismet_service|
+                allow(akismet_service).to receive(:spam?).and_return(true)
               end
             end
 
@@ -1026,6 +1018,7 @@ RSpec.describe Projects::IssuesController do
             end
 
             it 'returns 200 status' do
+              update_verified_issue
               expect(response).to have_gitlab_http_status(:ok)
             end
 
@@ -1071,33 +1064,6 @@ RSpec.describe Projects::IssuesController do
         # Follow-up to get rid of this `2 * label.count` requirement: https://gitlab.com/gitlab-org/gitlab-foss/issues/52230
         expect { issue.update!(description: [issue.description, labels].join(' ')) }
           .not_to exceed_query_limit(control_count + 2 * labels.count)
-      end
-
-      context 'real-time sidebar feature flag' do
-        using RSpec::Parameterized::TableSyntax
-
-        let_it_be(:project) { create(:project, :public) }
-        let_it_be(:issue) { create(:issue, project: project) }
-
-        where(:action_cable_in_app_enabled, :feature_flag_enabled, :gon_feature_flag) do
-          true  | true  | true
-          true  | false | true
-          false | true  | true
-          false | false | false
-        end
-
-        with_them do
-          before do
-            expect(Gitlab::ActionCable::Config).to receive(:in_app?).and_return(action_cable_in_app_enabled)
-            stub_feature_flags(real_time_issue_sidebar: feature_flag_enabled)
-          end
-
-          it 'broadcasts to the issues channel based on ActionCable and feature flag values' do
-            go(id: issue.to_param)
-
-            expect(Gon.features).to include('realTimeIssueSidebar' => gon_feature_flag)
-          end
-        end
       end
 
       it 'logs the view with Gitlab::Search::RecentIssues' do
@@ -1176,12 +1142,31 @@ RSpec.describe Projects::IssuesController do
       project.issues.first
     end
 
+    context 'when creating an incident' do
+      it 'sets the correct issue_type' do
+        issue = post_new_issue(issue_type: 'incident')
+
+        expect(issue.issue_type).to eq('incident')
+        expect(issue.work_item_type.base_type).to eq('incident')
+      end
+    end
+
+    context 'when trying to create a task' do
+      it 'defaults to issue type' do
+        issue = post_new_issue(issue_type: 'task')
+
+        expect(issue.issue_type).to eq('issue')
+        expect(issue.work_item_type.base_type).to eq('issue')
+      end
+    end
+
     it 'creates the issue successfully', :aggregate_failures do
       issue = post_new_issue
 
       expect(issue).to be_a(Issue)
       expect(issue.persisted?).to eq(true)
       expect(issue.issue_type).to eq('issue')
+      expect(issue.work_item_type.base_type).to eq('issue')
     end
 
     context 'resolving discussions in MergeRequest' do
@@ -1261,11 +1246,11 @@ RSpec.describe Projects::IssuesController do
         end
       end
 
-      context 'when SpamVerdictService requires recaptcha' do
+      context 'when an issue is identified as spam and requires recaptcha' do
         context 'when captcha is not verified' do
           before do
-            expect_next_instance_of(Spam::SpamVerdictService) do |verdict_service|
-              expect(verdict_service).to receive(:execute).and_return(CONDITIONAL_ALLOW)
+            allow_next_instance_of(Spam::AkismetService) do |akismet_service|
+              allow(akismet_service).to receive(:spam?).and_return(true)
             end
           end
 
@@ -1386,44 +1371,47 @@ RSpec.describe Projects::IssuesController do
       end
     end
 
-    context 'when the endpoint receives requests above the limit' do
+    context 'when the endpoint receives requests above the limit', :freeze_time, :clean_gitlab_redis_rate_limiting do
       before do
-        stub_application_setting(issues_create_limit: 5)
+        stub_application_setting(issues_create_limit: 1)
       end
 
-      it 'prevents from creating more issues', :request_store do
-        5.times { post_new_issue }
+      context 'when issue creation limits imposed' do
+        it 'prevents from creating more issues', :request_store do
+          post_new_issue
 
-        expect { post_new_issue }
-          .to change { Gitlab::GitalyClient.get_request_count }.by(1) # creates 1 projects and 0 issues
+          expect { post_new_issue }
+            .to change { Gitlab::GitalyClient.get_request_count }.by(1) # creates 1 projects and 0 issues
 
-        post_new_issue
-        expect(response.body).to eq(_('This endpoint has been requested too many times. Try again later.'))
-        expect(response).to have_gitlab_http_status(:too_many_requests)
-      end
+          post_new_issue
 
-      it 'logs the event on auth.log' do
-        attributes = {
-          message: 'Application_Rate_Limiter_Request',
-          env: :issues_create_request_limit,
-          remote_ip: '0.0.0.0',
-          request_method: 'POST',
-          path: "/#{project.full_path}/-/issues",
-          user_id: user.id,
-          username: user.username
-        }
+          expect(response.body).to eq(_('This endpoint has been requested too many times. Try again later.'))
+          expect(response).to have_gitlab_http_status(:too_many_requests)
+        end
 
-        expect(Gitlab::AuthLogger).to receive(:error).with(attributes).once
-
-        project.add_developer(user)
-        sign_in(user)
-
-        6.times do
-          post :create, params: {
-            namespace_id: project.namespace.to_param,
-            project_id: project,
-            issue: { title: 'Title', description: 'Description' }
+        it 'logs the event on auth.log' do
+          attributes = {
+            message: 'Application_Rate_Limiter_Request',
+            env: :issues_create_request_limit,
+            remote_ip: '0.0.0.0',
+            request_method: 'POST',
+            path: "/#{project.full_path}/-/issues",
+            user_id: user.id,
+            username: user.username
           }
+
+          expect(Gitlab::AuthLogger).to receive(:error).with(attributes).once
+
+          project.add_developer(user)
+          sign_in(user)
+
+          2.times do
+            post :create, params: {
+              namespace_id: project.namespace.to_param,
+              project_id: project,
+              issue: { title: 'Title', description: 'Description' }
+            }
+          end
         end
       end
     end
@@ -1937,42 +1925,6 @@ RSpec.describe Projects::IssuesController do
 
         expect(response).to redirect_to(designs_project_issue_path(new_project, issue))
         expect(response).to have_gitlab_http_status(:moved_permanently)
-      end
-    end
-  end
-
-  context 'private project with token authentication' do
-    let_it_be(:private_project) { create(:project, :private) }
-
-    it_behaves_like 'authenticates sessionless user', :index, :atom, ignore_incrementing: true do
-      before do
-        default_params.merge!(project_id: private_project, namespace_id: private_project.namespace)
-
-        private_project.add_maintainer(user)
-      end
-    end
-
-    it_behaves_like 'authenticates sessionless user', :calendar, :ics, ignore_incrementing: true do
-      before do
-        default_params.merge!(project_id: private_project, namespace_id: private_project.namespace)
-
-        private_project.add_maintainer(user)
-      end
-    end
-  end
-
-  context 'public project with token authentication' do
-    let_it_be(:public_project) { create(:project, :public) }
-
-    it_behaves_like 'authenticates sessionless user', :index, :atom, public: true do
-      before do
-        default_params.merge!(project_id: public_project, namespace_id: public_project.namespace)
-      end
-    end
-
-    it_behaves_like 'authenticates sessionless user', :calendar, :ics, public: true do
-      before do
-        default_params.merge!(project_id: public_project, namespace_id: public_project.namespace)
       end
     end
   end

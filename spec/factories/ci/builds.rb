@@ -5,6 +5,7 @@ FactoryBot.define do
     name { 'test' }
     add_attribute(:protected) { false }
     created_at { 'Di 29. Okt 09:50:00 CET 2013' }
+    scheduling_type { 'stage' }
     pending
 
     options do
@@ -33,6 +34,8 @@ FactoryBot.define do
     end
 
     trait :dependent do
+      scheduling_type { 'dag' }
+
       transient do
         sequence(:needed_name) { |n| "dependency #{n}" }
         needed { association(:ci_build, name: needed_name, pipeline: pipeline) }
@@ -282,6 +285,12 @@ FactoryBot.define do
       end
     end
 
+    trait :unarchived_trace_artifact do
+      after(:create) do |build, evaluator|
+        create(:ci_job_artifact, :unarchived_trace_artifact, job: build)
+      end
+    end
+
     trait :trace_with_duplicate_sections do
       after(:create) do |build, evaluator|
         trace = File.binread(
@@ -329,6 +338,10 @@ FactoryBot.define do
       running
 
       runner factory: :ci_runner
+
+      after(:create) do |build|
+        build.create_runtime_metadata!
+      end
     end
 
     trait :artifacts do
@@ -443,7 +456,7 @@ FactoryBot.define do
       options do
         {
           image: { name: 'ruby:2.7', entrypoint: '/bin/sh' },
-          services: ['postgres', { name: 'docker:stable-dind', entrypoint: '/bin/sh', command: 'sleep 30', alias: 'docker' }],
+          services: ['postgres', { name: 'docker:stable-dind', entrypoint: '/bin/sh', command: 'sleep 30', alias: 'docker' }, { name: 'mysql:latest', variables: { MYSQL_ROOT_PASSWORD: 'root123.' } }],
           script: %w(echo),
           after_script: %w(ls date),
           artifacts: {
@@ -482,6 +495,22 @@ FactoryBot.define do
 
     trait :no_options do
       options { {} }
+    end
+
+    trait :coverage_report_cobertura do
+      options do
+        {
+          artifacts: {
+            expire_in: '7d',
+            reports: {
+              coverage_report: {
+                coverage_format: 'cobertura',
+                path: 'cobertura.xml'
+              }
+            }
+          }
+        }
+      end
     end
 
     # TODO: move Security traits to ee_ci_build
@@ -534,6 +563,14 @@ FactoryBot.define do
       end
     end
 
+    trait :coverage_fuzzing do
+      options do
+        {
+          artifacts: { reports: { coverage_fuzzing: 'gl-coverage-fuzzing-report.json' } }
+        }
+      end
+    end
+
     trait :license_scanning do
       options do
         {
@@ -577,6 +614,11 @@ FactoryBot.define do
     trait :forward_deployment_failure do
       failed
       failure_reason { 13 }
+    end
+
+    trait :deployment_rejected do
+      failed
+      failure_reason { 22 }
     end
 
     trait :with_runner_session do

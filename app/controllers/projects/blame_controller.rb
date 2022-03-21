@@ -10,6 +10,7 @@ class Projects::BlameController < Projects::ApplicationController
   before_action :authorize_download_code!
 
   feature_category :source_code_management
+  urgency :low, [:show]
 
   def show
     @blob = @repository.blob_at(@commit.id, @path)
@@ -26,3 +27,5 @@ class Projects::BlameController < Projects::ApplicationController
     @blame = Gitlab::View::Presenter::Factory.new(@blame, project: @project, path: @path).fabricate!
   end
 end
+
+Projects::BlameController.prepend_mod

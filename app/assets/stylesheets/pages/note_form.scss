@@ -24,12 +24,6 @@
     margin: $gl-padding 0 0;
   }
 
-  .note-preview-holder {
-    > p {
-      overflow-x: auto;
-    }
-  }
-
   img {
     max-width: 100%;
   }
@@ -37,7 +31,7 @@
 
 .note-textarea {
   display: block;
-  padding: 10px 0;
+  padding: 10px 1px;
   color: $gl-text-color;
   font-family: $regular-font;
   border: 0;

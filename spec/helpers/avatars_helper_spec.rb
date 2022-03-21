@@ -7,7 +7,7 @@ RSpec.describe AvatarsHelper do
 
   let_it_be(:user) { create(:user) }
 
-  describe '#project_icon & #group_icon' do
+  describe '#project_icon, #group_icon, #topic_icon' do
     shared_examples 'resource with a default avatar' do |source_type|
       it 'returns a default avatar div' do
         expect(public_send("#{source_type}_icon", *helper_args))
@@ -68,6 +68,18 @@ RSpec.describe AvatarsHelper do
 
       it_behaves_like 'resource with a custom avatar', 'group' do
         let(:resource) { create(:group, avatar: File.open(uploaded_image_temp_path)) }
+        let(:helper_args) { [resource] }
+      end
+    end
+
+    context 'when providing a topic' do
+      it_behaves_like 'resource with a default avatar', 'topic' do
+        let(:resource) { create(:topic, name: 'foo') }
+        let(:helper_args) { [resource] }
+      end
+
+      it_behaves_like 'resource with a custom avatar', 'topic' do
+        let(:resource) { create(:topic, avatar: File.open(uploaded_image_temp_path)) }
         let(:helper_args) { [resource] }
       end
     end
@@ -134,10 +146,51 @@ RSpec.describe AvatarsHelper do
   describe '#avatar_icon_for_user' do
     let(:user) { create(:user, avatar: File.open(uploaded_image_temp_path)) }
 
+    shared_examples 'blocked or unconfirmed user with avatar' do
+      context 'when the viewer is not an admin' do
+        let!(:viewing_user) { create(:user) }
+
+        it 'returns the default avatar' do
+          expect(helper.avatar_icon_for_user(user, current_user: viewing_user).to_s)
+            .to match_asset_path(described_class::DEFAULT_AVATAR_PATH)
+        end
+      end
+
+      context 'when the viewer is an admin', :enable_admin_mode do
+        let!(:viewing_user) { create(:user, :admin) }
+
+        it 'returns the default avatar when the user is not passed' do
+          expect(helper.avatar_icon_for_user(user).to_s)
+            .to match_asset_path(described_class::DEFAULT_AVATAR_PATH)
+        end
+
+        it 'returns the user avatar when the user is passed' do
+          expect(helper.avatar_icon_for_user(user, current_user: viewing_user).to_s)
+            .to eq(user.avatar.url)
+        end
+      end
+    end
+
     context 'with a user object passed' do
       it 'returns a relative URL for the avatar' do
         expect(helper.avatar_icon_for_user(user).to_s)
           .to eq(user.avatar.url)
+      end
+
+      context 'when the user is blocked' do
+        before do
+          user.block!
+        end
+
+        it_behaves_like 'blocked or unconfirmed user with avatar'
+      end
+
+      context 'when the user is unconfirmed' do
+        before do
+          user.update!(confirmed_at: nil)
+        end
+
+        it_behaves_like 'blocked or unconfirmed user with avatar'
       end
     end
 
@@ -159,7 +212,7 @@ RSpec.describe AvatarsHelper do
       end
 
       it 'returns a generic avatar' do
-        expect(helper.gravatar_icon(user_email)).to match_asset_path('no_avatar.png')
+        expect(helper.gravatar_icon(user_email)).to match_asset_path(described_class::DEFAULT_AVATAR_PATH)
       end
     end
 
@@ -169,7 +222,7 @@ RSpec.describe AvatarsHelper do
       end
 
       it 'returns a generic avatar when email is blank' do
-        expect(helper.gravatar_icon('')).to match_asset_path('no_avatar.png')
+        expect(helper.gravatar_icon('')).to match_asset_path(described_class::DEFAULT_AVATAR_PATH)
       end
 
       it 'returns a valid Gravatar URL' do
@@ -416,7 +469,7 @@ RSpec.describe AvatarsHelper do
     subject { helper.avatar_without_link(resource, options) }
 
     context 'with users' do
-      let(:resource) { user }
+      let(:resource) { user.namespace }
 
       it 'displays user avatar' do
         is_expected.to eq tag(

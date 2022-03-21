@@ -22,12 +22,16 @@ const safeUrls = {
 const unsafeUrls = [
   '/an/evil/url',
   '../../../evil/url',
-  'https://evil.url/assets/icons-123a.svg',
+  'https://evil.url/assets/icons-123a.svg#test',
   'https://evil.url/assets/icons-456b.svg',
   `https://evil.url/${rootGon.sprite_icons}`,
   `https://evil.url/${rootGon.sprite_file_icons}`,
   `https://evil.url/${absoluteGon.sprite_icons}`,
   `https://evil.url/${absoluteGon.sprite_file_icons}`,
+  `${rootGon.sprite_icons}/../evil/path`,
+  `${rootGon.sprite_file_icons}/../../evil/path`,
+  `${absoluteGon.sprite_icons}/../evil/path`,
+  `${absoluteGon.sprite_file_icons}/../../https://evil.url`,
 ];
 
 const forbiddenDataAttrs = ['data-remote', 'data-url', 'data-type', 'data-method'];
@@ -55,6 +59,18 @@ describe('~/lib/dompurify', () => {
         '<a href="#"></a>',
       );
     });
+  });
+
+  it("doesn't sanitize local references", () => {
+    const htmlHref = `<svg><use href="#some-element"></use></svg>`;
+    const htmlXlink = `<svg><use xlink:href="#some-element"></use></svg>`;
+
+    expect(sanitize(htmlHref)).toBe(htmlHref);
+    expect(sanitize(htmlXlink)).toBe(htmlXlink);
+  });
+
+  it("doesn't sanitize gl-emoji", () => {
+    expect(sanitize('<p><gl-emoji>💯</gl-emoji></p>')).toBe('<p><gl-emoji>💯</gl-emoji></p>');
   });
 
   describe.each`

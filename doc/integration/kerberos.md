@@ -1,13 +1,16 @@
 ---
 stage: Manage
-group: Access
+group: Authentication and Authorization
 info: "To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments"
-type: reference, how-to
 ---
 
 # Kerberos integration **(PREMIUM SELF)**
 
 GitLab can integrate with [Kerberos](https://web.mit.edu/kerberos/) as an authentication mechanism.
+
+WARNING:
+GitLab CI/CD doesn't work with a Kerberos-enabled GitLab instance unless the integration is
+[set to use a dedicated port](#http-git-access-with-kerberos-token-passwordless-authentication).
 
 ## Overview
 
@@ -85,6 +88,9 @@ For source installations, make sure the `kerberos` gem group
    gitlab_rails['kerberos_keytab'] = "/etc/http.keytab"
    ```
 
+   To avoid GitLab creating users automatically on their first sign in through Kerberos,
+   don't set `kerberos` for `gitlab_rails['omniauth_allow_single_sign_on']`.
+
 1. [Reconfigure GitLab](../administration/restart_gitlab.md#omnibus-gitlab-reconfigure) for the changes to take effect.
 
 GitLab now offers the `negotiate` authentication method for signing in and
@@ -93,7 +99,7 @@ to authenticate with Kerberos tokens.
 
 #### Enable single sign-on
 
-See [Initial OmniAuth Configuration](omniauth.md#initial-omniauth-configuration)
+See [Configure initial settings](omniauth.md#configure-initial-settings)
 for initial settings to enable single sign-on and add Kerberos servers
 as an identity provider.
 
@@ -118,7 +124,7 @@ If you're not an administrator:
 
 1. In the top-right corner, select your avatar.
 1. Select **Edit profile**.
-1. In the left sidebar, select **Account**.
+1. On the left sidebar, select **Account**.
 1. In the **Social sign-in** section, select **Connect Kerberos SPNEGO**.
    If you don't see a **Social sign-in** Kerberos option, follow the
    requirements in [Enable single sign-on](#enable-single-sign-on).
@@ -130,7 +136,7 @@ with your Kerberos credentials.
 
 The first time users sign in to GitLab with their Kerberos accounts,
 GitLab creates a matching account.
-Before you continue, review the [Initial OmniAuth Configuration](omniauth.md#initial-omniauth-configuration) options in Omnibus and GitLab source. You must also include `kerberos`.
+Before you continue, review the [Configure initial settings](omniauth.md#configure-initial-settings) options in Omnibus and GitLab source. You must also include `kerberos`.
 
 With that information at hand:
 
@@ -165,7 +171,7 @@ enabled, your users are linked to their LDAP accounts on their first sign-in.
 For this to work, some prerequisites must be met:
 
 The Kerberos username must match the LDAP user's UID. You can choose which LDAP
-attribute is used as the UID in the GitLab [LDAP configuration](../administration/auth/ldap/index.md#configuration)
+attribute is used as the UID in the GitLab [LDAP configuration](../administration/auth/ldap/index.md#configure-ldap)
 but for Active Directory, this should be `sAMAccountName`.
 
 The Kerberos realm must match the domain part of the LDAP user's Distinguished
@@ -228,18 +234,22 @@ know the `libcurl` version installed, run `curl-config --version`.
 
 ### HTTP Git access with Kerberos token (passwordless authentication)
 
-#### Support for Git before 2.4
-
-Until Git version 2.4, the `git` command uses only the `negotiate` authentication
+Because of [a bug in current Git versions](https://lore.kernel.org/git/YKNVop80H8xSTCjz@coredump.intra.peff.net/T/#mab47fd7dcb61fee651f7cc8710b8edc6f62983d5),
+the `git` CLI command uses only the `negotiate` authentication
 method if the HTTP server offers it, even if this method fails (such as when
 the client does not have a Kerberos token). It is thus not possible to fall back
-to username/password (also known as `basic`) authentication if Kerberos
+to an embedded username and password (also known as `basic`) authentication if Kerberos
 authentication fails.
 
 For GitLab users to be able to use either `basic` or `negotiate` authentication
-with older Git versions, it is possible to offer Kerberos ticket-based
+with current Git versions, it is possible to offer Kerberos ticket-based
 authentication on a different port (for example, `8443`) while the standard port
 offers only `basic` authentication.
+
+NOTE:
+[Git 2.4 and later](https://github.com/git/git/blob/master/Documentation/RelNotes/2.4.0.txt#L225-L228) supports falling back to `basic` authentication if the
+username and password is passed interactively or through a credentials manager. It fails to fall back when the username and password is passed as part of the URL instead. For example,
+this can happen in GitLab CI/CD jobs that [authenticate with the CI/CD job token](../ci/jobs/ci_job_token.md).
 
 **For source installations with HTTPS**
 
@@ -288,7 +298,7 @@ Kerberos ticket-based authentication.
 
 ## Upgrading from password-based to ticket-based Kerberos sign-ins
 
-Prior to GitLab 8.10 Enterprise Edition, users had to submit their
+In previous versions of GitLab users had to submit their
 Kerberos username and password to GitLab when signing in. We plan to
 remove support for password-based Kerberos sign-ins in a future
 release, so we recommend that you upgrade to ticket-based sign-ins.

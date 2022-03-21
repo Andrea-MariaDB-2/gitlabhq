@@ -72,40 +72,29 @@ export default {
     visibilityHelpPath: {
       default: '',
     },
-  },
-  props: {
     endpoint: {
-      type: String,
-      required: true,
+      default: '',
     },
     projectFullPath: {
-      type: String,
-      required: true,
+      default: '',
     },
     projectId: {
-      type: String,
-      required: true,
+      default: '',
     },
     projectName: {
-      type: String,
-      required: true,
+      default: '',
     },
     projectPath: {
-      type: String,
-      required: true,
+      default: '',
     },
     projectDescription: {
-      type: String,
-      required: false,
       default: '',
     },
     projectVisibility: {
-      type: String,
-      required: true,
+      default: '',
     },
     restrictedVisibilityLevels: {
-      type: Array,
-      required: true,
+      default: [],
     },
   },
   data() {
@@ -382,7 +371,11 @@ export default {
           :data-testid="`radio-${value}`"
         >
           <div>
-            <gl-icon :name="icon" />
+            <gl-icon
+              data-qa-selector="fork_privacy_button"
+              :name="icon"
+              :data-qa-privacy-level="`${value}`"
+            />
             <span>{{ text }}</span>
           </div>
           <template #help>{{ help }}</template>

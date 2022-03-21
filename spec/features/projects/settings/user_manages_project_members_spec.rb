@@ -4,7 +4,7 @@ require 'spec_helper'
 
 RSpec.describe 'Projects > Settings > User manages project members' do
   include Spec::Support::Helpers::Features::MembersHelpers
-  include Select2Helper
+  include Spec::Support::Helpers::ModalHelpers
 
   let(:group) { create(:group, name: 'OpenSource') }
   let(:project) { create(:project) }
@@ -26,7 +26,7 @@ RSpec.describe 'Projects > Settings > User manages project members' do
       click_button 'Remove member'
     end
 
-    page.within('[role="dialog"]') do
+    within_modal do
       expect(page).to have_unchecked_field 'Also unassign this user from related issues and merge requests'
       click_button('Remove member')
     end
@@ -43,34 +43,17 @@ RSpec.describe 'Projects > Settings > User manages project members' do
 
     visit(project_project_members_path(project))
 
-    click_link('Import a project')
+    click_on 'Import from a project'
+    click_on 'Select a project'
+    wait_for_requests
 
-    select2(project2.id, from: '#source_project_id')
-    click_button('Import project members')
+    click_button project2.name
+    click_button 'Import project members'
+    wait_for_requests
+
+    page.refresh
 
     expect(find_member_row(user_mike)).to have_content('Reporter')
-  end
-
-  describe 'when the :invite_members_group_modal is disabled' do
-    before do
-      stub_feature_flags(invite_members_group_modal: false)
-    end
-
-    it 'imports a team from another project', :js do
-      project2.add_maintainer(user)
-      project2.add_reporter(user_mike)
-
-      visit(project_project_members_path(project))
-
-      page.within('.invite-users-form') do
-        click_link('Import')
-      end
-
-      select2(project2.id, from: '#source_project_id')
-      click_button('Import project members')
-
-      expect(find_member_row(user_mike)).to have_content('Reporter')
-    end
   end
 
   it 'shows all members of project shared group', :js do

@@ -1,6 +1,35 @@
 # frozen_string_literal: true
 
 module IntegrationsHelper
+  def integration_event_title(event)
+    case event
+    when "push", "push_events"
+      _("Push")
+    when "tag_push", "tag_push_events"
+      _("Tag push")
+    when "note", "note_events"
+      _("Note")
+    when "confidential_note", "confidential_note_events"
+      _("Confidential note")
+    when "issue", "issue_events"
+      _("Issue")
+    when "confidential_issue", "confidential_issue_events"
+      _("Confidential issue")
+    when "merge_request", "merge_request_events"
+      _("Merge request")
+    when "pipeline", "pipeline_events"
+      _("Pipeline")
+    when "wiki_page", "wiki_page_events"
+      _("Wiki page")
+    when "commit", "commit_events"
+      _("Commit")
+    when "deployment"
+      _("Deployment")
+    when "alert"
+      _("Alert")
+    end
+  end
+
   def integration_event_description(integration, event)
     case integration
     when Integrations::Jira
@@ -17,31 +46,31 @@ module IntegrationsHelper
     "#{event}_events"
   end
 
-  def scoped_integrations_path
-    if @project.present?
-      project_settings_integrations_path(@project)
-    elsif @group.present?
-      group_settings_integrations_path(@group)
+  def scoped_integrations_path(project: nil, group: nil)
+    if project.present?
+      project_settings_integrations_path(project)
+    elsif group.present?
+      group_settings_integrations_path(group)
     else
       integrations_admin_application_settings_path
     end
   end
 
-  def scoped_integration_path(integration)
-    if @project.present?
-      project_service_path(@project, integration)
-    elsif @group.present?
-      group_settings_integration_path(@group, integration)
+  def scoped_integration_path(integration, project: nil, group: nil)
+    if project.present?
+      project_integration_path(project, integration)
+    elsif group.present?
+      group_settings_integration_path(group, integration)
     else
       admin_application_settings_integration_path(integration)
     end
   end
 
-  def scoped_edit_integration_path(integration)
-    if @project.present?
-      edit_project_service_path(@project, integration)
-    elsif @group.present?
-      edit_group_settings_integration_path(@group, integration)
+  def scoped_edit_integration_path(integration, project: nil, group: nil)
+    if project.present?
+      edit_project_integration_path(project, integration)
+    elsif group.present?
+      edit_group_settings_integration_path(group, integration)
     else
       edit_admin_application_settings_integration_path(integration)
     end
@@ -51,11 +80,11 @@ module IntegrationsHelper
     overrides_admin_application_settings_integration_path(integration, options)
   end
 
-  def scoped_test_integration_path(integration)
-    if @project.present?
-      test_project_service_path(@project, integration)
-    elsif @group.present?
-      test_group_settings_integration_path(@group, integration)
+  def scoped_test_integration_path(integration, project: nil, group: nil)
+    if project.present?
+      test_project_integration_path(project, integration)
+    elsif group.present?
+      test_group_settings_integration_path(group, integration)
     else
       test_admin_application_settings_integration_path(integration)
     end
@@ -71,11 +100,12 @@ module IntegrationsHelper
     end
   end
 
-  def integration_form_data(integration, group: nil)
+  def integration_form_data(integration, project: nil, group: nil)
     form_data = {
       id: integration.id,
       show_active: integration.show_active_box?.to_s,
-      activated: (integration.active || integration.new_record?).to_s,
+      activated: (integration.active || (integration.new_record? && integration.activate_disabled_reason.nil?)).to_s,
+      activate_disabled: integration.activate_disabled_reason.present?.to_s,
       type: integration.to_param,
       merge_request_events: integration.merge_requests_events.to_s,
       commit_events: integration.commit_events.to_s,
@@ -83,14 +113,17 @@ module IntegrationsHelper
       comment_detail: integration.comment_detail,
       learn_more_path: integrations_help_page_path,
       trigger_events: trigger_events_for_integration(integration),
+      sections: integration.sections.to_json,
       fields: fields_for_integration(integration),
       inherit_from_id: integration.inherit_from_id,
       integration_level: integration_level(integration),
       editable: integration.editable?.to_s,
-      cancel_path: scoped_integrations_path,
+      cancel_path: scoped_integrations_path(project: project, group: group),
       can_test: integration.testable?.to_s,
-      test_path: scoped_test_integration_path(integration),
-      reset_path: scoped_reset_integration_path(integration, group: group)
+      test_path: scoped_test_integration_path(integration, project: project, group: group),
+      reset_path: scoped_reset_integration_path(integration, group: group),
+      form_path: scoped_integration_path(integration, project: project, group: group),
+      redirect_to: request.referer
     }
 
     if integration.is_a?(Integrations::Jira)
@@ -101,15 +134,16 @@ module IntegrationsHelper
     form_data
   end
 
-  def integration_overrides_data(integration)
+  def integration_overrides_data(integration, project: nil, group: nil)
     {
+      edit_path: scoped_edit_integration_path(integration, project: project, group: group),
       overrides_path: scoped_overrides_integration_path(integration, format: :json)
     }
   end
 
-  def integration_list_data(integrations)
+  def integration_list_data(integrations, group: nil, project: nil)
     {
-      integrations: integrations.map { |i| serialize_integration(i) }.to_json
+      integrations: integrations.map { |i| serialize_integration(i, group: group, project: project) }.to_json
     }
   end
 
@@ -125,20 +159,25 @@ module IntegrationsHelper
     !Gitlab.com?
   end
 
-  def integration_tabs(integration:)
-    [
-      { key: 'edit', text: _('Settings'), href: scoped_edit_integration_path(integration) },
-      (
-        { key: 'overrides', text: s_('Integrations|Projects using custom settings'), href: scoped_overrides_integration_path(integration) } if integration.instance_level?
-      )
-    ].compact
-  end
-
   def jira_issue_breadcrumb_link(issue_reference)
     link_to '', { class: 'gl-display-flex gl-align-items-center gl-white-space-nowrap' } do
       icon = image_tag image_path('illustrations/logos/jira.svg'), width: 15, height: 15, class: 'gl-mr-2'
       [icon, html_escape(issue_reference)].join.html_safe
     end
+  end
+
+  def zentao_issue_breadcrumb_link(issue)
+    link_to issue[:web_url], { target: '_blank', rel: 'noopener noreferrer', class: 'gl-display-flex gl-align-items-center gl-white-space-nowrap' } do
+      icon = image_tag image_path('logos/zentao.svg'), width: 15, height: 15, class: 'gl-mr-2'
+      [icon, html_escape(issue[:id])].join.html_safe
+    end
+  end
+
+  def zentao_issues_show_data
+    {
+      issues_show_path: project_integrations_zentao_issue_path(@project, params[:id], format: :json),
+      issues_list_path: project_integrations_zentao_issues_path(@project)
+    }
   end
 
   extend self
@@ -210,13 +249,13 @@ module IntegrationsHelper
     end
   end
 
-  def serialize_integration(integration)
+  def serialize_integration(integration, group: nil, project: nil)
     {
       active: integration.operating?,
       title: integration.title,
       description: integration.description,
       updated_at: integration.updated_at,
-      edit_path: scoped_edit_integration_path(integration),
+      edit_path: scoped_edit_integration_path(integration, group: group, project: project),
       name: integration.to_param
     }
   end

@@ -1,7 +1,7 @@
 ---
 type: reference
 stage: Manage
-group: Access
+group: Authentication and Authorization
 info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
 ---
 
@@ -36,7 +36,7 @@ this provider also allows Crowd authentication for Git-over-https requests.
      sudo -u git -H editor config/gitlab.yml
    ```
 
-1. See [Initial OmniAuth Configuration](../../integration/omniauth.md#initial-omniauth-configuration)
+1. See [Configure initial settings](../../integration/omniauth.md#configure-initial-settings)
    for initial settings.
 
 1. Add the provider configuration:
@@ -46,11 +46,12 @@ this provider also allows Crowd authentication for Git-over-https requests.
    ```ruby
      gitlab_rails['omniauth_providers'] = [
        {
-         "name" => "crowd",
-         "args" => {
-           "crowd_server_url" => "CROWD_SERVER_URL",
-           "application_name" => "YOUR_APP_NAME",
-           "application_password" => "YOUR_APP_PASSWORD"
+         name: "crowd",
+         # label: "Provider name", # optional label for login button, defaults to "Crowd"
+         args: {
+           crowd_server_url: "CROWD_SERVER_URL",
+           application_name: "YOUR_APP_NAME",
+           application_password: "YOUR_APP_PASSWORD"
          }
        }
      ]
@@ -60,6 +61,7 @@ this provider also allows Crowd authentication for Git-over-https requests.
 
    ```yaml
       - { name: 'crowd',
+          # label: 'Provider name', # optional label for login button, defaults to "Crowd"
           args: {
             crowd_server_url: 'CROWD_SERVER_URL',
             application_name: 'YOUR_APP_NAME',
@@ -84,7 +86,7 @@ could not authorize you from Crowd because invalid credentials
 ```
 
 Ensure the Crowd users who need to sign in to GitLab are authorized to the
-[application](#configure-a-new-crowd-application) in the **Authorisation** step.
+[application](#configure-a-new-crowd-application) in the **Authorization** step.
 This could be verified by trying "Authentication test" for Crowd (as of 2.11).
 
-![Example Crowd application authorisation configuration](img/crowd_application_authorisation.png)
+![Example Crowd application authorization configuration](img/crowd_application_authorisation.png)

@@ -5,24 +5,24 @@ require 'spec_helper'
 RSpec.describe Gitlab::Database::Count::ReltuplesCountStrategy do
   before do
     create_list(:project, 3)
-    create(:identity)
+    create_list(:ci_instance_variable, 2)
   end
 
   subject { described_class.new(models).count }
 
   describe '#count' do
-    let(:models) { [Project, Identity] }
+    let(:models) { [Project, Ci::InstanceVariable] }
 
     context 'when reltuples is up to date' do
       before do
-        ActiveRecord::Base.connection.execute('ANALYZE projects')
-        ActiveRecord::Base.connection.execute('ANALYZE identities')
+        Project.connection.execute('ANALYZE projects')
+        Ci::InstanceVariable.connection.execute('ANALYZE ci_instance_variables')
       end
 
       it 'uses statistics to do the count' do
         models.each { |model| expect(model).not_to receive(:count) }
 
-        expect(subject).to eq({ Project => 3, Identity => 1 })
+        expect(subject).to eq({ Project => 3, Ci::InstanceVariable => 2 })
       end
     end
 
@@ -31,20 +31,23 @@ RSpec.describe Gitlab::Database::Count::ReltuplesCountStrategy do
 
       before do
         models.each do |model|
-          ActiveRecord::Base.connection.execute("ANALYZE #{model.table_name}")
+          model.connection.execute("ANALYZE #{model.table_name}")
         end
       end
 
       it 'returns nil counts for inherited tables' do
         models.each { |model| expect(model).not_to receive(:count) }
 
-        expect(subject).to eq({ Namespace => 3 })
+        # 3 Namespaces as parents for each Project and 3 ProjectNamespaces(for each Project)
+        expect(subject).to eq({ Namespace => 6 })
       end
     end
 
     context 'insufficient permissions' do
       it 'returns an empty hash' do
-        allow(ActiveRecord::Base).to receive(:transaction).and_raise(PG::InsufficientPrivilege)
+        Gitlab::Database.database_base_models.each_value do |base_model|
+          allow(base_model).to receive(:transaction).and_raise(PG::InsufficientPrivilege)
+        end
 
         expect(subject).to eq({})
       end

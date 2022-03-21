@@ -14,6 +14,7 @@ RSpec.describe QA::Specs::Runner do
       allow(QA::Runtime::Browser).to receive(:configure!)
 
       QA::Runtime::Scenario.define(:gitlab_address, "http://gitlab.test")
+      QA::Runtime::Scenario.define(:klass, "QA::Scenario::Test::Instance::All")
     end
 
     it_behaves_like 'excludes orchestrated, transient, and geo'
@@ -25,6 +26,63 @@ RSpec.describe QA::Specs::Runner do
         expect_rspec_runner_arguments(['--tty', '--tag', '~orchestrated', '--tag', '~transient', '--tag', '~geo', *described_class::DEFAULT_TEST_PATH_ARGS])
 
         subject.perform
+      end
+    end
+
+    context 'when count_examples_only is set as an option' do
+      let(:out) { StringIO.new }
+
+      before do
+        QA::Runtime::Scenario.define(:count_examples_only, true)
+        out.string = '22 examples,'
+        allow(StringIO).to receive(:new).and_return(out)
+      end
+
+      it 'sets the `--dry-run` flag' do
+        expect_rspec_runner_arguments(['--dry-run', '--tag', '~orchestrated', '--tag', '~transient', '--tag', '~geo', *described_class::DEFAULT_TEST_PATH_ARGS], [$stderr, anything])
+
+        subject.perform
+      end
+
+      it 'writes to file when examples are more than zero' do
+        allow(RSpec::Core::Runner).to receive(:run).and_return(0)
+
+        expect(File).to receive(:open).with('no_of_examples/test_instance_all.txt', 'w') { '22' }
+
+        subject.perform
+      end
+
+      it 'does not write to file when zero examples' do
+        out.string = '0 examples,'
+        allow(RSpec::Core::Runner).to receive(:run).and_return(0)
+
+        expect(File).not_to receive(:open)
+
+        subject.perform
+      end
+
+      it 'raises error when Rspec output does not match regex' do
+        out.string = '0'
+        allow(RSpec::Core::Runner).to receive(:run).and_return(0)
+
+        expect { subject.perform }
+          .to raise_error(QA::Specs::Runner::RegexMismatchError, 'Rspec output did not match regex')
+      end
+
+      context 'when --tag is specified as an option' do
+        subject { described_class.new.tap { |runner| runner.options = %w[--tag actioncable] } }
+
+        it 'includes the option value in the file name' do
+          expect_rspec_runner_arguments(['--dry-run', '--tag', '~geo', '--tag', 'actioncable', *described_class::DEFAULT_TEST_PATH_ARGS], [$stderr, anything])
+
+          expect(File).to receive(:open).with('no_of_examples/test_instance_all_actioncable.txt', 'w') { '22' }
+
+          subject.perform
+        end
+      end
+
+      after do
+        QA::Runtime::Scenario.attributes.delete(:count_examples_only)
       end
     end
 
@@ -158,10 +216,10 @@ RSpec.describe QA::Specs::Runner do
       end
     end
 
-    def expect_rspec_runner_arguments(arguments)
+    def expect_rspec_runner_arguments(arguments, std_arguments = described_class::DEFAULT_STD_ARGS)
       expect(RSpec::Core::Runner).to receive(:run)
-        .with(arguments, $stderr, $stdout)
-        .and_return(0)
+                                       .with(arguments, *std_arguments)
+                                       .and_return(0)
     end
   end
 end

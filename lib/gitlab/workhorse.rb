@@ -8,6 +8,7 @@ require 'uri'
 module Gitlab
   class Workhorse
     SEND_DATA_HEADER = 'Gitlab-Workhorse-Send-Data'
+    SEND_DEPENDENCY_CONTENT_TYPE_HEADER = 'Workhorse-Proxy-Content-Type'
     VERSION_FILE = 'GITLAB_WORKHORSE_VERSION'
     INTERNAL_API_CONTENT_TYPE = 'application/vnd.gitlab-workhorse+json'
     INTERNAL_API_REQUEST_HEADER = 'Gitlab-Workhorse-Api-Request'
@@ -32,7 +33,8 @@ module Gitlab
           GitalyServer: {
             address: Gitlab::GitalyClient.address(repository.storage),
             token: Gitlab::GitalyClient.token(repository.storage),
-            features: Feature::Gitaly.server_feature_flags(repository.project)
+            features: Feature::Gitaly.server_feature_flags(repository.project),
+            sidechannel: Feature.enabled?(:workhorse_use_sidechannel, repository.project, default_enabled: :yaml)
           }
         }
 
@@ -169,6 +171,18 @@ module Gitlab
         ]
       end
 
+      def send_dependency(headers, url)
+        params = {
+          'Header' => headers,
+          'Url' => url
+        }
+
+        [
+          SEND_DATA_HEADER,
+          "send-dependency:#{encode(params)}"
+        ]
+      end
+
       def channel_websocket(channel)
         details = {
           'Channel' => {
@@ -189,11 +203,11 @@ module Gitlab
       end
 
       def verify_api_request!(request_headers)
-        decode_jwt(request_headers[INTERNAL_API_REQUEST_HEADER])
+        decode_jwt_with_issuer(request_headers[INTERNAL_API_REQUEST_HEADER])
       end
 
-      def decode_jwt(encoded_message)
-        decode_jwt_for_issuer('gitlab-workhorse', encoded_message)
+      def decode_jwt_with_issuer(encoded_message)
+        decode_jwt(encoded_message, issuer: 'gitlab-workhorse')
       end
 
       def secret_path

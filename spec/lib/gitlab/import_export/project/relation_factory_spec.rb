@@ -3,14 +3,14 @@
 require 'spec_helper'
 
 RSpec.describe Gitlab::ImportExport::Project::RelationFactory, :use_clean_rails_memory_store_caching do
-  let(:group) { create(:group) }
+  let(:group) { create(:group).tap { |g| g.add_maintainer(importer_user) } }
   let(:project) { create(:project, :repository, group: group) }
   let(:members_mapper) { double('members_mapper').as_null_object }
   let(:admin) { create(:admin) }
   let(:importer_user) { admin }
   let(:excluded_keys) { [] }
   let(:created_object) do
-    described_class.create(
+    described_class.create( # rubocop:disable Rails/SaveBang
       relation_sym: relation_sym,
       relation_hash: relation_hash,
       relation_index: 1,
@@ -88,7 +88,7 @@ RSpec.describe Gitlab::ImportExport::Project::RelationFactory, :use_clean_rails_
     end
 
     context 'original service exists' do
-      let(:service_id) { create(:service, project: project).id }
+      let(:service_id) { create(:integration, project: project).id }
 
       it 'does not have the original service_id' do
         expect(created_object.service_id).not_to eq(service_id)
@@ -267,6 +267,35 @@ RSpec.describe Gitlab::ImportExport::Project::RelationFactory, :use_clean_rails_
     end
   end
 
+  context 'pipeline_schedule' do
+    let(:relation_sym) { :pipeline_schedules }
+    let(:relation_hash) do
+      {
+        "id": 3,
+        "created_at": "2016-07-22T08:55:44.161Z",
+        "updated_at": "2016-07-22T08:55:44.161Z",
+        "description": "pipeline schedule",
+        "ref": "main",
+        "cron": "0 4 * * 0",
+        "cron_timezone": "UTC",
+        "active": value,
+        "project_id": project.id
+      }
+    end
+
+    subject { created_object.active }
+
+    [true, false].each do |v|
+      context "when relation_hash has active set to #{v}" do
+        let(:value) { v }
+
+        it "the created object is not active" do
+          expect(created_object.active).to eq(false)
+        end
+      end
+    end
+  end
+
   # `project_id`, `described_class.USER_REFERENCES`, noteable_id, target_id, and some project IDs are already
   # re-assigned by described_class.
   context 'Potentially hazardous foreign keys' do
@@ -370,6 +399,22 @@ RSpec.describe Gitlab::ImportExport::Project::RelationFactory, :use_clean_rails_
 
     it 'has no value for the encrypted attribute' do
       expect(created_object.value).to be_nil
+    end
+  end
+
+  context 'event object' do
+    let(:relation_sym) { :events }
+    let(:relation_hash) do
+      {
+        'project_id' => project.id,
+        'author_id' => admin.id,
+        'action' => 'created',
+        'target_type' => 'Issue'
+      }
+    end
+
+    it 'has preloaded project' do
+      expect(created_object.project).to equal(project)
     end
   end
 end

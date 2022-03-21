@@ -27,6 +27,7 @@ module Gitlab
       gon.revision               = Gitlab.revision
       gon.feature_category       = Gitlab::ApplicationContext.current_context_attribute(:feature_category).presence
       gon.gitlab_logo            = ActionController::Base.helpers.asset_path('gitlab_logo.png')
+      gon.secure                 = Gitlab.config.gitlab.https
       gon.sprite_icons           = IconsHelper.sprite_icon_path
       gon.sprite_file_icons      = IconsHelper.sprite_file_icons_path
       gon.emoji_sprites_css_path = ActionController::Base.helpers.stylesheet_path('emoji_sprites')
@@ -50,10 +51,15 @@ module Gitlab
 
       # Initialize gon.features with any flags that should be
       # made globally available to the frontend
-      push_frontend_feature_flag(:snippets_binary_blob, default_enabled: false)
       push_frontend_feature_flag(:usage_data_api, type: :ops, default_enabled: :yaml)
       push_frontend_feature_flag(:security_auto_fix, default_enabled: false)
       push_frontend_feature_flag(:improved_emoji_picker, default_enabled: :yaml)
+      push_frontend_feature_flag(:new_header_search, default_enabled: :yaml)
+      push_frontend_feature_flag(:bootstrap_confirmation_modals, default_enabled: :yaml)
+      push_frontend_feature_flag(:sandboxed_mermaid, default_enabled: :yaml)
+      push_frontend_feature_flag(:source_editor_toolbar, default_enabled: :yaml)
+      push_frontend_feature_flag(:gl_avatar_for_all_user_avatars, default_enabled: :yaml)
+      push_frontend_feature_flag(:mr_attention_requests, default_enabled: :yaml)
     end
 
     # Exposes the state of a feature flag to the frontend code.

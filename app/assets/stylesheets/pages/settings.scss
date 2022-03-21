@@ -110,8 +110,13 @@
 
   .bs-callout,
   .form-check:first-child,
-  .form-text.text-muted {
+  .form-check .form-text.text-muted,
+  .form-check + .form-text.text-muted {
     margin-top: 0;
+  }
+
+  .form-check .form-text.text-muted {
+    margin-bottom: $grid-size;
   }
 }
 
@@ -128,10 +133,6 @@
   background-color: $orange-50;
   border: 1px solid $orange-200;
   border-radius: $border-radius-base;
-}
-
-.empty-variables {
-  padding: 20px 0;
 }
 
 .warning-title {
@@ -151,17 +152,6 @@
 
   .svg-container {
     max-width: 150px;
-  }
-}
-
-.token-token-container {
-  #impersonation-token-token {
-    width: 80%;
-    display: inline;
-  }
-
-  .btn-clipboard {
-    margin-left: 5px;
   }
 }
 
@@ -199,22 +189,6 @@
       .option-disabled-reason {
         display: block;
       }
-    }
-  }
-}
-
-.initialize-with-readme-setting {
-  .form-check {
-    margin-bottom: 10px;
-
-    .option-title {
-      font-weight: $gl-font-weight-normal;
-      display: inline-block;
-      color: $gl-text-color;
-    }
-
-    .option-description {
-      color: $project-option-descr-color;
     }
   }
 }
@@ -320,14 +294,8 @@
   }
 }
 
-.modal-doorkeepr-auth {
-  .modal-body {
-    padding: $gl-padding;
-  }
-}
-
-.personal-access-tokens-never-expires-label {
-  color: $note-disabled-comment-color;
+.doorkeeper-authorize {
+  max-width: px-to-rem(500px);
 }
 
 .created-deploy-token-container {
@@ -345,12 +313,6 @@
     display: block;
     margin-bottom: 0;
   }
-}
-
-.mirror-error-badge {
-  background-color: $red-400;
-  border-radius: $border-radius-default;
-  color: $white;
 }
 
 .push-pull-table {

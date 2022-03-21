@@ -6,7 +6,7 @@ info: To determine the technical writer assigned to the Stage/Group associated w
 
 # GitLab Maintenance Mode **(PREMIUM SELF)**
 
-> [Introduced](https://gitlab.com/groups/gitlab-org/-/epics/2149) in GitLab Premium 13.9.
+> [Introduced](https://gitlab.com/groups/gitlab-org/-/epics/2149) in GitLab 13.9.
 
 Maintenance Mode allows administrators to reduce write operations to a minimum while maintenance tasks are performed. The main goal is to block all external actions that change the internal state, including the PostgreSQL database, but especially files, Git repositories, Container repositories, and so on.
 
@@ -75,7 +75,7 @@ An error is displayed when a user tries to perform a write operation that isn't 
 NOTE:
 In some cases, the visual feedback from an action could be misleading, for example when starring a project, the **Star** button changes to show the **Unstar** action, however, this is only the frontend update, and it doesn't take into account the failed status of the POST request. These visual bugs are to be fixed [in follow-up iterations](https://gitlab.com/gitlab-org/gitlab/-/issues/295197).
 
-### Admin functions
+### Administrator functions
 
 Systems administrators can edit the application settings. This allows
 them to disable Maintenance Mode after it's been enabled.
@@ -111,18 +111,18 @@ For most JSON requests, POST, PUT, PATCH, and DELETE are blocked, and the API re
 
 |HTTP request | Allowed routes |  Notes |
 |:----:|:--------------------------------------:|:----:|
-| POST | `/admin/application_settings/general` | To allow updating application settings in the admin UI |
+| POST | `/admin/application_settings/general` | To allow updating application settings in the administrator UI |
 | PUT  | `/api/v4/application/settings` | To allow updating application settings with the API |
 | POST | `/users/sign_in` | To allow users to log in. |
 | POST | `/users/sign_out`| To allow users to log out. |
 | POST | `/oauth/token` | To allow users to log in to a Geo secondary for the first time. |
-| POST | `/admin/session`, `/admin/session/destroy` | To allow [Admin mode for GitLab administrators](https://gitlab.com/groups/gitlab-org/-/epics/2158) |
+| POST | `/admin/session`, `/admin/session/destroy` | To allow [Administrator mode for GitLab administrators](https://gitlab.com/groups/gitlab-org/-/epics/2158) |
 | POST | Paths ending with `/compare`| Git revision routes. |
 | POST | `.git/git-upload-pack` | To allow Git pull/clone. |
-| POST | `/api/v4/internal` | [internal API routes](../../development/internal_api.md) |
-| POST | `/admin/sidekiq` | To allow management of background jobs in the admin UI |
-| POST | `/admin/geo` | To allow updating Geo Nodes in the admin UI |
-| POST | `/api/v4/geo_replication`| To allow certain Geo-specific admin UI actions on secondary sites |
+| POST | `/api/v4/internal` | [internal API routes](../../development/internal_api/index.md) |
+| POST | `/admin/sidekiq` | To allow management of background jobs in the Admin UI |
+| POST | `/admin/geo` | To allow updating Geo Nodes in the administrator UI |
+| POST | `/api/v4/geo_replication`| To allow certain Geo-specific administrator UI actions on secondary sites |
 
 ### GraphQL API
 
@@ -193,7 +193,8 @@ Replication and verification continues to work but proxied Git pushes to primary
 
 ### Secure features
 
-Features that depend on creating issues or creating or approving Merge Requests, do not work.
+Features that depend on creating issues or creating or approving merge requests,
+do not work.
 
 Exporting a vulnerability list from a Vulnerability Report page does not work.
 

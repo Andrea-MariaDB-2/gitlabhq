@@ -1,7 +1,7 @@
 # To contribute improvements to CI/CD templates, please follow the Development guide at:
 # https://docs.gitlab.com/ee/development/cicd/templates.html
 # This specific template is located at:
-# https://gitlab.com/gitlab-org/gitlab/-/blob/master/lib/gitlab/ci/templates/Security/DAST.lastest.gitlab-ci.yml
+# https://gitlab.com/gitlab-org/gitlab/-/blob/master/lib/gitlab/ci/templates/Security/DAST.latest.gitlab-ci.yml
 
 # To use this template, add the following to your .gitlab-ci.yml file:
 #
@@ -25,7 +25,7 @@ variables:
   DAST_VERSION: 2
   # Setting this variable will affect all Security templates
   # (SAST, Dependency Scanning, ...)
-  SECURE_ANALYZERS_PREFIX: "registry.gitlab.com/gitlab-org/security-products/analyzers"
+  SECURE_ANALYZERS_PREFIX: "registry.gitlab.com/security-products"
 
 dast:
   stage: dast
@@ -52,7 +52,7 @@ dast:
           $DAST_API_SPECIFICATION == null
       when: never
     - if: $CI_COMMIT_BRANCH &&
-          $CI_KUBERNETES_ACTIVE &&
+          ($CI_KUBERNETES_ACTIVE || $KUBECONFIG) &&
           $GITLAB_FEATURES =~ /\bdast\b/
     - if: $CI_COMMIT_BRANCH &&
           $DAST_WEBSITE

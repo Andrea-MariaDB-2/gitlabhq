@@ -23,7 +23,7 @@ cache:
     - venv/
 
 before_script:
-  - python -V  # Print out python version for debugging
+  - python --version  # For debugging
   - pip install virtualenv
   - virtualenv venv
   - source venv/bin/activate
@@ -47,7 +47,8 @@ run:
 pages:
   script:
     - pip install sphinx sphinx-rtd-theme
-    - cd doc ; make html
+    - cd doc
+    - make html
     - mv build/html/ ../public/
   artifacts:
     paths:

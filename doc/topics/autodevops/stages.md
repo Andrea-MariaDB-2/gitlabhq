@@ -35,7 +35,7 @@ your own `Dockerfile`, you must either:
 
 ### Auto Build using Cloud Native Buildpacks
 
-> - Introduced in [GitLab 12.10](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/28165).
+> - [Introduced](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/28165) in GitLab 12.10.
 > - Auto Build using Cloud Native Buildpacks by default was [introduced](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/63351) in GitLab 14.0.
 
 Auto Build builds an application using a project's `Dockerfile` if present. If no
@@ -65,6 +65,30 @@ Auto Test still uses Herokuish, as test suite detection is not
 yet part of the Cloud Native Buildpack specification. For more information, see
 [this issue](https://gitlab.com/gitlab-org/gitlab/-/issues/212689).
 
+#### Mount volumes into the build container
+
+> - [Introduced](https://gitlab.com/gitlab-org/cluster-integration/auto-build-image/-/merge_requests/65) in GitLab 14.2.
+> - Multiple volume support (or `auto-build-image` v1.6.0) [introduced](https://gitlab.com/gitlab-org/cluster-integration/auto-build-image/-/merge_requests/80) in GitLab 14.6.
+
+The variable `BUILDPACK_VOLUMES` can be used to pass volume mount definitions to the
+`pack` command. The mounts are passed to `pack build` using `--volume` arguments.
+Each volume definition can include any of the capabilities provided by `build pack`
+such as the host path, the target path, whether the volume is writable, and
+one or more volume options.
+
+Use a pipe `|` character to pass multiple volumes.
+Each item from the list is passed to `build back` using a separate `--volume` argument.
+
+In this example, three volumes are mounted in the container as `/etc/foo`, `/opt/foo`, and `/var/opt/foo`:
+
+```yaml
+buildjob:
+  variables:
+    BUILDPACK_VOLUMES: /mnt/1:/etc/foo:ro|/mnt/2:/opt/foo:ro|/mnt/3:/var/opt/foo:rw
+```
+
+Read more about defining volumes in the [`pack build` documentation](https://buildpacks.io/docs/tools/pack/cli/pack_build/).
+
 ### Auto Build using Herokuish
 
 > [Replaced](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/63351) with Cloud Native Buildpacks in GitLab 14.0.
@@ -88,7 +112,7 @@ Herokuish, with the following caveats:
   converted to a Cloud Native Buildpack using Heroku's
   [`cnb-shim`](https://github.com/heroku/cnb-shim).
 - `BUILDPACK_URL` must be in a format
-  [supported by `pack`](https://buildpacks.io/docs/app-developer-guide/specific-buildpacks/).
+  [supported by `pack`](https://buildpacks.io/docs/app-developer-guide/specify-buildpacks/).
 - The `/bin/herokuish` command is not present in the built image, and prefixing
   commands with `/bin/herokuish procfile exec` is no longer required (nor possible).
   Instead, custom commands should be prefixed with `/cnb/lifecycle/launcher`
@@ -147,7 +171,7 @@ might want to use a [custom buildpack](customize.md#custom-buildpacks).
 
 ## Auto Code Quality
 
-> - [Moved](https://gitlab.com/gitlab-org/gitlab/-/issues/212499) to GitLab Free in 13.2.
+> - [Moved](https://gitlab.com/gitlab-org/gitlab/-/issues/212499) from GitLab Starter to GitLab Free in 13.2.
 
 Auto Code Quality uses the
 [Code Quality image](https://gitlab.com/gitlab-org/ci-cd/codequality) to run
@@ -174,8 +198,8 @@ see the documentation.
 
 ## Auto Secret Detection
 
-> - Introduced in GitLab Ultimate 13.1.
-> - [Select functionality made available in all tiers](../../user/application_security/secret_detection/#making-secret-detection-available-to-all-gitlab-tiers) in 13.3
+> - Introduced in GitLab 13.1.
+> - Select functionality [made available](../../user/application_security/secret_detection/#making-secret-detection-available-to-all-gitlab-tiers) in all tiers in GitLab 13.3
 
 Secret Detection uses the
 [Secret Detection Docker image](https://gitlab.com/gitlab-org/security-products/analyzers/secrets) to run Secret Detection on the current code, and checks for leaked secrets. Auto Secret Detection requires [GitLab Runner](https://docs.gitlab.com/runner/) 11.5 or above.
@@ -202,7 +226,7 @@ see the documentation.
 
 ## Auto License Compliance **(ULTIMATE)**
 
-> Introduced in GitLab Ultimate 11.0.
+> Introduced in GitLab 11.0.
 
 License Compliance uses the
 [License Compliance Docker image](https://gitlab.com/gitlab-org/security-products/analyzers/license-finder)
@@ -310,7 +334,7 @@ You can disable DAST:
 
 ## Auto Browser Performance Testing **(PREMIUM)**
 
-> Introduced in [GitLab Premium](https://about.gitlab.com/pricing/) 10.4.
+> Introduced in GitLab 10.4.
 
 Auto [Browser Performance Testing](../../user/project/merge_requests/browser_performance_testing.md)
 measures the browser performance of a web page with the
@@ -331,7 +355,7 @@ Any browser performance differences between the source and target branches are a
 
 ## Auto Load Performance Testing **(PREMIUM)**
 
-> Introduced in [GitLab Premium](https://about.gitlab.com/pricing/) 13.2.
+> Introduced in GitLab 13.2.
 
 Auto [Load Performance Testing](../../user/project/merge_requests/load_performance_testing.md)
 measures the server performance of an application with the
@@ -348,7 +372,7 @@ Any load performance test result differences between the source and target branc
 
 ## Auto Deploy
 
-[Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/216008) in GitLab 13.6, you have the choice to deploy to [Amazon Elastic Compute Cloud (Amazon EC2)](https://aws.amazon.com/ec2/) in addition to a Kubernetes cluster.
+> [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/216008) in GitLab 13.6, you have the choice to deploy to [Amazon Elastic Compute Cloud (Amazon EC2)](https://aws.amazon.com/ec2/) in addition to a Kubernetes cluster.
 
 Auto Deploy is an optional step for Auto DevOps. If the [requirements](requirements.md) are not met, the job is skipped.
 
@@ -635,7 +659,7 @@ ciliumNetworkPolicy:
 #### Enabling Alerts
 
 You can also enable alerts. Network policies with alerts are considered only if
-[GitLab Kubernetes Agent](../../user/clusters/agent/index.md)
+the [agent](../../user/clusters/agent/index.md)
 has been integrated.
 
 You can enable alerts as follows:
@@ -663,7 +687,7 @@ may require commands to be wrapped as follows:
 Some of the reasons you may need to wrap commands:
 
 - Attaching using `kubectl exec`.
-- Using the GitLab [Web Terminal](../../ci/environments/index.md#web-terminals).
+- Using the GitLab [Web Terminal](../../ci/environments/index.md#web-terminals-deprecated).
 
 For example, to start a Rails console from the application root directory, run:
 
@@ -696,7 +720,7 @@ To use Auto Monitoring:
 
 1. [Install and configure the Auto DevOps requirements](requirements.md).
 1. [Enable Auto DevOps](index.md#enable-or-disable-auto-devops), if you haven't done already.
-1. On the left sidebar, select **CI/CD > Pipelines**. 
+1. On the left sidebar, select **CI/CD > Pipelines**.
 1. Select **Run pipeline**.
 1. After the pipeline finishes successfully, open the
    [monitoring dashboard for a deployed environment](../../ci/environments/index.md#monitor-environments)

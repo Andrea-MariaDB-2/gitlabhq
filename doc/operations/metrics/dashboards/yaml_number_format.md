@@ -1,6 +1,6 @@
 ---
 stage: Monitor
-group: Monitor
+group: Respond
 info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
 ---
 
@@ -15,7 +15,7 @@ You can select units to format your charts by adding `format` to your
 
 ## Internationalization and localization
 
-Currently, your [internationalization and localization options](https://en.wikipedia.org/wiki/Internationalization_and_localization) for number formatting are dependent on the system you are using i.e. your OS or browser.
+Currently, your [internationalization and localization options](https://en.wikipedia.org/wiki/Internationalization_and_localization) for number formatting are dependent on the system you are using (that is, your OS or browser).
 
 ## Engineering Notation
 

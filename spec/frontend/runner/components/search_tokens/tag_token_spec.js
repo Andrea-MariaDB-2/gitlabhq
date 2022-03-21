@@ -3,7 +3,7 @@ import { mount } from '@vue/test-utils';
 import MockAdapter from 'axios-mock-adapter';
 import { nextTick } from 'vue';
 import waitForPromises from 'helpers/wait_for_promises';
-import createFlash from '~/flash';
+import { createAlert } from '~/flash';
 import axios from '~/lib/utils/axios_utils';
 
 import TagToken, { TAG_SUGGESTIONS_PATH } from '~/runner/components/search_tokens/tag_token.vue';
@@ -41,7 +41,7 @@ const mockTagTokenConfig = {
   title: 'Tags',
   type: 'tag',
   token: TagToken,
-  recentTokenValuesStorageKey: mockStorageKey,
+  recentSuggestionsStorageKey: mockStorageKey,
   operators: OPERATOR_IS_ONLY,
 };
 
@@ -168,8 +168,8 @@ describe('TagToken', () => {
     });
 
     it('error is shown', async () => {
-      expect(createFlash).toHaveBeenCalledTimes(1);
-      expect(createFlash).toHaveBeenCalledWith({ message: expect.any(String) });
+      expect(createAlert).toHaveBeenCalledTimes(1);
+      expect(createAlert).toHaveBeenCalledWith({ message: expect.any(String) });
     });
   });
 

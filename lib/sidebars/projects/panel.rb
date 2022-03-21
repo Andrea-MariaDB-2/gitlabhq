@@ -23,6 +23,7 @@ module Sidebars
         add_menu(Sidebars::Projects::Menus::RepositoryMenu.new(context))
         add_menu(Sidebars::Projects::Menus::IssuesMenu.new(context))
         add_menu(Sidebars::Projects::Menus::ExternalIssueTrackerMenu.new(context))
+        add_menu(Sidebars::Projects::Menus::ZentaoMenu.new(context))
         add_menu(Sidebars::Projects::Menus::MergeRequestsMenu.new(context))
         add_menu(Sidebars::Projects::Menus::CiCdMenu.new(context))
         add_menu(Sidebars::Projects::Menus::SecurityComplianceMenu.new(context))
@@ -31,16 +32,29 @@ module Sidebars
         add_menu(Sidebars::Projects::Menus::InfrastructureMenu.new(context))
         add_menu(Sidebars::Projects::Menus::PackagesRegistriesMenu.new(context))
         add_menu(Sidebars::Projects::Menus::AnalyticsMenu.new(context))
-        add_menu(confluence_or_wiki_menu)
-        add_menu(Sidebars::Projects::Menus::ExternalWikiMenu.new(context))
+        add_wiki_menus
         add_menu(Sidebars::Projects::Menus::SnippetsMenu.new(context))
         add_menu(Sidebars::Projects::Menus::SettingsMenu.new(context))
+        add_invite_members_menu
       end
 
-      def confluence_or_wiki_menu
-        confluence_menu = ::Sidebars::Projects::Menus::ConfluenceMenu.new(context)
+      def add_invite_members_menu
+        experiment(:invite_members_in_side_nav, group: context.project.group) do |e|
+          e.control {}
+          e.candidate { add_menu(Sidebars::Projects::Menus::InviteTeamMembersMenu.new(context)) }
+        end
+      end
 
-        confluence_menu.render? ? confluence_menu : Sidebars::Projects::Menus::WikiMenu.new(context)
+      def add_wiki_menus
+        add_menu((third_party_wiki_menu || Sidebars::Projects::Menus::WikiMenu).new(context))
+        add_menu(Sidebars::Projects::Menus::ExternalWikiMenu.new(context))
+      end
+
+      def third_party_wiki_menu
+        wiki_menu_list = [::Sidebars::Projects::Menus::ConfluenceMenu]
+        wiki_menu_list << ::Sidebars::Projects::Menus::ShimoMenu if Feature.enabled?(:shimo_integration, context.project)
+
+        wiki_menu_list.find { |wiki_menu| wiki_menu.new(context).render? }
       end
     end
   end

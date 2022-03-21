@@ -1,6 +1,6 @@
 ---
-stage: Monitor
-group: Monitor
+stage: Enablement
+group: Distribution
 info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
 ---
 
@@ -55,13 +55,12 @@ To disable Prometheus and all of its exporters, as well as any added in the futu
 ### Changing the port and address Prometheus listens on
 
 WARNING:
-The following change was added in [Omnibus GitLab 8.17](https://gitlab.com/gitlab-org/omnibus-gitlab/-/merge_requests/1261). Although possible,
-it's not recommended to change the port Prometheus listens
+Although possible, it's not recommended to change the port Prometheus listens
 on, as this might affect or conflict with other services running on the GitLab
 server. Proceed at your own risk.
 
-To access Prometheus from outside the GitLab server, set an FQDN or IP in
-`prometheus['listen_address']`. To change the address/port that Prometheus
+To access Prometheus from outside the GitLab server,
+change the address/port that Prometheus
 listens on:
 
 1. Edit `/etc/gitlab/gitlab.rb`
@@ -260,9 +259,10 @@ To use an external Prometheus server:
            - 1.1.1.1:9229
      - job_name: gitlab-rails
        metrics_path: "/-/metrics"
+       scheme: https
        static_configs:
          - targets:
-           - 1.1.1.1:8080
+           - 1.1.1.1
      - job_name: gitlab-sidekiq
        static_configs:
          - targets:
@@ -288,7 +288,42 @@ To use an external Prometheus server:
            - 1.1.1.1:9236
    ```
 
+   WARNING:
+   The `gitlab-rails` job in the snippet assumes that GitLab is reachable through HTTPS. If your
+   deployment doesn't use HTTPS, the job configuration is adapted to use the `http` scheme and port
+   80.
+
 1. Reload the Prometheus server.
+
+### Configure the storage retention size
+
+Prometheus has several custom flags to configure local storage:
+
+- `storage.tsdb.retention.time`: when to remove old data. Defaults to `15d`. Overrides
+  `storage.tsdb.retention` if this flag is set to anything other than the default.
+- `storage.tsdb.retention.size`: (experimental) the maximum number of bytes of storage blocks to
+  retain. The oldest data is removed first. Defaults to `0` (disabled). This flag is experimental
+  and may change in future releases. Units supported: `B`, `KB`, `MB`, `GB`, `TB`, `PB`, `EB`. For
+  example, `512MB`.
+
+To configure the storage retention size:
+
+1. Edit `/etc/gitlab/gitlab.rb`:
+
+   ```ruby
+   prometheus['flags'] = {
+     'storage.tsdb.path' => "/var/opt/gitlab/prometheus/data",
+     'storage.tsdb.retention.time' => "7d",
+     'storage.tsdb.retention.size' => "2GB",
+     'config.file' => "/var/opt/gitlab/prometheus/prometheus.yml"
+   }
+   ```
+
+1. Reconfigure GitLab:
+
+   ```shell
+   sudo gitlab-ctl reconfigure
+   ```
 
 ## Viewing performance metrics
 
@@ -330,8 +365,6 @@ To add a Prometheus dashboard for a single server GitLab setup:
 
 ## GitLab metrics
 
-> Introduced in GitLab 9.3.
-
 GitLab monitors its own internal service metrics, and makes them available at the `/-/metrics` endpoint. Unlike other exporters, this endpoint requires authentication as it's available on the same URL and port as user traffic.
 
 Read more about the [GitLab Metrics](gitlab_metrics.md).
@@ -347,6 +380,12 @@ The node exporter allows you to measure various machine resources, such as
 memory, disk, and CPU utilization.
 
 [Read more about the node exporter](node_exporter.md).
+
+### Puma exporter
+
+The Puma exporter allows you to measure various Puma metrics.
+
+[Read more about the Puma exporter](puma_exporter.md).
 
 ### Redis exporter
 
@@ -380,9 +419,6 @@ The GitLab exporter allows you to measure various GitLab metrics, pulled from Re
 
 ## Configuring Prometheus to monitor Kubernetes
 
-> - Introduced in GitLab 9.0.
-> - Pod monitoring introduced in GitLab 9.4.
-
 If your GitLab server is running within Kubernetes, Prometheus collects metrics from the Nodes and [annotated Pods](https://prometheus.io/docs/prometheus/latest/configuration/configuration/#kubernetes_sd_config) in the cluster, including performance data on each container. This is particularly helpful if your CI/CD environments run in the same cluster, as you can use the [Prometheus project integration](../../../user/project/integrations/prometheus.md) to monitor them.
 
 To disable the monitoring of Kubernetes:
@@ -396,3 +432,35 @@ To disable the monitoring of Kubernetes:
 
 1. Save the file and [reconfigure GitLab](../../restart_gitlab.md#omnibus-gitlab-reconfigure) for the changes to
    take effect.
+
+## Troubleshooting
+
+### `/var/opt/gitlab/prometheus` consumes too much disk space
+
+If you are **not** using Prometheus monitoring:
+
+1. [Disable Prometheus](index.md#configuring-prometheus).
+1. Delete the data under `/var/opt/gitlab/prometheus`.
+
+If you are using Prometheus monitoring:
+
+1. Stop Prometheus (deleting data while it's running can cause data corruption):
+
+   ```shell
+   gitlab-ctl stop prometheus
+   ```
+
+1. Delete the data under `/var/opt/gitlab/prometheus/data`.
+1. Start the service again:
+
+   ```shell
+   gitlab-ctl start prometheus
+   ```
+
+1. Verify the service is up and running:
+
+   ```shell
+   gitlab-ctl status prometheus
+   ```
+
+1. Optional. [Configure the storage retention size](index.md#configure-the-storage-retention-size).

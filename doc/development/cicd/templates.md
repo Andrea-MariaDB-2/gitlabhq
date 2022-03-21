@@ -5,7 +5,7 @@ info: To determine the technical writer assigned to the Stage/Group associated w
 type: index, concepts, howto
 ---
 
-# Development guide for GitLab CI/CD templates
+# Development guide for GitLab CI/CD templates **(FREE)**
 
 This document explains how to develop [GitLab CI/CD templates](../../ci/examples/index.md).
 
@@ -18,6 +18,7 @@ Before submitting a merge request with a new or updated CI/CD template, you must
 - Name the template following the `*.gitlab-ci.yml` format.
 - Use valid [`.gitlab-ci.yml` syntax](../../ci/yaml/index.md). Verify it's valid
   with the [CI/CD lint tool](../../ci/lint.md).
+- [Add template metrics](#add-metrics).
 - Include [a changelog](../changelog.md) if the merge request introduces a user-facing change.
 - Follow the [template review process](#contribute-cicd-template-merge-requests).
 - (Optional but highly recommended) Test the template in an example GitLab project
@@ -60,7 +61,7 @@ don't have any other `.gitlab-ci.yml` files.
 When authoring pipeline templates:
 
 - Place any [global keywords](../../ci/yaml/index.md#global-keywords) like `image`
-  or `before_script` in a [`default`](../../ci/yaml/index.md#custom-default-keyword-values)
+  or `before_script` in a [`default`](../../ci/yaml/index.md#default)
   section at the top of the template.
 - Note clearly in the [code comments](#explain-the-template-with-comments) if the
   template is designed to be used with the `includes` keyword in an existing
@@ -77,7 +78,7 @@ other pipeline configuration.
 
 When authoring job templates:
 
-- Do not use [global](../../ci/yaml/index.md#global-keywords) or [`default`](../../ci/yaml/index.md#custom-default-keyword-values)
+- Do not use [global](../../ci/yaml/index.md#global-keywords) or [`default`](../../ci/yaml/index.md#default)
   keywords. When a root `.gitlab-ci.yml` includes a template, global or default keywords
   might be overridden and cause unexpected behavior. If a job template requires a
   specific stage, explain in the code comments that users must manually add the stage
@@ -95,7 +96,7 @@ Additional points to keep in mind when authoring templates:
 |------------------------------------------------------|--------------------|---------------|
 | Can use global keywords, including `stages`.         | Yes                | No            |
 | Can define jobs.                                     | Yes                | Yes           |
-| Can be selected in the new file UI                   | Yes                | Yes           |
+| Can be selected in the new file UI                   | Yes                | No            |
 | Can include other job templates with `include`       | Yes                | No            |
 | Can include other pipeline templates with `include`. | No                 | No            |
 
@@ -103,6 +104,16 @@ Additional points to keep in mind when authoring templates:
 
 To make templates easier to follow, templates should all use clear syntax styles,
 with a consistent format.
+
+The `before_script`, `script`, and `after_script` keywords of every job are linted
+using [ShellCheck](https://www.shellcheck.net/) and should follow the
+[Shell scripting standards and style guidelines](../shell_scripting_guide/index.md)
+as much as possible.
+
+ShellCheck assumes that the script is designed to run using [Bash](https://www.gnu.org/software/bash/).
+Templates which use scripts for shells that aren't compatible with the Bash ShellCheck
+rules can be excluded from ShellCheck linting. To exclude a script, add it to the
+`EXCLUDED_TEMPLATES` list in [`scripts/lint_templates_bash.rb`](https://gitlab.com/gitlab-org/gitlab/-/tree/master/scripts/lint_templates_bash.rb).
 
 #### Do not hardcode the default branch
 
@@ -178,10 +189,10 @@ This includes:
 
 - Repository/project requirements.
 - Expected behavior.
-- Any places that need to be edited by users before using the template.
+- Any places that must be edited by users before using the template.
 - If the template should be used by copy pasting it into a configuration file, or
   by using it with the `include` keyword in an existing pipeline.
-- If any variables need to be saved in the project's CI/CD settings.
+- If any variables must be saved in the project's CI/CD settings.
 
 ```yaml
 # Use this template to publish an application that uses the ABC server.
@@ -216,6 +227,30 @@ job1:
     ERROR_MESSAGE: "The $TEST_CODE_PATH path is invalid"  # (No need for a comment here, it's already clear)
   script:
     - echo ${ERROR_MESSAGE}
+```
+
+#### Use all-caps naming for non-local variables
+
+If you are expecting a variable to be provided via the CI/CD settings, or via the
+`variables` keyword, that variable must use all-caps naming with underscores (`_`)
+separating words.
+
+```yaml
+.with_login:
+  before_script:
+    # SECRET_TOKEN should be provided via the project settings
+    - docker login -u my-user -p "$SECRET_TOKEN my-registry
+```
+
+Lower-case naming can optionally be used for variables which are defined locally in
+one of the `script` keywords:
+
+```yaml
+job1:
+  script:
+    - response="$(curl "https://example.com/json")"
+    - message="$(echo "$response" | jq -r .message)"
+    - 'echo "Server responded with: $message"'
 ```
 
 ### Backward compatibility
@@ -325,7 +360,13 @@ projects on `gitlab.com`:
 After you're confident the latest template can be moved to stable:
 
 1. Update the stable template with the content of the latest version.
+1. Remove the migration template from `Gitlab::Template::GitlabCiYmlTemplate::TEMPLATES_WITH_LATEST_VERSION` const.
 1. Remove the corresponding feature flag.
+
+NOTE:
+Feature flags are enabled by default in RSpec, so all tests are performed
+against the latest templates. You should also test the stable templates
+with `stub_feature_flags(redirect_to_latest_template_<name>: false)`.
 
 ### Further reading
 
@@ -335,7 +376,7 @@ follow the progress.
 
 ## Testing
 
-Each CI/CD template must be tested in order to make sure that it's safe to be published.
+Each CI/CD template must be tested to make sure that it's safe to be published.
 
 ### Manual QA
 
@@ -376,16 +417,87 @@ you must:
 This information is important for users when [a stable template](#stable-version)
 is updated in a major version GitLab release.
 
+### Add metrics
+
+Every CI/CD template must also have metrics defined to track their use.
+
+To add a metric definition for a new template:
+
+1. Install and start the [GitLab GDK](https://gitlab.com/gitlab-org/gitlab-development-kit#installation).
+1. In the `gitlab` directory in your GDK, check out the branch that contains the new template.
+1. [Add the template inclusion event](../service_ping/implement.md#add-new-events)
+   with this Rake task:
+
+   ```shell
+   bin/rake gitlab:usage_data:generate_ci_template_events
+   ```
+
+   The task adds a section like the following to [`lib/gitlab/usage_data_counters/known_events/ci_templates.yml`](https://gitlab.com/gitlab-org/gitlab/-/blob/master/lib/gitlab/usage_data_counters/known_events/ci_templates.yml):
+
+   ```yaml
+   - name: p_ci_templates_my_template_name
+     category: ci_templates
+     redis_slot: ci_templates
+     aggregation: weekly
+   ```
+
+1. Copy the value of `name` from the new YAML section, and add it to the weekly
+   and monthly CI/CD template total count metrics:
+   - [`config/metrics/counts_7d/20210216184557_ci_templates_total_unique_counts_weekly.yml`](https://gitlab.com/gitlab-org/gitlab/-/blob/master/config/metrics/counts_7d/20210216184557_ci_templates_total_unique_counts_weekly.yml)
+   - [`config/metrics/counts_28d/20210216184559_ci_templates_total_unique_counts_monthly.yml`](https://gitlab.com/gitlab-org/gitlab/-/blob/master/config/metrics/counts_28d/20210216184559_ci_templates_total_unique_counts_monthly.yml)
+
+1. Use the same `name` as above as the last argument in the following command to
+  [add new metric definitions](../service_ping/metrics_dictionary.md#metrics-added-dynamic-to-service-ping-payload):
+
+   ```shell
+   bundle exec rails generate gitlab:usage_metric_definition:redis_hll ci_templates <template_metric_event_name>
+   ```
+
+   The output should look like:
+
+   ```shell
+   $ bundle exec rails generate gitlab:usage_metric_definition:redis_hll ci_templates p_ci_templates_my_template_name
+         create  config/metrics/counts_7d/20220120073740_p_ci_templates_my_template_name_weekly.yml
+         create  config/metrics/counts_28d/20220120073746_p_ci_templates_my_template_name_monthly.yml
+   ```
+
+1. Edit both newly generated files as follows:
+
+   - `name:` and `performance_indicator_type:`: Delete (not needed).
+   - `introduced_by_url:`: The URL of the MR adding the template.
+   - `data_source:`: Set to `redis_hll`.
+   - All other fields that have no values: Set to empty strings (`''`).
+   - Add the following to the end of each file:
+
+     ```yaml
+     options:
+       events:
+         - p_ci_templates_my_template_name
+     ```
+
+1. Commit and push the changes.
+
+For example, these are the metrics configuration files for the
+[5 Minute Production App template](https://gitlab.com/gitlab-org/gitlab/-/blob/master/lib/gitlab/ci/templates/5-Minute-Production-App.gitlab-ci.yml):
+
+- The template inclusion event: [`lib/gitlab/usage_data_counters/known_events/ci_templates.yml#L438-L441`](https://gitlab.com/gitlab-org/gitlab/-/blob/dcddbf83c29d1ad0839d55362c1b43888304f453/lib/gitlab/usage_data_counters/known_events/ci_templates.yml#L438-L441)
+- The weekly and monthly metrics definitions:
+  - [`config/metrics/counts_7d/20210901223501_p_ci_templates_5_minute_production_app_weekly.yml`](https://gitlab.com/gitlab-org/gitlab/-/blob/1a6eceff3914f240864b2ca15ae2dc076ea67bf6/config/metrics/counts_7d/20210216184515_p_ci_templates_5_min_production_app_weekly.yml)
+  - [`config/metrics/counts_28d/20210901223505_p_ci_templates_5_minute_production_app_monthly.yml`](https://gitlab.com/gitlab-org/gitlab/-/blob/master/config/metrics/counts_28d/20210216184517_p_ci_templates_5_min_production_app_monthly.yml)
+- The metrics count totals:
+  - [`config/metrics/counts_7d/20210216184557_ci_templates_total_unique_counts_weekly.yml#L19`](https://gitlab.com/gitlab-org/gitlab/-/blob/4e01ef2b094763943348655ef77008aba7a052ae/config/metrics/counts_7d/20210216184557_ci_templates_total_unique_counts_weekly.yml#L19)
+  - [`config/metrics/counts_28d/20210216184559_ci_templates_total_unique_counts_monthly.yml#L19`](https://gitlab.com/gitlab-org/gitlab/-/blob/4e01ef2b094763943348655ef77008aba7a052ae/config/metrics/counts_28d/20210216184559_ci_templates_total_unique_counts_monthly.yml#L19)
+
 ## Security
 
 A template could contain malicious code. For example, a template that contains the `export` shell command in a job
 might accidentally expose secret project CI/CD variables in a job log.
-If you're unsure if it's secure or not, you need to ask security experts for cross-validation.
+If you're unsure if it's secure or not, you must ask security experts for cross-validation.
 
 ## Contribute CI/CD template merge requests
 
 After your CI/CD template MR is created and labeled with `ci::templates`, DangerBot
 suggests one reviewer and one maintainer that can review your code. When your merge
-request is ready for review, please [mention](../../user/project/issues/issue_data_and_actions.md#mentions)
+request is ready for review, please [mention](../../user/discussions/index.md#mentions)
 the reviewer and ask them to review your CI/CD template changes. See details in the merge request that added
 [a DangerBot task for CI/CD template MRs](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/44688).

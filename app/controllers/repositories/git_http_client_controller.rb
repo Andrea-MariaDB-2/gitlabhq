@@ -8,11 +8,8 @@ module Repositories
 
     attr_reader :authentication_result, :redirected_path
 
-    delegate :actor, :authentication_abilities, to: :authentication_result, allow_nil: true
+    delegate :authentication_abilities, to: :authentication_result, allow_nil: true
     delegate :type, to: :authentication_result, allow_nil: true, prefix: :auth_result
-
-    alias_method :user, :actor
-    alias_method :authenticated_user, :actor
 
     # Git clients will not know what authenticity token to send along
     skip_around_action :set_session_storage
@@ -20,9 +17,20 @@ module Repositories
 
     prepend_before_action :authenticate_user, :parse_repo_path
 
+    skip_around_action :sessionless_bypass_admin_mode!
+    around_action :bypass_admin_mode!, if: :authenticated_user
+
     feature_category :source_code_management
 
+    def authenticated_user
+      authentication_result&.user || authentication_result&.deploy_token
+    end
+
     private
+
+    def user
+      authenticated_user
+    end
 
     def download_request?
       raise NotImplementedError
@@ -130,6 +138,12 @@ module Repositories
       download_request? &&
       container &&
       Guest.can?(repo_type.guest_read_ability, container)
+    end
+
+    def bypass_admin_mode!(&block)
+      return yield unless Gitlab::CurrentSettings.admin_mode
+
+      Gitlab::Auth::CurrentUserMode.bypass_session!(authenticated_user.id, &block)
     end
   end
 end

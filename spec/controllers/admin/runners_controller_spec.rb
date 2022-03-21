@@ -4,23 +4,52 @@ require 'spec_helper'
 
 RSpec.describe Admin::RunnersController do
   let_it_be(:runner) { create(:ci_runner) }
+  let_it_be(:user) { create(:admin) }
 
   before do
-    sign_in(create(:admin))
+    sign_in(user)
   end
 
   describe '#index' do
     render_views
 
-    it 'lists all runners' do
+    before do
       get :index
+    end
 
+    it 'renders index template' do
       expect(response).to have_gitlab_http_status(:ok)
       expect(response).to render_template(:index)
     end
   end
 
   describe '#show' do
+    render_views
+
+    let_it_be(:project) { create(:project) }
+
+    before_all do
+      create(:ci_build, runner: runner, project: project)
+    end
+
+    it 'shows a runner show page' do
+      get :show, params: { id: runner.id }
+
+      expect(response).to have_gitlab_http_status(:ok)
+      expect(response).to render_template(:show)
+    end
+
+    it 'when runner_read_only_admin_view is off, redirects to the runner edit page' do
+      stub_feature_flags(runner_read_only_admin_view: false)
+
+      get :show, params: { id: runner.id }
+
+      expect(response).to have_gitlab_http_status(:redirect)
+      expect(response).to redirect_to edit_admin_runner_path(runner)
+    end
+  end
+
+  describe '#edit' do
     render_views
 
     let_it_be(:project) { create(:project) }
@@ -31,29 +60,29 @@ RSpec.describe Admin::RunnersController do
       create(:ci_build, runner: runner, project: project_two)
     end
 
-    it 'shows a particular runner' do
-      get :show, params: { id: runner.id }
+    it 'shows a runner edit page' do
+      get :edit, params: { id: runner.id }
 
       expect(response).to have_gitlab_http_status(:ok)
     end
 
     it 'shows 404 for unknown runner' do
-      get :show, params: { id: 0 }
+      get :edit, params: { id: 0 }
 
       expect(response).to have_gitlab_http_status(:not_found)
     end
 
     it 'avoids N+1 queries', :request_store do
-      get :show, params: { id: runner.id }
+      get :edit, params: { id: runner.id }
 
-      control_count = ActiveRecord::QueryRecorder.new { get :show, params: { id: runner.id } }.count
+      control_count = ActiveRecord::QueryRecorder.new { get :edit, params: { id: runner.id } }.count
 
       new_project = create(:project)
       create(:ci_build, runner: runner, project: new_project)
 
       # There is one additional query looking up subject.group in ProjectPolicy for the
       # needs_new_sso_session permission
-      expect { get :show, params: { id: runner.id } }.not_to exceed_query_limit(control_count + 1)
+      expect { get :edit, params: { id: runner.id } }.not_to exceed_query_limit(control_count + 1)
 
       expect(response).to have_gitlab_http_status(:ok)
     end
@@ -76,6 +105,10 @@ RSpec.describe Admin::RunnersController do
 
   describe '#destroy' do
     it 'destroys the runner' do
+      expect_next_instance_of(Ci::Runners::UnregisterRunnerService, runner, user) do |service|
+        expect(service).to receive(:execute).once.and_call_original
+      end
+
       delete :destroy, params: { id: runner.id }
 
       expect(response).to have_gitlab_http_status(:found)

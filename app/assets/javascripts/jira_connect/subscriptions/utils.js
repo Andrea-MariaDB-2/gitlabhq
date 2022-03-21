@@ -1,4 +1,5 @@
 import AccessorUtilities from '~/lib/utils/accessor';
+import { objectToQuery } from '~/lib/utils/url_utility';
 import { ALERT_LOCALSTORAGE_KEY } from './constants';
 
 const isFunction = (fn) => typeof fn === 'function';
@@ -7,7 +8,7 @@ const isFunction = (fn) => typeof fn === 'function';
  * Persist alert data to localStorage.
  */
 export const persistAlert = ({ title, message, linkUrl, variant } = {}) => {
-  if (!AccessorUtilities.isLocalStorageAccessSafe()) {
+  if (!AccessorUtilities.canUseLocalStorage()) {
     return;
   }
 
@@ -19,7 +20,7 @@ export const persistAlert = ({ title, message, linkUrl, variant } = {}) => {
  * Return alert data from localStorage.
  */
 export const retrieveAlert = () => {
-  if (!AccessorUtilities.isLocalStorageAccessSafe()) {
+  if (!AccessorUtilities.canUseLocalStorage()) {
     return null;
   }
 
@@ -70,4 +71,18 @@ export const sizeToParent = () => {
   if (isFunction(AP?.sizeToParent)) {
     AP.sizeToParent();
   }
+};
+
+export const getGitlabSignInURL = async (signInURL) => {
+  const location = await getLocation();
+
+  if (location) {
+    const queryParams = {
+      return_to: location,
+    };
+
+    return `${signInURL}?${objectToQuery(queryParams)}`;
+  }
+
+  return signInURL;
 };

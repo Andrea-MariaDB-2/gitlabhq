@@ -1,6 +1,6 @@
 /* eslint-disable no-restricted-properties, babel/camelcase,
 no-unused-expressions, default-case,
-consistent-return, no-alert, no-param-reassign,
+consistent-return, no-param-reassign,
 no-shadow, no-useless-escape,
 class-methods-use-this */
 
@@ -13,20 +13,23 @@ deprecated_notes_spec.js is the spec for the legacy, jQuery notes application. I
 import { GlDeprecatedSkeletonLoading as GlSkeletonLoading } from '@gitlab/ui';
 import Autosize from 'autosize';
 import $ from 'jquery';
-import Cookies from 'js-cookie';
 import { escape, uniqueId } from 'lodash';
 import Vue from 'vue';
 import '~/lib/utils/jquery_at_who';
 import AjaxCache from '~/lib/utils/ajax_cache';
+import { loadingIconForLegacyJS } from '~/loading_icon_for_legacy_js';
 import syntaxHighlight from '~/syntax_highlight';
+import CommentTypeDropdown from '~/notes/components/comment_type_dropdown.vue';
+import * as constants from '~/notes/constants';
+import { confirmAction } from '~/lib/utils/confirm_via_gl_modal/confirm_via_gl_modal';
 import Autosave from './autosave';
 import loadAwardsHandler from './awards_handler';
-import CommentTypeToggle from './comment_type_toggle';
 import createFlash from './flash';
 import { defaultAutocompleteConfig } from './gfm_auto_complete';
 import GLForm from './gl_form';
 import axios from './lib/utils/axios_utils';
 import {
+  getCookie,
   isInViewport,
   getPagePath,
   scrollToElement,
@@ -120,7 +123,7 @@ export default class Notes {
   }
 
   setViewType(view) {
-    this.view = Cookies.get('diff_view') || view;
+    this.view = getCookie('diff_view') || view;
   }
 
   addBinding() {
@@ -128,7 +131,13 @@ export default class Notes {
     this.$wrapperEl.on('click', '.js-note-edit', this.showEditForm.bind(this));
     this.$wrapperEl.on('click', '.note-edit-cancel', this.cancelEdit);
     // Reopen and close actions for Issue/MR combined with note form submit
-    this.$wrapperEl.on('click', '.js-comment-submit-button', this.postComment);
+    this.$wrapperEl.on(
+      'click',
+      // this oddly written selector needs to match the old style (input with class) as
+      // well as the new DOM styling from the Vue-based note form
+      'input.js-comment-submit-button, .js-comment-submit-button > button:first-child',
+      this.postComment,
+    );
     this.$wrapperEl.on('click', '.js-comment-save-button', this.updateComment);
     this.$wrapperEl.on('keyup input', '.js-note-text', this.updateTargetButtons);
     // resolve a discussion
@@ -201,26 +210,42 @@ export default class Notes {
   }
 
   static initCommentTypeToggle(form) {
-    const dropdownTrigger = form.querySelector('.js-comment-type-dropdown .dropdown-toggle');
-    const dropdownList = form.querySelector('.js-comment-type-dropdown .dropdown-menu');
+    const el = form.querySelector('.js-comment-type-dropdown');
+    const { noteableName } = el.dataset;
     const noteTypeInput = form.querySelector('#note_type');
-    const submitButton = form.querySelector('.js-comment-type-dropdown .js-comment-submit-button');
-    const closeButton = form.querySelector('.js-note-target-close');
-    const reopenButton = form.querySelector('.js-note-target-reopen');
+    const formHasContent = form.querySelector('.js-note-text').value.trim().length > 0;
 
-    const commentTypeToggle = new CommentTypeToggle({
-      dropdownTrigger,
-      dropdownList,
-      noteTypeInput,
-      submitButton,
-      closeButton,
-      reopenButton,
+    form.commentTypeComponent = new Vue({
+      el,
+      data() {
+        return {
+          noteType: constants.COMMENT,
+          disabled: !formHasContent,
+        };
+      },
+      render(createElement) {
+        return createElement(CommentTypeDropdown, {
+          props: {
+            noteType: this.noteType,
+            noteableDisplayName: noteableName,
+            disabled: this.disabled,
+          },
+          on: {
+            change: (arg) => {
+              this.noteType = arg;
+              if (this.noteType === constants.DISCUSSION) {
+                noteTypeInput.value = constants.DISCUSSION_NOTE;
+              } else {
+                noteTypeInput.value = '';
+              }
+            },
+          },
+        });
+      },
     });
-
-    commentTypeToggle.initDroplab();
   }
 
-  keydownNoteText(e) {
+  async keydownNoteText(e) {
     let discussionNoteForm;
     let editNote;
     let myLastNote;
@@ -253,9 +278,11 @@ export default class Notes {
         discussionNoteForm = $textarea.closest('.js-discussion-note-form');
         if (discussionNoteForm.length) {
           if ($textarea.val() !== '') {
-            if (!window.confirm(__('Your comment will be discarded.'))) {
-              return;
-            }
+            const confirmed = await confirmAction(__('Your comment will be discarded.'), {
+              primaryBtnVariant: 'danger',
+              primaryBtnText: __('Discard'),
+            });
+            if (!confirmed) return;
           }
           this.removeDiscussionNoteForm(discussionNoteForm);
           return;
@@ -265,9 +292,14 @@ export default class Notes {
           originalText = $textarea.closest('form').data('originalNote');
           newText = $textarea.val();
           if (originalText !== newText) {
-            if (!window.confirm(__('Are you sure you want to discard this comment?'))) {
-              return;
-            }
+            const confirmed = await confirmAction(
+              __('Are you sure you want to discard this comment?'),
+              {
+                primaryBtnVariant: 'danger',
+                primaryBtnText: __('Discard'),
+              },
+            );
+            if (!confirmed) return;
           }
           return this.removeNoteEditForm(editNote);
         }
@@ -450,7 +482,7 @@ export default class Notes {
   }
 
   isParallelView() {
-    return Cookies.get('diff_view') === 'parallel';
+    return getCookie('diff_view') === 'parallel';
   }
 
   /**
@@ -670,6 +702,10 @@ export default class Notes {
   updateNote(noteEntity, $targetNote) {
     // Convert returned HTML to a jQuery object so we can modify it further
     const $noteEntityEl = $(noteEntity.html);
+    const $noteAvatar = $noteEntityEl.find('.image-diff-avatar-link');
+    const $targetNoteBadge = $targetNote.find('.design-note-pin');
+
+    $noteAvatar.append($targetNoteBadge);
     this.revertNoteEditForm($targetNote);
     $noteEntityEl.renderGFM();
     // Find the note's `li` element by ID and replace it with the updated HTML
@@ -1103,6 +1139,7 @@ export default class Notes {
     const form = textarea.parents('form');
     const reopenbtn = form.find('.js-note-target-reopen');
     const closebtn = form.find('.js-note-target-close');
+    const commentTypeComponent = form.get(0)?.commentTypeComponent;
 
     if (textarea.val().trim().length > 0) {
       reopentext = reopenbtn.attr('data-alternative-text');
@@ -1119,6 +1156,9 @@ export default class Notes {
       if (closebtn.is(':not(.btn-comment-and-close)')) {
         closebtn.addClass('btn-comment-and-close');
       }
+      if (commentTypeComponent) {
+        commentTypeComponent.disabled = false;
+      }
     } else {
       reopentext = reopenbtn.data('originalText');
       closetext = closebtn.data('originalText');
@@ -1133,6 +1173,9 @@ export default class Notes {
       }
       if (closebtn.is('.btn-comment-and-close')) {
         closebtn.removeClass('btn-comment-and-close');
+      }
+      if (commentTypeComponent) {
+        commentTypeComponent.disabled = true;
       }
     }
   }
@@ -1304,9 +1347,6 @@ export default class Notes {
   }
 
   cleanForm($form) {
-    // Remove JS classes that are not needed here
-    $form.find('.js-comment-type-dropdown').removeClass('btn-group');
-
     // Remove dropdown
     $form.find('.dropdown-menu').remove();
 
@@ -1501,6 +1541,8 @@ export default class Notes {
     const $submitBtn = $(e.target);
     $submitBtn.prop('disabled', true);
     let $form = $submitBtn.parents('form');
+    const commentTypeComponent = $form.get(0)?.commentTypeComponent;
+    if (commentTypeComponent) commentTypeComponent.disabled = true;
     const $closeBtn = $form.find('.js-note-target-close');
     const isDiscussionNote =
       $submitBtn.parent().find('li.droplab-item-selected').attr('id') === 'discussion';
@@ -1580,6 +1622,8 @@ export default class Notes {
         const note = res.data;
 
         $submitBtn.prop('disabled', false);
+        if (commentTypeComponent) commentTypeComponent.disabled = false;
+
         // Submission successful! remove placeholder
         $notesContainer.find(`#${noteUniqueId}`).remove();
 
@@ -1658,6 +1702,8 @@ export default class Notes {
         // Submission failed, remove placeholder note and show Flash error message
         $notesContainer.find(`#${noteUniqueId}`).remove();
         $submitBtn.prop('disabled', false);
+        if (commentTypeComponent) commentTypeComponent.disabled = false;
+
         const blurEvent = new CustomEvent('blur.imageDiff', {
           detail: e,
         });
@@ -1716,9 +1762,11 @@ export default class Notes {
     // Show updated comment content temporarily
     $noteBodyText.html(formContent);
     $editingNote.removeClass('is-editing fade-in-full').addClass('being-posted fade-in-half');
-    $editingNote
-      .find('.note-headline-meta a')
-      .html('<span class="spinner align-text-bottom"></span>');
+
+    const $timeAgo = $editingNote.find('.note-headline-meta a');
+
+    $timeAgo.empty();
+    $timeAgo.append(loadingIconForLegacyJS({ inline: true, size: 'sm' }));
 
     // Make request to update comment on server
     axios

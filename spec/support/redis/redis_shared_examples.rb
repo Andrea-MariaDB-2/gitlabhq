@@ -20,11 +20,11 @@ RSpec.shared_examples "redis_shared_examples" do
 
   before do
     allow(described_class).to receive(:config_file_name).and_return(Rails.root.join(config_file_name).to_s)
-    clear_raw_config
+    redis_clear_raw_config!(described_class)
   end
 
   after do
-    clear_raw_config
+    redis_clear_raw_config!(described_class)
   end
 
   describe '.config_file_name' do
@@ -83,6 +83,48 @@ RSpec.shared_examples "redis_shared_examples" do
             end
           end
         end
+      end
+    end
+  end
+
+  describe '.store' do
+    let(:rails_env) { 'development' }
+
+    subject { described_class.new(rails_env).store }
+
+    shared_examples 'redis store' do
+      let(:redis_store) { ::Redis::Store }
+      let(:redis_store_to_s) { "Redis Client connected to #{host} against DB #{redis_database}" }
+
+      it 'instantiates Redis::Store' do
+        is_expected.to be_a(redis_store)
+
+        expect(subject.to_s).to eq(redis_store_to_s)
+      end
+
+      context 'with the namespace' do
+        let(:namespace) { 'namespace_name' }
+        let(:redis_store_to_s) { "Redis Client connected to #{host} against DB #{redis_database} with namespace #{namespace}" }
+
+        subject { described_class.new(rails_env).store(namespace: namespace) }
+
+        it "uses specified namespace" do
+          expect(subject.to_s).to eq(redis_store_to_s)
+        end
+      end
+    end
+
+    context 'with old format' do
+      it_behaves_like 'redis store' do
+        let(:config_file_name) { config_old_format_host }
+        let(:host) { "localhost:#{redis_port}" }
+      end
+    end
+
+    context 'with new format' do
+      it_behaves_like 'redis store' do
+        let(:config_file_name) { config_new_format_host }
+        let(:host) { "development-host:#{redis_port}" }
       end
     end
   end
@@ -255,6 +297,28 @@ RSpec.shared_examples "redis_shared_examples" do
     end
   end
 
+  describe '#db' do
+    let(:rails_env) { 'development' }
+
+    subject { described_class.new(rails_env).db }
+
+    context 'with old format' do
+      let(:config_file_name) { config_old_format_host }
+
+      it 'returns the correct db' do
+        expect(subject).to eq(redis_database)
+      end
+    end
+
+    context 'with new format' do
+      let(:config_file_name) { config_new_format_host }
+
+      it 'returns the correct db' do
+        expect(subject).to eq(redis_database)
+      end
+    end
+  end
+
   describe '#sentinels' do
     subject { described_class.new(rails_env).sentinels }
 
@@ -327,12 +391,12 @@ RSpec.shared_examples "redis_shared_examples" do
 
       expect(subject.send(:fetch_config)).to eq false
     end
-  end
 
-  def clear_raw_config
-    described_class.remove_instance_variable(:@_raw_config)
-  rescue NameError
-    # raised if @_raw_config was not set; ignore
+    it 'has a value for the legacy default URL' do
+      allow(subject).to receive(:fetch_config) { false }
+
+      expect(subject.send(:raw_config_hash)).to include(url: a_string_matching(%r{\Aredis://localhost:638[012]\Z}))
+    end
   end
 
   def clear_pool

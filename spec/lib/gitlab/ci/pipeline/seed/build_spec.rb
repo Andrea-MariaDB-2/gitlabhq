@@ -3,17 +3,17 @@
 require 'spec_helper'
 
 RSpec.describe Gitlab::Ci::Pipeline::Seed::Build do
-  let_it_be(:project) { create(:project, :repository) }
+  let_it_be_with_reload(:project) { create(:project, :repository) }
   let_it_be(:head_sha) { project.repository.head_commit.id }
 
   let(:pipeline) { build(:ci_empty_pipeline, project: project, sha: head_sha) }
   let(:root_variables) { [] }
-  let(:seed_context) { double(pipeline: pipeline, root_variables: root_variables) }
-  let(:attributes) { { name: 'rspec', ref: 'master', scheduling_type: :stage } }
+  let(:seed_context) { Gitlab::Ci::Pipeline::Seed::Context.new(pipeline, root_variables: root_variables) }
+  let(:attributes) { { name: 'rspec', ref: 'master', scheduling_type: :stage, when: 'on_success' } }
   let(:previous_stages) { [] }
   let(:current_stage) { double(seeds_names: [attributes[:name]]) }
 
-  let(:seed_build) { described_class.new(seed_context, attributes, previous_stages, current_stage) }
+  let(:seed_build) { described_class.new(seed_context, attributes, previous_stages + [current_stage]) }
 
   describe '#attributes' do
     subject { seed_build.attributes }
@@ -61,17 +61,35 @@ RSpec.describe Gitlab::Ci::Pipeline::Seed::Build do
       end
     end
 
-    context 'with job:rules but no explicit when:' do
-      context 'is matched' do
-        let(:attributes) { { name: 'rspec', ref: 'master', rules: [{ if: '$VAR == null' }] } }
+    context 'with job: rules but no explicit when:' do
+      let(:base_attributes) { { name: 'rspec', ref: 'master' } }
 
-        it { is_expected.to include(when: 'on_success') }
+      context 'with a manual job' do
+        context 'with a matched rule' do
+          let(:attributes) { base_attributes.merge(when: 'manual', rules: [{ if: '$VAR == null' }]) }
+
+          it { is_expected.to include(when: 'manual') }
+        end
+
+        context 'is not matched' do
+          let(:attributes) { base_attributes.merge(when: 'manual', rules: [{ if: '$VAR != null' }]) }
+
+          it { is_expected.to include(when: 'never') }
+        end
       end
 
-      context 'is not matched' do
-        let(:attributes) { { name: 'rspec', ref: 'master', rules: [{ if: '$VAR != null' }] } }
+      context 'with an automatic job' do
+        context 'is matched' do
+          let(:attributes) { base_attributes.merge(when: 'on_success', rules: [{ if: '$VAR == null' }]) }
 
-        it { is_expected.to include(when: 'never') }
+          it { is_expected.to include(when: 'on_success') }
+        end
+
+        context 'is not matched' do
+          let(:attributes) { base_attributes.merge(when: 'on_success', rules: [{ if: '$VAR != null' }]) }
+
+          it { is_expected.to include(when: 'never') }
+        end
       end
     end
 
@@ -392,143 +410,6 @@ RSpec.describe Gitlab::Ci::Pipeline::Seed::Build do
 
   describe '#to_resource' do
     subject { seed_build.to_resource }
-
-    context 'when job is not a bridge' do
-      it { is_expected.to be_a(::Ci::Build) }
-      it { is_expected.to be_valid }
-
-      shared_examples_for 'deployment job' do
-        it 'returns a job with deployment' do
-          expect(subject.deployment).not_to be_nil
-          expect(subject.deployment.deployable).to eq(subject)
-          expect(subject.deployment.environment.name).to eq(expected_environment_name)
-        end
-      end
-
-      shared_examples_for 'non-deployment job' do
-        it 'returns a job without deployment' do
-          expect(subject.deployment).to be_nil
-        end
-      end
-
-      shared_examples_for 'ensures environment existence' do
-        it 'has environment' do
-          expect(subject).to be_has_environment
-          expect(subject.environment).to eq(environment_name)
-          expect(subject.metadata.expanded_environment_name).to eq(expected_environment_name)
-          expect(Environment.exists?(name: expected_environment_name)).to eq(true)
-        end
-      end
-
-      shared_examples_for 'ensures environment inexistence' do
-        it 'does not have environment' do
-          expect(subject).not_to be_has_environment
-          expect(subject.environment).to be_nil
-          expect(subject.metadata&.expanded_environment_name).to be_nil
-          expect(Environment.exists?(name: expected_environment_name)).to eq(false)
-        end
-      end
-
-      context 'when job deploys to production' do
-        let(:environment_name) { 'production' }
-        let(:expected_environment_name) { 'production' }
-        let(:attributes) { { name: 'deploy', ref: 'master', environment: 'production' } }
-
-        it_behaves_like 'deployment job'
-        it_behaves_like 'ensures environment existence'
-
-        context 'when the environment name is invalid' do
-          let(:attributes) { { name: 'deploy', ref: 'master', environment: '!!!' } }
-
-          it_behaves_like 'non-deployment job'
-          it_behaves_like 'ensures environment inexistence'
-
-          it 'tracks an exception' do
-            expect(Gitlab::ErrorTracking).to receive(:track_exception)
-              .with(an_instance_of(described_class::EnvironmentCreationFailure),
-                    project_id: project.id,
-                    reason: %q{Name can contain only letters, digits, '-', '_', '/', '$', '{', '}', '.', and spaces, but it cannot start or end with '/'})
-              .once
-
-            subject
-          end
-        end
-      end
-
-      context 'when job starts a review app' do
-        let(:environment_name) { 'review/$CI_COMMIT_REF_NAME' }
-        let(:expected_environment_name) { "review/#{pipeline.ref}" }
-
-        let(:attributes) do
-          {
-            name: 'deploy', ref: 'master', environment: environment_name,
-            options: { environment: { name: environment_name } }
-          }
-        end
-
-        it_behaves_like 'deployment job'
-        it_behaves_like 'ensures environment existence'
-      end
-
-      context 'when job stops a review app' do
-        let(:environment_name) { 'review/$CI_COMMIT_REF_NAME' }
-        let(:expected_environment_name) { "review/#{pipeline.ref}" }
-
-        let(:attributes) do
-          {
-            name: 'deploy', ref: 'master', environment: environment_name,
-            options: { environment: { name: environment_name, action: 'stop' } }
-          }
-        end
-
-        it 'returns a job without deployment' do
-          expect(subject.deployment).to be_nil
-        end
-
-        it_behaves_like 'non-deployment job'
-        it_behaves_like 'ensures environment existence'
-      end
-
-      context 'when job belongs to a resource group' do
-        let(:resource_group) { 'iOS' }
-        let(:attributes) { { name: 'rspec', ref: 'master', resource_group_key: resource_group, environment: 'production' }}
-
-        it 'returns a job with resource group' do
-          expect(subject.resource_group).not_to be_nil
-          expect(subject.resource_group.key).to eq('iOS')
-        end
-
-        context 'when resource group has $CI_ENVIRONMENT_NAME in it' do
-          let(:resource_group) { 'test/$CI_ENVIRONMENT_NAME' }
-
-          it 'expands environment name' do
-            expect(subject.resource_group.key).to eq('test/production')
-          end
-        end
-      end
-    end
-
-    context 'when job is a bridge' do
-      let(:base_attributes) do
-        {
-          name: 'rspec', ref: 'master', options: { trigger: 'my/project' }, scheduling_type: :stage
-        }
-      end
-
-      let(:attributes) { base_attributes }
-
-      it { is_expected.to be_a(::Ci::Bridge) }
-      it { is_expected.to be_valid }
-
-      context 'when job belongs to a resource group' do
-        let(:attributes) { base_attributes.merge(resource_group_key: 'iOS') }
-
-        it 'returns a job with resource group' do
-          expect(subject.resource_group).not_to be_nil
-          expect(subject.resource_group.key).to eq('iOS')
-        end
-      end
-    end
 
     it 'memoizes a resource object' do
       expect(subject.object_id).to eq seed_build.to_resource.object_id
@@ -873,7 +754,7 @@ RSpec.describe Gitlab::Ci::Pipeline::Seed::Build do
     context 'using rules:' do
       using RSpec::Parameterized
 
-      let(:attributes) { { name: 'rspec', rules: rule_set } }
+      let(:attributes) { { name: 'rspec', rules: rule_set, when: 'on_success' } }
 
       context 'with a matching if: rule' do
         context 'with an explicit `when: never`' do
@@ -1199,14 +1080,8 @@ RSpec.describe Gitlab::Ci::Pipeline::Seed::Build do
         ]
       end
 
-      context 'when FF :variable_inside_variable is enabled' do
-        before do
-          stub_feature_flags(variable_inside_variable: [project])
-        end
-
-        it "does not have errors" do
-          expect(subject.errors).to be_empty
-        end
+      it "does not have errors" do
+        expect(subject.errors).to be_empty
       end
     end
 
@@ -1219,36 +1094,20 @@ RSpec.describe Gitlab::Ci::Pipeline::Seed::Build do
         ]
       end
 
-      context 'when FF :variable_inside_variable is disabled' do
-        before do
-          stub_feature_flags(variable_inside_variable: false)
-        end
-
-        it "does not have errors" do
-          expect(subject.errors).to be_empty
-        end
+      it "returns an error" do
+        expect(subject.errors).to contain_exactly(
+          'rspec: circular variable reference detected: ["A", "B", "C"]')
       end
 
-      context 'when FF :variable_inside_variable is enabled' do
-        before do
-          stub_feature_flags(variable_inside_variable: [project])
+      context 'with job:rules:[if:]' do
+        let(:attributes) { { name: 'rspec', ref: 'master', rules: [{ if: '$C != null', when: 'always' }] } }
+
+        it "included? does not raise" do
+          expect { subject.included? }.not_to raise_error
         end
 
-        it "returns an error" do
-          expect(subject.errors).to contain_exactly(
-            'rspec: circular variable reference detected: ["A", "B", "C"]')
-        end
-
-        context 'with job:rules:[if:]' do
-          let(:attributes) { { name: 'rspec', ref: 'master', rules: [{ if: '$C != null', when: 'always' }] } }
-
-          it "included? does not raise" do
-            expect { subject.included? }.not_to raise_error
-          end
-
-          it "included? returns true" do
-            expect(subject.included?).to eq(true)
-          end
+        it "included? returns true" do
+          expect(subject.included?).to eq(true)
         end
       end
     end

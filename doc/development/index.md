@@ -18,7 +18,7 @@ the [Handbook](https://about.gitlab.com/handbook/).
 For information on using GitLab to work on your own software projects, see the
 [GitLab user documentation](../user/index.md).
 
-For information on working with the GitLab APIs, see the [API documentation](../api/README.md).
+For information on working with the GitLab APIs, see the [API documentation](../api/index.md).
 
 For information about how to install, configure, update, and upgrade your own
 GitLab instance, see the [administration documentation](../administration/index.md).
@@ -122,7 +122,7 @@ In these cases, use the following workflow:
    - [User Experience (UX)](https://about.gitlab.com/handbook/engineering/ux/)
    - [Security](https://about.gitlab.com/handbook/engineering/security/)
    - [Quality](https://about.gitlab.com/handbook/engineering/quality/)
-     - [Engineering Productivity](https://about.gitlab.com/handbook/engineering/quality/engineering-productivity-team/)
+     - [Engineering Productivity](https://about.gitlab.com/handbook/engineering/quality/engineering-productivity/)
    - [Infrastructure](https://about.gitlab.com/handbook/engineering/infrastructure/)
    - [Technical Writing](https://about.gitlab.com/handbook/engineering/ux/technical-writing/)
 
@@ -139,8 +139,9 @@ In these cases, use the following workflow:
    and approval from the VP of Development, the DRI for Development Guidelines,
    @clefelhocz1.
 
-1. After all approvals are complete, assign the merge request to the
-   Technical Writer for [Development Guidelines](https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments-to-development-guidelines)
+1. After all approvals are complete, review the page's metadata to
+   [find a Technical Writer](https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments)
+   who can help you merge the changes.
    for final content review and merge. The Technical Writer may ask for
    additional approvals as previously suggested before merging the MR.
 
@@ -163,6 +164,7 @@ the [reviewer values](https://about.gitlab.com/handbook/engineering/workflow/rev
 ### General
 
 - [Directory structure](directory_structure.md)
+- [GitLab EventStore](event_store.md) to publish/subscribe to domain events
 - [GitLab utilities](utilities.md)
 - [Newlines style guide](newlines_styleguide.md)
 - [Logging](logging.md)
@@ -173,6 +175,7 @@ the [reviewer values](https://about.gitlab.com/handbook/engineering/workflow/rev
 - [Windows Development on GCP](windows.md)
 - [FIPS compliance](fips_compliance.md)
 - [`Gemfile` guidelines](gemfile.md)
+- [Ruby upgrade guidelines](ruby_upgrade.md)
 
 ### Things to be aware of
 
@@ -180,6 +183,7 @@ the [reviewer values](https://about.gitlab.com/handbook/engineering/workflow/rev
 - [Avoid modules with instance variables](module_with_instance_variables.md), if
   possible
 - [Guidelines for reusing abstractions](reusing_abstractions.md)
+- [Ruby 3 gotchas](ruby3_gotchas.md)
 
 ### Rails Framework related
 
@@ -189,6 +193,7 @@ the [reviewer values](https://about.gitlab.com/handbook/engineering/workflow/rev
 - [Issuable-like Rails models](issuable-like-models.md)
 - [Issue types vs first-class types](issue_types.md)
 - [DeclarativePolicy framework](policies.md)
+- [Rails update guidelines](rails_update.md)
 
 ### Debugging
 
@@ -215,13 +220,14 @@ the [reviewer values](https://about.gitlab.com/handbook/engineering/workflow/rev
 - [How to dump production data to staging](db_dump.md)
 - [Geo development](geo.md)
 - [Redis guidelines](redis.md)
-- [Sidekiq guidelines](sidekiq_style_guide.md) for working with Sidekiq workers
+  - [Adding a new Redis instance](redis/new_redis_instance.md)
+- [Sidekiq guidelines](sidekiq/index.md) for working with Sidekiq workers
 - [Working with Gitaly](gitaly.md)
 - [Elasticsearch integration docs](elasticsearch.md)
-- [Working with Merge Request diffs](diffs.md)
+- [Working with merge request diffs](diffs.md)
 - [Approval Rules](approval_rules.md)
 - [Repository mirroring](repository_mirroring.md)
-- [File uploads](uploads.md)
+- [Uploads development guide](uploads/index.md)
 - [Auto DevOps development guide](auto_devops.md)
 - [Renaming features](renaming_features.md)
 - [Code Intelligence](code_intelligence/index.md)
@@ -253,15 +259,12 @@ the [reviewer values](https://about.gitlab.com/handbook/engineering/workflow/rev
 
 ## Performance guides
 
-- [Instrumentation](instrumentation.md) for Ruby code running in production
-  environments.
 - [Performance guidelines](performance.md) for writing code, benchmarks, and
   certain patterns to avoid.
 - [Caching guidelines](caching.md) for using caching in Rails under a GitLab environment.
 - [Merge request performance guidelines](merge_request_performance_guidelines.md)
   for ensuring merge requests do not negatively impact GitLab performance
-- [Profiling](profiling.md) a URL, measuring performance using Sherlock, or
-  tracking down N+1 queries using Bullet.
+- [Profiling](profiling.md) a URL or tracking down N+1 queries using Bullet.
 - [Cached queries guidelines](cached_queries.md), for tracking down N+1 queries
   masked by query caching, memory profiling and why should we avoid cached
   queries.
@@ -272,6 +275,7 @@ See [database guidelines](database/index.md).
 
 ## Integration guides
 
+- [Integrations development guide](integrations/index.md)
 - [Jira Connect app](integrations/jira_connect.md)
 - [Security Scanners](integrations/secure.md)
 - [Secure Partner Integration](integrations/secure_partner_integration.md)
@@ -326,6 +330,10 @@ See [database guidelines](database/index.md).
 - [CI/CD development documentation](cicd/index.md)
 - [AppSec development documentation](appsec/index.md)
 
+## Technical Reference by Group
+
+- [Create: Source Code BE](backend/create_source_code_be/index.md)
+
 ## Other Development guides
 
 - [Defining relations between files using projections](projections.md)
@@ -334,6 +342,8 @@ See [database guidelines](database/index.md).
 - [Features inside `.gitlab/`](features_inside_dot_gitlab.md)
 - [Dashboards for stage groups](stage_group_dashboards.md)
 - [Preventing transient bugs](transient/prevention-patterns.md)
+- [GitLab Application SLIs](application_slis/index.md)
+- [Spam protection and CAPTCHA development guide](spam_protection_and_captcha/index.md)
 
 ## Other GitLab Development Kit (GDK) guides
 

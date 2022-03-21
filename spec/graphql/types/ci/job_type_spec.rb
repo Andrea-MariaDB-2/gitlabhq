@@ -4,7 +4,6 @@ require 'spec_helper'
 
 RSpec.describe Types::Ci::JobType do
   specify { expect(described_class.graphql_name).to eq('CiJob') }
-  specify { expect(described_class).to require_graphql_authorizations(:read_commit_status) }
   specify { expect(described_class).to expose_permissions_using(Types::PermissionTypes::Ci::Job) }
 
   it 'exposes the expected fields' do
@@ -19,6 +18,7 @@ RSpec.describe Types::Ci::JobType do
       created_by_tag
       detailedStatus
       duration
+      downstreamPipeline
       finished_at
       id
       manual_job
@@ -26,6 +26,7 @@ RSpec.describe Types::Ci::JobType do
       needs
       pipeline
       playable
+      previousStageJobsOrNeeds
       queued_at
       queued_duration
       refName

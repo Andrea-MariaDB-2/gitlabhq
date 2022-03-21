@@ -2,13 +2,12 @@
 stage: Create
 group: Code Review
 info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
-type: index, reference
 description: "Getting started with merge requests."
 ---
 
 # Getting started with merge requests **(FREE)**
 
-A merge request (**MR**) is the basis of GitLab as a code
+A merge request (**MR**) is the basis of GitLab as a tool for code
 collaboration and version control.
 
 When working in a Git-based platform, you can use branching
@@ -50,13 +49,14 @@ Learn the various ways to [create a merge request](creating_merge_requests.md).
 ## What you can do with merge requests
 
 When you start a new merge request, you can immediately include the following
-options, or add them later by clicking the **Edit** button on the merge
-request's page at the top-right side:
+options. You can also add them later by either selecting **Edit** on the merge
+request's page at the top-right side, or by using
+[keyboard shortcuts for merge requests](../../shortcuts.md#issues-and-merge-requests):
 
 - [Assign](#assignee) the merge request to a colleague for review. With [multiple assignees](#multiple-assignees), you can assign it to more than one person at a time.
 - Set a [milestone](../milestones/index.md) to track time-sensitive changes.
 - Add [labels](../labels.md) to help contextualize and filter your merge requests over time.
-- [Require approval](approvals/index.md#required-approvals) from your team. **(PREMIUM)**
+- [Require approval](approvals/index.md#required-approvals) from your team.
 - [Close issues automatically](#merge-requests-to-close-issues) when they are merged.
 - Enable the [delete source branch when merge request is accepted](#deleting-the-source-branch) option to keep your repository clean.
 - Enable the [squash commits when merge request is accepted](squash_and_merge.md) option to combine all the commits into one before merging, thus keep a clean commit history in your repository.
@@ -65,8 +65,8 @@ request's page at the top-right side:
 After you have created the merge request, you can also:
 
 - [Discuss](../../discussions/index.md) your implementation with your team in the merge request thread.
-- [Perform inline code reviews](reviews/index.md#perform-inline-code-reviews).
-- Add [merge request dependencies](merge_request_dependencies.md) to restrict it to be merged only when other merge requests have been merged. **(PREMIUM)**
+- [Perform inline code reviews](reviews/index.md).
+- Add [merge request dependencies](merge_request_dependencies.md) to restrict it to be merged only when other merge requests have been merged.
 - Preview continuous integration [pipelines on the merge request widget](widgets.md).
 - Preview how your changes look directly on your deployed application with [Review Apps](widgets.md#live-preview-with-review-apps).
 - [Allow collaboration on merge requests across forks](allow_collaboration.md).
@@ -74,8 +74,10 @@ After you have created the merge request, you can also:
 - Add [code suggestions](reviews/suggestions.md) to change the content of merge requests directly into merge request threads, and easily apply them to the codebase directly from the UI.
 - Add a time estimation and the time spent with that merge request with [Time Tracking](../time_tracking.md#time-tracking).
 
-Many of these can be set when pushing changes from the command line,
-with [Git push options](../push_options.md).
+Many of these options can be set:
+
+- From the merge request page, with [keyboard shortcuts](../../shortcuts.md#issues-and-merge-requests).
+- When pushing changes from the command line, with [Git push options](../push_options.md).
 
 See also other [features associated to merge requests](reviews/index.md#associated-features).
 
@@ -85,12 +87,11 @@ Choose an assignee to designate someone as the person responsible
 for the first [review of the merge request](reviews/index.md).
 Open the drop down box to search for the user you wish to assign,
 and the merge request is added to their
-[assigned merge request list](../../search/index.md#issues-and-merge-requests).
+[assigned merge request list](../../search/index.md#search-issues-and-merge-requests).
 
 #### Multiple assignees **(PREMIUM)**
 
-> - [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/2004) in GitLab 11.11.
-> - Moved to GitLab Premium in 13.9
+> Moved to GitLab Premium in 13.9
 
 Multiple people often review merge requests at the same time.
 GitLab allows you to have multiple assignees for merge requests
@@ -133,10 +134,18 @@ To learn more, read [Review a merge request](reviews/index.md).
 
 ### Merge requests to close issues
 
-If the merge request is being created to resolve an issue, you can
-add a note in the description which sets it to
-[automatically close the issue](../issues/managing_issues.md#closing-issues-automatically)
-when merged.
+To create a merge request to close an issue when it's merged, you can either:
+
+- [Add a note in the MR description](../issues/managing_issues.md#closing-issues-automatically).
+- In the issue, select **Create a merge request**. Then, you can either:
+
+  - Create a new branch and [a draft merge request](../merge_requests/drafts.md)
+    in one action. The branch is named `issuenumber-title` by default, but you can
+    choose any name, and GitLab verifies that it's not already in use. The merge request
+    inherits the milestone and labels of the issue, and is set to automatically
+    close the issue when it is merged.
+  - Create a [new branch](../repository/web_editor.md#create-a-new-branch-from-an-issue)
+    only, with its name starting with the issue number.
 
 If the issue is [confidential](../issues/confidential_issues.md),
 you may want to use a different workflow for
@@ -152,8 +161,8 @@ enabled by default for all new merge requests, enable it in the
 [project's settings](../settings/index.md#merge-request-settings).
 
 This option is also visible in an existing merge request next to
-the merge request button and can be selected or deselected before merging.
-It is only visible to users with the [Maintainer role](../../permissions.md)
+the merge request button and can be selected or cleared before merging.
+It is only visible to users with the Maintainer role
 in the source project.
 
 If the user viewing the merge request does not have the correct
@@ -168,11 +177,6 @@ is set for deletion, the merge request widget displays the
 > - [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/320902) in GitLab 13.9.
 > - [Disabled on self-managed](https://gitlab.com/gitlab-org/gitlab/-/issues/320902) in GitLab 13.9.
 > - [Enabled on self-managed](https://gitlab.com/gitlab-org/gitlab/-/issues/320895) GitLab 13.10.
-
-FLAG:
-On self-managed GitLab, by default this feature is available. To hide the feature,
-ask an administrator to
-[disable the `retarget_merge_requests` flag](../../../administration/feature_flags.md).
 
 In specific circumstances, GitLab can retarget the destination branch of
 open merge request, if the destination branch merges while the merge request is
@@ -201,7 +205,7 @@ This improvement is [tracked as a follow-up](https://gitlab.com/gitlab-org/gitla
 
 - When working locally in your branch, add multiple commits and only push when
   you're done, so GitLab runs only one pipeline for all the commits pushed
-  at once. By doing so, you save pipeline minutes.
+  at once. By doing so, you save CI/CD minutes.
 - Delete feature branches on merge or after merging them to keep your repository clean.
 - Take one thing at a time and ship the smallest changes possible. By doing so,
   reviews are faster and your changes are less prone to errors.

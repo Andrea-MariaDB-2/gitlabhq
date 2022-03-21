@@ -81,14 +81,22 @@ RSpec.describe API::Members do
         expect(json_response.map { |u| u['id'] }).to match_array [maintainer.id, developer.id]
       end
 
-      it 'finds members with query string' do
-        get api(members_url, developer), params: { query: maintainer.username }
+      context 'with cross db check disabled' do
+        around do |example|
+          allow_cross_joins_across_databases(url: 'https://gitlab.com/gitlab-org/gitlab/-/issues/343305') do
+            example.run
+          end
+        end
 
-        expect(response).to have_gitlab_http_status(:ok)
-        expect(response).to include_pagination_headers
-        expect(json_response).to be_an Array
-        expect(json_response.count).to eq(1)
-        expect(json_response.first['username']).to eq(maintainer.username)
+        it 'finds members with query string' do
+          get api(members_url, developer), params: { query: maintainer.username }
+
+          expect(response).to have_gitlab_http_status(:ok)
+          expect(response).to include_pagination_headers
+          expect(json_response).to be_an Array
+          expect(json_response.count).to eq(1)
+          expect(json_response.first['username']).to eq(maintainer.username)
+        end
       end
 
       it 'finds members with the given user_ids' do
@@ -198,7 +206,7 @@ RSpec.describe API::Members do
 
               # Member attributes
               expect(json_response['access_level']).to eq(Member::DEVELOPER)
-              expect(json_response['created_at'].to_time).to be_like_time(developer.created_at)
+              expect(json_response['created_at'].to_time).to be_present
             end
           end
         end
@@ -311,36 +319,6 @@ RSpec.describe API::Members do
             expect(json_response['status']).to eq('error')
             expect(json_response['message']).to eq(error_message)
           end
-
-          context 'with invite_source considerations', :snowplow do
-            let(:params) { { user_id: user_ids, access_level: Member::DEVELOPER } }
-
-            it 'tracks the invite source as api' do
-              post api("/#{source_type.pluralize}/#{source.id}/members", maintainer),
-                   params: params
-
-              expect_snowplow_event(
-                category: 'Members::CreateService',
-                action: 'create_member',
-                label: 'members-api',
-                property: 'existing_user',
-                user: maintainer
-              )
-            end
-
-            it 'tracks the invite source from params' do
-              post api("/#{source_type.pluralize}/#{source.id}/members", maintainer),
-                   params: params.merge(invite_source: '_invite_source_')
-
-              expect_snowplow_event(
-                category: 'Members::CreateService',
-                action: 'create_member',
-                label: '_invite_source_',
-                property: 'existing_user',
-                user: maintainer
-              )
-            end
-          end
         end
       end
 
@@ -409,54 +387,37 @@ RSpec.describe API::Members do
         end
       end
 
-      context 'with areas_of_focus considerations', :snowplow do
+      context 'with tasks_to_be_done and tasks_project_id in the params' do
+        let(:project_id) { source_type == 'project' ? source.id : create(:project, namespace: source).id }
+
         context 'when there is 1 user to add' do
-          let(:user_id) { stranger.id }
+          it 'creates a member_task with the correct attributes' do
+            post api("/#{source_type.pluralize}/#{source.id}/members", maintainer),
+                 params: { user_id: stranger.id, access_level: Member::DEVELOPER, tasks_to_be_done: %w(code ci), tasks_project_id: project_id }
 
-          context 'when areas_of_focus is present in params' do
-            it 'tracks the areas_of_focus' do
-              post api("/#{source_type.pluralize}/#{source.id}/members", maintainer),
-                   params: { user_id: user_id, access_level: Member::DEVELOPER, areas_of_focus: 'Other' }
-
-              expect_snowplow_event(
-                category: 'Members::CreateService',
-                action: 'area_of_focus',
-                label: 'Other',
-                property: source.members.last.id.to_s
-              )
-            end
-          end
-
-          context 'when areas_of_focus is not present in params' do
-            it 'does not track the areas_of_focus' do
-              post api("/#{source_type.pluralize}/#{source.id}/members", maintainer),
-                   params: { user_id: user_id, access_level: Member::DEVELOPER }
-
-              expect_no_snowplow_event(category: 'Members::CreateService', action: 'area_of_focus')
-            end
+            member = source.members.find_by(user_id: stranger.id)
+            expect(member.tasks_to_be_done).to match_array([:code, :ci])
+            expect(member.member_task.project_id).to eq(project_id)
           end
         end
 
         context 'when there are multiple users to add' do
-          let(:user_id) { [developer.id, stranger.id].join(',') }
+          it 'creates a member_task with the correct attributes' do
+            post api("/#{source_type.pluralize}/#{source.id}/members", maintainer),
+                 params: { user_id: [developer.id, stranger.id].join(','), access_level: Member::DEVELOPER, tasks_to_be_done: %w(code ci), tasks_project_id: project_id }
 
-          context 'when areas_of_focus is present in params' do
-            it 'tracks the areas_of_focus' do
-              post api("/#{source_type.pluralize}/#{source.id}/members", maintainer),
-                   params: { user_id: user_id, access_level: Member::DEVELOPER, areas_of_focus: 'Other' }
-
-              expect_snowplow_event(
-                category: 'Members::CreateService',
-                action: 'area_of_focus',
-                label: 'Other',
-                property: source.members.last.id.to_s
-              )
+            members = source.members.where(user_id: [developer.id, stranger.id])
+            members.each do |member|
+              expect(member.tasks_to_be_done).to match_array([:code, :ci])
+              expect(member.member_task.project_id).to eq(project_id)
             end
           end
         end
       end
 
       it "returns 409 if member already exists" do
+        source.add_guest(stranger)
+
         post api("/#{source_type.pluralize}/#{source.id}/members", maintainer),
              params: { user_id: maintainer.id, access_level: Member::MAINTAINER }
 
@@ -714,13 +675,13 @@ RSpec.describe API::Members do
     end
 
     context 'adding owner to project' do
-      it 'returns 403' do
+      it 'returns created status' do
         expect do
           post api("/projects/#{project.id}/members", maintainer),
                params: { user_id: stranger.id, access_level: Member::OWNER }
 
-          expect(response).to have_gitlab_http_status(:bad_request)
-        end.not_to change { project.members.count }
+          expect(response).to have_gitlab_http_status(:created)
+        end.to change { project.members.count }.by(1)
       end
     end
 

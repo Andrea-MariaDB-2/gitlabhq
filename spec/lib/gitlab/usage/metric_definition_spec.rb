@@ -9,7 +9,9 @@ RSpec.describe Gitlab::Usage::MetricDefinition do
       value_type: 'string',
       product_category: 'collection',
       product_stage: 'growth',
+      product_section: 'devops',
       status: 'active',
+      milestone: '14.1',
       default_generation: 'generation_1',
       key_path: 'uuid',
       product_group: 'group::product analytics',
@@ -48,6 +50,59 @@ RSpec.describe Gitlab::Usage::MetricDefinition do
     expect { described_class.definitions }.not_to raise_error
   end
 
+  describe 'not_removed' do
+    let(:all_definitions) do
+      metrics_definitions = [
+        { key_path: 'metric1', instrumentation_class: 'RedisHLLMetric', status: 'active' },
+        { key_path: 'metric2', instrumentation_class: 'RedisHLLMetric', status: 'broken' },
+        { key_path: 'metric3', instrumentation_class: 'RedisHLLMetric', status: 'active' },
+        { key_path: 'metric4', instrumentation_class: 'RedisHLLMetric', status: 'removed' }
+      ]
+      metrics_definitions.map { |definition| described_class.new(definition[:key_path], definition.symbolize_keys) }
+    end
+
+    before do
+      allow(described_class).to receive(:all).and_return(all_definitions)
+    end
+
+    it 'includes metrics that are not removed' do
+      expect(described_class.not_removed.count).to eq(3)
+
+      expect(described_class.not_removed.keys).to match_array(%w(metric1 metric2 metric3))
+    end
+  end
+
+  describe '#with_instrumentation_class' do
+    let(:metric_status) { 'active' }
+    let(:all_definitions) do
+      metrics_definitions = [
+        { key_path: 'metric1', instrumentation_class: 'RedisHLLMetric', status: 'data_available' },
+        { key_path: 'metric2', instrumentation_class: 'RedisHLLMetric', status: 'implemented' },
+        { key_path: 'metric3', instrumentation_class: 'RedisHLLMetric', status: 'deprecated' },
+        { key_path: 'metric4', instrumentation_class: 'RedisHLLMetric', status: metric_status },
+        { key_path: 'metric5', status: 'active' },
+        { key_path: 'metric_missing_status' }
+      ]
+      metrics_definitions.map { |definition| described_class.new(definition[:key_path], definition.symbolize_keys) }
+    end
+
+    before do
+      allow(described_class).to receive(:all).and_return(all_definitions)
+    end
+
+    it 'includes definitions with instrumentation_class' do
+      expect(described_class.with_instrumentation_class.count).to eq(4)
+    end
+
+    context 'with removed metric' do
+      let(:metric_status) { 'removed' }
+
+      it 'excludes removed definitions' do
+        expect(described_class.with_instrumentation_class.count).to eq(3)
+      end
+    end
+  end
+
   describe '#key' do
     subject { definition.key }
 
@@ -64,6 +119,7 @@ RSpec.describe Gitlab::Usage::MetricDefinition do
       :value_type         | nil
       :value_type         | 'test'
       :status             | nil
+      :milestone          | nil
       :data_category      | nil
       :key_path           | nil
       :product_group      | nil
@@ -189,7 +245,9 @@ RSpec.describe Gitlab::Usage::MetricDefinition do
         value_type: 'string',
         product_category: 'collection',
         product_stage: 'growth',
+        product_section: 'devops',
         status: 'active',
+        milestone: '14.1',
         default_generation: 'generation_1',
         key_path: 'counter.category.event',
         product_group: 'group::product analytics',

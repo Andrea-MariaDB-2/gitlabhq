@@ -32,10 +32,10 @@ RSpec.describe 'Profile > SSH Keys' do
       expect(find('.breadcrumbs-sub-title')).to have_link(attrs[:title])
     end
 
-    it 'shows a confirmable warning if the key does not start with ssh-' do
+    it 'shows a confirmable warning if the key begins with an algorithm name that is unsupported' do
       attrs = attributes_for(:key)
 
-      fill_in('Key', with: 'invalid-key')
+      fill_in('Key', with: 'unsupported-ssh-rsa key')
       fill_in('Title', with: attrs[:title])
       click_button('Add key')
 
@@ -49,7 +49,12 @@ RSpec.describe 'Profile > SSH Keys' do
     context 'when only DSA and ECDSA keys are allowed' do
       before do
         forbidden = ApplicationSetting::FORBIDDEN_KEY_VALUE
-        stub_application_setting(rsa_key_restriction: forbidden, ed25519_key_restriction: forbidden)
+        stub_application_setting(
+          rsa_key_restriction: forbidden,
+          ed25519_key_restriction: forbidden,
+          ecdsa_sk_key_restriction: forbidden,
+          ed25519_sk_key_restriction: forbidden
+        )
       end
 
       it 'shows a validation error' do

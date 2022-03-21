@@ -1,15 +1,16 @@
 import { GlEmptyState, GlLoadingIcon, GlFormInput, GlPagination, GlDropdown } from '@gitlab/ui';
-import { createLocalVue, mount } from '@vue/test-utils';
+import { mount } from '@vue/test-utils';
+import Vue, { nextTick } from 'vue';
 import Vuex from 'vuex';
 import stubChildren from 'helpers/stub_children';
 import ErrorTrackingActions from '~/error_tracking/components/error_tracking_actions.vue';
 import ErrorTrackingList from '~/error_tracking/components/error_tracking_list.vue';
 import { trackErrorListViewsOptions, trackErrorStatusUpdateOptions } from '~/error_tracking/utils';
 import Tracking from '~/tracking';
+import { extendedWrapper } from 'helpers/vue_test_utils_helper';
 import errorsList from './list_mock.json';
 
-const localVue = createLocalVue();
-localVue.use(Vuex);
+Vue.use(Vuex);
 
 describe('ErrorTrackingList', () => {
   let store;
@@ -25,29 +26,33 @@ describe('ErrorTrackingList', () => {
   const findLoadingIcon = () => wrapper.find(GlLoadingIcon);
   const findPagination = () => wrapper.find(GlPagination);
   const findErrorActions = () => wrapper.find(ErrorTrackingActions);
+  const findIntegratedDisabledAlert = () => wrapper.findByTestId('integrated-disabled-alert');
 
   function mountComponent({
     errorTrackingEnabled = true,
     userCanEnableErrorTracking = true,
+    showIntegratedTrackingDisabledAlert = false,
     stubs = {},
   } = {}) {
-    wrapper = mount(ErrorTrackingList, {
-      localVue,
-      store,
-      propsData: {
-        indexPath: '/path',
-        listPath: '/error_tracking',
-        projectPath: 'project/test',
-        enableErrorTrackingLink: '/link',
-        userCanEnableErrorTracking,
-        errorTrackingEnabled,
-        illustrationPath: 'illustration/path',
-      },
-      stubs: {
-        ...stubChildren(ErrorTrackingList),
-        ...stubs,
-      },
-    });
+    wrapper = extendedWrapper(
+      mount(ErrorTrackingList, {
+        store,
+        propsData: {
+          indexPath: '/path',
+          listPath: '/error_tracking',
+          projectPath: 'project/test',
+          enableErrorTrackingLink: '/link',
+          userCanEnableErrorTracking,
+          errorTrackingEnabled,
+          showIntegratedTrackingDisabledAlert,
+          illustrationPath: 'illustration/path',
+        },
+        stubs: {
+          ...stubChildren(ErrorTrackingList),
+          ...stubs,
+        },
+      }),
+    );
   }
 
   beforeEach(() => {
@@ -224,6 +229,31 @@ describe('ErrorTrackingList', () => {
     });
   });
 
+  describe('When the integrated tracking diabled alert should be shown', () => {
+    beforeEach(() => {
+      mountComponent({
+        showIntegratedTrackingDisabledAlert: true,
+        stubs: {
+          GlAlert: false,
+        },
+      });
+    });
+
+    it('shows the alert box', () => {
+      expect(findIntegratedDisabledAlert().exists()).toBe(true);
+    });
+
+    describe('when alert is dismissed', () => {
+      it('hides the alert box', async () => {
+        findIntegratedDisabledAlert().vm.$emit('dismiss');
+
+        await nextTick();
+
+        expect(findIntegratedDisabledAlert().exists()).toBe(false);
+      });
+    });
+  });
+
   describe('When the ignore button on an error is clicked', () => {
     beforeEach(() => {
       store.state.list.loading = false;
@@ -317,15 +347,14 @@ describe('ErrorTrackingList', () => {
       expect(findRecentSearchesDropdown().text()).toContain("You don't have any recent searches");
     });
 
-    it('shows items', () => {
+    it('shows items', async () => {
       store.state.list.recentSearches = ['great', 'search'];
 
-      return wrapper.vm.$nextTick().then(() => {
-        const dropdownItems = wrapper.findAll('.filtered-search-box li');
-        expect(dropdownItems.length).toBe(3);
-        expect(dropdownItems.at(0).text()).toBe('great');
-        expect(dropdownItems.at(1).text()).toBe('search');
-      });
+      await nextTick();
+      const dropdownItems = wrapper.findAll('.filtered-search-box li');
+      expect(dropdownItems.length).toBe(3);
+      expect(dropdownItems.at(0).text()).toBe('great');
+      expect(dropdownItems.at(1).text()).toBe('search');
     });
 
     describe('clear', () => {
@@ -337,23 +366,21 @@ describe('ErrorTrackingList', () => {
         expect(clearRecentButton().exists()).toBe(false);
       });
 
-      it('is visible when list has items', () => {
+      it('is visible when list has items', async () => {
         store.state.list.recentSearches = ['some', 'searches'];
 
-        return wrapper.vm.$nextTick().then(() => {
-          expect(clearRecentButton().exists()).toBe(true);
-          expect(clearRecentButton().text()).toBe('Clear recent searches');
-        });
+        await nextTick();
+        expect(clearRecentButton().exists()).toBe(true);
+        expect(clearRecentButton().text()).toBe('Clear recent searches');
       });
 
-      it('clears items on click', () => {
+      it('clears items on click', async () => {
         store.state.list.recentSearches = ['some', 'searches'];
 
-        return wrapper.vm.$nextTick().then(() => {
-          clearRecentButton().vm.$emit('click');
+        await nextTick();
+        clearRecentButton().vm.$emit('click');
 
-          expect(actions.clearRecentSearches).toHaveBeenCalledTimes(1);
-        });
+        expect(actions.clearRecentSearches).toHaveBeenCalledTimes(1);
       });
     });
   });
@@ -371,24 +398,9 @@ describe('ErrorTrackingList', () => {
   });
 
   describe('When pagination is required', () => {
-    describe('and the user is on the first page', () => {
-      beforeEach(() => {
-        store.state.list.loading = false;
-        mountComponent({
-          stubs: {
-            GlPagination: false,
-          },
-        });
-      });
-
-      it('shows a disabled Prev button', () => {
-        expect(wrapper.find('.prev-page-item').attributes('aria-disabled')).toBe('true');
-      });
-    });
-
     describe('and the user is not on the first page', () => {
       describe('and the previous button is clicked', () => {
-        beforeEach(() => {
+        beforeEach(async () => {
           store.state.list.loading = false;
           mountComponent({
             stubs: {
@@ -396,8 +408,10 @@ describe('ErrorTrackingList', () => {
               GlPagination: false,
             },
           });
+          // setData usage is discouraged. See https://gitlab.com/groups/gitlab-org/-/epics/7330 for details
+          // eslint-disable-next-line no-restricted-syntax
           wrapper.setData({ pageValue: 2 });
-          return wrapper.vm.$nextTick();
+          await nextTick();
         });
 
         it('fetches the previous page of results', () => {
@@ -449,7 +463,7 @@ describe('ErrorTrackingList', () => {
       expect(Tracking.event).toHaveBeenCalledWith(category, action);
     });
 
-    it('should track status updates', () => {
+    it('should track status updates', async () => {
       Tracking.event.mockClear();
       const status = 'ignored';
       findErrorActions().vm.$emit('update-issue-status', {
@@ -457,10 +471,10 @@ describe('ErrorTrackingList', () => {
         status,
       });
 
-      setImmediate(() => {
-        const { category, action } = trackErrorStatusUpdateOptions(status);
-        expect(Tracking.event).toHaveBeenCalledWith(category, action);
-      });
+      await nextTick();
+
+      const { category, action } = trackErrorStatusUpdateOptions(status);
+      expect(Tracking.event).toHaveBeenCalledWith(category, action);
     });
   });
 });

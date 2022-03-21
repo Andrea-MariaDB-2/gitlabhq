@@ -16,6 +16,40 @@ Bundler.require(*Rails.groups)
 
 module Gitlab
   class Application < Rails::Application
+    config.load_defaults 6.1
+
+    config.view_component.preview_route = "/-/view_component/previews"
+
+    # This section contains configuration from Rails upgrades to override the new defaults so that we
+    # keep existing behavior.
+    #
+    # For boolean values, the new default is the opposite of the value being set in this section.
+    # For other types, the new default is noted in the comments. These are also documented in
+    # https://guides.rubyonrails.org/configuring.html#results-of-config-load-defaults
+    #
+    # To switch a setting to the new default value, we just need to delete the specific line here.
+
+    # Rails 6.1
+    config.action_dispatch.cookies_same_site_protection = nil # New default is :lax
+    ActiveSupport.utc_to_local_returns_utc_offset_times = false
+    config.action_controller.urlsafe_csrf_tokens = false
+    config.action_view.preload_links_header = false
+
+    # Rails 5.2
+    config.action_dispatch.use_authenticated_cookie_encryption = false
+    config.active_support.use_authenticated_message_encryption = false
+    config.active_support.hash_digest_class = ::Digest::MD5 # New default is ::Digest::SHA1
+    config.action_controller.default_protect_from_forgery = false
+    config.action_view.form_with_generates_ids = false
+
+    # Rails 5.1
+    config.assets.unknown_asset_fallback = true
+
+    # Rails 5.0
+    config.action_controller.per_form_csrf_tokens = false
+    config.action_controller.forgery_protection_origin_check = false
+    ActiveSupport.to_time_preserves_timezone = false
+
     require_dependency Rails.root.join('lib/gitlab')
     require_dependency Rails.root.join('lib/gitlab/utils')
     require_dependency Rails.root.join('lib/gitlab/action_cable/config')
@@ -23,16 +57,30 @@ module Gitlab
     require_dependency Rails.root.join('lib/gitlab/redis/cache')
     require_dependency Rails.root.join('lib/gitlab/redis/queues')
     require_dependency Rails.root.join('lib/gitlab/redis/shared_state')
+    require_dependency Rails.root.join('lib/gitlab/redis/trace_chunks')
+    require_dependency Rails.root.join('lib/gitlab/redis/rate_limiting')
+    require_dependency Rails.root.join('lib/gitlab/redis/sessions')
     require_dependency Rails.root.join('lib/gitlab/current_settings')
     require_dependency Rails.root.join('lib/gitlab/middleware/read_only')
+    require_dependency Rails.root.join('lib/gitlab/middleware/compressed_json')
     require_dependency Rails.root.join('lib/gitlab/middleware/basic_health_check')
     require_dependency Rails.root.join('lib/gitlab/middleware/same_site_cookies')
     require_dependency Rails.root.join('lib/gitlab/middleware/handle_ip_spoof_attack_error')
     require_dependency Rails.root.join('lib/gitlab/middleware/handle_malformed_strings')
     require_dependency Rails.root.join('lib/gitlab/middleware/rack_multipart_tempfile_factory')
     require_dependency Rails.root.join('lib/gitlab/runtime')
+    require_dependency Rails.root.join('lib/gitlab/patch/legacy_database_config')
+    require_dependency Rails.root.join('lib/gitlab/exceptions_app')
 
-    config.autoloader = :zeitwerk
+    config.exceptions_app = Gitlab::ExceptionsApp.new(Rails.public_path)
+
+    # To be removed in 15.0
+    # This preload is needed to convert legacy `database.yml`
+    # from `production: adapter: postgresql`
+    # into a `production: main: adapter: postgresql`
+    unless Gitlab::Utils.to_boolean(ENV['SKIP_DATABASE_CONFIG_VALIDATION'], default: false)
+      config.class.prepend(::Gitlab::Patch::LegacyDatabaseConfig)
+    end
 
     # Settings in config/environments/* take precedence over those specified here.
     # Application configuration should go into files in config/initializers
@@ -177,17 +225,18 @@ module Gitlab
     # regardless if schema_search_path is set, or not.
     config.active_record.dump_schemas = :all
 
-    # Use new connection handling so that we can use Rails 6.1+ multiple
-    # database support.
-    config.active_record.legacy_connection_handling = false
-
-    config.action_mailer.delivery_job = "ActionMailer::MailDeliveryJob"
+    # Override default Active Record settings
+    # We cannot do this in an initializer because some models are already loaded by then
+    config.active_record.cache_versioning = false
+    config.active_record.collection_cache_versioning = false
+    config.active_record.has_many_inversing = false
+    config.active_record.belongs_to_required_by_default = false
 
     # Enable the asset pipeline
     config.assets.enabled = true
 
     # Support legacy unicode file named img emojis, `1F939.png`
-    config.assets.paths << Gemojione.images_path
+    config.assets.paths << TanukiEmoji.images_path
     config.assets.paths << "#{config.root}/vendor/assets/fonts"
 
     config.assets.precompile << "application_utilities.css"
@@ -200,6 +249,7 @@ module Gitlab
     config.assets.precompile << "mailer.css"
     config.assets.precompile << "mailer_client_specific.css"
     config.assets.precompile << "notify.css"
+    config.assets.precompile << "notify_enhanced.css"
     config.assets.precompile << "mailers/*.css"
     config.assets.precompile << "page_bundles/_mixins_and_variables_and_functions.css"
     config.assets.precompile << "page_bundles/admin/application_settings_metrics_and_profiling.css"
@@ -210,7 +260,8 @@ module Gitlab
     config.assets.precompile << "page_bundles/build.css"
     config.assets.precompile << "page_bundles/ci_status.css"
     config.assets.precompile << "page_bundles/cycle_analytics.css"
-    config.assets.precompile << "page_bundles/dev_ops_report.css"
+    config.assets.precompile << "page_bundles/dashboard_projects.css"
+    config.assets.precompile << "page_bundles/dev_ops_reports.css"
     config.assets.precompile << "page_bundles/environments.css"
     config.assets.precompile << "page_bundles/epics.css"
     config.assets.precompile << "page_bundles/error_tracking_details.css"
@@ -237,12 +288,14 @@ module Gitlab
     config.assets.precompile << "page_bundles/productivity_analytics.css"
     config.assets.precompile << "page_bundles/profile_two_factor_auth.css"
     config.assets.precompile << "page_bundles/project.css"
+    config.assets.precompile << "page_bundles/projects_edit.css"
     config.assets.precompile << "page_bundles/reports.css"
     config.assets.precompile << "page_bundles/roadmap.css"
     config.assets.precompile << "page_bundles/security_dashboard.css"
     config.assets.precompile << "page_bundles/security_discover.css"
     config.assets.precompile << "page_bundles/signup.css"
     config.assets.precompile << "page_bundles/terminal.css"
+    config.assets.precompile << "page_bundles/terms.css"
     config.assets.precompile << "page_bundles/todos.css"
     config.assets.precompile << "page_bundles/wiki.css"
     config.assets.precompile << "page_bundles/xterm.css"
@@ -306,6 +359,8 @@ module Gitlab
 
     config.middleware.insert_after Rack::Sendfile, ::Gitlab::Middleware::RackMultipartTempfileFactory
 
+    config.middleware.insert_before Rack::Runtime, ::Gitlab::Middleware::CompressedJson
+
     # Allow access to GitLab API from other domains
     config.middleware.insert_before Warden::Manager, Rack::Cors do
       headers_to_expose = %w[Link X-Total X-Total-Pages X-Per-Page X-Page X-Next-Page X-Prev-Page X-Gitlab-Blob-Id X-Gitlab-Commit-Id X-Gitlab-Content-Sha256 X-Gitlab-Encoding X-Gitlab-File-Name X-Gitlab-File-Path X-Gitlab-Last-Commit-Id X-Gitlab-Ref X-Gitlab-Size]
@@ -361,17 +416,11 @@ module Gitlab
     end
 
     # Use caching across all environments
-    # Full list of options:
-    # https://api.rubyonrails.org/classes/ActiveSupport/Cache/RedisCacheStore.html#method-c-new
-    caching_config_hash = {}
-    caching_config_hash[:redis] = Gitlab::Redis::Cache.pool
-    caching_config_hash[:compress] = Gitlab::Utils.to_boolean(ENV.fetch('ENABLE_REDIS_CACHE_COMPRESSION', '1'))
-    caching_config_hash[:namespace] = Gitlab::Redis::Cache::CACHE_NAMESPACE
-    caching_config_hash[:expires_in] = 2.weeks # Cache should not grow forever
-
-    config.cache_store = :redis_cache_store, caching_config_hash
+    config.cache_store = :redis_cache_store, Gitlab::Redis::Cache.active_support_config
 
     config.active_job.queue_adapter = :sidekiq
+    config.active_job.logger = nil
+    config.action_mailer.deliver_later_queue_name = :mailers
 
     # This is needed for gitlab-shell
     ENV['GITLAB_PATH_OUTSIDE_HOOK'] = ENV['PATH']
@@ -462,6 +511,16 @@ module Gitlab
         %w[images javascripts stylesheets].each do |path|
           app.config.assets.paths.unshift("#{config.root}/#{extension}/app/assets/#{path}")
         end
+      end
+    end
+
+    # DO NOT PLACE ANY INITIALIZERS AFTER THIS.
+    config.after_initialize do
+      # on_master_start yields immediately in unclustered environments and runs
+      # when the primary process is done initializing otherwise.
+      Gitlab::Cluster::LifecycleEvents.on_master_start do
+        Gitlab::Metrics::BootTimeTracker.instance.track_boot_time!
+        Gitlab::Console.welcome!
       end
     end
   end

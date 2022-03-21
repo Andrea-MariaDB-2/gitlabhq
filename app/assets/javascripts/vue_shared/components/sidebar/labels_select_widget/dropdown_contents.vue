@@ -1,22 +1,26 @@
 <script>
-import { GlButton } from '@gitlab/ui';
-import { mapActions, mapGetters, mapState } from 'vuex';
-
+import { GlButton, GlDropdown, GlDropdownItem, GlLink } from '@gitlab/ui';
+import { debounce } from 'lodash';
+import { DEFAULT_DEBOUNCE_AND_THROTTLE_MS } from '~/lib/utils/constants';
+import { __, s__, sprintf } from '~/locale';
 import DropdownContentsCreateView from './dropdown_contents_create_view.vue';
 import DropdownContentsLabelsView from './dropdown_contents_labels_view.vue';
+import DropdownFooter from './dropdown_footer.vue';
+import DropdownHeader from './dropdown_header.vue';
+import { isDropdownVariantStandalone, isDropdownVariantSidebar } from './utils';
 
 export default {
   components: {
     DropdownContentsLabelsView,
     DropdownContentsCreateView,
+    DropdownHeader,
+    DropdownFooter,
     GlButton,
+    GlDropdown,
+    GlDropdownItem,
+    GlLink,
   },
   props: {
-    renderOnTop: {
-      type: Boolean,
-      required: false,
-      default: false,
-    },
     labelsCreateTitle: {
       type: String,
       required: true,
@@ -33,6 +37,10 @@ export default {
       type: String,
       required: true,
     },
+    dropdownButtonText: {
+      type: String,
+      required: true,
+    },
     footerCreateLabelTitle: {
       type: String,
       required: true,
@@ -41,70 +49,189 @@ export default {
       type: String,
       required: true,
     },
+    variant: {
+      type: String,
+      required: true,
+    },
+    isVisible: {
+      type: Boolean,
+      required: false,
+      default: false,
+    },
+    fullPath: {
+      type: String,
+      required: true,
+    },
+    workspaceType: {
+      type: String,
+      required: true,
+    },
+    attrWorkspacePath: {
+      type: String,
+      required: true,
+    },
+    labelCreateType: {
+      type: String,
+      required: true,
+    },
+  },
+  data() {
+    return {
+      showDropdownContentsCreateView: false,
+      localSelectedLabels: [...this.selectedLabels],
+      isDirty: false,
+      searchKey: '',
+    };
   },
   computed: {
-    ...mapState(['showDropdownContentsCreateView']),
-    ...mapGetters(['isDropdownVariantSidebar', 'isDropdownVariantEmbedded']),
     dropdownContentsView() {
       if (this.showDropdownContentsCreateView) {
         return 'dropdown-contents-create-view';
       }
       return 'dropdown-contents-labels-view';
     },
-    directionStyle() {
-      const bottom = this.isDropdownVariantSidebar ? '3rem' : '2rem';
-      return this.renderOnTop ? { bottom } : {};
-    },
     dropdownTitle() {
       return this.showDropdownContentsCreateView ? this.labelsCreateTitle : this.labelsListTitle;
     },
+    buttonText() {
+      if (!this.localSelectedLabels.length) {
+        return this.dropdownButtonText || __('Label');
+      } else if (this.localSelectedLabels.length > 1) {
+        return sprintf(s__('LabelSelect|%{firstLabelName} +%{remainingLabelCount} more'), {
+          firstLabelName: this.localSelectedLabels[0].title,
+          remainingLabelCount: this.localSelectedLabels.length - 1,
+        });
+      }
+      return this.localSelectedLabels[0].title;
+    },
+    showDropdownFooter() {
+      return !this.showDropdownContentsCreateView && !this.isStandalone;
+    },
+    isStandalone() {
+      return isDropdownVariantStandalone(this.variant);
+    },
+  },
+  watch: {
+    localSelectedLabels: {
+      handler() {
+        this.isDirty = true;
+      },
+      deep: true,
+    },
+    isVisible(newVal) {
+      if (newVal) {
+        this.$refs.dropdown.show();
+        this.isDirty = false;
+        this.localSelectedLabels = this.selectedLabels;
+      } else {
+        this.$refs.dropdown.hide();
+        this.setLabels();
+      }
+    },
+    selectedLabels(newVal) {
+      if (!this.isDirty) {
+        this.localSelectedLabels = newVal;
+      }
+    },
+  },
+  created() {
+    this.debouncedSearchKeyUpdate = debounce(this.setSearchKey, DEFAULT_DEBOUNCE_AND_THROTTLE_MS);
+  },
+  beforeDestroy() {
+    this.debouncedSearchKeyUpdate.cancel();
   },
   methods: {
-    ...mapActions(['toggleDropdownContentsCreateView']),
+    toggleDropdownContentsCreateView() {
+      this.showDropdownContentsCreateView = !this.showDropdownContentsCreateView;
+    },
+    toggleDropdownContent() {
+      this.toggleDropdownContentsCreateView();
+      // Required to recalculate dropdown position as its size changes
+      if (this.$refs.dropdown?.$refs.dropdown) {
+        this.$refs.dropdown.$refs.dropdown.$_popper.scheduleUpdate();
+      }
+    },
+    setLabels() {
+      if (!this.isDirty) {
+        return;
+      }
+      this.$emit('setLabels', this.localSelectedLabels);
+    },
+    handleDropdownHide() {
+      this.$emit('closeDropdown');
+      if (!isDropdownVariantSidebar(this.variant)) {
+        this.setLabels();
+      }
+    },
+    setSearchKey(value) {
+      this.searchKey = value;
+    },
+    setFocus() {
+      this.$refs.header.focusInput();
+    },
+    showDropdown() {
+      this.$refs.dropdown.show();
+    },
+    clearSearch() {
+      if (!this.allowMultiselect || this.isStandalone) {
+        return;
+      }
+      this.searchKey = '';
+      this.setFocus();
+    },
+    selectFirstItem() {
+      this.$refs.dropdownContentsView.selectFirstItem();
+    },
   },
 };
 </script>
 
 <template>
-  <div
-    class="labels-select-dropdown-contents gl-w-full gl-my-2 gl-py-3 gl-rounded-base gl-absolute"
+  <gl-dropdown
+    ref="dropdown"
+    :text="buttonText"
+    class="gl-w-full gl-mt-2"
+    data-testid="labels-select-dropdown-contents"
     data-qa-selector="labels_dropdown_content"
-    :style="directionStyle"
+    @hide="handleDropdownHide"
+    @shown="setFocus"
   >
-    <div
-      v-if="isDropdownVariantSidebar || isDropdownVariantEmbedded"
-      class="dropdown-title gl-display-flex gl-align-items-center gl-pt-0 gl-pb-3!"
-      data-testid="dropdown-title"
-    >
-      <gl-button
-        v-if="showDropdownContentsCreateView"
-        :aria-label="__('Go back')"
-        variant="link"
-        size="small"
-        class="js-btn-back dropdown-header-button p-0"
-        icon="arrow-left"
-        @click.stop="toggleDropdownContentsCreateView"
+    <template #header>
+      <dropdown-header
+        ref="header"
+        :search-key="searchKey"
+        :labels-create-title="labelsCreateTitle"
+        :labels-list-title="labelsListTitle"
+        :show-dropdown-contents-create-view="showDropdownContentsCreateView"
+        :is-standalone="isStandalone"
+        @toggleDropdownContentsCreateView="toggleDropdownContent"
+        @closeDropdown="$emit('closeDropdown')"
+        @input="debouncedSearchKeyUpdate"
+        @searchEnter="selectFirstItem"
       />
-      <span class="flex-grow-1">{{ dropdownTitle }}</span>
-      <gl-button
-        :aria-label="__('Close')"
-        variant="link"
-        size="small"
-        class="dropdown-header-button gl-p-0!"
-        icon="close"
-        @click="$emit('closeDropdown')"
+    </template>
+    <template #default>
+      <component
+        :is="dropdownContentsView"
+        ref="dropdownContentsView"
+        v-model="localSelectedLabels"
+        :search-key="searchKey"
+        :allow-multiselect="allowMultiselect"
+        :full-path="fullPath"
+        :workspace-type="workspaceType"
+        :attr-workspace-path="attrWorkspacePath"
+        :label-create-type="labelCreateType"
+        @hideCreateView="toggleDropdownContent"
+        @input="clearSearch"
       />
-    </div>
-    <component
-      :is="dropdownContentsView"
-      :selected-labels="selectedLabels"
-      :allow-multiselect="allowMultiselect"
-      :labels-list-title="labelsListTitle"
-      :footer-create-label-title="footerCreateLabelTitle"
-      :footer-manage-label-title="footerManageLabelTitle"
-      @hideCreateView="toggleDropdownContentsCreateView"
-      @setLabels="$emit('setLabels', $event)"
-      @toggleDropdownContentsCreateView="toggleDropdownContentsCreateView"
-    />
-  </div>
+    </template>
+    <template #footer>
+      <dropdown-footer
+        v-if="showDropdownFooter"
+        :footer-create-label-title="footerCreateLabelTitle"
+        :footer-manage-label-title="footerManageLabelTitle"
+        @toggleDropdownContentsCreateView="toggleDropdownContent"
+      />
+    </template>
+  </gl-dropdown>
 </template>

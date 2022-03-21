@@ -53,6 +53,9 @@ variables:
   # KUBE_INGRESS_BASE_DOMAIN is the application deployment domain and should be set as a variable at the group or project level.
   # KUBE_INGRESS_BASE_DOMAIN: domain.example.com
 
+  # Allows Container-Scanning to correctly correlate image names when using Jobs/Build.gitlab-ci.yml
+  CS_DEFAULT_BRANCH_IMAGE: $CI_REGISTRY_IMAGE/$CI_DEFAULT_BRANCH:$CI_COMMIT_SHA
+
   POSTGRES_USER: user
   POSTGRES_PASSWORD: testing-password
   POSTGRES_ENABLED: "true"
@@ -175,7 +178,16 @@ include:
   - template: Jobs/Helm-2to3.gitlab-ci.yml  # https://gitlab.com/gitlab-org/gitlab/blob/master/lib/gitlab/ci/templates/Jobs/Helm-2to3.gitlab-ci.yml
   - template: Security/DAST.gitlab-ci.yml  # https://gitlab.com/gitlab-org/gitlab/blob/master/lib/gitlab/ci/templates/Security/DAST.gitlab-ci.yml
   - template: Security/Container-Scanning.gitlab-ci.yml  # https://gitlab.com/gitlab-org/gitlab/blob/master/lib/gitlab/ci/templates/Security/Container-Scanning.gitlab-ci.yml
+  - template: Security/Cluster-Image-Scanning.gitlab-ci.yml  # https://gitlab.com/gitlab-org/gitlab/-/blob/master/lib/gitlab/ci/templates/Security/Cluster-Image-Scanning.gitlab-ci.yml
   - template: Security/Dependency-Scanning.gitlab-ci.yml  # https://gitlab.com/gitlab-org/gitlab/blob/master/lib/gitlab/ci/templates/Security/Dependency-Scanning.gitlab-ci.yml
   - template: Security/License-Scanning.gitlab-ci.yml  # https://gitlab.com/gitlab-org/gitlab/blob/master/lib/gitlab/ci/templates/Security/License-Scanning.gitlab-ci.yml
   - template: Security/SAST.gitlab-ci.yml  # https://gitlab.com/gitlab-org/gitlab/blob/master/lib/gitlab/ci/templates/Security/SAST.gitlab-ci.yml
   - template: Security/Secret-Detection.gitlab-ci.yml  # https://gitlab.com/gitlab-org/gitlab/blob/master/lib/gitlab/ci/templates/Security/Secret-Detection.gitlab-ci.yml
+
+# The latest build job generates a dotenv report artifact with a CI_APPLICATION_TAG
+# that also includes the image digest. This configures Auto Deploy to receive
+# this artifact and use the updated CI_APPLICATION_TAG for deployments.
+.auto-deploy:
+  dependencies: [build]
+dast_environment_deploy:
+  dependencies: [build]

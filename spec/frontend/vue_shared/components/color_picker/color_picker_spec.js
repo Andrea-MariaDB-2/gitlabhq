@@ -111,15 +111,13 @@ describe('ColorPicker', () => {
       gon.suggested_label_colors = {};
       createComponent(shallowMount);
 
-      expect(description()).toBe('Choose any color');
+      expect(description()).toBe('Enter any color.');
       expect(presetColors().exists()).toBe(false);
     });
 
     it('shows the suggested colors', () => {
       createComponent(shallowMount);
-      expect(description()).toBe(
-        'Choose any color. Or you can choose one of the suggested colors below',
-      );
+      expect(description()).toBe('Enter any color or choose one of the suggested colors below.');
       expect(presetColors()).toHaveLength(4);
     });
 
@@ -128,6 +126,19 @@ describe('ColorPicker', () => {
       await presetColors().at(0).trigger('click');
 
       expect(wrapper.emitted().input[0]).toStrictEqual([setColor]);
+    });
+
+    it('shows the suggested colors passed using props', () => {
+      const customColors = {
+        '#ff0000': 'Red',
+        '#808080': 'Gray',
+      };
+
+      createComponent(shallowMount, { suggestedColors: customColors });
+      expect(description()).toBe('Enter any color or choose one of the suggested colors below.');
+      expect(presetColors()).toHaveLength(2);
+      expect(presetColors().at(0).attributes('title')).toBe('Red');
+      expect(presetColors().at(1).attributes('title')).toBe('Gray');
     });
   });
 });

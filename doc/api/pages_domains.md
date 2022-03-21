@@ -4,7 +4,7 @@ group: Release
 info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
 ---
 
-# Pages domains API
+# Pages domains API **(FREE)**
 
 Endpoints for connecting custom domain(s) and TLS certificates in [GitLab Pages](https://about.gitlab.com/stages-devops-lifecycle/pages/).
 
@@ -12,7 +12,7 @@ The GitLab Pages feature must be enabled to use these endpoints. Find out more a
 
 ## List all Pages domains
 
-Get a list of all Pages domains. The user must have admin permissions.
+Get a list of all Pages domains. The user must have administrator access.
 
 ```plaintext
 GET /pages/domains

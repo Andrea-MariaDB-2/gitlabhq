@@ -1,6 +1,5 @@
 <script>
-/* eslint-disable vue/no-v-html */
-import { GlLoadingIcon, GlFormInput, GlFormGroup, GlButton } from '@gitlab/ui';
+import { GlLoadingIcon, GlFormInput, GlFormGroup, GlButton, GlSafeHtmlDirective } from '@gitlab/ui';
 import { escape, debounce } from 'lodash';
 import { mapActions, mapState } from 'vuex';
 import createFlash from '~/flash';
@@ -18,6 +17,9 @@ export default {
     GlLoadingIcon,
     GlFormInput,
     GlFormGroup,
+  },
+  directives: {
+    SafeHtml: GlSafeHtmlDirective,
   },
   props: {
     isEditing: {
@@ -168,6 +170,7 @@ export default {
         });
     },
   },
+  safeHtmlConfig: { ALLOW_TAGS: ['a', 'code'] },
 };
 </script>
 
@@ -179,15 +182,16 @@ export default {
     @submit.prevent.stop="onSubmit"
   >
     <gl-form-group :label="s__('Badges|Name')" label-for="badge-name">
-      <gl-form-input id="badge-name" v-model="name" />
+      <gl-form-input id="badge-name" v-model="name" data-qa-selector="badge_name_field" />
     </gl-form-group>
 
     <div class="form-group">
       <label for="badge-link-url" class="label-bold">{{ s__('Badges|Link') }}</label>
-      <p v-html="helpText"></p>
+      <p v-safe-html:[$options.safeHtmlConfig]="helpText"></p>
       <input
         id="badge-link-url"
         v-model="linkUrl"
+        data-qa-selector="badge_link_url_field"
         type="URL"
         class="form-control gl-form-input"
         required
@@ -199,10 +203,11 @@ export default {
 
     <div class="form-group">
       <label for="badge-image-url" class="label-bold">{{ s__('Badges|Badge image URL') }}</label>
-      <p v-html="helpText"></p>
+      <p v-safe-html:[$options.safeHtmlConfig]="helpText"></p>
       <input
         id="badge-image-url"
         v-model="imageUrl"
+        data-qa-selector="badge_image_url_field"
         type="URL"
         class="form-control gl-form-input"
         required
@@ -243,7 +248,13 @@ export default {
       </gl-button>
     </div>
     <div v-else class="form-group">
-      <gl-button :loading="isSaving" type="submit" variant="confirm" category="primary">
+      <gl-button
+        :loading="isSaving"
+        type="submit"
+        variant="confirm"
+        category="primary"
+        data-qa-selector="add_badge_button"
+      >
         {{ s__('Badges|Add badge') }}
       </gl-button>
     </div>

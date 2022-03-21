@@ -12,13 +12,13 @@ RSpec.describe Types::Ci::PipelineType do
       id iid sha before_sha complete status detailed_status config_source
       duration queued_duration
       coverage created_at updated_at started_at finished_at committed_at
-      stages user retryable cancelable jobs source_job job downstream
-      upstream path project active user_permissions warnings commit_path uses_needs
-      test_report_summary test_suite ref
+      stages user retryable cancelable jobs source_job job job_artifacts downstream
+      upstream path project active user_permissions warnings commit commit_path uses_needs
+      test_report_summary test_suite ref ref_path warning_messages
     ]
 
     if Gitlab.ee?
-      expected_fields += %w[security_report_summary security_report_findings code_quality_reports]
+      expected_fields += %w[security_report_summary security_report_findings code_quality_reports dast_profile]
     end
 
     expect(described_class).to have_graphql_fields(*expected_fields)

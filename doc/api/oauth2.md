@@ -1,19 +1,19 @@
 ---
 type: reference, howto
 stage: Manage
-group: Access
-info: To determine the technical writer assigned to the Stage/Group associated   with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#designated-technical-writers
+group: Authentication and Authorization
+info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
 ---
 
-# GitLab as an OAuth 2.0 provider
+# OAuth 2.0 identity provider API **(FREE)**
 
-This document covers using the [OAuth2](https://oauth.net/2/) protocol to allow
-other services to access GitLab resources on user's behalf.
+GitLab provides an API to allow third-party services to access GitLab resources on a user's behalf
+with the [OAuth2](https://oauth.net/2/) protocol.
 
-If you want GitLab to be an OAuth authentication service provider to sign into
-other services, see the [OAuth2 authentication service provider](../integration/oauth_provider.md)
-documentation. This functionality is based on the
-[doorkeeper Ruby gem](https://github.com/doorkeeper-gem/doorkeeper).
+To configure GitLab for this, see
+[Configure GitLab as an OAuth 2.0 authentication identity provider](../integration/oauth_provider.md).
+
+This functionality is based on the [doorkeeper Ruby gem](https://github.com/doorkeeper-gem/doorkeeper).
 
 ## Supported OAuth 2.0 flows
 
@@ -25,14 +25,14 @@ GitLab supports the following authorization flows:
 - **Authorization code:** Secure and common flow. Recommended option for secure
   server-side apps.
 - **Implicit grant:** Originally designed for user-agent only apps, such as
-  single page web apps running on GitLab Pages).
+  single page web apps running on GitLab Pages.
   The [Internet Engineering Task Force (IETF)](https://tools.ietf.org/html/draft-ietf-oauth-security-topics-09#section-2.1.2)
   recommends against Implicit grant flow.
 - **Resource owner password credentials:** To be used **only** for securely
   hosted, first-party services. GitLab recommends against use of this flow.
 
 The draft specification for [OAuth 2.1](https://oauth.net/2.1/) specifically omits both the
-Implicit grant and Resource Owner Password Credentials flows. It will be deprecated in the next OAuth specification version.
+Implicit grant and Resource Owner Password Credentials flows.
 
 Refer to the [OAuth RFC](https://tools.ietf.org/html/rfc6749) to find out
 how all those flows work and pick the right one for your use case.
@@ -41,7 +41,11 @@ Both **authorization code** (with or without PKCE) and **implicit grant** flows 
 registered first via the `/profile/applications` page in your user's account.
 During registration, by enabling proper scopes, you can limit the range of
 resources which the `application` can access. Upon creation, you obtain the
-`application` credentials: _Application ID_ and _Client Secret_ - **keep them secure**.
+`application` credentials: _Application ID_ and _Client Secret_. The _Client Secret_
+**must be kept secure**. It is also advantageous to keep the _Application ID_
+secret when your application architecture allows.
+
+For a list of scopes in GitLab, see [the provider documentation](../integration/oauth_provider.md#authorized-applications).
 
 ### Prevent CSRF attacks
 
@@ -72,7 +76,10 @@ detailed flow description, from authorization request through access token.
 The following steps describe our implementation of the flow.
 
 The Authorization code with PKCE flow, PKCE for short, makes it possible to securely perform
-the OAuth exchange of client credentials for access tokens on public clients.
+the OAuth exchange of client credentials for access tokens on public clients without
+requiring access to the _Client Secret_ at all. This makes the PKCE flow advantageous
+for single page JavaScript applications or other client side apps where keeping secrets
+from the user is a technical impossibility.
 
 Before starting the flow, generate the `STATE`, the `CODE_VERIFIER` and the `CODE_CHALLENGE`.
 
@@ -82,7 +89,11 @@ Before starting the flow, generate the `STATE`, the `CODE_VERIFIER` and the `COD
   which use the characters `A-Z`, `a-z`, `0-9`, `-`, `.`, `_`, and `~`.
 - The `CODE_CHALLENGE` is an URL-safe base64-encoded string of the SHA256 hash of the
   `CODE_VERIFIER`
+  - The SHA256 hash must be in binary format before encoding.
   - In Ruby, you can set that up with `Base64.urlsafe_encode64(Digest::SHA256.digest(CODE_VERIFIER), padding: false)`.
+  - For reference, a `CODE_VERIFIER` string of `ks02i3jdikdo2k0dkfodf3m39rjfjsdk0wk349rj3jrhf` when hashed
+    and encoded using the Ruby snippet above produces a `CODE_CHALLENGE` string
+    of `2i0WFA-0AerkjQm4X4oDEhqA17QIAKNjXpagHBXmO_U`.
 
 1. Request authorization code. To do that, you should redirect the user to the
    `/oauth/authorize` page with the following query parameters:
@@ -93,8 +104,8 @@ Before starting the flow, generate the `STATE`, the `CODE_VERIFIER` and the `COD
 
    This page asks the user to approve the request from the app to access their
    account based on the scopes specified in `REQUESTED_SCOPES`. The user is then
-   redirected back to the specified `REDIRECT_URI`. The [scope parameter](https://github.com/doorkeeper-gem/doorkeeper/wiki/Using-Scopes#requesting-particular-scopes)
-   is a space separated list of scopes associated with the user.
+   redirected back to the specified `REDIRECT_URI`. The [scope parameter](../integration/oauth_provider.md#authorized-applications)
+   is a space-separated list of scopes associated with the user.
    For example,`scope=read_user+profile` requests the `read_user` and `profile` scopes.
    The redirect includes the authorization `code`, for example:
 
@@ -107,7 +118,7 @@ Before starting the flow, generate the `STATE`, the `CODE_VERIFIER` and the `COD
    any HTTP client. The following example uses Ruby's `rest-client`:
 
    ```ruby
-   parameters = 'client_id=APP_ID&client_secret=APP_SECRET&code=RETURNED_CODE&grant_type=authorization_code&redirect_uri=REDIRECT_URI&code_verifier=CODE_VERIFIER'
+   parameters = 'client_id=APP_ID&code=RETURNED_CODE&grant_type=authorization_code&redirect_uri=REDIRECT_URI&code_verifier=CODE_VERIFIER'
    RestClient.post 'https://gitlab.example.com/oauth/token', parameters
    ```
 
@@ -122,19 +133,19 @@ Before starting the flow, generate the `STATE`, the `CODE_VERIFIER` and the `COD
     "created_at": 1607635748
    }
    ```
-  
+
 1. To retrieve a new `access_token`, use the `refresh_token` parameter. Refresh tokens may
    be used even after the `access_token` itself expires. This request:
    - Invalidates the existing `access_token` and `refresh_token`.
    - Sends new tokens in the response.
 
    ```ruby
-     parameters = 'client_id=APP_ID&client_secret=APP_SECRET&refresh_token=REFRESH_TOKEN&grant_type=refresh_token&redirect_uri=REDIRECT_URI&code_verifier=CODE_VERIFIER'
+     parameters = 'client_id=APP_ID&refresh_token=REFRESH_TOKEN&grant_type=refresh_token&redirect_uri=REDIRECT_URI&code_verifier=CODE_VERIFIER'
      RestClient.post 'https://gitlab.example.com/oauth/token', parameters
    ```
 
    Example response:
-   
+
    ```json
    {
      "access_token": "c97d1fe52119f38c7f67f0a14db68d60caa35ddc86fd12401718b649dcfa9c68",
@@ -173,8 +184,8 @@ be used as a CSRF token.
 
    This page asks the user to approve the request from the app to access their
    account based on the scopes specified in `REQUESTED_SCOPES`. The user is then
-   redirected back to the specified `REDIRECT_URI`. The [scope parameter](https://github.com/doorkeeper-gem/doorkeeper/wiki/Using-Scopes#requesting-particular-scopes)
-   is a space separated list of scopes associated with the user.
+   redirected back to the specified `REDIRECT_URI`. The [scope parameter](../integration/oauth_provider.md#authorized-applications)
+   is a space-separated list of scopes associated with the user.
    For example,`scope=read_user+profile` requests the `read_user` and `profile` scopes.
    The redirect includes the authorization `code`, for example:
 
@@ -202,7 +213,7 @@ be used as a CSRF token.
     "created_at": 1607635748
    }
    ```
-  
+
 1. To retrieve a new `access_token`, use the `refresh_token` parameter. Refresh tokens may
    be used even after the `access_token` itself expires. This request:
    - Invalidates the existing `access_token` and `refresh_token`.
@@ -233,19 +244,13 @@ You can now make requests to the API with the access token returned.
 
 ### Implicit grant flow
 
-NOTE:
-For a detailed flow diagram, see the [RFC specification](https://tools.ietf.org/html/rfc6749#section-4.2).
-
 WARNING:
 Implicit grant flow is inherently insecure and the IETF has removed it in [OAuth 2.1](https://oauth.net/2.1/).
-For this reason, [support for it is deprecated](https://gitlab.com/gitlab-org/gitlab/-/issues/288516).
-In GitLab 14.0, new applications can't be created using it. In GitLab 14.4, support for it is
-scheduled to be removed for existing applications.
+It is [deprecated](https://gitlab.com/gitlab-org/gitlab/-/issues/288516) for use in GitLab 14.0, and is planned for
+[removal](https://gitlab.com/gitlab-org/gitlab/-/issues/344609) in GitLab 15.0.
 
-We recommend that you use [Authorization code with PKCE](#authorization-code-with-proof-key-for-code-exchange-pkce) instead. If you choose to use Implicit flow, be sure to verify the
-`application id` (or `client_id`) associated with the access token before granting
-access to the data. To learn more, read
-[Retrieving the token information](#retrieve-the-token-information)).
+We recommend that you use [Authorization code with PKCE](#authorization-code-with-proof-key-for-code-exchange-pkce)
+instead.
 
 Unlike the authorization code flow, the client receives an `access token`
 immediately as a result of the authorization request. The flow does not use the
@@ -261,8 +266,8 @@ https://gitlab.example.com/oauth/authorize?client_id=APP_ID&redirect_uri=REDIREC
 
 This prompts the user to approve the applications access to their account
 based on the scopes specified in `REQUESTED_SCOPES` and then redirect back to
-the `REDIRECT_URI` you provided. The [scope parameter](https://github.com/doorkeeper-gem/doorkeeper/wiki/Using-Scopes#requesting-particular-scopes)
-   is a space separated list of scopes you want to have access to (for example, `scope=read_user+profile`
+the `REDIRECT_URI` you provided. The [scope parameter](../integration/oauth_provider.md#authorized-applications)
+   is a space-separated list of scopes you want to have access to (for example, `scope=read_user+profile`
 would request `read_user` and `profile` scopes). The redirect
 includes a fragment with `access_token` as well as token details in GET
 parameters, for example:
@@ -367,6 +372,12 @@ or you can put the token to the Authorization header:
 curl --header "Authorization: Bearer OAUTH-TOKEN" "https://gitlab.example.com/api/v4/user"
 ```
 
+## Access Git over HTTPS with `access token`
+
+A token with [scope](../integration/oauth_provider.md#authorized-applications)
+`read_repository` or `write_repository` can access Git over HTTPS. Use the token as the password.
+The username must be `oauth2`, not your username.
+
 ## Retrieve the token information
 
 To verify the details of a token, use the `token/info` endpoint provided by the
@@ -403,10 +414,20 @@ The following is an example response:
 
 The fields `scopes` and `expires_in_seconds` are included in the response.
 
-These are aliases for `scope` and `expires_in` respectively, and have been included to
+These fields are aliases for `scope` and `expires_in` respectively, and have been included to
 prevent breaking changes introduced in [doorkeeper 5.0.2](https://github.com/doorkeeper-gem/doorkeeper/wiki/Migration-from-old-versions#from-4x-to-5x).
 
 Don't rely on these fields as they are slated for removal in a later release.
+
+## Revoke a token
+
+To revoke a token, use the `revoke` endpoint. The API returns a 200 response code and an empty
+JSON hash to indicate success.
+
+```ruby
+parameters = 'client_id=APP_ID&client_secret=APP_SECRET&token=TOKEN'
+RestClient.post 'https://gitlab.example.com/oauth/revoke', parameters
+```
 
 ## OAuth 2.0 tokens and GitLab registries
 

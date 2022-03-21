@@ -57,9 +57,13 @@ For example:
 When using the GitLab UI form builder, the following components are available for use in HAML.
 
 NOTE:
-Currently only `gitlab_ui_checkbox_component` is available but more components are planned.
+Currently only the listed components are available but more components are planned.
+
+<!-- vale gitlab.Spelling = NO -->
 
 #### gitlab_ui_checkbox_component
+
+<!-- vale gitlab.Spelling = YES -->
 
 [GitLab UI Docs](https://gitlab-org.gitlab.io/gitlab-ui/?path=/story/base-form-form-checkbox--default)
 
@@ -71,4 +75,21 @@ Currently only `gitlab_ui_checkbox_component` is available but more components a
 | `checkbox_options` | Options that are passed to [Rails `check_box` method](https://api.rubyonrails.org/classes/ActionView/Helpers/FormBuilder.html#method-i-check_box). | `Hash` | `false` (`{}`) |
 | `checked_value` | Value when checkbox is checked. | `String` | `false` (`'1'`) |
 | `unchecked_value` | Value when checkbox is unchecked. | `String` | `false` (`'0'`) |
+| `label_options` | Options that are passed to [Rails `label` method](https://api.rubyonrails.org/classes/ActionView/Helpers/FormBuilder.html#method-i-label). | `Hash` | `false` (`{}`) |
+
+<!-- vale gitlab.Spelling = NO -->
+
+#### gitlab_ui_radio_component
+
+<!-- vale gitlab.Spelling = YES -->
+
+[GitLab UI Docs](https://gitlab-org.gitlab.io/gitlab-ui/?path=/story/base-form-form-radio--default)
+
+| Argument | Description | Type | Required (default value) |
+|---|---|---|---|
+| `method` | Attribute on the object passed to `gitlab_ui_form_for`. | `Symbol` | `true` |
+| `value` | The value of the radio tag. | `Symbol` | `true` |
+| `label` | Radio label. | `String` | `true` |
+| `help_text` | Help text displayed below the radio button. | `String` | `false` (`nil`) |
+| `radio_options` | Options that are passed to [Rails `radio_button` method](https://api.rubyonrails.org/classes/ActionView/Helpers/FormBuilder.html#method-i-radio_button). | `Hash` | `false` (`{}`) |
 | `label_options` | Options that are passed to [Rails `label` method](https://api.rubyonrails.org/classes/ActionView/Helpers/FormBuilder.html#method-i-label). | `Hash` | `false` (`{}`) |

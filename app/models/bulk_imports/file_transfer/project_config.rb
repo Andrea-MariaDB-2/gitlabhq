@@ -3,16 +3,23 @@
 module BulkImports
   module FileTransfer
     class ProjectConfig < BaseConfig
-      def base_export_path
-        portable.disk_path
-      end
+      SKIPPED_RELATIONS = %w(
+        project_members
+        group_members
+      ).freeze
+
+      LFS_OBJECTS_RELATION = 'lfs_objects'
 
       def import_export_yaml
         ::Gitlab::ImportExport.config_file
       end
 
       def skipped_relations
-        @skipped_relations ||= %w(project_members group_members)
+        SKIPPED_RELATIONS
+      end
+
+      def file_relations
+        [UPLOADS_RELATION, LFS_OBJECTS_RELATION]
       end
     end
   end

@@ -18,10 +18,6 @@ RSpec.describe 'Profile > Personal Access Tokens', :js do
     find("#created-personal-access-token").value
   end
 
-  def feed_token
-    find("#feed_token").value
-  end
-
   def feed_token_description
     "Your feed token authenticates you when your RSS reader loads a personalized RSS feed or when your calendar application loads a personalized calendar. It is visible in those feed URLs."
   end
@@ -34,6 +30,7 @@ RSpec.describe 'Profile > Personal Access Tokens', :js do
   end
 
   before do
+    stub_feature_flags(bootstrap_confirmation_modals: false)
     sign_in(user)
   end
 
@@ -56,7 +53,7 @@ RSpec.describe 'Profile > Personal Access Tokens', :js do
       click_on "Create personal access token"
 
       expect(active_personal_access_tokens).to have_text(name)
-      expect(active_personal_access_tokens).to have_text('In')
+      expect(active_personal_access_tokens).to have_text('in')
       expect(active_personal_access_tokens).to have_text('api')
       expect(active_personal_access_tokens).to have_text('read_user')
       expect(created_personal_access_token).not_to be_empty
@@ -84,6 +81,18 @@ RSpec.describe 'Profile > Personal Access Tokens', :js do
 
       expect(active_personal_access_tokens).to have_text(personal_access_token.name)
       expect(active_personal_access_tokens).not_to have_text(impersonation_token.name)
+    end
+
+    context 'when User#time_display_relative is false' do
+      before do
+        user.update!(time_display_relative: false)
+      end
+
+      it 'shows absolute times for expires_at' do
+        visit profile_personal_access_tokens_path
+
+        expect(active_personal_access_tokens).to have_text(PersonalAccessToken.last.expires_at.strftime('%b %-d'))
+      end
     end
   end
 
@@ -127,9 +136,12 @@ RSpec.describe 'Profile > Personal Access Tokens', :js do
         allow(Gitlab::CurrentSettings).to receive(:disable_feed_token).and_return(false)
         visit profile_personal_access_tokens_path
 
-        expect(feed_token).to eq(user.feed_token)
+        within('[data-testid="feed-token-container"]') do
+          click_button('Click to reveal')
 
-        expect(page).to have_content(feed_token_description)
+          expect(page).to have_field('Feed token', with: user.feed_token)
+          expect(page).to have_content(feed_token_description)
+        end
       end
     end
 
@@ -138,8 +150,8 @@ RSpec.describe 'Profile > Personal Access Tokens', :js do
         allow(Gitlab::CurrentSettings).to receive(:disable_feed_token).and_return(true)
         visit profile_personal_access_tokens_path
 
-        expect(page).to have_no_content(feed_token_description)
-        expect(page).to have_no_css("#feed_token")
+        expect(page).not_to have_content(feed_token_description)
+        expect(page).not_to have_field('Feed token')
       end
     end
   end

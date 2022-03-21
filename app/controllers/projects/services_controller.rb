@@ -13,11 +13,16 @@ class Projects::ServicesController < Projects::ApplicationController
   before_action :set_deprecation_notice_for_prometheus_integration, only: [:edit, :update]
   before_action :redirect_deprecated_prometheus_integration, only: [:update]
 
+  before_action do
+    push_frontend_feature_flag(:integration_form_sections, project, default_enabled: :yaml)
+  end
+
   respond_to :html
 
   layout "project_settings"
 
   feature_category :integrations
+  urgency :low, [:test]
 
   def edit
   end
@@ -65,7 +70,7 @@ class Projects::ServicesController < Projects::ApplicationController
   private
 
   def redirect_path
-    safe_redirect_path(params[:redirect_to]).presence || edit_project_service_path(project, integration)
+    safe_redirect_path(params[:redirect_to]).presence || edit_project_integration_path(project, integration)
   end
 
   def service_test_response
@@ -118,7 +123,7 @@ class Projects::ServicesController < Projects::ApplicationController
   end
 
   def redirect_deprecated_prometheus_integration
-    redirect_to edit_project_service_path(project, integration) if integration.is_a?(::Integrations::Prometheus) && Feature.enabled?(:settings_operations_prometheus_service, project)
+    redirect_to edit_project_integration_path(project, integration) if integration.is_a?(::Integrations::Prometheus) && Feature.enabled?(:settings_operations_prometheus_service, project)
   end
 
   def set_deprecation_notice_for_prometheus_integration

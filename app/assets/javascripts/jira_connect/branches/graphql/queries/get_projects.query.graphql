@@ -1,6 +1,6 @@
 #import "~/graphql_shared/fragments/pageInfo.fragment.graphql"
 
-query getProjects(
+query jiraGetProjects(
   $search: String!
   $after: String = ""
   $first: Int!
@@ -25,6 +25,9 @@ query getProjects(
       path
       repository {
         empty
+      }
+      userPermissions {
+        pushCode
       }
     }
     pageInfo {

@@ -5,7 +5,7 @@ require 'spec_helper'
 RSpec.describe 'layouts/nav/sidebar/_project' do
   let_it_be_with_reload(:project) { create(:project, :repository) }
 
-  let(:user) { project.owner }
+  let(:user) { project.first_owner }
   let(:current_ref) { 'master' }
 
   before do
@@ -68,8 +68,8 @@ RSpec.describe 'layouts/nav/sidebar/_project' do
   end
 
   describe 'Learn GitLab' do
-    it 'has a link to the learn GitLab experiment' do
-      allow(view).to receive(:learn_gitlab_experiment_enabled?).and_return(true)
+    it 'has a link to the learn GitLab' do
+      allow(view).to receive(:learn_gitlab_enabled?).and_return(true)
       allow_next_instance_of(LearnGitlab::Onboarding) do |onboarding|
         expect(onboarding).to receive(:completed_percentage).and_return(20)
       end
@@ -286,10 +286,20 @@ RSpec.describe 'layouts/nav/sidebar/_project' do
     end
 
     describe 'Pipeline Editor' do
-      it 'has a link to the pipeline editor' do
-        render
+      context 'with a current_ref' do
+        it 'has a link to the pipeline editor' do
+          render
 
-        expect(rendered).to have_link('Editor', href: project_ci_pipeline_editor_path(project))
+          expect(rendered).to have_link('Editor', href: project_ci_pipeline_editor_path(project, params: { branch_name: current_ref }))
+        end
+      end
+
+      context 'with the default_branch' do
+        it 'has a link to the pipeline editor' do
+          render
+
+          expect(rendered).to have_link('Editor', href: project_ci_pipeline_editor_path(project, params: { branch_name: project.default_branch }))
+        end
       end
 
       context 'when user cannot access pipeline editor' do
@@ -577,6 +587,23 @@ RSpec.describe 'layouts/nav/sidebar/_project' do
           render
 
           expect(rendered).not_to have_link('Kubernetes clusters')
+        end
+      end
+    end
+
+    describe 'Google Cloud' do
+      it 'has a link to the google cloud page' do
+        render
+        expect(rendered).to have_link('Google Cloud', href: project_google_cloud_index_path(project))
+      end
+
+      describe 'when the user does not have access' do
+        let(:user) { nil }
+
+        it 'does not have a link to the google cloud page' do
+          render
+
+          expect(rendered).not_to have_link('Google Cloud')
         end
       end
     end
@@ -970,28 +997,10 @@ RSpec.describe 'layouts/nav/sidebar/_project' do
     end
 
     describe 'Usage Quotas' do
-      context 'with project_storage_ui feature flag enabled' do
-        before do
-          stub_feature_flags(project_storage_ui: true)
-        end
+      it 'has a link to Usage Quotas' do
+        render
 
-        it 'has a link to Usage Quotas' do
-          render
-
-          expect(rendered).to have_link('Usage Quotas', href: project_usage_quotas_path(project))
-        end
-      end
-
-      context 'with project_storage_ui feature flag disabled' do
-        before do
-          stub_feature_flags(project_storage_ui: false)
-        end
-
-        it 'does not have a link to Usage Quotas' do
-          render
-
-          expect(rendered).not_to have_link('Usage Quotas', href: project_usage_quotas_path(project))
-        end
+        expect(rendered).to have_link('Usage Quotas', href: project_usage_quotas_path(project))
       end
     end
   end

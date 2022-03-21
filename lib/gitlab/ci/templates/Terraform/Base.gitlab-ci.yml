@@ -20,24 +20,23 @@ cache:
   key: "${TF_ROOT}"
   paths:
     - ${TF_ROOT}/.terraform/
-    - ${TF_ROOT}/.terraform.lock.hcl
 
 .init: &init
   stage: init
   script:
-    - cd ${TF_ROOT}
+    - cd "${TF_ROOT}"
     - gitlab-terraform init
 
 .validate: &validate
   stage: validate
   script:
-    - cd ${TF_ROOT}
+    - cd "${TF_ROOT}"
     - gitlab-terraform validate
 
 .build: &build
   stage: build
   script:
-    - cd ${TF_ROOT}
+    - cd "${TF_ROOT}"
     - gitlab-terraform plan
     - gitlab-terraform plan-json
   artifacts:
@@ -49,7 +48,7 @@ cache:
 .deploy: &deploy
   stage: deploy
   script:
-    - cd ${TF_ROOT}
+    - cd "${TF_ROOT}"
     - gitlab-terraform apply
   when: manual
   only:
@@ -59,6 +58,6 @@ cache:
 .destroy: &destroy
   stage: cleanup
   script:
-    - cd ${TF_ROOT}
+    - cd "${TF_ROOT}"
     - gitlab-terraform destroy
   when: manual

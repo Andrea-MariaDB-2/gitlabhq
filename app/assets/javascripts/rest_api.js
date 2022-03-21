@@ -2,9 +2,11 @@ export * from './api/groups_api';
 export * from './api/projects_api';
 export * from './api/user_api';
 export * from './api/markdown_api';
+export * from './api/bulk_imports_api';
+export * from './api/namespaces_api';
 
 // Note: It's not possible to spy on methods imported from this file in
-// Jest tests. See https://stackoverflow.com/a/53307822/1063392.
+// Jest tests.
 // As a workaround, in Jest tests, import the methods from the file
 // in which they are defined:
 //

@@ -9,25 +9,24 @@ import {
   GlTooltipDirective,
 } from '@gitlab/ui';
 import { produce } from 'immer';
-import { fetchPolicies } from '~/lib/graphql';
 import { historyPushState } from '~/lib/utils/common_utils';
 import { setUrlParams } from '~/lib/utils/url_utility';
-import { s__ } from '~/locale';
+import { __ } from '~/locale';
 import {
   BRANCH_PAGINATION_LIMIT,
   BRANCH_SEARCH_DEBOUNCE,
   DEFAULT_FAILURE,
 } from '~/pipeline_editor/constants';
-import updateCurrentBranchMutation from '~/pipeline_editor/graphql/mutations/update_current_branch.mutation.graphql';
-import getAvailableBranchesQuery from '~/pipeline_editor/graphql/queries/available_branches.graphql';
-import getCurrentBranchQuery from '~/pipeline_editor/graphql/queries/client/current_branch.graphql';
-import getLastCommitBranchQuery from '~/pipeline_editor/graphql/queries/client/last_commit_branch.query.graphql';
+import updateCurrentBranchMutation from '~/pipeline_editor/graphql/mutations/client/update_current_branch.mutation.graphql';
+import getAvailableBranchesQuery from '~/pipeline_editor/graphql/queries/available_branches.query.graphql';
+import getCurrentBranch from '~/pipeline_editor/graphql/queries/client/current_branch.query.graphql';
+import getLastCommitBranch from '~/pipeline_editor/graphql/queries/client/last_commit_branch.query.graphql';
 
 export default {
   i18n: {
-    dropdownHeader: s__('Switch branch'),
-    title: s__('Branches'),
-    fetchError: s__('Unable to fetch branch list for this project.'),
+    dropdownHeader: __('Switch branch'),
+    title: __('Branches'),
+    fetchError: __('Unable to fetch branch list for this project.'),
   },
   inputDebounce: BRANCH_SEARCH_DEBOUNCE,
   components: {
@@ -43,17 +42,26 @@ export default {
   },
   inject: ['projectFullPath', 'totalBranches'],
   props: {
+    hasUnsavedChanges: {
+      type: Boolean,
+      required: false,
+      default: false,
+    },
     paginationLimit: {
       type: Number,
       required: false,
       default: BRANCH_PAGINATION_LIMIT,
     },
+    shouldLoadNewBranch: {
+      type: Boolean,
+      required: false,
+      default: false,
+    },
   },
   data() {
     return {
       availableBranches: [],
-      filteredBranches: [],
-      isSearchingBranches: false,
+      branchSelected: null,
       pageLimit: this.paginationLimit,
       pageCounter: 0,
       searchTerm: '',
@@ -65,10 +73,9 @@ export default {
       query: getAvailableBranchesQuery,
       variables() {
         return {
-          limit: this.paginationLimit,
           offset: 0,
           projectFullPath: this.projectFullPath,
-          searchPattern: '*',
+          ...this.availableBranchesVariables,
         };
       },
       update(data) {
@@ -82,62 +89,72 @@ export default {
       },
     },
     currentBranch: {
-      query: getCurrentBranchQuery,
+      query: getCurrentBranch,
+      update(data) {
+        return data.workBranches.current.name;
+      },
     },
     lastCommitBranch: {
-      query: getLastCommitBranchQuery,
-      result({ data: { lastCommitBranch } }) {
-        if (lastCommitBranch === '' || this.availableBranches.includes(lastCommitBranch)) {
-          return;
+      query: getLastCommitBranch,
+      update(data) {
+        return data.workBranches.lastCommit.name;
+      },
+      result({ data }) {
+        if (data) {
+          const { name: lastCommitBranch } = data.workBranches.lastCommit;
+          if (lastCommitBranch === '' || this.availableBranches.includes(lastCommitBranch)) {
+            return;
+          }
+
+          this.availableBranches.unshift(lastCommitBranch);
         }
-        this.availableBranches.unshift(lastCommitBranch);
       },
     },
   },
   computed: {
-    branches() {
-      return this.searchTerm.length > 0 ? this.filteredBranches : this.availableBranches;
-    },
-    isBranchesLoading() {
-      return this.$apollo.queries.availableBranches.loading || this.isSearchingBranches;
-    },
-    showBranchSwitcher() {
-      return this.branches.length > 0 || this.searchTerm.length > 0;
-    },
-  },
-  methods: {
-    availableBranchesQueryVars(varsOverride = {}) {
+    availableBranchesVariables() {
       if (this.searchTerm.length > 0) {
         return {
           limit: this.totalBranches,
-          offset: 0,
-          projectFullPath: this.projectFullPath,
           searchPattern: `*${this.searchTerm}*`,
-          ...varsOverride,
         };
       }
 
       return {
         limit: this.paginationLimit,
-        offset: this.pageCounter * this.paginationLimit,
-        projectFullPath: this.projectFullPath,
         searchPattern: '*',
-        ...varsOverride,
       };
     },
+    enableBranchSwitcher() {
+      return this.availableBranches.length > 0 || this.searchTerm.length > 0;
+    },
+    isBranchesLoading() {
+      return this.$apollo.queries.availableBranches.loading;
+    },
+  },
+  watch: {
+    shouldLoadNewBranch(flag) {
+      if (flag) {
+        this.changeBranch(this.branchSelected);
+      }
+    },
+  },
+  methods: {
     // if there is no searchPattern, paginate by {paginationLimit} branches
     fetchNextBranches() {
       if (
         this.isBranchesLoading ||
         this.searchTerm.length > 0 ||
-        this.branches.length >= this.totalBranches
+        this.availableBranches.length >= this.totalBranches
       ) {
         return;
       }
 
       this.$apollo.queries.availableBranches
         .fetchMore({
-          variables: this.availableBranchesQueryVars(),
+          variables: {
+            offset: this.pageCounter * this.paginationLimit,
+          },
           updateQuery(previousResult, { fetchMoreResult }) {
             const previousBranches = previousResult.project.repository.branchNames;
             const newBranches = fetchMoreResult.project.repository.branchNames;
@@ -149,11 +166,7 @@ export default {
         })
         .catch(this.showFetchError);
     },
-    async selectBranch(newBranch) {
-      if (newBranch === this.currentBranch) {
-        return;
-      }
-
+    async changeBranch(newBranch) {
       this.updateCurrentBranch(newBranch);
       const updatedPath = setUrlParams({ branch_name: newBranch });
       historyPushState(updatedPath);
@@ -164,26 +177,22 @@ export default {
       await this.$nextTick();
       this.$emit('refetchContent');
     },
+    selectBranch(newBranch) {
+      if (newBranch !== this.currentBranch) {
+        // If there are unsaved changes, we want to show the user
+        // a modal to confirm what to do with these before changing
+        // branches.
+        if (this.hasUnsavedChanges) {
+          this.branchSelected = newBranch;
+          this.$emit('select-branch', newBranch);
+        } else {
+          this.changeBranch(newBranch);
+        }
+      }
+    },
     async setSearchTerm(newSearchTerm) {
       this.pageCounter = 0;
       this.searchTerm = newSearchTerm.trim();
-
-      if (this.searchTerm === '') {
-        this.pageLimit = this.paginationLimit;
-        return;
-      }
-
-      this.isSearchingBranches = true;
-      const fetchResults = await this.$apollo
-        .query({
-          query: getAvailableBranchesQuery,
-          fetchPolicy: fetchPolicies.NETWORK_ONLY,
-          variables: this.availableBranchesQueryVars(),
-        })
-        .catch(this.showFetchError);
-
-      this.isSearchingBranches = false;
-      this.filteredBranches = fetchResults?.data?.project?.repository?.branchNames || [];
     },
     showFetchError() {
       this.$emit('showError', {
@@ -203,11 +212,11 @@ export default {
 
 <template>
   <gl-dropdown
-    v-if="showBranchSwitcher"
     v-gl-tooltip.hover
     :title="$options.i18n.dropdownHeader"
     :header-text="$options.i18n.dropdownHeader"
     :text="currentBranch"
+    :disabled="!enableBranchSwitcher"
     icon="branch"
     data-qa-selector="branch_selector_button"
     data-testid="branch-selector"
@@ -218,17 +227,18 @@ export default {
     </gl-dropdown-section-header>
 
     <gl-infinite-scroll
-      :fetched-items="branches.length"
+      :fetched-items="availableBranches.length"
       :max-list-height="250"
+      data-qa-selector="branch_menu_container"
       @bottomReached="fetchNextBranches"
     >
       <template #items>
         <gl-dropdown-item
-          v-for="branch in branches"
+          v-for="branch in availableBranches"
           :key="branch"
           :is-checked="currentBranch === branch"
           :is-check-item="true"
-          data-qa-selector="menu_branch_button"
+          data-qa-selector="branch_menu_item_button"
           @click="selectBranch(branch)"
         >
           {{ branch }}

@@ -50,11 +50,12 @@ RSpec.describe ServicePing::SubmitService do
 
   let(:with_dev_ops_score_params) { { dev_ops_score: score_params[:score] } }
   let(:with_conv_index_params) { { conv_index: score_params[:score] } }
+  let(:with_usage_data_id_params) { { conv_index: { usage_data_id: usage_data_id } } }
 
   shared_examples 'does not run' do
     it do
       expect(Gitlab::HTTP).not_to receive(:post)
-      expect(Gitlab::UsageData).not_to receive(:data)
+      expect(Gitlab::Usage::ServicePingReport).not_to receive(:for)
 
       subject.execute
     end
@@ -62,7 +63,7 @@ RSpec.describe ServicePing::SubmitService do
 
   shared_examples 'does not send a blank usage ping payload' do
     it do
-      expect(Gitlab::HTTP).not_to receive(:post)
+      expect(Gitlab::HTTP).not_to receive(:post).with(subject.url, any_args)
 
       expect { subject.execute }.to raise_error(described_class::SubmissionError) do |error|
         expect(error.message).to include('Usage data is blank')
@@ -109,6 +110,7 @@ RSpec.describe ServicePing::SubmitService do
   context 'when product_intelligence_enabled is true' do
     before do
       stub_usage_data_connections
+      stub_database_flavor_check
 
       allow(ServicePing::ServicePingSettings).to receive(:product_intelligence_enabled?).and_return(true)
     end
@@ -116,7 +118,7 @@ RSpec.describe ServicePing::SubmitService do
     it 'generates service ping' do
       stub_response(body: with_dev_ops_score_params)
 
-      expect(Gitlab::UsageData).to receive(:data).with(force_refresh: true).and_call_original
+      expect(Gitlab::Usage::ServicePingReport).to receive(:for).with(output: :all_metrics_values).and_call_original
 
       subject.execute
     end
@@ -125,7 +127,9 @@ RSpec.describe ServicePing::SubmitService do
   context 'when usage ping is enabled' do
     before do
       stub_usage_data_connections
+      stub_database_flavor_check
       stub_application_setting(usage_ping_enabled: true)
+      stub_response(body: nil, url: subject.error_url, status: 201)
     end
 
     context 'and user requires usage stats consent' do
@@ -147,7 +151,7 @@ RSpec.describe ServicePing::SubmitService do
     it 'forces a refresh of usage data statistics before submitting' do
       stub_response(body: with_dev_ops_score_params)
 
-      expect(Gitlab::UsageData).to receive(:data).with(force_refresh: true).and_call_original
+      expect(Gitlab::Usage::ServicePingReport).to receive(:for).with(output: :all_metrics_values).and_call_original
 
       subject.execute
     end
@@ -163,7 +167,30 @@ RSpec.describe ServicePing::SubmitService do
         recorded_at = Time.current
         usage_data = { uuid: 'uuid', recorded_at: recorded_at }
 
-        expect(Gitlab::UsageData).to receive(:data).with(force_refresh: true).and_return(usage_data)
+        expect(Gitlab::Usage::ServicePingReport).to receive(:for).with(output: :all_metrics_values).and_return(usage_data)
+
+        subject.execute
+
+        raw_usage_data = RawUsageData.find_by(recorded_at: recorded_at)
+
+        expect(raw_usage_data.version_usage_data_id_value).to eq(31643)
+      end
+    end
+
+    context 'when only usage_data_id is passed in response' do
+      before do
+        stub_response(body: with_usage_data_id_params)
+      end
+
+      it 'does not save DevOps report data' do
+        expect { subject.execute }.not_to change { DevOpsReport::Metric.count }
+      end
+
+      it 'saves usage_data_id to version_usage_data_id_value' do
+        recorded_at = Time.current
+        usage_data = { uuid: 'uuid', recorded_at: recorded_at }
+
+        expect(Gitlab::Usage::ServicePingReport).to receive(:for).with(output: :all_metrics_values).and_return(usage_data)
 
         subject.execute
 
@@ -208,7 +235,7 @@ RSpec.describe ServicePing::SubmitService do
         recorded_at = Time.current
         usage_data = { uuid: 'uuid', recorded_at: recorded_at }
 
-        expect(Gitlab::UsageData).to receive(:data).with(force_refresh: true).and_return(usage_data)
+        expect(Gitlab::Usage::ServicePingReport).to receive(:for).with(output: :all_metrics_values).and_return(usage_data)
 
         subject.execute
 
@@ -233,7 +260,7 @@ RSpec.describe ServicePing::SubmitService do
 
     context 'and usage data is empty string' do
       before do
-        allow(Gitlab::UsageData).to receive(:data).and_return({})
+        allow(Gitlab::Usage::ServicePingReport).to receive(:for).with(output: :all_metrics_values).and_return({})
       end
 
       it_behaves_like 'does not send a blank usage ping payload'
@@ -242,7 +269,7 @@ RSpec.describe ServicePing::SubmitService do
     context 'and usage data is nil' do
       before do
         allow(ServicePing::BuildPayloadService).to receive(:execute).and_return(nil)
-        allow(Gitlab::UsageData).to receive(:data).and_return(nil)
+        allow(Gitlab::Usage::ServicePingReport).to receive(:for).with(output: :all_metrics_values).and_return(nil)
       end
 
       it_behaves_like 'does not send a blank usage ping payload'
@@ -251,13 +278,23 @@ RSpec.describe ServicePing::SubmitService do
     context 'if payload service fails' do
       before do
         stub_response(body: with_dev_ops_score_params)
-        allow(ServicePing::BuildPayloadService).to receive(:execute).and_raise(described_class::SubmissionError, 'SubmissionError')
+        allow(ServicePing::BuildPayloadService).to receive_message_chain(:new, :execute)
+                                                     .and_raise(described_class::SubmissionError, 'SubmissionError')
       end
 
-      it 'calls UsageData .data method' do
+      it 'calls Gitlab::Usage::ServicePingReport .for method' do
         usage_data = build_usage_data
 
-        expect(Gitlab::UsageData).to receive(:data).and_return(usage_data)
+        expect(Gitlab::Usage::ServicePingReport).to receive(:for).with(output: :all_metrics_values).and_return(usage_data)
+
+        subject.execute
+      end
+
+      it 'submits error' do
+        expect(Gitlab::HTTP).to receive(:post).with(subject.url, any_args)
+                                              .and_call_original
+        expect(Gitlab::HTTP).to receive(:post).with(subject.error_url, any_args)
+                                              .and_call_original
 
         subject.execute
       end
@@ -289,19 +326,62 @@ RSpec.describe ServicePing::SubmitService do
         end
       end
 
-      it 'calls UsageData .data method' do
+      it 'calls Gitlab::Usage::ServicePingReport .for method' do
         usage_data = build_usage_data
 
-        expect(Gitlab::UsageData).to receive(:data).and_return(usage_data)
+        expect(Gitlab::Usage::ServicePingReport).to receive(:for).with(output: :all_metrics_values).and_return(usage_data)
 
         # SubmissionError is raised as a result of 404 in response from HTTP Request
         expect { subject.execute }.to raise_error(described_class::SubmissionError)
       end
     end
+
+    context 'when skip_db_write passed to service' do
+      let(:subject) { ServicePing::SubmitService.new(skip_db_write: true) }
+
+      before do
+        stub_response(body: with_dev_ops_score_params)
+      end
+
+      it 'does not save RawUsageData' do
+        expect { subject.execute }
+          .not_to change { RawUsageData.count }
+      end
+
+      it 'does not call DevOpsReport service' do
+        expect(ServicePing::DevopsReportService).not_to receive(:new)
+
+        subject.execute
+      end
+    end
   end
 
-  def stub_response(body:, status: 201)
-    stub_full_request(subject.send(:url), method: :post)
+  describe '#url' do
+    let(:url) { subject.url.to_s }
+
+    context 'when Rails.env is production' do
+      before do
+        stub_rails_env('production')
+      end
+
+      it 'points to the production Version app' do
+        expect(url).to eq("#{described_class::PRODUCTION_BASE_URL}/#{described_class::USAGE_DATA_PATH}")
+      end
+    end
+
+    context 'when Rails.env is not production' do
+      before do
+        stub_rails_env('development')
+      end
+
+      it 'points to the staging Version app' do
+        expect(url).to eq("#{described_class::STAGING_BASE_URL}/#{described_class::USAGE_DATA_PATH}")
+      end
+    end
+  end
+
+  def stub_response(url: subject.url, body:, status: 201)
+    stub_full_request(url, method: :post)
       .to_return(
         headers: { 'Content-Type' => 'application/json' },
         body: body.to_json,

@@ -1,15 +1,13 @@
 <script>
-import { GlTable, GlTooltipDirective } from '@gitlab/ui';
-import { s__ } from '~/locale';
+import { GlTableLite, GlTooltipDirective } from '@gitlab/ui';
+import { s__, __ } from '~/locale';
 import eventHub from '../../event_hub';
 import PipelineMiniGraph from './pipeline_mini_graph.vue';
 import PipelineOperations from './pipeline_operations.vue';
 import PipelineStopModal from './pipeline_stop_modal.vue';
 import PipelineTriggerer from './pipeline_triggerer.vue';
 import PipelineUrl from './pipeline_url.vue';
-import PipelinesCommit from './pipelines_commit.vue';
 import PipelinesStatusBadge from './pipelines_status_badge.vue';
-import PipelinesTimeago from './time_ago.vue';
 
 const DEFAULT_TD_CLASS = 'gl-p-5!';
 const HIDE_TD_ON_MOBILE = 'gl-display-none! gl-lg-display-table-cell!';
@@ -18,18 +16,57 @@ const DEFAULT_TH_CLASSES =
 
 export default {
   components: {
-    GlTable,
+    GlTableLite,
     LinkedPipelinesMiniList: () =>
       import('ee_component/vue_shared/components/linked_pipelines_mini_list.vue'),
-    PipelinesCommit,
     PipelineMiniGraph,
     PipelineOperations,
     PipelinesStatusBadge,
     PipelineStopModal,
-    PipelinesTimeago,
     PipelineTriggerer,
     PipelineUrl,
   },
+  tableFields: [
+    {
+      key: 'status',
+      label: s__('Pipeline|Status'),
+      thClass: DEFAULT_TH_CLASSES,
+      columnClass: 'gl-w-15p',
+      tdClass: DEFAULT_TD_CLASS,
+      thAttr: { 'data-testid': 'status-th' },
+    },
+    {
+      key: 'pipeline',
+      label: __('Pipeline'),
+      thClass: DEFAULT_TH_CLASSES,
+      tdClass: `${DEFAULT_TD_CLASS}`,
+      columnClass: 'gl-w-30p',
+      thAttr: { 'data-testid': 'pipeline-th' },
+    },
+    {
+      key: 'triggerer',
+      label: s__('Pipeline|Triggerer'),
+      thClass: DEFAULT_TH_CLASSES,
+      tdClass: `${DEFAULT_TD_CLASS} ${HIDE_TD_ON_MOBILE}`,
+      columnClass: 'gl-w-10p',
+      thAttr: { 'data-testid': 'triggerer-th' },
+    },
+    {
+      key: 'stages',
+      label: s__('Pipeline|Stages'),
+      thClass: DEFAULT_TH_CLASSES,
+      tdClass: DEFAULT_TD_CLASS,
+      columnClass: 'gl-w-quarter',
+      thAttr: { 'data-testid': 'stages-th' },
+    },
+    {
+      key: 'actions',
+      thClass: DEFAULT_TH_CLASSES,
+      tdClass: DEFAULT_TD_CLASS,
+      columnClass: 'gl-w-15p',
+      thAttr: { 'data-testid': 'actions-th' },
+    },
+  ],
   directives: {
     GlTooltip: GlTooltipDirective,
   },
@@ -65,68 +102,6 @@ export default {
       cancelingPipeline: null,
     };
   },
-  computed: {
-    tableFields() {
-      const fields = [
-        {
-          key: 'status',
-          label: s__('Pipeline|Status'),
-          thClass: DEFAULT_TH_CLASSES,
-          columnClass: 'gl-w-10p',
-          tdClass: DEFAULT_TD_CLASS,
-          thAttr: { 'data-testid': 'status-th' },
-        },
-        {
-          key: 'pipeline',
-          label: this.pipelineKeyOption.label,
-          thClass: DEFAULT_TH_CLASSES,
-          tdClass: `${DEFAULT_TD_CLASS} ${HIDE_TD_ON_MOBILE}`,
-          columnClass: 'gl-w-10p',
-          thAttr: { 'data-testid': 'pipeline-th' },
-        },
-        {
-          key: 'triggerer',
-          label: s__('Pipeline|Triggerer'),
-          thClass: DEFAULT_TH_CLASSES,
-          tdClass: `${DEFAULT_TD_CLASS} ${HIDE_TD_ON_MOBILE}`,
-          columnClass: 'gl-w-10p',
-          thAttr: { 'data-testid': 'triggerer-th' },
-        },
-        {
-          key: 'commit',
-          label: s__('Pipeline|Commit'),
-          thClass: DEFAULT_TH_CLASSES,
-          tdClass: DEFAULT_TD_CLASS,
-          columnClass: 'gl-w-20p',
-          thAttr: { 'data-testid': 'commit-th' },
-        },
-        {
-          key: 'stages',
-          label: s__('Pipeline|Stages'),
-          thClass: DEFAULT_TH_CLASSES,
-          tdClass: DEFAULT_TD_CLASS,
-          columnClass: 'gl-w-quarter',
-          thAttr: { 'data-testid': 'stages-th' },
-        },
-        {
-          key: 'timeago',
-          label: s__('Pipeline|Duration'),
-          thClass: DEFAULT_TH_CLASSES,
-          tdClass: DEFAULT_TD_CLASS,
-          columnClass: 'gl-w-15p',
-          thAttr: { 'data-testid': 'timeago-th' },
-        },
-        {
-          key: 'actions',
-          thClass: DEFAULT_TH_CLASSES,
-          tdClass: DEFAULT_TD_CLASS,
-          columnClass: 'gl-w-15p',
-          thAttr: { 'data-testid': 'actions-th' },
-        },
-      ];
-      return fields;
-    },
-  },
   watch: {
     pipelines() {
       this.cancelingPipeline = null;
@@ -156,8 +131,8 @@ export default {
 </script>
 <template>
   <div class="ci-table">
-    <gl-table
-      :fields="tableFields"
+    <gl-table-lite
+      :fields="$options.tableFields"
       :items="pipelines"
       tbody-tr-class="commit"
       :tbody-tr-attr="{ 'data-testid': 'pipeline-table-row' }"
@@ -189,10 +164,6 @@ export default {
         <pipeline-triggerer :pipeline="item" />
       </template>
 
-      <template #cell(commit)="{ item }">
-        <pipelines-commit :pipeline="item" :view-type="viewType" />
-      </template>
-
       <template #cell(stages)="{ item }">
         <div class="stage-cell">
           <!-- This empty div should be removed, see https://gitlab.com/gitlab-org/gitlab/-/issues/323488 -->
@@ -218,14 +189,10 @@ export default {
         </div>
       </template>
 
-      <template #cell(timeago)="{ item }">
-        <pipelines-timeago :pipeline="item" />
-      </template>
-
       <template #cell(actions)="{ item }">
         <pipeline-operations :pipeline="item" :canceling-pipeline="cancelingPipeline" />
       </template>
-    </gl-table>
+    </gl-table-lite>
 
     <pipeline-stop-modal :pipeline="pipeline" @submit="onSubmit" />
   </div>

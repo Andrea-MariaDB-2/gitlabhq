@@ -4,7 +4,7 @@ group: Package
 info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.example/handbook/engineering/ux/technical-writing/#assignments
 ---
 
-# npm API
+# npm API **(FREE)**
 
 This is the API documentation for [npm Packages](../../user/packages/npm_registry/index.md).
 
@@ -21,8 +21,6 @@ See the [npm package registry documentation](../../user/packages/npm_registry/in
 for details on which headers and token types are supported.
 
 ## Download a package
-
-> Introduced in GitLab 11.8.
 
 Downloads the npm package. This URL is provided by the [metadata endpoint](#metadata).
 
@@ -49,8 +47,6 @@ curl --header "Authorization: Bearer <personal_access_token>" "https://gitlab.ex
 This writes the downloaded file to `@myscope/my-pkg-0.0.1.tgz` in the current directory.
 
 ## Upload a package file
-
-> Introduced in GitLab 11.8.
 
 Upload a package.
 
@@ -152,8 +148,6 @@ The examples in this document all use the project-level prefix.
 | `id`      | string | yes      | The project ID or full project path. |
 
 ## Metadata
-
-> Introduced in GitLab 11.8.
 
 Returns the metadata for a given package.
 

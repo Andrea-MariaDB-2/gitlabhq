@@ -4,7 +4,14 @@ group: Configure
 info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
 ---
 
-# Add an existing Kubernetes cluster
+# Connect existing clusters through cluster certificates (DEPRECATED) **(FREE)**
+
+> [Deprecated](https://gitlab.com/groups/gitlab-org/configure/-/epics/8) in GitLab 14.5.
+
+WARNING:
+This feature was [deprecated](https://gitlab.com/groups/gitlab-org/configure/-/epics/8) in GitLab 14.5.
+To connect your cluster to GitLab, use the [GitLab agent](../../clusters/agent/index.md)
+instead.
 
 If you have an existing Kubernetes cluster, you can add it to a project, group,
 or instance and benefit from the integration with GitLab.
@@ -20,7 +27,7 @@ To add any cluster to GitLab, you need:
 - Either a GitLab.com account or an account for a self-managed installation
 running GitLab 12.5 or later.
 - The Maintainer role for group-level and project-level clusters.
-- Access to the Admin area for instance-level clusters. **(FREE SELF)**
+- Access to the Admin area for instance-level clusters.
 - A Kubernetes cluster.
 - Cluster administration access to the cluster with `kubectl`.
 
@@ -62,8 +69,8 @@ To add a Kubernetes cluster to your project, group, or instance:
    1. Project's **{cloud-gear}** **Infrastructure > Kubernetes clusters** page, for a project-level cluster.
    1. Group's **{cloud-gear}** **Kubernetes** page, for a group-level cluster.
    1. **Menu > Admin > Kubernetes** page, for an instance-level cluster.
-1. Click **Add Kubernetes cluster**.
-1. Click the **Add existing cluster** tab and fill in the details:
+1. On the **Kubernetes clusters** page, select the **Connect with a certificate** option from the **Actions** dropdown menu.
+1. On the **Connect a cluster** page, fill in the details:
    1. **Kubernetes cluster name** (required) - The name you wish to give the cluster.
    1. **Environment scope** (required) - The
       [associated environment](multiple_kubernetes_clusters.md#setting-the-environment-scope) to this cluster.
@@ -182,7 +189,7 @@ To add a Kubernetes cluster to your project, group, or instance:
          ```
 
    1. **GitLab-managed cluster** - Leave this checked if you want GitLab to manage namespaces and service accounts for this cluster.
-      See the [Managed clusters section](index.md#gitlab-managed-clusters) for more information.
+      See the [Managed clusters section](gitlab_managed_clusters.md) for more information.
    1. **Project namespace** (optional) - You don't have to fill this in. By leaving
       it blank, GitLab creates one for you. Also:
       - Each project should have a unique namespace.
@@ -211,7 +218,8 @@ integration to work properly.
 WARNING:
 Disabling RBAC means that any application running in the cluster,
 or user who can authenticate to the cluster, has full API access. This is a
-[security concern](index.md#security-implications), and may not be desirable.
+[security concern](../../infrastructure/clusters/connect/index.md#security-implications-for-clusters-connected-with-certificates),
+and may not be desirable.
 
 To effectively disable RBAC, global permissions can be applied granting full access:
 

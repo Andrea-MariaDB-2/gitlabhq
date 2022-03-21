@@ -4,41 +4,41 @@ module Gitlab
   module Database
     module Migrations
       class Instrumentation
-        RESULT_DIR = Rails.root.join('tmp', 'migration-testing').freeze
         STATS_FILENAME = 'migration-stats.json'
 
         attr_reader :observations
 
-        def initialize(observer_classes = ::Gitlab::Database::Migrations::Observers.all_observers)
+        def initialize(result_dir:, observer_classes: ::Gitlab::Database::Migrations::Observers.all_observers)
           @observer_classes = observer_classes
           @observations = []
+          @result_dir = result_dir
         end
 
-        def observe(version:, name:, &block)
-          observation = Observation.new(version, name)
-          observation.success = true
+        def observe(version:, name:, connection:, &block)
+          observation = Observation.new(version: version, name: name, success: false)
 
-          observers = observer_classes.map { |c| c.new(observation) }
+          per_migration_result_dir = File.join(@result_dir, name)
 
-          exception = nil
+          FileUtils.mkdir_p(per_migration_result_dir)
+
+          observers = observer_classes.map { |c| c.new(observation, per_migration_result_dir, connection) }
 
           on_each_observer(observers) { |observer| observer.before }
 
-          observation.walltime = Benchmark.realtime do
-            yield
-          rescue StandardError => e
-            exception = e
-            observation.success = false
-          end
+          start = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+
+          yield
+
+          observation.success = true
+
+          observation
+        ensure
+          observation.walltime = Process.clock_gettime(Process::CLOCK_MONOTONIC) - start
 
           on_each_observer(observers) { |observer| observer.after }
           on_each_observer(observers) { |observer| observer.record }
 
           record_observation(observation)
-
-          raise exception if exception
-
-          observation
         end
 
         private

@@ -5,7 +5,6 @@ module QA
     module Project
       class New < Page::Base
         include Page::Component::Project::Templates
-        include Page::Component::Select2
         include Page::Component::VisibilitySetting
 
         include Layout::Flash
@@ -14,18 +13,25 @@ module QA
 
         view 'app/views/projects/_new_project_fields.html.haml' do
           element :initialize_with_readme_checkbox
-          element :project_namespace_select
-          element :project_namespace_field, 'namespaces_options' # rubocop:disable QA/ElementWithPattern
-          element :project_name, 'text_field :name' # rubocop:disable QA/ElementWithPattern
-          element :project_path, 'text_field :path' # rubocop:disable QA/ElementWithPattern
-          element :project_description, 'text_area :description' # rubocop:disable QA/ElementWithPattern
-          element :project_create_button, "submit _('Create project')" # rubocop:disable QA/ElementWithPattern
-          element :visibility_radios, 'visibility_level:' # rubocop:disable QA/ElementWithPattern
+          element :project_name
+          element :project_path
+          element :project_description
+          element :project_create_button
+          element :visibility_radios
+        end
+
+        view 'app/views/projects/_new_project_initialize_with_sast.html.haml' do
+          element :initialize_with_sast_checkbox
         end
 
         view 'app/views/projects/project_templates/_template.html.haml' do
           element :use_template_button
           element :template_option_row
+        end
+
+        view 'app/assets/javascripts/projects/new/components/new_project_url_select.vue' do
+          element :select_namespace_dropdown
+          element :select_namespace_dropdown_search_field
         end
 
         view 'app/assets/javascripts/vue_shared/new_namespace/components/welcome.vue' do
@@ -46,8 +52,9 @@ module QA
 
         def choose_namespace(namespace)
           retry_on_exception do
-            click_element :project_namespace_select unless dropdown_open?
-            search_and_select(namespace)
+            click_element :select_namespace_dropdown
+            fill_element :select_namespace_dropdown_search_field, namespace
+            click_button namespace
           end
         end
 
@@ -73,6 +80,13 @@ module QA
 
         def set_visibility(visibility)
           choose visibility.capitalize
+        end
+
+        # Disable experiment for SAST at project creation https://gitlab.com/gitlab-org/gitlab/-/issues/333196
+        def disable_initialize_with_sast
+          return unless has_element?(:initialize_with_sast_checkbox)
+
+          uncheck_element(:initialize_with_sast_checkbox)
         end
 
         def click_github_link

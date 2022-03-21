@@ -5,7 +5,7 @@ info: To determine the technical writer assigned to the Stage/Group associated w
 type: concepts, howto
 ---
 
-# Profile preferences
+# Profile preferences **(FREE)**
 
 A user's profile preferences page allows the user to customize various aspects
 of GitLab to their liking.
@@ -39,11 +39,11 @@ The default theme is Indigo. You can choose between 10 themes:
 
 ## Dark mode
 
-> [Introduced](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/28252) in GitLab 13.1 as an Alpha release.
+> [Introduced](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/28252) in GitLab 13.1 as an [Alpha](../../policy/alpha-beta-support.md#alpha-features) release.
 
 GitLab has started work on dark mode! The dark mode Alpha release is available in the
 spirit of iteration and the lower expectations of
-[Alpha versions](https://about.gitlab.com/handbook/product/gitlab-the-product/#alpha).
+[Alpha versions](../../policy/alpha-beta-support.md#alpha-features).
 
 Progress on dark mode is tracked in the [Dark theme epic](https://gitlab.com/groups/gitlab-org/-/epics/2902).
 See the epic for:
@@ -120,7 +120,7 @@ You can include the following options for your default dashboard view:
 - Your [To-Do List](../todos.md)
 - Assigned Issues
 - Assigned Merge Requests
-- Operations Dashboard **(PREMIUM)**
+- [Operations Dashboard](../operations_dashboard/index.md)
 
 ### Group overview content
 
@@ -130,7 +130,7 @@ displayed on a group's home page.
 You can choose between 2 options:
 
 - Details (default)
-- [Security dashboard](../application_security/security_dashboard/index.md) **(ULTIMATE)**
+- [Security dashboard](../application_security/security_dashboard/index.md)
 
 ### Project overview content
 

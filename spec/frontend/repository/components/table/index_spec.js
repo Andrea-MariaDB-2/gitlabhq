@@ -1,5 +1,6 @@
 import { GlDeprecatedSkeletonLoading as GlSkeletonLoading, GlButton } from '@gitlab/ui';
 import { shallowMount } from '@vue/test-utils';
+import { nextTick } from 'vue';
 import Table from '~/repository/components/table/index.vue';
 import TableRow from '~/repository/components/table/row.vue';
 
@@ -34,16 +35,44 @@ const MOCK_BLOBS = [
   },
 ];
 
-function factory({ path, isLoading = false, hasMore = true, entries = {} }) {
+const MOCK_COMMITS = [
+  {
+    fileName: 'blob.md',
+    type: 'blob',
+    commit: {
+      message: 'Updated blob.md',
+    },
+  },
+  {
+    fileName: 'blob2.md',
+    type: 'blob',
+    commit: {
+      message: 'Updated blob2.md',
+    },
+  },
+  {
+    fileName: 'blob3.md',
+    type: 'blob',
+    commit: {
+      message: 'Updated blob3.md',
+    },
+  },
+];
+
+function factory({ path, isLoading = false, hasMore = true, entries = {}, commits = [] }) {
   vm = shallowMount(Table, {
     propsData: {
       path,
       isLoading,
       entries,
       hasMore,
+      commits,
     },
     mocks: {
       $apollo,
+    },
+    provide: {
+      glFeatures: { lazyLoadCommits: true },
     },
   });
 }
@@ -58,16 +87,17 @@ describe('Repository table component', () => {
     ${'/'}          | ${'main'}
     ${'app/assets'} | ${'main'}
     ${'/'}          | ${'test'}
-  `('renders table caption for $ref in $path', ({ path, ref }) => {
+  `('renders table caption for $ref in $path', async ({ path, ref }) => {
     factory({ path });
 
+    // setData usage is discouraged. See https://gitlab.com/groups/gitlab-org/-/epics/7330 for details
+    // eslint-disable-next-line no-restricted-syntax
     vm.setData({ ref });
 
-    return vm.vm.$nextTick(() => {
-      expect(vm.find('.table').attributes('aria-label')).toEqual(
-        `Files, directories, and submodules in the path ${path} for commit reference ${ref}`,
-      );
-    });
+    await nextTick();
+    expect(vm.find('.table').attributes('aria-label')).toEqual(
+      `Files, directories, and submodules in the path ${path} for commit reference ${ref}`,
+    );
   });
 
   it('shows loading icon', () => {
@@ -82,12 +112,15 @@ describe('Repository table component', () => {
       entries: {
         blobs: MOCK_BLOBS,
       },
+      commits: MOCK_COMMITS,
     });
 
     const rows = vm.findAll(TableRow);
 
     expect(rows.length).toEqual(3);
     expect(rows.at(2).attributes().mode).toEqual('120000');
+    expect(rows.at(2).props().rowNumber).toBe(2);
+    expect(rows.at(2).props().commitInfo).toEqual(MOCK_COMMITS[2]);
   });
 
   describe('Show more button', () => {
@@ -107,7 +140,7 @@ describe('Repository table component', () => {
 
       showMoreButton().vm.$emit('click');
 
-      await vm.vm.$nextTick();
+      await nextTick();
 
       expect(vm.emitted('showMore')).toHaveLength(1);
     });

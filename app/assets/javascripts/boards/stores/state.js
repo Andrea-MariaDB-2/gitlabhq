@@ -1,6 +1,7 @@
 import { inactiveId, ListType } from '~/boards/constants';
 
 export default () => ({
+  board: {},
   boardType: null,
   issuableType: null,
   fullPath: null,
@@ -31,6 +32,8 @@ export default () => ({
   },
   selectedProject: {},
   error: undefined,
+  iterations: [],
+  iterationsLoading: false,
   addColumnForm: {
     visible: false,
     columnType: ListType.label,

@@ -12,6 +12,38 @@ RSpec.describe 'Query.project(fullPath).pipelines' do
     travel_to(Time.current) { example.run }
   end
 
+  describe 'sha' do
+    let_it_be(:pipeline) { create(:ci_pipeline, project: project) }
+
+    let(:pipelines_graphql_data) { graphql_data.dig(*%w[project pipelines nodes]).first }
+
+    let(:query) do
+      %(
+        query {
+          project(fullPath: "#{project.full_path}") {
+            pipelines {
+              nodes {
+                fullSha: sha
+                shortSha: sha(format: SHORT)
+                alsoFull: sha(format: LONG)
+              }
+            }
+          }
+        }
+      )
+    end
+
+    it 'returns all formats of the SHA' do
+      post_graphql(query, current_user: user)
+
+      expect(pipelines_graphql_data).to include(
+        'fullSha' => eq(pipeline.sha),
+        'alsoFull' => eq(pipeline.sha),
+        'shortSha' => eq(pipeline.short_sha)
+      )
+    end
+  end
+
   describe 'duration fields' do
     let_it_be(:pipeline) do
       create(:ci_pipeline, project: project)
@@ -79,12 +111,13 @@ RSpec.describe 'Query.project(fullPath).pipelines' do
       create(:ci_build, pipeline: pipeline, stage_id: other_stage.id, name: 'linux: [baz]')
     end
 
-    it 'is null if the user is a guest' do
+    it 'is present if the user has guest access' do
       project.add_guest(user)
 
-      post_graphql(query, current_user: user, variables: first_n.with(1))
+      post_graphql(query, current_user: user)
 
-      expect(graphql_data_at(:project, :pipelines, :nodes)).to contain_exactly a_hash_including('stages' => be_nil)
+      expect(graphql_data_at(:project, :pipelines, :nodes, :stages, :nodes, :name))
+        .to contain_exactly(eq(stage.name), eq(other_stage.name))
     end
 
     it 'is present if the user has reporter access' do
@@ -113,12 +146,13 @@ RSpec.describe 'Query.project(fullPath).pipelines' do
         wrap_fields(query_graphql_path(query_path, :name))
       end
 
-      it 'is empty if the user is a guest' do
+      it 'is present if the user has guest access' do
         project.add_guest(user)
 
         post_graphql(query, current_user: user)
 
-        expect(graphql_data_at(:project, :pipelines, :nodes, :stages, :nodes, :groups)).to be_empty
+        expect(graphql_data_at(:project, :pipelines, :nodes, :stages, :nodes, :groups, :nodes, :name))
+          .to contain_exactly('linux', 'linux')
       end
 
       it 'is present if the user has reporter access' do
@@ -182,6 +216,113 @@ RSpec.describe 'Query.project(fullPath).pipelines' do
 
       expect do
         post_graphql(query, current_user: second_user)
+      end.not_to exceed_query_limit(control_count)
+    end
+  end
+
+  describe '.job_artifacts' do
+    let_it_be(:pipeline) { create(:ci_pipeline, project: project) }
+    let_it_be(:pipeline_job_1) { create(:ci_build, pipeline: pipeline, name: 'Job 1') }
+    let_it_be(:pipeline_job_artifact_1) { create(:ci_job_artifact, job: pipeline_job_1) }
+    let_it_be(:pipeline_job_2) { create(:ci_build, pipeline: pipeline, name: 'Job 2') }
+    let_it_be(:pipeline_job_artifact_2) { create(:ci_job_artifact, job: pipeline_job_2) }
+
+    let(:path) { %i[project pipelines nodes jobArtifacts] }
+
+    let(:query) do
+      %(
+        query {
+          project(fullPath: "#{project.full_path}") {
+            pipelines {
+              nodes {
+                jobArtifacts {
+                  name
+                  downloadPath
+                  fileType
+                }
+              }
+            }
+          }
+        }
+      )
+    end
+
+    before do
+      post_graphql(query, current_user: user)
+    end
+
+    it_behaves_like 'a working graphql query'
+
+    it 'returns the job_artifacts of a pipeline' do
+      job_artifacts_graphql_data = graphql_data_at(*path).flatten
+
+      expect(
+        job_artifacts_graphql_data.map { |pip| pip['name'] }
+      ).to contain_exactly(pipeline_job_artifact_1.filename, pipeline_job_artifact_2.filename)
+    end
+
+    it 'avoids N+1 queries' do
+      first_user = create(:user)
+      second_user = create(:user)
+
+      control_count = ActiveRecord::QueryRecorder.new do
+        post_graphql(query, current_user: first_user)
+      end
+
+      pipeline_2 = create(:ci_pipeline, project: project)
+      pipeline_2_job_1 = create(:ci_build, pipeline: pipeline_2, name: 'Pipeline 2 Job 1')
+      create(:ci_job_artifact, job: pipeline_2_job_1)
+      pipeline_2_job_2 = create(:ci_build, pipeline: pipeline_2, name: 'Pipeline 2 Job 2')
+      create(:ci_job_artifact, job: pipeline_2_job_2)
+
+      expect do
+        post_graphql(query, current_user: second_user)
+      end.not_to exceed_query_limit(control_count)
+
+      expect(response).to have_gitlab_http_status(:ok)
+    end
+  end
+
+  describe 'warningMessages' do
+    let_it_be(:pipeline) { create(:ci_pipeline, project: project) }
+    let_it_be(:warning_message) { create(:ci_pipeline_message, pipeline: pipeline, content: 'warning') }
+
+    let(:pipelines_graphql_data) { graphql_data.dig(*%w[project pipelines nodes]).first }
+
+    let(:query) do
+      %(
+        query {
+          project(fullPath: "#{project.full_path}") {
+            pipelines {
+              nodes {
+                warningMessages {
+                  content
+                }
+              }
+            }
+          }
+        }
+      )
+    end
+
+    it 'returns pipeline warnings' do
+      post_graphql(query, current_user: user)
+
+      expect(pipelines_graphql_data['warningMessages']).to contain_exactly(
+        a_hash_including('content' => 'warning')
+      )
+    end
+
+    it 'avoids N+1 queries' do
+      control_count = ActiveRecord::QueryRecorder.new do
+        post_graphql(query, current_user: user)
+      end
+
+      pipeline_2 = create(:ci_pipeline, project: project)
+      create(:ci_pipeline_message, pipeline: pipeline_2, content: 'warning')
+
+      expect do
+        post_graphql(query, current_user: user)
       end.not_to exceed_query_limit(control_count)
     end
   end
@@ -352,6 +493,71 @@ RSpec.describe 'Query.project(fullPath).pipelines' do
         expect do
           post_graphql(query, current_user: second_user)
         end.not_to exceed_query_limit(control_count)
+      end
+    end
+  end
+
+  describe 'ref_path' do
+    let_it_be(:merge_request) { create(:merge_request, source_project: project) }
+    let_it_be(:pipeline_1) { create(:ci_pipeline, project: project, user: user, merge_request: merge_request) }
+    let_it_be(:pipeline_2) { create(:ci_pipeline, project: project, user: user, merge_request: merge_request) }
+
+    let(:query) do
+      %(
+        query {
+          project(fullPath: "#{project.full_path}") {
+            pipelines {
+              nodes {
+                refPath
+              }
+            }
+          }
+        }
+      )
+    end
+
+    it 'avoids N+1 queries' do
+      control_count = ActiveRecord::QueryRecorder.new do
+        post_graphql(query, current_user: user)
+      end
+
+      create(:ci_pipeline, project: project, user: user, merge_request: merge_request)
+
+      expect do
+        post_graphql(query, current_user: user)
+      end.not_to exceed_query_limit(control_count)
+    end
+  end
+
+  describe 'filtering' do
+    let(:query) do
+      %(
+        query {
+          project(fullPath: "#{project.full_path}") {
+            pipelines(updatedAfter: "#{updated_after_arg}", updatedBefore: "#{updated_before_arg}") {
+              nodes {
+                id
+              }}}}
+      )
+    end
+
+    context 'when filtered by updated_at' do
+      let_it_be(:oldish_pipeline) { create(:ci_empty_pipeline, project: project, updated_at: 3.days.ago) }
+      let_it_be(:older_pipeline) { create(:ci_empty_pipeline, project: project, updated_at: 10.days.ago) }
+
+      let(:updated_after_arg) { 5.days.ago }
+      let(:updated_before_arg) { 1.day.ago }
+
+      before do
+        post_graphql(query, current_user: user)
+      end
+
+      it_behaves_like 'a working graphql query'
+
+      it 'accepts filter params' do
+        pipeline_ids = graphql_data.dig('project', 'pipelines', 'nodes').map { |pipeline| pipeline.fetch('id') }
+
+        expect(pipeline_ids).to match_array(oldish_pipeline.to_global_id.to_s)
       end
     end
   end

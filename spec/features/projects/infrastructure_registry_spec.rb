@@ -43,12 +43,10 @@ RSpec.describe 'Infrastructure Registry' do
 
           expect(page).to have_current_path(project_infrastructure_registry_path(terraform_module.project, terraform_module))
 
-          expect(page).to have_css('.packages-app h1[data-testid="title"]', text: terraform_module.name)
+          expect(page).to have_css('.packages-app h2[data-testid="title"]', text: terraform_module.name)
 
-          page.within(%Q([name="#{terraform_module.name}"])) do
-            expect(page).to have_content('Provision instructions')
-            expect(page).to have_content('Registry setup')
-          end
+          expect(page).to have_content('Provision instructions')
+          expect(page).to have_content('Registry setup')
         end
       end
 

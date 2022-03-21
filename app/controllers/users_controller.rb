@@ -23,6 +23,9 @@ class UsersController < ApplicationController
   before_action :user, except: [:exists]
   before_action :authorize_read_user_profile!,
                 only: [:calendar, :calendar_activities, :groups, :projects, :contributed, :starred, :snippets, :followers, :following]
+  before_action only: [:exists] do
+    check_rate_limit!(:username_exists, scope: request.ip)
+  end
 
   feature_category :users
 
@@ -32,7 +35,7 @@ class UsersController < ApplicationController
 
       format.atom do
         load_events
-        render layout: 'xml.atom'
+        render layout: 'xml'
       end
 
       format.json do
@@ -145,7 +148,11 @@ class UsersController < ApplicationController
   end
 
   def exists
-    render json: { exists: !!Namespace.find_by_path_or_name(params[:username]) }
+    if Gitlab::CurrentSettings.signup_enabled? || current_user
+      render json: { exists: !!Namespace.find_by_path_or_name(params[:username]) }
+    else
+      render json: { error: _('You must be authenticated to access this path.') }, status: :unauthorized
+    end
   end
 
   def follow
@@ -179,7 +186,7 @@ class UsersController < ApplicationController
   end
 
   def starred_projects
-    StarredProjectsFinder.new(user, current_user: current_user).execute
+    StarredProjectsFinder.new(user, params: finder_params, current_user: current_user).execute
   end
 
   def contributions_calendar
@@ -244,6 +251,15 @@ class UsersController < ApplicationController
         }
       end
     end
+  end
+
+  def finder_params
+    {
+      # don't display projects pending deletion
+      without_deleted: true,
+      # don't display projects marked for deletion
+      not_aimed_for_deletion: true
+    }
   end
 end
 

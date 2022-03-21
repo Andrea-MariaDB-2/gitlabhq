@@ -2,7 +2,7 @@
 
 module QA
   RSpec.describe 'Manage' do
-    describe 'User', :requires_admin do
+    describe 'User', :requires_admin, :reliable do
       let(:admin_api_client) { Runtime::API::Client.as_admin }
 
       let!(:user) do
@@ -39,7 +39,7 @@ module QA
           end
         end
 
-        it 'is not allowed to edit the project files', testcase: 'https://gitlab.com/gitlab-org/quality/testcases/-/quality/test_cases/1709' do
+        it 'is not allowed to edit the project files', testcase: 'https://gitlab.com/gitlab-org/gitlab/-/quality/test_cases/347866' do
           Flow::Login.sign_in(as: user)
           project.visit!
 

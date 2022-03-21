@@ -22,13 +22,16 @@ class Import::BulkImportsController < ApplicationController
   def status
     respond_to do |format|
       format.json do
-        data = importable_data
+        data = ::BulkImports::GetImportableDataService.new(params, query_params, credentials).execute
 
         pagination_headers.each do |header|
-          response.set_header(header, data.headers[header])
+          response.set_header(header, data[:response].headers[header])
         end
 
-        render json: { importable_data: serialized_data(data.parsed_response) }
+        json_response = { importable_data: serialized_data(data[:response].parsed_response) }
+        json_response[:version_validation] = data[:version_validation]
+
+        render json: json_response
       end
       format.html do
         @source_url = session[url_key]
@@ -37,13 +40,9 @@ class Import::BulkImportsController < ApplicationController
   end
 
   def create
-    response = BulkImportService.new(current_user, create_params, credentials).execute
+    responses = create_params.map { |entry| ::BulkImports::CreateService.new(current_user, entry, credentials).execute }
 
-    if response.success?
-      render json: response.payload.to_json(only: [:id])
-    else
-      render json: { error: response.message }, status: response.http_status
-    end
+    render json: responses.map { |response| { success: response.success?, id: response.payload[:id], message: response.message } }
   end
 
   def realtime_changes
@@ -66,10 +65,6 @@ class Import::BulkImportsController < ApplicationController
     @serializer ||= BaseSerializer.new(current_user: current_user)
   end
 
-  def importable_data
-    client.get('groups', query_params)
-  end
-
   # Default query string params used to fetch groups from GitLab source instance
   #
   # top_level_only: fetch only top level groups (subgroups are fetched during import itself)
@@ -83,15 +78,6 @@ class Import::BulkImportsController < ApplicationController
 
     query_params[:search] = sanitized_filter_param if sanitized_filter_param
     query_params
-  end
-
-  def client
-    @client ||= BulkImports::Clients::HTTP.new(
-      url: session[url_key],
-      token: session[access_token_key],
-      per_page: params[:per_page],
-      page: params[:page]
-    )
   end
 
   def configure_params

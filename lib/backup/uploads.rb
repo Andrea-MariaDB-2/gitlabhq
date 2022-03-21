@@ -2,12 +2,13 @@
 
 module Backup
   class Uploads < Backup::Files
-    attr_reader :progress
-
     def initialize(progress)
-      @progress = progress
+      super(progress, 'uploads', File.join(Gitlab.config.uploads.storage_path, "uploads"), excludes: ['tmp'])
+    end
 
-      super('uploads', File.join(Gitlab.config.uploads.storage_path, "uploads"), excludes: ['tmp'])
+    override :human_name
+    def human_name
+      _('uploads')
     end
   end
 end

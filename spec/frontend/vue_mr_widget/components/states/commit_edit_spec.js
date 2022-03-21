@@ -1,4 +1,5 @@
 import { shallowMount } from '@vue/test-utils';
+import { nextTick } from 'vue';
 import CommitEdit from '~/vue_merge_request_widget/components/states/commit_edit.vue';
 
 const testCommitMessage = 'Test commit message';
@@ -46,16 +47,15 @@ describe('Commits edit component', () => {
       expect(findTextarea().element.value).toBe(testCommitMessage);
     });
 
-    it('emits an input event and receives changed value', () => {
+    it('emits an input event and receives changed value', async () => {
       const changedCommitMessage = 'Changed commit message';
 
       findTextarea().element.value = changedCommitMessage;
       findTextarea().trigger('input');
 
-      return wrapper.vm.$nextTick().then(() => {
-        expect(wrapper.emitted().input[0]).toEqual([changedCommitMessage]);
-        expect(findTextarea().element.value).toBe(changedCommitMessage);
-      });
+      await nextTick();
+      expect(wrapper.emitted().input[0]).toEqual([changedCommitMessage]);
+      expect(findTextarea().element.value).toBe(changedCommitMessage);
     });
   });
 
@@ -63,7 +63,6 @@ describe('Commits edit component', () => {
     beforeEach(() => {
       createComponent({
         header: `<div class="test-header">${testCommitMessage}</div>`,
-        checkbox: `<label class="test-checkbox">${testLabel}</label >`,
       });
     });
 
@@ -72,13 +71,6 @@ describe('Commits edit component', () => {
 
       expect(headerSlotElement.exists()).toBe(true);
       expect(headerSlotElement.text()).toBe(testCommitMessage);
-    });
-
-    it('renders checkbox slot correctly', () => {
-      const checkboxSlotElement = wrapper.find('.test-checkbox');
-
-      expect(checkboxSlotElement.exists()).toBe(true);
-      expect(checkboxSlotElement.text()).toBe(testLabel);
     });
   });
 });

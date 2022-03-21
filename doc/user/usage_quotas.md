@@ -2,13 +2,16 @@
 type: howto
 stage: Fulfillment
 group: Utilization
-info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#designated-technical-writers
+info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
 ---
 
-# Storage usage quota **(FREE SAAS)**
+# Storage usage quota **(FREE)**
 
 > - [Introduced](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/13294) in GitLab 12.0.
 > - Moved to GitLab Free.
+
+NOTE:
+Free tier namespaces on GitLab SaaS have a 5GB storage limit. This limit is not visible on the storage quota page nor currently enforced for users who exceed the limit. To learn more, visit our [pricing page](https://about.gitlab.com/pricing/).
 
 A project's repository has a free storage quota of 10 GB. When a project's repository reaches
 the quota it is locked. You cannot push changes to a locked project. To monitor the size of each
@@ -18,31 +21,28 @@ you must purchase additional storage. For more details, see [Excess storage usag
 
 ## View storage usage
 
-To help manage storage, a namespace's owner can view:
+You can view storage usage for your project or [namespace](../user/group/#namespaces).
 
-- Total storage used in the namespace
-- Total storage used per project
+1. Go to your project or namespace:
+   - For a project, on the top bar, select **Menu > Projects** and find your project.
+   - For a namespace, enter the URL in your browser's toolbar.
+1. From the left sidebar, select **Settings > Usage Quotas**.
+1. Select the **Storage** tab.
 
-To view storage usage, from the namespace's page go to **Settings > Usage Quotas** and select the
-**Storage** tab. The Usage Quotas statistics are updated every 90 minutes.
+The statistics are displayed. Select any title to view details. The information on this page
+is updated every 90 minutes.
 
-If your namespace shows `N/A` as the total storage usage, push a commit to any project in that
-namespace to trigger a recalculation.
-
-A stacked bar graph shows the proportional storage used for the namespace, including a total per
-storage item. Click on each project's title to see a breakdown per storage item.
+If your namespace shows `N/A`, push a commit to any project in the
+namespace to recalculate the storage.
 
 ## Storage usage statistics
 
-> - [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/247831) in GitLab 13.7.
-> - It's [deployed behind a feature flag](../user/feature_flags.md), enabled by default.
-> - It's enabled on GitLab SaaS.
-> - It's recommended for production use.
+> - [Introduced](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/68898) project-level graph in GitLab 14.4 [with a flag](../administration/feature_flags.md) named `project_storage_ui`. Disabled by default.
+> - Enabled on GitLab.com in GitLab 14.4.
+> - Enabled on self-managed in GitLab 14.5.
+> - [Feature flag removed](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/71270) in GitLab 14.5.
 
-WARNING:
-This feature might not be available to you. Check the **version history** note above for details.
-
-The following storage usage statistics are available to an owner:
+The following storage usage statistics are available to a maintainer:
 
 - Total namespace storage used: Total amount of storage used across projects in this namespace.
 - Total excess storage used: Total amount of storage used that exceeds their allocated storage.
@@ -52,7 +52,7 @@ The following storage usage statistics are available to an owner:
 
 Excess storage usage is the amount that a project's repository exceeds the free storage quota. If no
 purchased storage is available the project is locked. You cannot push changes to a locked project.
-To unlock a project you must [purchase more storage](../subscriptions/gitlab_com/index.md#purchase-more-storage)
+To unlock a project you must [purchase more storage](../subscriptions/gitlab_com/index.md#purchase-more-storage-and-transfer)
 for the namespace. When the purchase is completed, locked projects are automatically unlocked. The
 amount of purchased storage available must always be greater than zero.
 

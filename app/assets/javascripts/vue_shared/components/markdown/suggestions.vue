@@ -68,6 +68,10 @@ export default {
     if (this.suggestionsWatch) {
       this.suggestionsWatch();
     }
+
+    if (this.defaultCommitMessageWatch) {
+      this.defaultCommitMessageWatch();
+    }
   },
   methods: {
     renderSuggestions() {
@@ -123,12 +127,16 @@ export default {
         suggestionDiff.suggestionsCount = this.suggestionsCount;
       });
 
+      this.defaultCommitMessageWatch = this.$watch('defaultCommitMessage', () => {
+        suggestionDiff.defaultCommitMessage = this.defaultCommitMessage;
+      });
+
       suggestionDiff.$on('apply', ({ suggestionId, callback, message }) => {
         this.$emit('apply', { suggestionId, callback, flashContainer: this.$el, message });
       });
 
-      suggestionDiff.$on('applyBatch', () => {
-        this.$emit('applyBatch', { flashContainer: this.$el });
+      suggestionDiff.$on('applyBatch', (message) => {
+        this.$emit('applyBatch', { message, flashContainer: this.$el });
       });
 
       suggestionDiff.$on('addToBatch', (suggestionId) => {
@@ -157,6 +165,6 @@ export default {
 <template>
   <div>
     <div class="flash-container js-suggestions-flash"></div>
-    <div v-show="isRendered" ref="container" v-safe-html="noteHtml" class="md"></div>
+    <div v-show="isRendered" ref="container" v-safe-html="noteHtml" class="md suggestions"></div>
   </div>
 </template>

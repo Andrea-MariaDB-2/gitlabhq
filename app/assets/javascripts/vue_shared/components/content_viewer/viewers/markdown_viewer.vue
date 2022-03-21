@@ -1,6 +1,8 @@
 <script>
-/* eslint-disable vue/no-v-html */
-import { GlDeprecatedSkeletonLoading as GlSkeletonLoading } from '@gitlab/ui';
+import {
+  GlDeprecatedSkeletonLoading as GlSkeletonLoading,
+  GlSafeHtmlDirective as SafeHtml,
+} from '@gitlab/ui';
 import $ from 'jquery';
 import '~/behaviors/markdown/render_gfm';
 import { forEach, escape } from 'lodash';
@@ -13,6 +15,9 @@ let axiosSource;
 export default {
   components: {
     GlSkeletonLoading,
+  },
+  directives: {
+    SafeHtml,
   },
   props: {
     content: {
@@ -98,18 +103,23 @@ export default {
             });
           })
           .catch(() => {
-            this.previewContent = __('An error occurred while fetching markdown preview');
+            this.previewContent = __('An error occurred while fetching Markdown preview');
             this.isLoading = false;
           });
       }
     },
   },
+  safeHtmlConfig: { ADD_TAGS: ['gl-emoji', 'use'] },
 };
 </script>
 
 <template>
   <div ref="markdownPreview" class="md-previewer" data-testid="md-previewer">
     <gl-skeleton-loading v-if="isLoading" />
-    <div v-else class="md gl-ml-auto gl-mr-auto" v-html="previewContent"></div>
+    <div
+      v-else
+      v-safe-html:[$options.safeHtmlConfig]="previewContent"
+      class="md gl-ml-auto gl-mr-auto"
+    ></div>
   </div>
 </template>

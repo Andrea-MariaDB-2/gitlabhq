@@ -1,7 +1,7 @@
 ---
 type: concepts, howto
 stage: Manage
-group: Access
+group: Authentication and Authorization
 info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
 ---
 
@@ -40,7 +40,7 @@ The following steps enable AWS Cognito as an authentication provider:
 
 ## Configure GitLab
 
-1. See [Initial OmniAuth Configuration](../../integration/omniauth.md#initial-omniauth-configuration) for initial settings.
+1. See [Configure initial settings](../../integration/omniauth.md#configure-initial-settings) for initial settings.
 1. On your GitLab server, open the configuration file.
 
    **For Omnibus installations**
@@ -56,25 +56,25 @@ Include the code block in the `/etc/gitlab/gitlab.rb` file:
    gitlab_rails['omniauth_allow_single_sign_on'] = ['cognito']
    gitlab_rails['omniauth_providers'] = [
      {
-       "name" => "cognito",
-       # "label" => "Cognito",
-       # "icon" => nil,   # Optional icon URL
-       "app_id" => "CLIENT ID",
-       "app_secret" => "CLIENT SECRET",
-       "args" => {
-         "scope" => "openid profile email",
+       name: "cognito",
+       label: "Provider name", # optional label for login button, defaults to "Cognito"
+       icon: nil,   # Optional icon URL
+       app_id: "CLIENT ID",
+       app_secret: "CLIENT SECRET",
+       args: {
+         scope: "openid profile email",
          client_options: {
-           'site' => 'https://your_domain.auth.your_region.amazoncognito.com',
-           'authorize_url' => '/oauth2/authorize',
-           'token_url' => '/oauth2/token',
-           'user_info_url' => '/oauth2/userInfo'
+           site: "https://your_domain.auth.your_region.amazoncognito.com",
+           authorize_url: "/oauth2/authorize",
+           token_url: "/oauth2/token",
+           user_info_url: "/oauth2/userInfo"
          },
          user_response_structure: {
            root_path: [],
-           id_path: ['sub'],
-           attributes: { nickname: 'email', name: 'email', email: 'email' }
+           id_path: ["sub"],
+           attributes: { nickname: "email", name: "email", email: "email" }
          },
-         name: 'cognito',
+         name: "cognito",
          strategy_class: "OmniAuth::Strategies::OAuth2Generic"
        }
      }
@@ -88,4 +88,4 @@ Your sign-in page should now display a Cognito button below the regular sign-in 
 To begin the authentication process, click the icon, and AWS Cognito asks the user to sign in and authorize the GitLab application.
 If successful, the user is redirected and signed in to your GitLab instance.
 
-For more information, see the [Initial OmniAuth Configuration](../../integration/omniauth.md#initial-omniauth-configuration).
+For more information, see [Configure initial settings](../../integration/omniauth.md#configure-initial-settings).

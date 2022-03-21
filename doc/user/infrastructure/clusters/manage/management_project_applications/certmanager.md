@@ -4,9 +4,11 @@ group: Configure
 info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
 ---
 
-# Install cert-manager with a cluster management project
+# Install cert-manager with a cluster management project **(FREE)**
 
-> [Introduced](https://gitlab.com/gitlab-org/project-templates/cluster-management/-/merge_requests/5) in GitLab 14.0.
+> - [Introduced](https://gitlab.com/gitlab-org/project-templates/cluster-management/-/merge_requests/5) in GitLab 14.0.
+> - Support for cert-manager v1.4 was [introduced](https://gitlab.com/gitlab-org/project-templates/cluster-management/-/merge_requests/69405) in GitLab 14.3.
+> - [Upgraded](https://gitlab.com/gitlab-org/project-templates/cluster-management/-/merge_requests/23) to cert-manager 1.7 in GitLab 14.8.
 
 Assuming you already have a [Cluster management project](../../../../../user/clusters/management_project.md) created from a
 [management project template](../../../../../user/clusters/management_project_template.md), to install cert-manager you should
@@ -16,41 +18,23 @@ uncomment this line from your `helmfile.yaml`:
   - path: applications/cert-manager/helmfile.yaml
 ```
 
+NOTE:
+If your Kubernetes version is earlier than 1.20 and you are [migrating from GitLab
+Managed Apps to a cluster management
+project](../../../../clusters/migrating_from_gma_to_project_template.md), then
+you can instead use `- path: applications/cert-manager-legacy/helmfile.yaml` to
+take over an existing release of cert-manager v0.10.
+
 cert-manager:
 
 - Is installed by default into the `gitlab-managed-apps` namespace of your cluster.
-- Can be installed with or without a default
-  [Let's Encrypt `ClusterIssuer`](https://cert-manager.io/docs/configuration/acme/), which requires an
-  email address to be specified. The email address is used by Let's Encrypt to
+- Includes a
+  [Let's Encrypt
+  `ClusterIssuer`](https://cert-manager.io/docs/configuration/acme/) enabled by
+  default. In the `certmanager-issuer` release, the issuer requires a valid email address
+  for `letsEncryptClusterIssuer.email`. Let's Encrypt uses this email address to
   contact you about expiring certificates and issues related to your account.
-
-The following configuration in your `applications/cert-manager/helmfile.yaml` is required to install cert-manager:
-
-```yaml
-certManager:
-  installed: true
-  letsEncryptClusterIssuer:
-    installed: true
-    email: "user@example.com"
-```
-
-Or without the default `ClusterIssuer`:
-
-```yaml
-certManager:
-  installed: true
-  letsEncryptClusterIssuer:
-    installed: false
-```
-
-You can customize the installation of cert-manager by defining a
-`.gitlab/managed-apps/cert-manager/values.yaml` file in your cluster
-management project. Refer to the
-[chart](https://github.com/jetstack/cert-manager) for the
-available configuration options.
-
-Support for installing the Cert Manager managed application is provided by the
-GitLab Configure group. If you run into unknown issues,
-[open a new issue](https://gitlab.com/gitlab-org/gitlab/-/issues/new), and ping at
-least 2 people from the
-[Configure group](https://about.gitlab.com/handbook/product/categories/#configure-group).
+- Can be customized in `applications/cert-manager/helmfile.yaml` by passing custom
+  `values` to the `certmanager` release. Refer to the
+  [chart](https://github.com/jetstack/cert-manager) for the available
+  configuration options.

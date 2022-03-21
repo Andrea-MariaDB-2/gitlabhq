@@ -1,5 +1,6 @@
-import { GlTab } from '@gitlab/ui';
+import { GlTab, GlTabs } from '@gitlab/ui';
 import { mount } from '@vue/test-utils';
+import { nextTick } from 'vue';
 import { useLocalStorageSpy } from 'helpers/local_storage_helper';
 import { makeMockUserCalloutDismisser } from 'helpers/mock_user_callout_dismisser';
 import stubChildren from 'helpers/stub_children';
@@ -19,6 +20,7 @@ import {
   AUTO_DEVOPS_ENABLED_ALERT_DISMISSED_STORAGE_KEY,
 } from '~/security_configuration/components/constants';
 import FeatureCard from '~/security_configuration/components/feature_card.vue';
+import TrainingProviderList from '~/security_configuration/components/training_provider_list.vue';
 
 import UpgradeBanner from '~/security_configuration/components/upgrade_banner.vue';
 import {
@@ -30,7 +32,7 @@ const upgradePath = '/upgrade';
 const autoDevopsHelpPagePath = '/autoDevopsHelpPagePath';
 const autoDevopsPath = '/autoDevopsPath';
 const gitlabCiHistoryPath = 'test/historyPath';
-const projectPath = 'namespace/project';
+const projectFullPath = 'namespace/project';
 
 useLocalStorageSpy();
 
@@ -38,7 +40,11 @@ describe('App component', () => {
   let wrapper;
   let userCalloutDismissSpy;
 
-  const createComponent = ({ shouldShowCallout = true, ...propsData }) => {
+  const createComponent = ({
+    shouldShowCallout = true,
+    secureVulnerabilityTraining = true,
+    ...propsData
+  }) => {
     userCalloutDismissSpy = jest.fn();
 
     wrapper = extendedWrapper(
@@ -48,7 +54,10 @@ describe('App component', () => {
           upgradePath,
           autoDevopsHelpPagePath,
           autoDevopsPath,
-          projectPath,
+          projectFullPath,
+          glFeatures: {
+            secureVulnerabilityTraining,
+          },
         },
         stubs: {
           ...stubChildren(SecurityConfigurationApp),
@@ -68,8 +77,11 @@ describe('App component', () => {
   const findMainHeading = () => wrapper.find('h1');
   const findTab = () => wrapper.findComponent(GlTab);
   const findTabs = () => wrapper.findAllComponents(GlTab);
+  const findGlTabs = () => wrapper.findComponent(GlTabs);
   const findByTestId = (id) => wrapper.findByTestId(id);
   const findFeatureCards = () => wrapper.findAllComponents(FeatureCard);
+  const findTrainingProviderList = () => wrapper.findComponent(TrainingProviderList);
+  const findManageViaMRErrorAlert = () => wrapper.findByTestId('manage-via-mr-error-alert');
   const findLink = ({ href, text, container = wrapper }) => {
     const selector = `a[href="${href}"]`;
     const link = container.find(selector);
@@ -132,24 +144,36 @@ describe('App component', () => {
 
     it('renders main-heading with correct text', () => {
       const mainHeading = findMainHeading();
-      expect(mainHeading).toExist();
+      expect(mainHeading.exists()).toBe(true);
       expect(mainHeading.text()).toContain('Security Configuration');
     });
 
-    it('renders GlTab Component ', () => {
-      expect(findTab()).toExist();
-    });
+    describe('tabs', () => {
+      const expectedTabs = ['security-testing', 'compliance-testing', 'vulnerability-management'];
 
-    it('renders right amount of tabs with correct title ', () => {
-      expect(findTabs()).toHaveLength(2);
-    });
+      it('renders GlTab Component', () => {
+        expect(findTab().exists()).toBe(true);
+      });
 
-    it('renders security-testing tab', () => {
-      expect(findByTestId('security-testing-tab').exists()).toBe(true);
-    });
+      it('passes the `sync-active-tab-with-query-params` prop', () => {
+        expect(findGlTabs().props('syncActiveTabWithQueryParams')).toBe(true);
+      });
 
-    it('renders compliance-testing tab', () => {
-      expect(findByTestId('compliance-testing-tab').exists()).toBe(true);
+      it('lazy loads each tab', () => {
+        expect(findGlTabs().attributes('lazy')).not.toBe(undefined);
+      });
+
+      it('renders correct amount of tabs', () => {
+        expect(findTabs()).toHaveLength(expectedTabs.length);
+      });
+
+      it.each(expectedTabs)('renders the %s tab', (tabName) => {
+        expect(findByTestId(`${tabName}-tab`).exists()).toBe(true);
+      });
+
+      it.each(expectedTabs)('has the %s query-param-value', (tabName) => {
+        expect(findByTestId(`${tabName}-tab`).props('queryParamValue')).toBe(tabName);
+      });
     });
 
     it('renders right amount of feature cards for given props with correct props', () => {
@@ -170,6 +194,43 @@ describe('App component', () => {
     it('should not show configuration History Link when gitlabCiPresent & gitlabCiHistoryPath are not defined', () => {
       expect(findComplianceViewHistoryLink().exists()).toBe(false);
       expect(findSecurityViewHistoryLink().exists()).toBe(false);
+    });
+  });
+
+  describe('Manage via MR Error Alert', () => {
+    beforeEach(() => {
+      createComponent({
+        augmentedSecurityFeatures: securityFeaturesMock,
+        augmentedComplianceFeatures: complianceFeaturesMock,
+      });
+    });
+
+    describe('on initial load', () => {
+      it('should  not show Manage via MR Error Alert', () => {
+        expect(findManageViaMRErrorAlert().exists()).toBe(false);
+      });
+    });
+
+    describe('when error occurs', () => {
+      it('should show Alert with error Message', async () => {
+        expect(findManageViaMRErrorAlert().exists()).toBe(false);
+        findFeatureCards().at(1).vm.$emit('error', 'There was a manage via MR error');
+
+        await nextTick();
+        expect(findManageViaMRErrorAlert().exists()).toBe(true);
+        expect(findManageViaMRErrorAlert().text()).toEqual('There was a manage via MR error');
+      });
+
+      it('should hide Alert when it is dismissed', async () => {
+        findFeatureCards().at(1).vm.$emit('error', 'There was a manage via MR error');
+
+        await nextTick();
+        expect(findManageViaMRErrorAlert().exists()).toBe(true);
+
+        findManageViaMRErrorAlert().vm.$emit('dismiss');
+        await nextTick();
+        expect(findManageViaMRErrorAlert().exists()).toBe(false);
+      });
     });
   });
 
@@ -213,11 +274,11 @@ describe('App component', () => {
 
   describe('Auto DevOps enabled alert', () => {
     describe.each`
-      context                                        | autoDevopsEnabled | localStorageValue | shouldRender
-      ${'enabled'}                                   | ${true}           | ${null}           | ${true}
-      ${'enabled, alert dismissed on other project'} | ${true}           | ${['foo/bar']}    | ${true}
-      ${'enabled, alert dismissed on this project'}  | ${true}           | ${[projectPath]}  | ${false}
-      ${'not enabled'}                               | ${false}          | ${null}           | ${false}
+      context                                        | autoDevopsEnabled | localStorageValue    | shouldRender
+      ${'enabled'}                                   | ${true}           | ${null}              | ${true}
+      ${'enabled, alert dismissed on other project'} | ${true}           | ${['foo/bar']}       | ${true}
+      ${'enabled, alert dismissed on this project'}  | ${true}           | ${[projectFullPath]} | ${false}
+      ${'not enabled'}                               | ${false}          | ${null}              | ${false}
     `('given Auto DevOps is $context', ({ autoDevopsEnabled, localStorageValue, shouldRender }) => {
       beforeEach(() => {
         if (localStorageValue !== null) {
@@ -241,11 +302,11 @@ describe('App component', () => {
 
     describe('dismissing', () => {
       describe.each`
-        dismissedProjects | expectedWrittenValue
-        ${null}           | ${[projectPath]}
-        ${[]}             | ${[projectPath]}
-        ${['foo/bar']}    | ${['foo/bar', projectPath]}
-        ${[projectPath]}  | ${[projectPath]}
+        dismissedProjects    | expectedWrittenValue
+        ${null}              | ${[projectFullPath]}
+        ${[]}                | ${[projectFullPath]}
+        ${['foo/bar']}       | ${['foo/bar', projectFullPath]}
+        ${[projectFullPath]} | ${[projectFullPath]}
       `(
         'given dismissed projects $dismissedProjects',
         ({ dismissedProjects, expectedWrittenValue }) => {
@@ -377,6 +438,43 @@ describe('App component', () => {
 
       expect(findComplianceViewHistoryLink().attributes('href')).toBe('test/historyPath');
       expect(findSecurityViewHistoryLink().attributes('href')).toBe('test/historyPath');
+    });
+  });
+
+  describe('Vulnerability management', () => {
+    beforeEach(() => {
+      createComponent({
+        augmentedSecurityFeatures: securityFeaturesMock,
+        augmentedComplianceFeatures: complianceFeaturesMock,
+      });
+    });
+
+    it('renders TrainingProviderList component', () => {
+      expect(findTrainingProviderList().exists()).toBe(true);
+    });
+
+    it('renders security training description', () => {
+      const vulnerabilityManagementTab = wrapper.findByTestId('vulnerability-management-tab');
+
+      expect(vulnerabilityManagementTab.text()).toContain(i18n.securityTrainingDescription);
+    });
+  });
+
+  describe('when secureVulnerabilityTraining feature flag is disabled', () => {
+    beforeEach(() => {
+      createComponent({
+        augmentedSecurityFeatures: securityFeaturesMock,
+        augmentedComplianceFeatures: complianceFeaturesMock,
+        secureVulnerabilityTraining: false,
+      });
+    });
+
+    it('renders correct amount of tabs', () => {
+      expect(findTabs()).toHaveLength(2);
+    });
+
+    it('does not render the vulnerability-management tab', () => {
+      expect(wrapper.findByTestId('vulnerability-management-tab').exists()).toBe(false);
     });
   });
 });

@@ -4,13 +4,18 @@ group: Configure
 info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
 ---
 
-# Instance clusters API **(FREE)**
+# Instance clusters API (certificate-based) (DEPRECATED) **(FREE SELF)**
 
-> [Introduced](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/36001) in GitLab 13.2.
+> - [Introduced](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/36001) in GitLab 13.2.
+> - [Deprecated](https://gitlab.com/groups/gitlab-org/configure/-/epics/8) in GitLab 14.5.
 
-Instance-level Kubernetes clusters allow you to connect a Kubernetes cluster to the GitLab instance, which enables you to use the same cluster across multiple projects. [More information](../user/instance/clusters/index.md)
+WARNING:
+This feature was [deprecated](https://gitlab.com/groups/gitlab-org/configure/-/epics/8) in GitLab 14.5.
 
-NOTE:
+With [instance-level Kubernetes clusters](../user/instance/clusters/index.md),
+you can connect a Kubernetes cluster to the GitLab instance and use the same cluster across all of
+the projects within your instance.
+
 Users need administrator access to use these endpoints.
 
 ## List instance clusters
@@ -91,7 +96,6 @@ Example response:
     ...
   }
 ]
-
 ```
 
 ## Get a single instance cluster
@@ -178,7 +182,6 @@ curl --header "Private-Token:<your_access_token>" "http://gitlab.example.com/api
 -H "Accept:application/json" \
 -H "Content-Type:application/json" \
 -X POST --data '{"name":"cluster-3", "environment_scope":"production", "platform_kubernetes_attributes":{"api_url":"https://example.com", "token":"12345",  "ca_cert":"-----BEGIN CERTIFICATE-----qpoeiXXZafCM0ZDJkZjM...-----END CERTIFICATE-----"}}'
-
 ```
 
 Example response:
@@ -240,7 +243,7 @@ Parameters:
 
 NOTE:
 `name`, `api_url`, `ca_cert` and `token` can only be updated if the cluster was added
-through the [Add existing Kubernetes cluster](../user/project/clusters/add_remove_clusters.md#add-existing-cluster) option or
+through the [Add existing Kubernetes cluster](../user/project/clusters/add_existing_cluster.md) option or
 through the [Add existing instance cluster](#add-existing-instance-cluster) endpoint.
 
 Example request:
@@ -249,7 +252,6 @@ Example request:
 curl --header "Private-Token: <your_access_token>" "http://gitlab.example.com/api/v4/admin/clusters/9" \
 -H "Content-Type:application/json" \
 -X PUT --data '{"name":"update-cluster-name", "platform_kubernetes_attributes":{"api_url":"https://new-example.com","token":"new-token"}}'
-
 ```
 
 Example response:
@@ -284,7 +286,6 @@ Example response:
   "management_project": null,
   "project": null
 }
-
 ```
 
 ## Delete instance cluster

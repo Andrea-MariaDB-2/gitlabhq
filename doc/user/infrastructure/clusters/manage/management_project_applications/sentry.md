@@ -1,10 +1,10 @@
 ---
 stage: Monitor
-group: Monitor
+group: Respond
 info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
 ---
 
-# Install Sentry with a cluster management project
+# Install Sentry with a cluster management project **(FREE)**
 
 > [Introduced](https://gitlab.com/gitlab-org/project-templates/cluster-management/-/merge_requests/5) in GitLab 14.0.
 
@@ -68,9 +68,3 @@ ingress:
 postgresql:
   postgresqlPassword: example-postgresql-password
 ```
-
-Support for installing the Sentry managed application is provided by the
-GitLab Monitor group. If you run into unknown issues,
-[open a new issue](https://gitlab.com/gitlab-org/gitlab/-/issues/new), and ping at
-least 2 people from the
-[Monitor group](https://about.gitlab.com/handbook/product/categories/#monitor-group).

@@ -7,6 +7,8 @@ module IssuableCollectionsAction
 
   # rubocop:disable Gitlab/ModuleWithInstanceVariables
   def issues
+    show_alert_if_search_is_disabled
+
     @issues = issuables_collection
               .non_archived
               .page(params[:page])
@@ -15,11 +17,13 @@ module IssuableCollectionsAction
 
     respond_to do |format|
       format.html
-      format.atom { render layout: 'xml.atom' }
+      format.atom { render layout: 'xml' }
     end
   end
 
   def merge_requests
+    show_alert_if_search_is_disabled
+
     @merge_requests = issuables_collection.page(params[:page])
 
     @issuable_meta_data = Gitlab::IssuableMetadata.new(current_user, @merge_requests).data

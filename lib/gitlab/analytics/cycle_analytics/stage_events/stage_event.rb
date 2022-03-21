@@ -19,7 +19,7 @@ module Gitlab
             raise NotImplementedError
           end
 
-          def markdown_description
+          def html_description(options = {})
             self.class.name
           end
 
@@ -60,6 +60,10 @@ module Gitlab
             query.where(timestamp_projection.eq(nil))
           end
           # rubocop: enable CodeReuse/ActiveRecord
+
+          def include_in(query)
+            query
+          end
 
           def self.label_based?
             false

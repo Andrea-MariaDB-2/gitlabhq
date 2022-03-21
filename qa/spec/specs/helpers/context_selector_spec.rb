@@ -10,7 +10,7 @@ RSpec.describe QA::Specs::Helpers::ContextSelector do
     QA::Runtime::Scenario.define(:gitlab_address, 'https://staging.gitlab.com')
 
     RSpec::Core::Sandbox.sandboxed do |config|
-      config.formatter = QA::Specs::Helpers::ContextFormatter
+      config.formatter = QA::Support::Formatters::ContextFormatter
 
       # If there is an example-within-an-example, we want to make sure the inner example
       # does not get a reference to the outer example (the real spec) if it calls
@@ -182,6 +182,24 @@ RSpec.describe QA::Specs::Helpers::ContextSelector do
           expect(group.examples.first.execution_result.status).to eq(:pending)
           expect(group.examples.last.execution_result.status).to eq(:passed)
         end
+      end
+    end
+  end
+
+  context 'staging-ref' do
+    before do
+      QA::Runtime::Scenario.define(:gitlab_address, 'https://staging-ref.gitlab.com/')
+    end
+
+    it 'runs on staging-ref' do
+      group = describe_successfully do
+        it('does not run in staging', only: { subdomain: :staging }) {}
+        it('runs in staging-ref', only: { subdomain: /^staging-ref./ }) {}
+      end
+
+      aggregate_failures do
+        expect(group.examples[0].execution_result.status).to eq(:pending)
+        expect(group.examples[1].execution_result.status).to eq(:passed)
       end
     end
   end

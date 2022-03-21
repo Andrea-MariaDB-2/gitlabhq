@@ -8,6 +8,7 @@ RSpec.describe Notify do
   include EmailSpec::Matchers
   include EmailHelpers
   include RepoHelpers
+  include MembersHelper
 
   include_context 'gitlab email notification'
 
@@ -71,7 +72,7 @@ RSpec.describe Notify do
       it 'is sent to the assignee as the author' do
         aggregate_failures do
           expect_sender(current_user)
-          expect(subject).to deliver_to(recipient.notification_email)
+          expect(subject).to deliver_to(recipient.notification_email_or_default)
         end
       end
     end
@@ -212,7 +213,7 @@ RSpec.describe Notify do
         subject { described_class.issue_due_email(recipient.id, issue.id) }
 
         before do
-          issue.update(due_date: Date.tomorrow)
+          issue.update!(due_date: Date.tomorrow)
         end
 
         it_behaves_like 'an answer to an existing thread with reply-by-email enabled' do
@@ -612,6 +613,28 @@ RSpec.describe Notify do
         it 'has References header including the notes and issue of the discussion' do
           expect(subject.header['References'].message_ids).to include("issue_#{note.noteable.id}@#{host}")
         end
+
+        context 'with private references accessible to the recipient' do
+          let_it_be(:private_project) { create(:project, :private) }
+          let_it_be(:private_issue) { create(:issue, :closed, project: private_project) }
+
+          before_all do
+            private_project.add_guest(recipient)
+
+            note.update!(note: "#{private_issue.to_reference(full: true)}")
+          end
+
+          let(:html_part) { subject.body.parts.last.to_s }
+
+          it 'does not redact the reference' do
+            expect(html_part).to include("data-reference-type=\"issue\"")
+            expect(html_part).to include("title=\"#{private_issue.title}\"")
+          end
+
+          it 'renders expanded issue references' do
+            expect(html_part).to include("#{private_issue.to_reference(full: true)} (closed)")
+          end
+        end
       end
     end
 
@@ -691,7 +714,7 @@ RSpec.describe Notify do
     describe 'project access requested' do
       let(:project) do
         create(:project, :public) do |project|
-          project.add_maintainer(project.owner)
+          project.add_maintainer(project.first_owner)
         end
       end
 
@@ -710,7 +733,7 @@ RSpec.describe Notify do
 
       it 'contains all the useful information' do
         to_emails = subject.header[:to].addrs.map(&:address)
-        expect(to_emails).to eq([recipient.notification_email])
+        expect(to_emails).to eq([recipient.notification_email_or_default])
 
         is_expected.to have_subject "Request to join the #{project.full_name} project"
         is_expected.to have_body_text project.full_name
@@ -720,11 +743,8 @@ RSpec.describe Notify do
     end
 
     describe 'project access denied' do
-      let(:project) { create(:project, :public) }
-      let(:project_member) do
-        project.request_access(user)
-        project.requesters.find_by(user_id: user.id)
-      end
+      let_it_be(:project) { create(:project, :public) }
+      let_it_be(:project_member) { create(:project_member, :developer, :access_request, user: user, source: project) }
 
       subject { described_class.member_access_denied_email('project', project.id, user.id) }
 
@@ -738,6 +758,17 @@ RSpec.describe Notify do
         is_expected.to have_subject "Access to the #{project.full_name} project was denied"
         is_expected.to have_body_text project.full_name
         is_expected.to have_body_text project.web_url
+      end
+
+      context 'when user can not read project' do
+        let_it_be(:project) { create(:project, :private) }
+
+        it 'hides project name from subject and body' do
+          is_expected.to have_subject "Access to the Hidden project was denied"
+          is_expected.to have_body_text "Hidden project"
+          is_expected.not_to have_body_text project.full_name
+          is_expected.not_to have_body_text project.web_url
+        end
       end
     end
 
@@ -761,10 +792,21 @@ RSpec.describe Notify do
         is_expected.to have_body_text project_member.human_access
         is_expected.to have_body_text 'leave the project'
         is_expected.to have_body_text project_url(project, leave: 1)
+        is_expected.not_to have_body_text 'You were assigned the following tasks:'
+      end
+
+      context 'with tasks to be done present' do
+        let(:project_member) { create(:project_member, project: project, user: user, tasks_to_be_done: [:ci, :code]) }
+
+        it 'contains the assigned tasks to be done' do
+          is_expected.to have_body_text 'You were assigned the following tasks:'
+          is_expected.to have_body_text localized_tasks_to_be_done_choices[:ci]
+          is_expected.to have_body_text localized_tasks_to_be_done_choices[:code]
+        end
       end
     end
 
-    def invite_to_project(project, inviter:, user: nil)
+    def invite_to_project(project, inviter:, user: nil, tasks_to_be_done: [])
       create(
         :project_member,
         :developer,
@@ -772,7 +814,8 @@ RSpec.describe Notify do
         invite_token: '1234',
         invite_email: 'toto@example.com',
         user: user,
-        created_by: inviter
+        created_by: inviter,
+        tasks_to_be_done: tasks_to_be_done
       )
     end
 
@@ -786,7 +829,7 @@ RSpec.describe Notify do
       end
 
       it_behaves_like 'an email sent from GitLab'
-      it_behaves_like 'it should not have Gmail Actions links'
+      it_behaves_like 'it should show Gmail Actions Join now link'
       it_behaves_like "a user cannot unsubscribe through footer link"
       it_behaves_like 'appearance header and footer enabled'
       it_behaves_like 'appearance header and footer not enabled'
@@ -804,6 +847,7 @@ RSpec.describe Notify do
           is_expected.to have_content("#{inviter.name} invited you to join the")
           is_expected.to have_content('Project details')
           is_expected.to have_content("What's it about?")
+          is_expected.not_to have_body_text 'and has assigned you the following tasks:'
         end
       end
 
@@ -823,48 +867,6 @@ RSpec.describe Notify do
         end
       end
 
-      context 'with invite_email_preview_text enabled', :experiment do
-        before do
-          stub_experiments(invite_email_preview_text: :control)
-        end
-
-        it 'has the correct invite_url with params' do
-          is_expected.to have_link('Join now',
-                                   href: invite_url(project_member.invite_token,
-                                                    invite_type: Emails::Members::INITIAL_INVITE,
-                                                    experiment_name: 'invite_email_preview_text'))
-        end
-
-        it 'tracks the sent invite' do
-          expect(experiment(:invite_email_preview_text)).to track(:assignment)
-                                                      .with_context(actor: project_member)
-                                                      .on_next_instance
-
-          invite_email.deliver_now
-        end
-      end
-
-      context 'with invite_email_from enabled', :experiment do
-        before do
-          stub_experiments(invite_email_from: :control)
-        end
-
-        it 'has the correct invite_url with params' do
-          is_expected.to have_link('Join now',
-                                   href: invite_url(project_member.invite_token,
-                                                    invite_type: Emails::Members::INITIAL_INVITE,
-                                                    experiment_name: 'invite_email_from'))
-        end
-
-        it 'tracks the sent invite' do
-          expect(experiment(:invite_email_from)).to track(:assignment)
-                                                      .with_context(actor: project_member)
-                                                      .on_next_instance
-
-          invite_email.deliver_now
-        end
-      end
-
       context 'when invite email sent is tracked', :snowplow do
         it 'tracks the sent invite' do
           invite_email.deliver_now
@@ -878,16 +880,26 @@ RSpec.describe Notify do
         end
       end
 
-      context 'when on gitlab.com' do
+      context 'when mailgun events are enabled' do
         before do
-          allow(Gitlab).to receive(:dev_env_or_com?).and_return(true)
+          stub_application_setting(mailgun_events_enabled: true)
         end
 
         it 'has custom headers' do
           aggregate_failures do
-            expect(subject).to have_header('X-Mailgun-Tag', 'invite_email')
-            expect(subject).to have_header('X-Mailgun-Variables', { 'invite_token' => project_member.invite_token }.to_json)
+            expect(subject).to have_header('X-Mailgun-Tag', ::Members::Mailgun::INVITE_EMAIL_TAG)
+            expect(subject).to have_header('X-Mailgun-Variables', { ::Members::Mailgun::INVITE_EMAIL_TOKEN_KEY => project_member.invite_token }.to_json)
           end
+        end
+      end
+
+      context 'with tasks to be done present', :aggregate_failures do
+        let(:project_member) { invite_to_project(project, inviter: inviter, tasks_to_be_done: [:ci, :code]) }
+
+        it 'contains the assigned tasks to be done' do
+          is_expected.to have_body_text 'and has assigned you the following tasks:'
+          is_expected.to have_body_text localized_tasks_to_be_done_choices[:ci]
+          is_expected.to have_body_text localized_tasks_to_be_done_choices[:code]
         end
       end
     end
@@ -1047,7 +1059,7 @@ RSpec.describe Notify do
         it 'is sent to the given recipient as the author' do
           aggregate_failures do
             expect_sender(note_author)
-            expect(subject).to deliver_to(recipient.notification_email)
+            expect(subject).to deliver_to(recipient.notification_email_or_default)
           end
         end
 
@@ -1204,7 +1216,7 @@ RSpec.describe Notify do
         it 'is sent to the given recipient as the author' do
           aggregate_failures do
             expect_sender(note_author)
-            expect(subject).to deliver_to(recipient.notification_email)
+            expect(subject).to deliver_to(recipient.notification_email_or_default)
           end
         end
 
@@ -1217,7 +1229,7 @@ RSpec.describe Notify do
         end
 
         context 'when a comment on an existing discussion' do
-          let(:first_note) { create(model) }
+          let(:first_note) { create(model) } # rubocop:disable Rails/SaveBang
           let(:note) { create(model, author: note_author, noteable: nil, in_reply_to: first_note) }
 
           it 'contains an introduction' do
@@ -1341,7 +1353,7 @@ RSpec.describe Notify do
 
       it 'contains all the useful information' do
         to_emails = subject.header[:to].addrs.map(&:address)
-        expect(to_emails).to eq([recipient.notification_email])
+        expect(to_emails).to eq([recipient.notification_email_or_default])
 
         is_expected.to have_subject "Request to join the #{group.name} group"
         is_expected.to have_body_text group.name
@@ -1351,10 +1363,8 @@ RSpec.describe Notify do
     end
 
     describe 'group access denied' do
-      let(:group_member) do
-        group.request_access(user)
-        group.requesters.find_by(user_id: user.id)
-      end
+      let_it_be(:group) { create(:group, :public) }
+      let_it_be(:group_member) { create(:group_member, :developer, :access_request, user: user, source: group) }
 
       let(:recipient) { user }
 
@@ -1371,6 +1381,17 @@ RSpec.describe Notify do
         is_expected.to have_subject "Access to the #{group.name} group was denied"
         is_expected.to have_body_text group.name
         is_expected.to have_body_text group.web_url
+      end
+
+      context 'when user can not read group' do
+        let_it_be(:group) { create(:group, :private) }
+
+        it 'hides group name from subject and body' do
+          is_expected.to have_subject "Access to the Hidden group was denied"
+          is_expected.to have_body_text "Hidden group"
+          is_expected.not_to have_body_text group.name
+          is_expected.not_to have_body_text group.web_url
+        end
       end
     end
 
@@ -1398,7 +1419,7 @@ RSpec.describe Notify do
       end
     end
 
-    def invite_to_group(group, inviter:, user: nil)
+    def invite_to_group(group, inviter:, user: nil, tasks_to_be_done: [])
       create(
         :group_member,
         :developer,
@@ -1406,7 +1427,8 @@ RSpec.describe Notify do
         invite_token: '1234',
         invite_email: 'toto@example.com',
         user: user,
-        created_by: inviter
+        created_by: inviter,
+        tasks_to_be_done: tasks_to_be_done
       )
     end
 
@@ -1418,7 +1440,7 @@ RSpec.describe Notify do
       subject { described_class.member_invited_email('Group', group_member.id, group_member.invite_token) }
 
       it_behaves_like 'an email sent from GitLab'
-      it_behaves_like 'it should not have Gmail Actions links'
+      it_behaves_like 'it should show Gmail Actions Join now link'
       it_behaves_like "a user cannot unsubscribe through footer link"
       it_behaves_like 'appearance header and footer enabled'
       it_behaves_like 'appearance header and footer not enabled'
@@ -1431,6 +1453,7 @@ RSpec.describe Notify do
           is_expected.to have_body_text group.name
           is_expected.to have_body_text group_member.human_access.downcase
           is_expected.to have_body_text group_member.invite_token
+          is_expected.not_to have_body_text 'and has assigned you the following tasks:'
         end
       end
 
@@ -1442,6 +1465,24 @@ RSpec.describe Notify do
           is_expected.to have_body_text group.name
           is_expected.to have_body_text group_member.human_access.downcase
           is_expected.to have_body_text group_member.invite_token
+        end
+      end
+
+      context 'with tasks to be done present', :aggregate_failures do
+        let(:group_member) { invite_to_group(group, inviter: inviter, tasks_to_be_done: [:ci, :code]) }
+
+        it 'contains the assigned tasks to be done' do
+          is_expected.to have_body_text 'and has assigned you the following tasks:'
+          is_expected.to have_body_text localized_tasks_to_be_done_choices[:ci]
+          is_expected.to have_body_text localized_tasks_to_be_done_choices[:code]
+        end
+
+        context 'when there is no inviter' do
+          let(:inviter) { nil }
+
+          it 'does not contain the assigned tasks to be done' do
+            is_expected.not_to have_body_text 'and has assigned you the following tasks:'
+          end
         end
       end
     end
@@ -1464,7 +1505,7 @@ RSpec.describe Notify do
 
         context 'member is not created by a user' do
           before do
-            group_member.update(created_by: nil)
+            group_member.update!(created_by: nil)
           end
 
           it_behaves_like 'no email is sent'
@@ -1472,7 +1513,7 @@ RSpec.describe Notify do
 
         context 'member is a known user' do
           before do
-            group_member.update(user: create(:user))
+            group_member.update!(user: create(:user))
           end
 
           it_behaves_like 'no email is sent'
@@ -1696,7 +1737,7 @@ RSpec.describe Notify do
       stub_config_setting(email_subject_suffix: 'A Nice Suffix')
       perform_enqueued_jobs do
         user.email = "new-email@mail.com"
-        user.save
+        user.save!
       end
     end
 

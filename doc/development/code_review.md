@@ -10,7 +10,7 @@ This guide contains advice and best practices for performing code review, and
 having your code reviewed.
 
 All merge requests for GitLab CE and EE, whether written by a GitLab team member
-or a volunteer contributor, must go through a code review process to ensure the
+or a wider community member, must go through a code review process to ensure the
 code is effective, understandable, maintainable, and secure.
 
 ## Getting your merge request reviewed, approved, and merged
@@ -35,7 +35,7 @@ If you need assistance with security scans or comments, feel free to include the
 Application Security Team (`@gitlab-com/gl-security/appsec`) in the review.
 
 Depending on the areas your merge request touches, it must be **approved** by one
-or more [maintainers](https://about.gitlab.com/handbook/engineering/workflow/code-review/#maintainer):
+or more [maintainers](https://about.gitlab.com/handbook/engineering/workflow/code-review/#maintainer).
 
 For approvals, we use the approval functionality found in the merge request
 widget. For reviewers, we use the [reviewer functionality](../user/project/merge_requests/getting_started.md#reviewer) in the sidebar.
@@ -46,9 +46,11 @@ more than one approval, the last maintainer to review and approve merges it.
 
 ### Domain experts
 
-Domain experts are team members who have substantial experience with a specific technology, product feature or area of the codebase. Team members are encouraged to self-identify as domain experts and add it to their [team profile](https://gitlab.com/gitlab-com/www-gitlab-com/-/blob/master/data/team.yml).
+Domain experts are team members who have substantial experience with a specific technology,
+product feature, or area of the codebase. Team members are encouraged to self-identify as
+domain experts and add it to their [team profiles](https://gitlab.com/gitlab-com/www-gitlab-com/-/blob/master/data/team_members/person/README.md).
 
-When self-identifying as a domain expert, it is recommended to assign the MR changing the `team.yml` to be merged by an already established Domain Expert or a corresponding Engineering Manager.
+When self-identifying as a domain expert, it is recommended to assign the MR changing the `.yml` file to be merged by an already established Domain Expert or a corresponding Engineering Manager.
 
 We make the following assumption with regards to automatically being considered a domain expert:
 
@@ -72,19 +74,27 @@ It picks reviewers and maintainers from the list at the
 page, with these behaviors:
 
 1. It doesn't pick people whose Slack or [GitLab status](../user/profile/index.md#set-your-current-status):
-    - contains the string 'OOO', 'PTO', 'Parental Leave', or 'Friends and Family'
-    - emoji is `:palm_tree:`, `:beach:`, `:beach_umbrella:`, `:beach_with_umbrella:`, `:ferris_wheel:`, `:thermometer:`, `:face_with_thermometer:`, `:red_circle:`, `:bulb:`, `:sun_with_face:`.
-    - GitLab user busy indicator is set to true
+    - Contains the string 'OOO', 'PTO', 'Parental Leave', or 'Friends and Family'.
+    - GitLab user **Busy** indicator is set to `True`.
+    - Emoji is any of:
+      - 🌴 `:palm_tree:`
+      - 🏖️ `:beach:`, `:beach_umbrella:`, or `:beach_with_umbrella:`
+      - 🎡 `:ferris_wheel:`
+      - 🌡️ `:thermometer:`
+      - 🤒 `:face_with_thermometer:`
+      - 🔴 `:red_circle:`
+      - 💡 `:bulb:`
+      - 🌞 `:sun_with_face:`
 1. [Trainee maintainers](https://about.gitlab.com/handbook/engineering/workflow/code-review/#trainee-maintainer)
    are three times as likely to be picked as other reviewers.
 1. Team members whose Slack or [GitLab status](../user/profile/index.md#set-your-current-status) emoji
    is 🔵 `:large_blue_circle:` are more likely to be picked. This applies to both reviewers and trainee maintainers.
-   - Reviewers with `:large_blue_circle:` are two times as likely to be picked as other reviewers.
-   - Trainee maintainers with `:large_blue_circle:` are four times as likely to be picked as other reviewers.
+   - Reviewers with 🔵 `:large_blue_circle:` are two times as likely to be picked as other reviewers.
+   - Trainee maintainers with 🔵 `:large_blue_circle:` are four times as likely to be picked as other reviewers.
 1. People whose [GitLab status](../user/profile/index.md#set-your-current-status) emoji
-   is 🔶 `:large_orange_diamond:` are half as likely to be picked. This applies to both reviewers and trainee maintainers.
+   is 🔶 `:large_orange_diamond:` or 🔸 `:small_orange_diamond:` are half as likely to be picked. This applies to both reviewers and trainee maintainers.
 1. It always picks the same reviewers and maintainers for the same
-   branch name (unless their OOO status changes, as in point 1). It
+   branch name (unless their out-of-office (OOO) status changes, as in point 1). It
    removes leading `ce-` and `ee-`, and trailing `-ce` and `-ee`, so
    that it can be stable for backport branches.
 
@@ -104,10 +114,11 @@ with [domain expertise](#domain-experts).
 1. If your merge request includes user-facing changes (*3*), it must be
    **approved by a [Product Designer](https://about.gitlab.com/handbook/engineering/projects/#gitlab_reviewers_UX)**,
    based on assignments in the appropriate [DevOps stage group](https://about.gitlab.com/handbook/product/categories/#devops-stages).
+   See the [design and user interface guidelines](contributing/design.md) for details.
 1. If your merge request includes adding a new JavaScript library (*1*)...
    - If the library significantly increases the
      [bundle size](https://gitlab.com/gitlab-org/frontend/playground/webpack-memory-metrics/-/blob/master/doc/report.md), it must
-     be **approved by a [frontend foundations member](https://about.gitlab.com/direction/create/ecosystem/frontend-ux-foundations/)**.
+     be **approved by a [frontend foundations member](https://about.gitlab.com/direction/ecosystem/foundations/)**.
    - If the license used by the new library hasn't been approved for use in
      GitLab, the license must be **approved by a [legal department member](https://about.gitlab.com/handbook/legal/)**.
      More information about license compatibility can be found in our
@@ -117,11 +128,12 @@ with [domain expertise](#domain-experts).
 1. If your merge request includes documentation changes, it must be **approved
    by a [Technical writer](https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments)**,
    based on assignments in the appropriate [DevOps stage group](https://about.gitlab.com/handbook/product/categories/#devops-stages).
+1. If your merge request includes changes to development guidelines, follow the [review process](index.md#development-guidelines-review) and get the approvals accordingly.
 1. If your merge request includes end-to-end **and** non-end-to-end changes (*4*), it must be **approved
    by a [Software Engineer in Test](https://about.gitlab.com/handbook/engineering/quality/#individual-contributors)**.
 1. If your merge request only includes end-to-end changes (*4*) **or** if the MR author is a [Software Engineer in Test](https://about.gitlab.com/handbook/engineering/quality/#individual-contributors), it must be **approved by a [Quality maintainer](https://about.gitlab.com/handbook/engineering/projects/#gitlab_maintainers_qa)**
 1. If your merge request includes a new or updated [application limit](https://about.gitlab.com/handbook/product/product-processes/#introducing-application-limits), it must be **approved by a [product manager](https://about.gitlab.com/company/team/)**.
-1. If your merge request includes Product Intelligence (telemetry or analytics) changes, it should be reviewed and approved by a [Product Intelligence engineer](https://gitlab.com/gitlab-org/growth/product_intelligence/engineers).
+1. If your merge request includes Product Intelligence (telemetry or analytics) changes, it should be reviewed and approved by a [Product Intelligence engineer](https://gitlab.com/gitlab-org/growth/product-intelligence/engineers).
 1. If your merge request includes an addition of, or changes to a [Feature spec](testing_guide/testing_levels.md#frontend-feature-tests), it must be **approved by a [Quality maintainer](https://about.gitlab.com/handbook/engineering/projects/#gitlab_maintainers_qa) or [Quality reviewer](https://about.gitlab.com/handbook/engineering/projects/#gitlab_reviewers_qa)**.
 1. If your merge request introduces a new service to GitLab (Puma, Sidekiq, Gitaly are examples), it must be **approved by a [product manager](https://about.gitlab.com/company/team/)**. See the [process for adding a service component to GitLab](adding_service_component.md) for details.
 
@@ -134,15 +146,60 @@ with [domain expertise](#domain-experts).
   the content.
 - (*4*): End-to-end changes include all files within the `qa` directory.
 
-#### Security requirements
+#### Acceptance checklist
 
-View the updated documentation regarding [internal application security reviews](https://about.gitlab.com/handbook/engineering/security/#internal-application-security-reviews) for **when** and **how** to request a security review.
+This checklist encourages the authors, reviewers, and maintainers of merge requests (MRs) to confirm changes were analyzed for high-impact risks to quality, performance, reliability, security, and maintainability.
+
+Using checklists improves quality in software engineering. This checklist is a straightforward tool to support and bolster the skills of contributors to the GitLab codebase.
+
+##### Quality
+
+See the [test engineering process](https://about.gitlab.com/handbook/engineering/quality/test-engineering/) for further quality guidelines.
+
+1. I have self-reviewed this MR per [code review guidelines](code_review.md).
+1. For the code that this change impacts, I believe that the automated tests ([Testing Guide](testing_guide/index.md)) validate functionality that is highly important to users (including consideration of [all test levels](testing_guide/testing_levels.md)).
+1. If the existing automated tests do not cover the above functionality, I have added the necessary additional tests or added an issue to describe the automation testing gap and linked it to this MR.
+1. I have considered the technical aspects of this change's impact on GitLab.com hosted customers and self-managed customers.
+1. I have considered the impact of this change on the frontend, backend, and database portions of the system where appropriate and applied the `~ux`, `~frontend`, `~backend`, and `~database` labels accordingly.
+1. I have tested this MR in [all supported browsers](../install/requirements.md#supported-web-browsers), or determined that this testing is not needed.
+1. I have confirmed that this change is [backwards compatible across updates](multi_version_compatibility.md), or I have decided that this does not apply.
+1. I have properly separated EE content from FOSS, or this MR is FOSS only.
+    - [Where should EE code go?](ee_features.md#separation-of-ee-code)
+1. I have considered that existing data may be surprisingly varied. For example, a new model validation can break existing records. Consider making validation on existing data optional rather than required if you haven't confirmed that existing data will pass validation.
+
+##### Performance, reliability, and availability
+
+1. I am confident that this MR does not harm performance, or I have asked a reviewer to help assess the performance impact. ([Merge request performance guidelines](merge_request_performance_guidelines.md))
+1. I have added [information for database reviewers in the MR description](database_review.md#required), or I have decided that it is unnecessary.
+    - [Does this MR have database-related changes?](database_review.md)
+1. I have considered the availability and reliability risks of this change.
+1. I have considered the scalability risk based on future predicted growth.
+1. I have considered the performance, reliability, and availability impacts of this change on large customers who may have significantly more data than the average customer.
+
+##### Documentation
+
+1. I have included changelog trailers, or I have decided that they are not needed.
+    - [Does this MR need a changelog?](changelog.md#what-warrants-a-changelog-entry)
+1. I have added/updated documentation or decided that documentation changes are unnecessary for this MR.
+    - [Is documentation required?](https://about.gitlab.com/handbook/engineering/ux/technical-writing/workflow/#when-documentation-is-required)
+
+##### Security
+
+1. I have confirmed that if this MR contains changes to processing or storing of credentials or tokens, authorization, and authentication methods, or other items described in [the security review guidelines](https://about.gitlab.com/handbook/engineering/security/#when-to-request-a-security-review), I have added the `~security` label and I have `@`-mentioned `@gitlab-com/gl-security/appsec`.
+1. I have reviewed the documentation regarding [internal application security reviews](https://about.gitlab.com/handbook/engineering/security/#internal-application-security-reviews) for **when** and **how** to request a security review and requested a security review if this is warranted for this change.
+
+##### Deployment
+
+1. I have considered using a feature flag for this change because the change may be high risk.
+1. If I am using a feature flag, I plan to test the change in staging before I test it in production, and I have considered rolling it out to a subset of production customers before rolling it out to all customers.
+    - [When to use a feature flag](https://about.gitlab.com/handbook/product-development-flow/feature-flag-lifecycle/#when-to-use-feature-flags)
+1. I have informed the Infrastructure department of a default setting or new setting change per [definition of done](contributing/merge_request_workflow.md#definition-of-done), or decided that this is unnecessary.
 
 ### The responsibility of the merge request author
 
 The responsibility to find the best solution and implement it lies with the
 merge request author. The author or [directly responsible individual](https://about.gitlab.com/handbook/people-group/directly-responsible-individuals/)
-will stay assigned to the merge request as the assignee throughout
+(DRI) stays assigned to the merge request as the assignee throughout
 the code review lifecycle. If you are unable to set yourself as an assignee, ask a [reviewer](https://about.gitlab.com/handbook/engineering/workflow/code-review/#reviewer) to do this for you.
 
 Before requesting a review from a maintainer to approve and merge, they
@@ -169,7 +226,7 @@ database specialists to get input on the data model or specific queries, or to
 any other developer to get an in-depth review of the solution.
 
 If an author is unsure if a merge request needs a [domain expert's](#domain-experts) opinion,
-that indicates it does. Without it it's unlikely they have the required level of confidence in their
+then that indicates it does. Without it, it's unlikely they have the required level of confidence in their
 solution.
 
 Before the review, the author is requested to submit comments on the merge
@@ -236,7 +293,7 @@ Maintainers should check before merging if the merge request is approved by the
 required approvers. If still awaiting further approvals from others, remove yourself as a reviewer then `@` mention the author and explain why in a comment. Stay as reviewer if you're merging the code.
 
 Maintainers must check before merging if the merge request is introducing new
-vulnerabilities, by inspecting the list in the Merge Request
+vulnerabilities, by inspecting the list in the merge request
 [Security Widget](../user/application_security/index.md).
 When in doubt, a [Security Engineer](https://about.gitlab.com/company/team/) can be involved. The list of detected
 vulnerabilities must be either empty or containing:
@@ -247,9 +304,9 @@ vulnerabilities must be either empty or containing:
 Maintainers should **never** dismiss vulnerabilities to "empty" the list,
 without duly verifying them.
 
-Note that certain Merge Requests may target a stable branch. These are rare
-events. These types of Merge Requests cannot be merged by the Maintainer.
-Instead these should be sent to the [Release Manager](https://about.gitlab.com/community/release-managers/).
+Note that certain merge requests may target a stable branch. These are rare
+events. These types of merge requests cannot be merged by the Maintainer.
+Instead, these should be sent to the [Release Manager](https://about.gitlab.com/community/release-managers/).
 
 After merging, a maintainer should stay as the reviewer listed on the merge request.
 
@@ -305,8 +362,8 @@ first time.
   codebase. Thorough descriptions help all reviewers understand your request
   and test effectively.
 - If you know your change depends on another being merged first, note it in the
-  description and set an [merge request dependency](../user/project/merge_requests/merge_request_dependencies.md).
-- Be grateful for the reviewer's suggestions. (`Good call. I'll make that change.`)
+  description and set a [merge request dependency](../user/project/merge_requests/merge_request_dependencies.md).
+- Be grateful for the reviewer's suggestions. ("Good call. I'll make that change.")
 - Don't take it personally. The review is of the code, not of you.
 - Explain why the code exists. ("It's like that because of these reasons. Would
   it be more clear if I rename this class/file/method/variable?")
@@ -332,7 +389,7 @@ first time.
 ### Requesting a review
 
 When you are ready to have your merge request reviewed,
-you should request an initial review by assigning it to a reviewer from your group or team.
+you should [request an initial review](../user/project/merge_requests/getting_started.md#reviewer) by selecting a reviewer from your group or team.
 However, you can also assign it to any reviewer. The list of reviewers can be found on [Engineering projects](https://about.gitlab.com/handbook/engineering/projects/) page.
 
 You can also use `workflow::ready for review` label. That means that your merge request is ready to be reviewed and any reviewer can pick it. It is recommended to use that label only if there isn't time pressure and make sure the merge request is assigned to a reviewer.
@@ -345,9 +402,9 @@ the roulette is not available, choose someone else from that list.
 
 It is the responsibility of the author for the merge request to be reviewed. If it stays in the `ready for review` state too long it is recommended to request a review from a specific reviewer.
 
-#### List of merge requests ready for review
+### Volunteering to review
 
-Developers who have capacity can regularly check the list of [merge requests to review](https://gitlab.com/groups/gitlab-org/-/merge_requests?state=opened&label_name%5B%5D=workflow%3A%3Aready%20for%20review) and add themselves as a reviewer for any merge request they want to review.
+GitLab engineers who have capacity can regularly check the list of [merge requests to review](https://gitlab.com/groups/gitlab-org/-/merge_requests?state=opened&label_name%5B%5D=workflow%3A%3Aready%20for%20review) and add themselves as a reviewer for any merge request they want to review.
 
 ### Reviewing a merge request
 
@@ -425,22 +482,22 @@ WARNING:
 - Start a new merge request pipeline with the `Run pipeline` button in the merge
   request's "Pipelines" tab, and enable "Merge When Pipeline Succeeds" (MWPS).
   Note that:
-  - If **[main is broken](https://about.gitlab.com/handbook/engineering/workflow/#broken-master),
+  - If **[the default branch is broken](https://about.gitlab.com/handbook/engineering/workflow/#broken-master),
     do not merge the merge request** except for
     [very specific cases](https://about.gitlab.com/handbook/engineering/workflow/#criteria-for-merging-during-broken-master).
     For other cases, follow these [handbook instructions](https://about.gitlab.com/handbook/engineering/workflow/#merging-during-broken-master).
   - If the latest pipeline was created before the merge request was approved, start a new pipeline to ensure that full RSpec suite has been run. You may skip this step only if the merge request does not contain any backend change.
-  - If the **latest [Pipeline for Merged Results](../ci/pipelines/pipelines_for_merged_results.md)** finished less than 2 hours ago, you
-    might merge without starting a new pipeline as the merge request is close
+  - If the **latest [merged results pipeline](../ci/pipelines/merged_results_pipelines.md)** finished less than 2 hours ago, you
+    may merge without starting a new pipeline as the merge request is close
     enough to `main`.
 - When you set the MR to "Merge When Pipeline Succeeds", you should take over
   subsequent revisions for anything that would be spotted after that.
 - For merge requests that have had [Squash and
   merge](../user/project/merge_requests/squash_and_merge.md#squash-and-merge) set,
-  the squashed commit’s default commit message is taken from the merge request title.
+  the squashed commit's default commit message is taken from the merge request title.
   You're encouraged to [select a commit with a more informative commit message](../user/project/merge_requests/squash_and_merge.md) before merging.
 
-Thanks to **Pipeline for Merged Results**, authors no longer have to rebase their
+Thanks to **merged results pipelines**, authors no longer have to rebase their
 branch as frequently anymore (only when there are conflicts) because the Merge
 Results Pipeline already incorporate the latest changes from `main`.
 This results in faster review/merge cycles because maintainers don't have to ask
@@ -452,7 +509,7 @@ Merge Results against the latest `main` at the time of the pipeline creation.
 
 WARNING:
 **Review all changes thoroughly for malicious code before starting a
-[Pipeline for Merged Results](../ci/pipelines/merge_request_pipelines.md#run-pipelines-in-the-parent-project-for-merge-requests-from-a-forked-project).**
+[merged results pipeline](../ci/pipelines/merge_request_pipelines.md#run-pipelines-in-the-parent-project).**
 
 When reviewing merge requests added by wider community contributors:
 
@@ -461,6 +518,9 @@ When reviewing merge requests added by wider community contributors:
   fetching of malicious packages.
 - Review links and images, especially in documentation MRs.
 - When in doubt, ask someone from `@gitlab-com/gl-security/appsec` to review the merge request **before manually starting any merge request pipeline**.
+- Only set the milestone when the merge request is likely to be included in
+  the current milestone. This is to avoid confusion around when it'll be
+  merged and avoid moving milestone too often when it's not yet ready.
 
 If the MR source branch is more than 1,000 commits behind the target branch:
 
@@ -473,9 +533,12 @@ If the MR source branch is more than 1,000 commits behind the target branch:
   or check with the contributor first when they're actively working on the MR.
 - The rebase can usually be done inside GitLab with the `/rebase` [quick action](../user/project/quick_actions.md).
 
+#### Taking over a community merge request
+
 When an MR needs further changes but the author is not responding for a long period of time,
-or unable to finish the MR, we can take it over in accordance with our
-[Closing policy for issues and merge requests](contributing/#closing-policy-for-issues-and-merge-requests):
+or is unable to finish the MR, GitLab can take it over in accordance with our
+[Closing policy for issues and merge requests](contributing/#closing-policy-for-issues-and-merge-requests).
+A GitLab engineer (generally the merge request coach) will:
 
 1. Add a comment to their MR saying you'll take it over to be able to get it merged.
 1. Add the label `~"coach will finish"` to their MR.
@@ -526,7 +589,7 @@ author.
 
 GitLab is used in a lot of places. Many users use
 our [Omnibus packages](https://about.gitlab.com/install/), but some use
-the [Docker images](https://docs.gitlab.com/omnibus/docker/), some are
+the [Docker images](../install/docker.md), some are
 [installed from source](../install/installation.md),
 and there are other installation methods available. GitLab.com itself is a large
 Enterprise Edition instance. This has some implications:
@@ -547,7 +610,7 @@ Enterprise Edition instance. This has some implications:
       - [Background migrations](background_migrations.md) run in Sidekiq, and
         should only be done for migrations that would take an extreme amount of
         time at GitLab.com scale.
-1. **Sidekiq workers** [cannot change in a backwards-incompatible way](sidekiq_style_guide.md#sidekiq-compatibility-across-updates):
+1. **Sidekiq workers** [cannot change in a backwards-incompatible way](sidekiq/compatibility_across_updates.md):
    1. Sidekiq queues are not drained before a deploy happens, so there are
       workers in the queue from the previous version of GitLab.
    1. If you need to change a method signature, try to do so across two releases,
@@ -566,10 +629,10 @@ Enterprise Edition instance. This has some implications:
    If you're adding a new setting in `gitlab.yml`:
    1. Try to avoid that, and add to `ApplicationSetting` instead.
    1. Ensure that it is also
-      [added to Omnibus](https://docs.gitlab.com/omnibus/settings/gitlab.yml.html#adding-a-new-setting-to-gitlab-yml).
+      [added to Omnibus](https://docs.gitlab.com/omnibus/settings/gitlab.yml#adding-a-new-setting-to-gitlabyml).
 1. **File system access** is not possible in a [cloud-native architecture](architecture.md#adapting-existing-and-introducing-new-components).
    Ensure that we support object storage for any file storage we need to perform. For more
-   information, see the [uploads documentation](uploads.md).
+   information, see the [uploads documentation](uploads/index.md).
 
 ### Review turnaround time
 
@@ -613,12 +676,12 @@ A merge request may benefit from being considered a customer critical priority b
 
 Properties of customer critical merge requests:
 
-- The [VP of Development](https://about.gitlab.com/job-families/engineering/development/management/vp) ([@clefelhocz1](https://gitlab.com/clefelhocz1)) is the DRI for deciding if a merge request qualifies as customer critical.
+- The [VP of Development](https://about.gitlab.com/job-families/engineering/development/management/vp/) ([@clefelhocz1](https://gitlab.com/clefelhocz1)) is the DRI for deciding if a merge request qualifies as customer critical.
 - The DRI applies the `customer-critical-merge-request` label to the merge request.
 - It is required that the reviewer(s) and maintainer(s) involved with a customer critical merge request are engaged as soon as this decision is made.
 - It is required to prioritize work for those involved on a customer critical merge request so that they have the time available necessary to focus on it.
 - It is required to adhere to GitLab [values](https://about.gitlab.com/handbook/values/) and processes when working on customer critical merge requests, taking particular note of family and friends first/work second, definition of done, iteration, and release when it's ready.
-- Customer critical merge requests are required to not reduce security, introduce data-loss risk, reduce availability, nor break existing functionality per the process for [prioritizing technical decisions](https://about.gitlab.com/handbook/engineering/#prioritizing-technical-decisions.md).
+- Customer critical merge requests are required to not reduce security, introduce data-loss risk, reduce availability, nor break existing functionality per the process for [prioritizing technical decisions](https://about.gitlab.com/handbook/engineering/principles/#prioritizing-technical-decisions).
 - On customer critical requests, it is _recommended_ that those involved _consider_ coordinating synchronously (Zoom, Slack) in addition to asynchronously (merge requests comments) if they believe this may reduce the elapsed time to merge even though this _may_ sacrifice [efficiency](https://about.gitlab.com/company/culture/all-remote/asynchronous/#evaluating-efficiency.md).
 - After a customer critical merge request is merged, a retrospective must be completed with the intention of reducing the frequency of future customer critical merge requests.
 
@@ -650,7 +713,3 @@ A good example of collaboration on an MR touching multiple parts of the codebase
 ### Credits
 
 Largely based on the [`thoughtbot` code review guide](https://github.com/thoughtbot/guides/tree/master/code-review).
-
----
-
-[Return to Development documentation](index.md)

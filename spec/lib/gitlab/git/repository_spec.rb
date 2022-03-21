@@ -109,6 +109,47 @@ RSpec.describe Gitlab::Git::Repository, :seed_helper do
     it_behaves_like 'wrapping gRPC errors', Gitlab::GitalyClient::RefService, :tag_names
   end
 
+  describe '#tags' do
+    subject { repository.tags }
+
+    it 'gets tags from GitalyClient' do
+      expect_next_instance_of(Gitlab::GitalyClient::RefService) do |service|
+        expect(service).to receive(:tags)
+      end
+
+      subject
+    end
+
+    context 'with sorting option' do
+      subject { repository.tags(sort_by: 'name_asc') }
+
+      it 'gets tags from GitalyClient' do
+        expect_next_instance_of(Gitlab::GitalyClient::RefService) do |service|
+          expect(service).to receive(:tags).with(sort_by: 'name_asc', pagination_params: nil)
+        end
+
+        subject
+      end
+    end
+
+    context 'with pagination option' do
+      subject { repository.tags(pagination_params: { limit: 5, page_token: 'refs/tags/v1.0.0' }) }
+
+      it 'gets tags from GitalyClient' do
+        expect_next_instance_of(Gitlab::GitalyClient::RefService) do |service|
+          expect(service).to receive(:tags).with(
+            sort_by: nil,
+            pagination_params: { limit: 5, page_token: 'refs/tags/v1.0.0' }
+          )
+        end
+
+        subject
+      end
+    end
+
+    it_behaves_like 'wrapping gRPC errors', Gitlab::GitalyClient::RefService, :tags
+  end
+
   describe '#archive_metadata' do
     let(:storage_path) { '/tmp' }
     let(:cache_key) { File.join(repository.gl_repository, SeedRepo::LastCommit::ID) }
@@ -939,15 +980,20 @@ RSpec.describe Gitlab::Git::Repository, :seed_helper do
   describe '#new_blobs' do
     let(:repository) { mutable_repository }
     let(:repository_rugged) { mutable_repository_rugged }
-    let(:new_blob) do
-      repository_rugged.write('This is a new blob', :blob)
+    let(:blob) { create_blob('This is a new blob') }
+    let(:commit) { create_commit('nested/new-blob.txt' => blob) }
+
+    def create_blob(content)
+      repository_rugged.write(content, :blob)
     end
 
-    let(:new_commit) do
+    def create_commit(blobs)
       author = { name: 'Test User', email: 'mail@example.com', time: Time.now }
 
       index = repository_rugged.index
-      index.add(path: 'nested/new-blob.txt', oid: new_blob, mode: 0100644)
+      blobs.each do |path, oid|
+        index.add(path: path, oid: oid, mode: 0100644)
+      end
 
       Rugged::Commit.create(repository_rugged,
                             author: author,
@@ -957,51 +1003,130 @@ RSpec.describe Gitlab::Git::Repository, :seed_helper do
                             tree: index.write_tree(repository_rugged))
     end
 
-    subject { repository.new_blobs(new_commit).to_a }
+    subject { repository.new_blobs(newrevs).to_a }
 
-    context 'with :new_blobs_via_list_blobs enabled' do
+    shared_examples '#new_blobs with revisions' do
       before do
-        stub_feature_flags(new_blobs_via_list_blobs: true)
-
         expect_next_instance_of(Gitlab::GitalyClient::BlobService) do |service|
           expect(service)
             .to receive(:list_blobs)
-            .with(['--not', '--all', '--not', new_commit],
+            .with(expected_newrevs,
                   limit: Gitlab::Git::Repository::REV_LIST_COMMIT_LIMIT,
                   with_paths: true,
                   dynamic_timeout: nil)
+            .once
             .and_call_original
         end
       end
 
       it 'enumerates new blobs' do
-        expect(subject).to match_array(
-          [have_attributes(class: Gitlab::Git::Blob, id: new_blob, path: 'nested/new-blob.txt', size: 18)]
-        )
+        expect(subject).to match_array(expected_blobs)
+      end
+
+      it 'memoizes results' do
+        expect(subject).to match_array(expected_blobs)
+        expect(subject).to match_array(expected_blobs)
       end
     end
 
-    context 'with :new_blobs_via_list_blobs disabled' do
+    context 'with a single revision' do
+      let(:newrevs) { commit }
+      let(:expected_newrevs) { ['--not', '--all', '--not', newrevs] }
+      let(:expected_blobs) do
+        [have_attributes(class: Gitlab::Git::Blob, id: blob, path: 'nested/new-blob.txt', size: 18)]
+      end
+
+      it_behaves_like '#new_blobs with revisions'
+    end
+
+    context 'with a single-entry array' do
+      let(:newrevs) { [commit] }
+      let(:expected_newrevs) { ['--not', '--all', '--not'] + newrevs }
+      let(:expected_blobs) do
+        [have_attributes(class: Gitlab::Git::Blob, id: blob, path: 'nested/new-blob.txt', size: 18)]
+      end
+
+      it_behaves_like '#new_blobs with revisions'
+    end
+
+    context 'with multiple revisions' do
+      let(:another_blob) { create_blob('Another blob') }
+      let(:newrevs) { [commit, create_commit('another_path.txt' => another_blob)] }
+      let(:expected_newrevs) { ['--not', '--all', '--not'] + newrevs.sort }
+      let(:expected_blobs) do
+        [
+          have_attributes(class: Gitlab::Git::Blob, id: blob, path: 'nested/new-blob.txt', size: 18),
+          have_attributes(class: Gitlab::Git::Blob, id: another_blob, path: 'another_path.txt', size: 12)
+        ]
+      end
+
+      it_behaves_like '#new_blobs with revisions'
+    end
+
+    context 'with partially blank revisions' do
+      let(:newrevs) { [nil, commit, Gitlab::Git::BLANK_SHA] }
+      let(:expected_newrevs) { ['--not', '--all', '--not', commit] }
+      let(:expected_blobs) do
+        [
+          have_attributes(class: Gitlab::Git::Blob, id: blob, path: 'nested/new-blob.txt', size: 18)
+        ]
+      end
+
+      it_behaves_like '#new_blobs with revisions'
+    end
+
+    context 'with repeated revisions' do
+      let(:newrevs) { [commit, commit, commit] }
+      let(:expected_newrevs) { ['--not', '--all', '--not', commit] }
+      let(:expected_blobs) do
+        [
+          have_attributes(class: Gitlab::Git::Blob, id: blob, path: 'nested/new-blob.txt', size: 18)
+        ]
+      end
+
+      it_behaves_like '#new_blobs with revisions'
+    end
+
+    context 'with preexisting commits' do
+      let(:newrevs) { ['refs/heads/master'] }
+      let(:expected_newrevs) { ['--not', '--all', '--not'] + newrevs }
+      let(:expected_blobs) { [] }
+
+      it_behaves_like '#new_blobs with revisions'
+    end
+
+    shared_examples '#new_blobs without revisions' do
       before do
-        stub_feature_flags(new_blobs_via_list_blobs: false)
-
-        expect_next_instance_of(Gitlab::GitalyClient::RefService) do |service|
-          expect(service)
-            .to receive(:list_new_blobs)
-            .with(new_commit,
-                  Gitlab::Git::Repository::REV_LIST_COMMIT_LIMIT,
-                  dynamic_timeout: nil)
-            .and_call_original
-        end
+        expect(Gitlab::GitalyClient::BlobService).not_to receive(:new)
       end
 
-      it 'enumerates new blobs' do
-        expect(subject).to match_array([Gitaly::NewBlobObject.new(
-          size: 18,
-          oid: new_blob,
-          path: "nested/new-blob.txt"
-        )])
+      it 'returns an empty array' do
+        expect(subject).to eq([])
       end
+    end
+
+    context 'with a single nil newrev' do
+      let(:newrevs) { nil }
+
+      it_behaves_like '#new_blobs without revisions'
+    end
+
+    context 'with a single zero newrev' do
+      let(:newrevs) { Gitlab::Git::BLANK_SHA }
+
+      it_behaves_like '#new_blobs without revisions'
+    end
+
+    context 'with an empty array' do
+      let(:newrevs) { [] }
+
+      it_behaves_like '#new_blobs without revisions'
+    end
+
+    context 'with array containing only empty refs' do
+      let(:newrevs) { [nil, Gitlab::Git::BLANK_SHA] }
+
+      it_behaves_like '#new_blobs without revisions'
     end
   end
 
@@ -1778,6 +1903,44 @@ RSpec.describe Gitlab::Git::Repository, :seed_helper do
     end
   end
 
+  describe '#list_refs' do
+    it 'returns a list of branches with their head commit' do
+      refs = repository.list_refs
+      reference = refs.first
+
+      expect(refs).to be_an(Enumerable)
+      expect(reference).to be_a(Gitaly::ListRefsResponse::Reference)
+      expect(reference.name).to be_a(String)
+      expect(reference.target).to be_a(String)
+    end
+  end
+
+  describe '#refs_by_oid' do
+    it 'returns a list of refs from a OID' do
+      refs = repository.refs_by_oid(oid: repository.commit.id)
+
+      expect(refs).to be_an(Array)
+      expect(refs).to include(Gitlab::Git::BRANCH_REF_PREFIX + repository.root_ref)
+    end
+
+    it 'returns a single ref from a OID' do
+      refs = repository.refs_by_oid(oid: repository.commit.id, limit: 1)
+
+      expect(refs).to be_an(Array)
+      expect(refs).to eq([Gitlab::Git::BRANCH_REF_PREFIX + repository.root_ref])
+    end
+
+    it 'returns empty for unknown ID' do
+      expect(repository.refs_by_oid(oid: Gitlab::Git::BLANK_SHA, limit: 0)).to eq([])
+    end
+
+    it 'returns nil for an empty repo' do
+      project = create(:project)
+
+      expect(project.repository.refs_by_oid(oid: SeedRepo::Commit::ID, limit: 0)).to be_nil
+    end
+  end
+
   describe '#set_full_path' do
     before do
       repository_rugged.config["gitlab.fullpath"] = repository_path
@@ -2089,46 +2252,7 @@ RSpec.describe Gitlab::Git::Repository, :seed_helper do
     end
   end
 
-  describe '#clean_stale_repository_files' do
-    let(:worktree_id) { 'rebase-1' }
-    let(:gitlab_worktree_path) { File.join(repository_path, 'gitlab-worktree', worktree_id) }
-    let(:admin_dir) { File.join(repository_path, 'worktrees') }
-
-    it 'cleans up the files' do
-      create_worktree = %W[git -C #{repository_path} worktree add --detach #{gitlab_worktree_path} master]
-      raise 'preparation failed' unless system(*create_worktree, err: '/dev/null')
-
-      FileUtils.touch(gitlab_worktree_path, mtime: Time.now - 8.hours)
-      # git rev-list --all will fail in git 2.16 if HEAD is pointing to a non-existent object,
-      # but the HEAD must be 40 characters long or git will ignore it.
-      File.write(File.join(admin_dir, worktree_id, 'HEAD'), Gitlab::Git::BLANK_SHA)
-
-      expect(rev_list_all).to be(false)
-      repository.clean_stale_repository_files
-
-      expect(rev_list_all).to be(true)
-      expect(File.exist?(gitlab_worktree_path)).to be_falsey
-    end
-
-    def rev_list_all
-      system(*%W[git -C #{repository_path} rev-list --all], out: '/dev/null', err: '/dev/null')
-    end
-
-    it 'increments a counter upon an error' do
-      expect(repository.gitaly_repository_client).to receive(:cleanup).and_raise(Gitlab::Git::CommandError)
-
-      counter = double(:counter)
-
-      expect(counter).to receive(:increment)
-      expect(Gitlab::Metrics).to receive(:counter).with(:failed_repository_cleanup_total,
-                                                        'Number of failed repository cleanup events').and_return(counter)
-
-      repository.clean_stale_repository_files
-    end
-  end
-
   describe '#squash' do
-    let(:squash_id) { '1' }
     let(:branch_name) { 'fix' }
     let(:start_sha) { '4b4918a572fa86f9771e5ba40fbd48e1eb03e2c6' }
     let(:end_sha) { '12d65c8dd2b2676fa3ac47d955accc085a37a9c1' }
@@ -2142,7 +2266,7 @@ RSpec.describe Gitlab::Git::Repository, :seed_helper do
         message: 'Squash commit message'
       }
 
-      repository.squash(user, squash_id, opts)
+      repository.squash(user, opts)
     end
 
     # Should be ported to gitaly-ruby rspec suite https://gitlab.com/gitlab-org/gitaly/issues/1234

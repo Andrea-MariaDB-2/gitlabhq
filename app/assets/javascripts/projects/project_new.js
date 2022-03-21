@@ -1,5 +1,9 @@
 import $ from 'jquery';
+import { debounce } from 'lodash';
 import DEFAULT_PROJECT_TEMPLATES from 'ee_else_ce/projects/default_project_templates';
+import { confirmAction } from '~/lib/utils/confirm_via_gl_modal/confirm_via_gl_modal';
+import { DEFAULT_DEBOUNCE_AND_THROTTLE_MS } from '../lib/utils/constants';
+import axios from '../lib/utils/axios_utils';
 import {
   convertToTitleCase,
   humanize,
@@ -9,6 +13,29 @@ import {
 
 let hasUserDefinedProjectPath = false;
 let hasUserDefinedProjectName = false;
+const invalidInputClass = 'gl-field-error-outline';
+
+const cancelSource = axios.CancelToken.source();
+const endpoint = `${gon.relative_url_root}/import/url/validate`;
+let importCredentialsValidationPromise = null;
+const validateImportCredentials = (url, user, password) => {
+  cancelSource.cancel();
+  importCredentialsValidationPromise = axios
+    .post(endpoint, { url, user, password }, { cancelToken: cancelSource.cancel() })
+    .then(({ data }) => data)
+    .catch((thrown) =>
+      axios.isCancel(thrown)
+        ? {
+            cancelled: true,
+          }
+        : {
+            // intentionally reporting success in case of validation error
+            // we do not want to block users from trying import in case of validation exception
+            success: true,
+          },
+    );
+  return importCredentialsValidationPromise;
+};
 
 const onProjectNameChange = ($projectNameInput, $projectPathInput) => {
   const slug = slugify(convertUnicodeToAscii($projectNameInput.val()));
@@ -24,6 +51,8 @@ const onProjectPathChange = ($projectNameInput, $projectPathInput, hasExistingPr
 };
 
 const setProjectNamePathHandlers = ($projectNameInput, $projectPathInput) => {
+  const specialRepo = document.querySelector('.js-user-readme-repo');
+
   // eslint-disable-next-line @gitlab/no-global-event-off
   $projectNameInput.off('keyup change').on('keyup change', () => {
     onProjectNameChange($projectNameInput, $projectPathInput);
@@ -35,6 +64,11 @@ const setProjectNamePathHandlers = ($projectNameInput, $projectPathInput) => {
   $projectPathInput.off('keyup change').on('keyup change', () => {
     onProjectPathChange($projectNameInput, $projectPathInput, hasUserDefinedProjectName);
     hasUserDefinedProjectPath = $projectPathInput.val().trim().length > 0;
+
+    specialRepo.classList.toggle(
+      'gl-display-none',
+      $projectPathInput.val() !== $projectPathInput.data('username'),
+    );
   });
 };
 
@@ -46,7 +80,7 @@ const deriveProjectPathFromUrl = ($projectImportUrl) => {
     .parents('.toggle-import-form')
     .find('#project_path');
 
-  if (hasUserDefinedProjectPath) {
+  if (hasUserDefinedProjectPath || $currentProjectPath.length === 0) {
     return;
   }
 
@@ -71,10 +105,30 @@ const deriveProjectPathFromUrl = ($projectImportUrl) => {
   }
 };
 
+const bindHowToImport = () => {
+  const importLinks = document.querySelectorAll('.js-how-to-import-link');
+
+  importLinks.forEach((link) => {
+    const { modalTitle: title, modalMessage: modalHtmlMessage } = link.dataset;
+
+    link.addEventListener('click', (e) => {
+      e.preventDefault();
+      confirmAction('', {
+        modalHtmlMessage,
+        title,
+        hideCancel: true,
+      });
+    });
+  });
+};
+
 const bindEvents = () => {
   const $newProjectForm = $('#new_project');
   const $projectImportUrl = $('#project_import_url');
-  const $projectImportUrlWarning = $('.js-import-url-warning');
+  const $projectImportUrlUser = $('#project_import_url_user');
+  const $projectImportUrlPassword = $('#project_import_url_password');
+  const $projectImportUrlError = $('.js-import-url-error');
+  const $projectImportForm = $('form.js-project-import');
   const $projectPath = $('.tab-pane.active #project_path');
   const $useTemplateBtn = $('.template-button > input');
   const $projectFieldsForm = $('.project-fields-form');
@@ -84,21 +138,14 @@ const bindEvents = () => {
   const $projectTemplateButtons = $('.project-templates-buttons');
   const $projectName = $('.tab-pane.active #project_name');
 
-  if ($newProjectForm.length !== 1) {
+  if ($newProjectForm.length !== 1 && $projectImportForm.length !== 1) {
     return;
   }
 
-  $('.how_to_import_link').on('click', (e) => {
-    e.preventDefault();
-    $(e.currentTarget).next('.modal').show();
-  });
+  bindHowToImport();
 
-  $('.modal-header .close').on('click', () => {
-    $('.modal').hide();
-  });
-
-  $('.btn_import_gitlab_project').on('click', () => {
-    const importHref = $('a.btn_import_gitlab_project').attr('href');
+  $('.btn_import_gitlab_project').on('click contextmenu', () => {
+    const importHref = $('a.btn_import_gitlab_project').attr('data-href');
     $('.btn_import_gitlab_project').attr(
       'href',
       `${importHref}?namespace_id=${$(
@@ -135,23 +182,63 @@ const bindEvents = () => {
     $projectPath.val($projectPath.val().trim());
   });
 
-  function updateUrlPathWarningVisibility() {
-    const url = $projectImportUrl.val();
-    const URL_PATTERN = /(?:git|https?):\/\/.*\/.*\.git$/;
-    const isUrlValid = URL_PATTERN.test(url);
-    $projectImportUrlWarning.toggleClass('hide', isUrlValid);
-  }
+  const updateUrlPathWarningVisibility = async () => {
+    const { success: isUrlValid, cancelled } = await validateImportCredentials(
+      $projectImportUrl.val(),
+      $projectImportUrlUser.val(),
+      $projectImportUrlPassword.val(),
+    );
+    if (cancelled) {
+      return;
+    }
+
+    $projectImportUrl.toggleClass(invalidInputClass, !isUrlValid);
+    $projectImportUrlError.toggleClass('hide', isUrlValid);
+  };
+  const debouncedUpdateUrlPathWarningVisibility = debounce(
+    updateUrlPathWarningVisibility,
+    DEFAULT_DEBOUNCE_AND_THROTTLE_MS,
+  );
 
   let isProjectImportUrlDirty = false;
   $projectImportUrl.on('blur', () => {
     isProjectImportUrlDirty = true;
-    updateUrlPathWarningVisibility();
+    debouncedUpdateUrlPathWarningVisibility();
   });
   $projectImportUrl.on('keyup', () => {
     deriveProjectPathFromUrl($projectImportUrl);
-    // defer error message till first input blur
-    if (isProjectImportUrlDirty) {
+  });
+
+  [$projectImportUrl, $projectImportUrlUser, $projectImportUrlPassword].forEach(($f) => {
+    $f.on('input', () => {
+      if (isProjectImportUrlDirty) {
+        debouncedUpdateUrlPathWarningVisibility();
+      }
+    });
+  });
+
+  $projectImportForm.on('submit', async (e) => {
+    e.preventDefault();
+
+    if (importCredentialsValidationPromise === null) {
+      // we didn't validate credentials yet
+      debouncedUpdateUrlPathWarningVisibility.cancel();
       updateUrlPathWarningVisibility();
+    }
+
+    const submitBtn = $projectImportForm.find('input[type="submit"]');
+
+    submitBtn.disable();
+    await importCredentialsValidationPromise;
+    submitBtn.enable();
+
+    const $invalidFields = $projectImportForm.find(`.${invalidInputClass}`);
+    if ($invalidFields.length > 0) {
+      $invalidFields[0].focus();
+    } else {
+      // calling .submit() on HTMLFormElement does not trigger 'submit' event
+      // We are using this behavior to bypass this handler and avoid infinite loop
+      $projectImportForm[0].submit();
     }
   });
 
@@ -174,3 +261,5 @@ export default {
   onProjectNameChange,
   onProjectPathChange,
 };
+
+export { bindHowToImport };

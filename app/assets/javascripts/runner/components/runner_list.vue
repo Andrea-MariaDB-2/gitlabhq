@@ -1,43 +1,23 @@
 <script>
-import { GlTable, GlTooltipDirective, GlSkeletonLoader } from '@gitlab/ui';
+import { GlTableLite, GlTooltipDirective, GlSkeletonLoader } from '@gitlab/ui';
+import TooltipOnTruncate from '~/vue_shared/components/tooltip_on_truncate/tooltip_on_truncate.vue';
 import { getIdFromGraphQLId } from '~/graphql_shared/utils';
-import { formatNumber, __, s__ } from '~/locale';
+import { __, s__ } from '~/locale';
 import TimeAgo from '~/vue_shared/components/time_ago_tooltip.vue';
-import { RUNNER_JOB_COUNT_LIMIT } from '../constants';
-import RunnerActionsCell from './cells/runner_actions_cell.vue';
-import RunnerNameCell from './cells/runner_name_cell.vue';
-import RunnerTypeCell from './cells/runner_type_cell.vue';
+import { formatJobCount, tableField } from '../utils';
+import RunnerSummaryCell from './cells/runner_summary_cell.vue';
+import RunnerStatusCell from './cells/runner_status_cell.vue';
 import RunnerTags from './runner_tags.vue';
-
-const tableField = ({ key, label = '', width = 10 }) => {
-  return {
-    key,
-    label,
-    thClass: [
-      `gl-w-${width}p`,
-      'gl-bg-transparent!',
-      'gl-border-b-solid!',
-      'gl-border-b-gray-100!',
-      'gl-py-5!',
-      'gl-px-0!',
-      'gl-border-b-1!',
-    ],
-    tdClass: ['gl-py-5!', 'gl-px-1!'],
-    tdAttr: {
-      'data-testid': `td-${key}`,
-    },
-  };
-};
 
 export default {
   components: {
-    GlTable,
+    GlTableLite,
     GlSkeletonLoader,
+    TooltipOnTruncate,
     TimeAgo,
-    RunnerActionsCell,
-    RunnerNameCell,
+    RunnerSummaryCell,
     RunnerTags,
-    RunnerTypeCell,
+    RunnerStatusCell,
   },
   directives: {
     GlTooltip: GlTooltipDirective,
@@ -53,18 +33,19 @@ export default {
       required: true,
     },
   },
-  methods: {
-    formatProjectCount(projectCount) {
-      if (projectCount === null) {
-        return __('n/a');
-      }
-      return formatNumber(projectCount);
+  computed: {
+    tableClass() {
+      // <gl-table-lite> does not provide a busy state, add
+      // simple support for it.
+      // See http://bootstrap-vue.org/docs/components/table#table-busy-state
+      return {
+        'gl-opacity-6': this.loading,
+      };
     },
+  },
+  methods: {
     formatJobCount(jobCount) {
-      if (jobCount > RUNNER_JOB_COUNT_LIMIT) {
-        return `${formatNumber(RUNNER_JOB_COUNT_LIMIT)}+`;
-      }
-      return formatNumber(jobCount);
+      return formatJobCount(jobCount);
     },
     runnerTrAttr(runner) {
       if (runner) {
@@ -76,13 +57,12 @@ export default {
     },
   },
   fields: [
-    tableField({ key: 'type', label: __('Type/State') }),
-    tableField({ key: 'name', label: s__('Runners|Runner'), width: 30 }),
+    tableField({ key: 'status', label: s__('Runners|Status') }),
+    tableField({ key: 'summary', label: s__('Runners|Runner'), thClasses: ['gl-lg-w-25p'] }),
     tableField({ key: 'version', label: __('Version') }),
-    tableField({ key: 'ipAddress', label: __('IP Address') }),
-    tableField({ key: 'projectCount', label: __('Projects'), width: 5 }),
-    tableField({ key: 'jobCount', label: __('Jobs'), width: 5 }),
-    tableField({ key: 'tagList', label: __('Tags') }),
+    tableField({ key: 'ipAddress', label: __('IP') }),
+    tableField({ key: 'jobCount', label: __('Jobs') }),
+    tableField({ key: 'tagList', label: __('Tags'), thClasses: ['gl-lg-w-25p'] }),
     tableField({ key: 'contactedAt', label: __('Last contact') }),
     tableField({ key: 'actions', label: '' }),
   ],
@@ -90,37 +70,39 @@ export default {
 </script>
 <template>
   <div>
-    <gl-table
-      :busy="loading"
+    <gl-table-lite
+      :aria-busy="loading"
+      :class="tableClass"
       :items="runners"
       :fields="$options.fields"
       :tbody-tr-attr="runnerTrAttr"
       data-testid="runner-list"
       stacked="md"
+      primary-key="id"
       fixed
     >
-      <template v-if="!runners.length" #table-busy>
-        <gl-skeleton-loader v-for="i in 4" :key="i" />
+      <template #cell(status)="{ item }">
+        <runner-status-cell :runner="item" />
       </template>
 
-      <template #cell(type)="{ item }">
-        <runner-type-cell :runner="item" />
-      </template>
-
-      <template #cell(name)="{ item }">
-        <runner-name-cell :runner="item" />
+      <template #cell(summary)="{ item, index }">
+        <runner-summary-cell :runner="item">
+          <template #runner-name="{ runner }">
+            <slot name="runner-name" :runner="runner" :index="index"></slot>
+          </template>
+        </runner-summary-cell>
       </template>
 
       <template #cell(version)="{ item: { version } }">
-        {{ version }}
+        <tooltip-on-truncate class="gl-display-block gl-text-truncate" :title="version">
+          {{ version }}
+        </tooltip-on-truncate>
       </template>
 
       <template #cell(ipAddress)="{ item: { ipAddress } }">
-        {{ ipAddress }}
-      </template>
-
-      <template #cell(projectCount)="{ item: { projectCount } }">
-        {{ formatProjectCount(projectCount) }}
+        <tooltip-on-truncate class="gl-display-block gl-text-truncate" :title="ipAddress">
+          {{ ipAddress }}
+        </tooltip-on-truncate>
       </template>
 
       <template #cell(jobCount)="{ item: { jobCount } }">
@@ -137,8 +119,12 @@ export default {
       </template>
 
       <template #cell(actions)="{ item }">
-        <runner-actions-cell :runner="item" />
+        <slot name="runner-actions-cell" :runner="item"></slot>
       </template>
-    </gl-table>
+    </gl-table-lite>
+
+    <template v-if="!runners.length && loading">
+      <gl-skeleton-loader v-for="i in 4" :key="i" />
+    </template>
   </div>
 </template>

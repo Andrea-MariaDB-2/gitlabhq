@@ -23,6 +23,11 @@ export default {
       required: false,
       default: -1,
     },
+    cssClassJobName: {
+      type: [String, Array],
+      required: false,
+      default: '',
+    },
     stageName: {
       type: String,
       required: false,
@@ -54,14 +59,19 @@ export default {
 </script>
 <template>
   <!-- eslint-disable @gitlab/vue-no-data-toggle -->
-  <div :id="computedJobId" class="ci-job-dropdown-container dropdown dropright">
+  <div
+    :id="computedJobId"
+    class="ci-job-dropdown-container dropdown dropright"
+    data-qa-selector="job_dropdown_container"
+  >
     <button
       type="button"
       data-toggle="dropdown"
       data-display="static"
-      class="dropdown-menu-toggle build-content gl-build-content gl-pipeline-job-width! gl-pr-4!"
+      :class="cssClassJobName"
+      class="dropdown-menu-toggle gl-pipeline-job-width! gl-pr-4!"
     >
-      <div class="gl-display-flex gl-align-items-center gl-justify-content-space-between">
+      <div class="gl-display-flex gl-align-items-stretch gl-justify-content-space-between">
         <job-item
           :type="$options.jobItemTypes.jobDropdown"
           :group-tooltip="tooltipText"
@@ -73,7 +83,10 @@ export default {
       </div>
     </button>
 
-    <ul class="dropdown-menu big-pipeline-graph-dropdown-menu js-grouped-pipeline-dropdown">
+    <ul
+      class="dropdown-menu big-pipeline-graph-dropdown-menu js-grouped-pipeline-dropdown"
+      data-qa-selector="jobs_dropdown_menu"
+    >
       <li class="scrollable-menu">
         <ul>
           <li v-for="job in group.jobs" :key="job.id">

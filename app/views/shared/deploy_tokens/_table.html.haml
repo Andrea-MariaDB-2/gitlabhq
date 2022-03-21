@@ -20,12 +20,12 @@
             %td
               - if token.expires?
                 %span{ class: ('text-warning' if token.expires_soon?) }
-                  In #{distance_of_time_in_words_to_now(token.expires_at)}
+                  = time_ago_with_tooltip(token.expires_at)
               - else
                 %span.token-never-expires-label= _('Never')
             %td= token.scopes.present? ? token.scopes.join(', ') : _('no scopes selected')
             %td
-              .js-deploy-token-revoke-button{ data: { button_class: 'float-right', token: token.to_json, revoke_path: revoke_deploy_token_path(group_or_project, token) } }
+              .js-deploy-token-revoke-button{ data: deploy_token_revoke_button_data(token: token, group_or_project: group_or_project) }
 
 - else
   .settings-message.text-center

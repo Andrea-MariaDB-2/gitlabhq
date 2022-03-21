@@ -75,8 +75,9 @@ module API
       save_current_user_in_env(@current_user) if @current_user
 
       if @current_user
-        ::Gitlab::Database::LoadBalancing::RackMiddleware
-          .stick_or_unstick(env, :user, @current_user.id)
+        ::ApplicationRecord
+          .sticking
+          .stick_or_unstick_request(env, :user, @current_user.id)
       end
 
       @current_user
@@ -116,7 +117,9 @@ module API
 
     # rubocop: disable CodeReuse/ActiveRecord
     def find_project(id)
-      projects = Project.without_deleted
+      return unless id
+
+      projects = Project.without_deleted.not_hidden
 
       if id.is_a?(Integer) || id =~ /^\d+$/
         projects.find_by(id: id)
@@ -173,9 +176,9 @@ module API
     # rubocop: disable CodeReuse/ActiveRecord
     def find_namespace(id)
       if id.to_s =~ /^\d+$/
-        Namespace.find_by(id: id)
+        Namespace.without_project_namespaces.find_by(id: id)
       else
-        Namespace.find_by_full_path(id)
+        find_namespace_by_path(id)
       end
     end
     # rubocop: enable CodeReuse/ActiveRecord
@@ -185,7 +188,7 @@ module API
     end
 
     def find_namespace_by_path(path)
-      Namespace.find_by_full_path(path)
+      Namespace.without_project_namespaces.find_by_full_path(path)
     end
 
     def find_namespace_by_path!(path)
@@ -429,8 +432,8 @@ module API
       render_api_error!('406 Not Acceptable', 406)
     end
 
-    def service_unavailable!
-      render_api_error!('503 Service Unavailable', 503)
+    def service_unavailable!(message = nil)
+      render_api_error!(message || '503 Service Unavailable', 503)
     end
 
     def conflict!(message = nil)
@@ -471,23 +474,28 @@ module API
       model.errors.messages
     end
 
-    def render_spam_error!
-      render_api_error!({ error: 'Spam detected' }, 400)
+    def render_api_error!(message, status)
+      render_structured_api_error!({ 'message' => message }, status)
     end
 
-    def render_api_error!(message, status)
+    def render_structured_api_error!(hash, status)
+      # Use this method instead of `render_api_error!` when you have additional top-level
+      # hash entries in addition to 'message' which need to be passed to `#error!`
+      set_status_code_in_env(status)
+      error!(hash, status, header)
+    end
+
+    def set_status_code_in_env(status)
       # grape-logging doesn't pass the status code, so this is a
       # workaround for getting that information in the loggers:
       # https://github.com/aserafin/grape_logging/issues/71
       env[API_RESPONSE_STATUS_CODE] = Rack::Utils.status_code(status)
-
-      error!({ 'message' => message }, status, header)
     end
 
     def handle_api_exception(exception)
       if report_exception?(exception)
         define_params_for_grape_middleware
-        Gitlab::ApplicationContext.push(user: current_user)
+        Gitlab::ApplicationContext.push(user: current_user, remote_ip: request.ip)
         Gitlab::ErrorTracking.track_exception(exception)
       end
 
@@ -560,7 +568,7 @@ module API
 
     def increment_counter(event_name)
       feature_name = "usage_data_#{event_name}"
-      return unless Feature.enabled?(feature_name)
+      return unless Feature.enabled?(feature_name, default_enabled: :yaml)
 
       Gitlab::UsageDataCounters.count(event_name)
     rescue StandardError => error
@@ -624,6 +632,12 @@ module API
       {}
     end
 
+    def validate_anonymous_search_access!
+      return if current_user.present? || Feature.disabled?(:disable_anonymous_search, type: :ops)
+
+      unprocessable_entity!('User must be authenticated to use search')
+    end
+
     private
 
     # rubocop:disable Gitlab/ModuleWithInstanceVariables
@@ -674,20 +688,27 @@ module API
     def send_git_blob(repository, blob)
       env['api.format'] = :txt
       content_type 'text/plain'
+
       header['Content-Disposition'] = ActionDispatch::Http::ContentDisposition.format(disposition: 'inline', filename: blob.name)
 
       # Let Workhorse examine the content and determine the better content disposition
       header[Gitlab::Workhorse::DETECT_HEADER] = "true"
 
       header(*Gitlab::Workhorse.send_git_blob(repository, blob))
+
+      body ''
     end
 
     def send_git_archive(repository, **kwargs)
       header(*Gitlab::Workhorse.send_git_archive(repository, **kwargs))
+
+      body ''
     end
 
     def send_artifacts_entry(file, entry)
       header(*Gitlab::Workhorse.send_artifacts_entry(file, entry))
+
+      body ''
     end
 
     # The Grape Error Middleware only has access to `env` but not `params` nor

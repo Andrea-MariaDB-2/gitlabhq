@@ -14,7 +14,7 @@ export default {
   components: {
     GlButton,
   },
-  inject: ['projectPath'],
+  inject: ['projectFullPath'],
   props: {
     feature: {
       type: Object,
@@ -47,7 +47,7 @@ export default {
       try {
         const { mutationSettings } = this;
         const { data } = await this.$apollo.mutate(
-          mutationSettings.getMutationPayload(this.projectPath),
+          mutationSettings.getMutationPayload(this.projectFullPath),
         );
         const { errors, successPath } = data[mutationSettings.mutationId];
 
@@ -85,7 +85,7 @@ export default {
     );
   },
   i18n: {
-    buttonLabel: s__('SecurityConfiguration|Configure via Merge Request'),
+    buttonLabel: s__('SecurityConfiguration|Configure with a merge request'),
     noSuccessPathError: s__(
       'SecurityConfiguration|%{featureName} merge request creation mutation failed',
     ),
@@ -100,6 +100,7 @@ export default {
     :loading="isLoading"
     :variant="variant"
     :category="category"
+    :data-qa-selector="`${feature.type}_mr_button`"
     @click="mutate"
     >{{ $options.i18n.buttonLabel }}</gl-button
   >

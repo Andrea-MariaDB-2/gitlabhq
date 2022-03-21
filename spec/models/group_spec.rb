@@ -4,6 +4,7 @@ require 'spec_helper'
 
 RSpec.describe Group do
   include ReloadHelpers
+  include StubGitlabCalls
 
   let!(:group) { create(:group) }
 
@@ -35,6 +36,11 @@ RSpec.describe Group do
     it { is_expected.to have_many(:dependency_proxy_manifests) }
     it { is_expected.to have_many(:debian_distributions).class_name('Packages::Debian::GroupDistribution').dependent(:destroy) }
     it { is_expected.to have_many(:daily_build_group_report_results).class_name('Ci::DailyBuildGroupReportResult') }
+    it { is_expected.to have_many(:group_callouts).class_name('Users::GroupCallout').with_foreign_key(:group_id) }
+    it { is_expected.to have_many(:bulk_import_exports).class_name('BulkImports::Export') }
+    it { is_expected.to have_many(:contacts).class_name('CustomerRelations::Contact') }
+    it { is_expected.to have_many(:organizations).class_name('CustomerRelations::Organization') }
+    it { is_expected.to have_one(:crm_settings) }
 
     describe '#members & #requesters' do
       let(:requester) { create(:user) }
@@ -59,6 +65,7 @@ RSpec.describe Group do
 
   describe 'validations' do
     it { is_expected.to validate_presence_of :name }
+    it { is_expected.not_to allow_value('colon:in:path').for(:path) } # This is to validate that a specially crafted name cannot bypass a pattern match. See !72555
     it { is_expected.to allow_value('group test_4').for(:name) }
     it { is_expected.not_to allow_value('test/../foo').for(:name) }
     it { is_expected.not_to allow_value('<script>alert("Attack!")</script>').for(:name) }
@@ -81,41 +88,13 @@ RSpec.describe Group do
           group = build(:group, parent: build(:namespace))
 
           expect(group).not_to be_valid
-          expect(group.errors[:parent_id].first).to eq('a group cannot have a user namespace as its parent')
+          expect(group.errors[:parent_id].first).to eq('user namespace cannot be the parent of another namespace')
         end
 
         it 'allows a group to have another group as its parent' do
           group = build(:group, parent: build(:group))
 
           expect(group).to be_valid
-        end
-      end
-
-      context 'when the feature flag `validate_namespace_parent_type` is disabled' do
-        before do
-          stub_feature_flags(validate_namespace_parent_type: false)
-        end
-
-        context 'when the group has no parent' do
-          it 'allows a group to have no parent associated with it' do
-            group = build(:group)
-
-            expect(group).to be_valid
-          end
-        end
-
-        context 'when the group has a parent' do
-          it 'allows a group to have a namespace as its parent' do
-            group = build(:group, parent: build(:namespace))
-
-            expect(group).to be_valid
-          end
-
-          it 'allows a group to have another group as its parent' do
-            group = build(:group, parent: build(:group))
-
-            expect(group).to be_valid
-          end
         end
       end
     end
@@ -158,7 +137,7 @@ RSpec.describe Group do
       context 'when sub group is deleted' do
         it 'does not delete parent notification settings' do
           expect do
-            sub_group.destroy
+            sub_group.destroy!
           end.to change { NotificationSetting.count }.by(-1)
         end
       end
@@ -314,6 +293,8 @@ RSpec.describe Group do
     end
   end
 
+  it_behaves_like 'a BulkUsersByEmailLoad model'
+
   context 'traversal_ids on create' do
     context 'default traversal_ids' do
       let(:group) { build(:group) }
@@ -402,13 +383,8 @@ RSpec.describe Group do
 
       subject do
         recorded_queries.record do
-          group.update(parent: new_parent)
+          group.update!(parent: new_parent)
         end
-      end
-
-      before do
-        subject
-        reload_models(old_parent, new_parent, group)
       end
 
       context 'within the same hierarchy' do
@@ -416,13 +392,20 @@ RSpec.describe Group do
         let!(:old_parent) { create(:group, parent: root) }
         let!(:new_parent) { create(:group, parent: root) }
 
-        it 'updates traversal_ids' do
-          expect(group.traversal_ids).to eq [root.id, new_parent.id, group.id]
-        end
+        context 'with FOR NO KEY UPDATE lock' do
+          before do
+            subject
+            reload_models(old_parent, new_parent, group)
+          end
 
-        it_behaves_like 'hierarchy with traversal_ids'
-        it_behaves_like 'locked row' do
-          let(:row) { root }
+          it 'updates traversal_ids' do
+            expect(group.traversal_ids).to eq [root.id, new_parent.id, group.id]
+          end
+
+          it_behaves_like 'hierarchy with traversal_ids'
+          it_behaves_like 'locked row' do
+            let(:row) { root }
+          end
         end
       end
 
@@ -430,6 +413,11 @@ RSpec.describe Group do
         let!(:old_parent) { create(:group) }
         let!(:new_parent) { create(:group) }
         let!(:group) { create(:group, parent: old_parent) }
+
+        before do
+          subject
+          reload_models(old_parent, new_parent, group)
+        end
 
         it 'updates traversal_ids' do
           expect(group.traversal_ids).to eq [new_parent.id, group.id]
@@ -456,6 +444,11 @@ RSpec.describe Group do
         let!(:old_parent) { nil }
         let!(:new_parent) { create(:group) }
 
+        before do
+          subject
+          reload_models(old_parent, new_parent, group)
+        end
+
         it 'updates traversal_ids' do
           expect(group.traversal_ids).to eq [new_parent.id, group.id]
         end
@@ -472,6 +465,11 @@ RSpec.describe Group do
       context 'to being a root ancestor' do
         let!(:old_parent) { create(:group) }
         let!(:new_parent) { nil }
+
+        before do
+          subject
+          reload_models(old_parent, new_parent, group)
+        end
 
         it 'updates traversal_ids' do
           expect(group.traversal_ids).to eq [group.id]
@@ -494,7 +492,7 @@ RSpec.describe Group do
       let!(:group) { create(:group, parent: parent_group) }
 
       before do
-        parent_group.update(parent: new_grandparent)
+        parent_group.update!(parent: new_grandparent)
       end
 
       it 'updates traversal_ids for all descendants' do
@@ -526,8 +524,16 @@ RSpec.describe Group do
         it { expect(group.descendants.to_sql).not_to include 'traversal_ids @>' }
       end
 
+      describe '#self_and_hierarchy' do
+        it { expect(group.self_and_hierarchy.to_sql).not_to include 'traversal_ids @>' }
+      end
+
       describe '#ancestors' do
         it { expect(group.ancestors.to_sql).not_to include 'traversal_ids <@' }
+      end
+
+      describe '#ancestors_upto' do
+        it { expect(group.ancestors_upto.to_sql).not_to include "WITH ORDINALITY" }
       end
     end
 
@@ -546,6 +552,10 @@ RSpec.describe Group do
         it { expect(group.descendants.to_sql).to include 'traversal_ids @>' }
       end
 
+      describe '#self_and_hierarchy' do
+        it { expect(group.self_and_hierarchy.to_sql).to include 'traversal_ids @>' }
+      end
+
       describe '#ancestors' do
         it { expect(group.ancestors.to_sql).to include "\"namespaces\".\"id\" = #{group.parent_id}" }
 
@@ -561,6 +571,19 @@ RSpec.describe Group do
           it { expect(group.ancestors.to_sql).not_to include 'traversal_ids <@' }
         end
       end
+
+      describe '#ancestors_upto' do
+        it { expect(group.ancestors_upto.to_sql).to include "WITH ORDINALITY" }
+      end
+
+      context 'when project namespace exists in the group' do
+        let!(:project) { create(:project, group: group) }
+        let!(:project_namespace) { project.project_namespace }
+
+        it 'filters out project namespace' do
+          expect(group.descendants.find_by_id(project_namespace.id)).to be_nil
+        end
+      end
     end
   end
 
@@ -569,8 +592,8 @@ RSpec.describe Group do
     let(:instance_integration) { build(:jira_integration, :instance) }
 
     before do
-      create(:jira_integration, group: group, project: nil)
-      create(:integrations_slack, group: another_group, project: nil)
+      create(:jira_integration, :group, group: group)
+      create(:integrations_slack, :group, group: another_group)
     end
 
     it 'returns groups without integration' do
@@ -677,6 +700,26 @@ RSpec.describe Group do
         expect(result).to match_array([internal_group])
       end
     end
+
+    describe 'by_ids_or_paths' do
+      let(:group_path) { 'group_path' }
+      let!(:group) { create(:group, path: group_path) }
+      let(:group_id) { group.id }
+
+      it 'returns matching records based on paths' do
+        expect(described_class.by_ids_or_paths(nil, [group_path])).to match_array([group])
+      end
+
+      it 'returns matching records based on ids' do
+        expect(described_class.by_ids_or_paths([group_id], nil)).to match_array([group])
+      end
+
+      it 'returns matching records based on both paths and ids' do
+        new_group = create(:group)
+
+        expect(described_class.by_ids_or_paths([new_group.id], [group_path])).to match_array([group, new_group])
+      end
+    end
   end
 
   describe '#to_reference' do
@@ -715,6 +758,21 @@ RSpec.describe Group do
       group.add_users([user.id], GroupMember::DEVELOPER)
       expect(group.group_members.developers.map(&:user)).to include(user)
       expect(group.group_members.guests.map(&:user)).not_to include(user)
+    end
+
+    context 'when `tasks_to_be_done` and `tasks_project_id` are passed' do
+      let!(:project) { create(:project, group: group) }
+
+      before do
+        group.add_users([create(:user)], :developer, tasks_to_be_done: %w(ci code), tasks_project_id: project.id)
+      end
+
+      it 'creates a member_task with the correct attributes', :aggregate_failures do
+        member = group.group_members.last
+
+        expect(member.tasks_to_be_done).to match_array([:ci, :code])
+        expect(member.member_task.project).to eq(project)
+      end
     end
   end
 
@@ -829,7 +887,7 @@ RSpec.describe Group do
       before do
         parent_group = create(:group)
         create(:group_member, :owner, group: parent_group)
-        group.update(parent: parent_group)
+        group.update!(parent: parent_group)
       end
 
       it { expect(group.last_owner?(@members[:owner])).to be_falsy }
@@ -886,7 +944,7 @@ RSpec.describe Group do
         before do
           parent_group = create(:group)
           create(:group_member, :owner, group: parent_group)
-          group.update(parent: parent_group)
+          group.update!(parent: parent_group)
         end
 
         it { expect(group.member_last_blocked_owner?(member)).to be(false) }
@@ -1210,7 +1268,7 @@ RSpec.describe Group do
         let(:common_id) { [Project.maximum(:id).to_i, Namespace.maximum(:id).to_i].max + 999 }
         let!(:group) { create(:group, id: common_id) }
         let!(:unrelated_project) { create(:project, id: common_id) }
-        let(:user) { unrelated_project.owner }
+        let(:user) { unrelated_project.first_owner }
 
         it 'returns correct access level' do
           expect(shared_group_parent.max_member_access_for_user(user)).to eq(Gitlab::Access::NO_ACCESS)
@@ -1288,10 +1346,14 @@ RSpec.describe Group do
     let!(:group) { create(:group, :nested) }
     let!(:maintainer) { group.parent.add_user(create(:user), GroupMember::MAINTAINER) }
     let!(:developer) { group.add_user(create(:user), GroupMember::DEVELOPER) }
+    let!(:pending_maintainer) { create(:group_member, :awaiting, :maintainer, group: group.parent) }
+    let!(:pending_developer) { create(:group_member, :awaiting, :developer, group: group) }
 
-    it 'returns parents members' do
+    it 'returns parents active members' do
       expect(group.members_with_parents).to include(developer)
       expect(group.members_with_parents).to include(maintainer)
+      expect(group.members_with_parents).not_to include(pending_developer)
+      expect(group.members_with_parents).not_to include(pending_maintainer)
     end
 
     context 'group sharing' do
@@ -1301,9 +1363,11 @@ RSpec.describe Group do
         create(:group_group_link, shared_group: shared_group, shared_with_group: group)
       end
 
-      it 'returns shared with group members' do
+      it 'returns shared with group active members' do
         expect(shared_group.members_with_parents).to(
           include(developer))
+        expect(shared_group.members_with_parents).not_to(
+          include(pending_developer))
       end
     end
   end
@@ -1934,7 +1998,7 @@ RSpec.describe Group do
           let(:environment) { 'foo%bar/test' }
 
           it 'matches literally for %' do
-            ci_variable.update(environment_scope: 'foo%bar/*')
+            ci_variable.update_attribute(:environment_scope, 'foo%bar/*')
 
             is_expected.to contain_exactly(ci_variable)
           end
@@ -2048,6 +2112,23 @@ RSpec.describe Group do
     end
   end
 
+  describe '#bots' do
+    subject { group.bots }
+
+    let_it_be(:group) { create(:group) }
+    let_it_be(:project_bot) { create(:user, :project_bot) }
+    let_it_be(:user) { create(:user) }
+
+    before_all do
+      [project_bot, user].each do |member|
+        group.add_maintainer(member)
+      end
+    end
+
+    it { is_expected.to contain_exactly(project_bot) }
+    it { is_expected.not_to include(user) }
+  end
+
   describe '#related_group_ids' do
     let(:nested_group) { create(:group, parent: group) }
     let(:shared_with_group) { create(:group, parent: group) }
@@ -2075,7 +2156,7 @@ RSpec.describe Group do
       let(:ancestor_group) { create(:group) }
 
       before do
-        group.update(parent: ancestor_group)
+        group.update!(parent: ancestor_group)
       end
 
       it 'returns all ancestor group ids' do
@@ -2112,7 +2193,7 @@ RSpec.describe Group do
 
     let(:group) { create(:group) }
 
-    subject { group.first_auto_devops_config }
+    subject(:fetch_config) { group.first_auto_devops_config }
 
     where(:instance_value, :group_value, :config) do
       # Instance level enabled
@@ -2137,6 +2218,8 @@ RSpec.describe Group do
     end
 
     context 'with parent groups' do
+      let(:parent) { create(:group) }
+
       where(:instance_value, :parent_value, :group_value, :config) do
         # Instance level enabled
         true | nil   | nil    | { status: true, scope: :instance }
@@ -2166,17 +2249,82 @@ RSpec.describe Group do
       end
 
       with_them do
+        def define_cache_expectations(cache_key)
+          if group_value.nil?
+            expect(Rails.cache).to receive(:fetch).with(start_with(cache_key), expires_in: 1.day)
+          else
+            expect(Rails.cache).not_to receive(:fetch).with(start_with(cache_key), expires_in: 1.day)
+          end
+        end
+
         before do
           stub_application_setting(auto_devops_enabled: instance_value)
-          parent = create(:group, auto_devops_enabled: parent_value)
 
           group.update!(
             auto_devops_enabled: group_value,
             parent: parent
           )
+          parent.update!(auto_devops_enabled: parent_value)
+
+          group.reload # Reload so we get the populated traversal IDs
         end
 
         it { is_expected.to eq(config) }
+
+        it 'caches the parent config when group auto_devops_enabled is nil' do
+          cache_key = "namespaces:{#{group.traversal_ids.first}}:first_auto_devops_config:#{group.id}"
+          define_cache_expectations(cache_key)
+
+          fetch_config
+        end
+
+        context 'when traversal ID feature flags are disabled' do
+          before do
+            stub_feature_flags(sync_traversal_ids: false)
+          end
+
+          it 'caches the parent config when group auto_devops_enabled is nil' do
+            cache_key = "namespaces:{first_auto_devops_config}:#{group.id}"
+            define_cache_expectations(cache_key)
+
+            fetch_config
+          end
+        end
+      end
+
+      context 'cache expiration' do
+        before do
+          group.update!(parent: parent)
+
+          reload_models(parent)
+        end
+
+        it 'clears both self and descendant cache when the parent value is updated' do
+          expect(Rails.cache).to receive(:delete_multi)
+            .with(
+              match_array([
+                start_with("namespaces:{#{parent.traversal_ids.first}}:first_auto_devops_config:#{parent.id}"),
+                start_with("namespaces:{#{parent.traversal_ids.first}}:first_auto_devops_config:#{group.id}")
+              ])
+            )
+
+          parent.update!(auto_devops_enabled: true)
+        end
+
+        it 'only clears self cache when there are no dependents' do
+          expect(Rails.cache).to receive(:delete_multi)
+            .with([start_with("namespaces:{#{group.traversal_ids.first}}:first_auto_devops_config:#{group.id}")])
+
+          group.update!(auto_devops_enabled: true)
+        end
+
+        it 'does not clear cache when the feature is disabled' do
+          stub_feature_flags(namespaces_cache_first_auto_devops_config: false)
+
+          expect(Rails.cache).not_to receive(:delete_multi)
+
+          parent.update!(auto_devops_enabled: true)
+        end
       end
     end
   end
@@ -2288,14 +2436,6 @@ RSpec.describe Group do
     end
 
     it_behaves_like 'returns the expected groups for a group and its descendants'
-
-    context 'when :linear_group_including_descendants_by feature flag is disabled' do
-      before do
-        stub_feature_flags(linear_group_including_descendants_by: false)
-      end
-
-      it_behaves_like 'returns the expected groups for a group and its descendants'
-    end
   end
 
   describe '.preset_root_ancestor_for' do
@@ -2368,7 +2508,7 @@ RSpec.describe Group do
       let_it_be(:project) { create(:project, group: group, shared_runners_enabled: true) }
       let_it_be(:project_2) { create(:project, group: sub_group_2, shared_runners_enabled: true) }
 
-      subject { group.update_shared_runners_setting!('disabled_and_unoverridable') }
+      subject { group.update_shared_runners_setting!(Namespace::SR_DISABLED_AND_UNOVERRIDABLE) }
 
       it 'disables shared Runners for all descendant groups and projects' do
         expect { subject_and_reload(group, sub_group, sub_group_2, project, project_2) }
@@ -2394,7 +2534,7 @@ RSpec.describe Group do
     end
 
     context 'disabled_with_override' do
-      subject { group.update_shared_runners_setting!('disabled_with_override') }
+      subject { group.update_shared_runners_setting!(Namespace::SR_DISABLED_WITH_OVERRIDE) }
 
       context 'top level group' do
         let_it_be(:group) { create(:group, :shared_runners_disabled) }
@@ -2486,7 +2626,13 @@ RSpec.describe Group do
     end
   end
 
-  describe '#default_owner' do
+  describe '#membership_locked?' do
+    it 'returns false' do
+      expect(build(:group)).not_to be_membership_locked
+    end
+  end
+
+  describe '#first_owner' do
     let(:group) { build(:group) }
 
     context 'the group has owners' do
@@ -2496,7 +2642,7 @@ RSpec.describe Group do
       end
 
       it 'is the first owner' do
-        expect(group.default_owner)
+        expect(group.first_owner)
           .to eq(group.owners.first)
           .and be_a(User)
       end
@@ -2511,8 +2657,8 @@ RSpec.describe Group do
       end
 
       it 'is the first owner of the parent' do
-        expect(group.default_owner)
-          .to eq(parent.default_owner)
+        expect(group.first_owner)
+          .to eq(parent.first_owner)
           .and be_a(User)
       end
     end
@@ -2523,7 +2669,7 @@ RSpec.describe Group do
       end
 
       it 'is the group.owner' do
-        expect(group.default_owner)
+        expect(group.first_owner)
           .to eq(group.owner)
           .and be_a(User)
       end
@@ -2586,7 +2732,7 @@ RSpec.describe Group do
       let_it_be(:project) { create(:project, group: group, service_desk_enabled: false) }
 
       before do
-        project.update(service_desk_enabled: false)
+        project.update!(service_desk_enabled: false)
       end
 
       it { is_expected.to eq(false) }
@@ -2600,17 +2746,21 @@ RSpec.describe Group do
   end
 
   describe '.ids_with_disabled_email' do
-    let!(:parent_1) { create(:group, emails_disabled: true) }
-    let!(:child_1) { create(:group, parent: parent_1) }
+    let_it_be(:parent_1) { create(:group, emails_disabled: true) }
+    let_it_be(:child_1) { create(:group, parent: parent_1) }
 
-    let!(:parent_2) { create(:group, emails_disabled: false) }
-    let!(:child_2) { create(:group, parent: parent_2) }
+    let_it_be(:parent_2) { create(:group, emails_disabled: false) }
+    let_it_be(:child_2) { create(:group, parent: parent_2) }
 
-    let!(:other_group) { create(:group, emails_disabled: false) }
+    let_it_be(:other_group) { create(:group, emails_disabled: false) }
 
-    subject(:group_ids_where_email_is_disabled) { described_class.ids_with_disabled_email([child_1, child_2, other_group]) }
+    shared_examples 'returns namespaces with disabled email' do
+      subject(:group_ids_where_email_is_disabled) { described_class.ids_with_disabled_email([child_1, child_2, other_group]) }
 
-    it { is_expected.to eq(Set.new([child_1.id])) }
+      it { is_expected.to eq(Set.new([child_1.id])) }
+    end
+
+    it_behaves_like 'returns namespaces with disabled email'
   end
 
   describe '.timelogs' do
@@ -2625,6 +2775,26 @@ RSpec.describe Group do
 
     it 'returns timelogs belonging to the group' do
       expect(group.timelogs).to contain_exactly(timelog1, timelog3)
+    end
+  end
+
+  describe '.organizations' do
+    it 'returns organizations belonging to the group' do
+      organization1 = create(:organization, group: group)
+      create(:organization)
+      organization3 = create(:organization, group: group)
+
+      expect(group.organizations).to contain_exactly(organization1, organization3)
+    end
+  end
+
+  describe '.contacts' do
+    it 'returns contacts belonging to the group' do
+      contact1 = create(:contact, group: group)
+      create(:contact)
+      contact3 = create(:contact, group: group)
+
+      expect(group.contacts).to contain_exactly(contact1, contact3)
     end
   end
 
@@ -2703,6 +2873,379 @@ RSpec.describe Group do
       expect(count_service).to receive(:count)
 
       group.open_merge_requests_count
+    end
+  end
+
+  describe '#dependency_proxy_image_prefix' do
+    let_it_be(:group) { build_stubbed(:group, path: 'GroupWithUPPERcaseLetters') }
+
+    it 'converts uppercase letters to lowercase' do
+      expect(group.dependency_proxy_image_prefix).to end_with("/groupwithuppercaseletters#{DependencyProxy::URL_SUFFIX}")
+    end
+
+    it 'removes the protocol' do
+      expect(group.dependency_proxy_image_prefix).not_to include('http')
+    end
+
+    it 'does not include /groups' do
+      expect(group.dependency_proxy_image_prefix).not_to include('/groups')
+    end
+  end
+
+  describe '#dependency_proxy_image_ttl_policy' do
+    subject(:ttl_policy) { group.dependency_proxy_image_ttl_policy }
+
+    it 'builds a new policy if one does not exist', :aggregate_failures do
+      expect(ttl_policy.ttl).to eq(90)
+      expect(ttl_policy.enabled).to eq(false)
+      expect(ttl_policy.created_at).to be_nil
+      expect(ttl_policy.updated_at).to be_nil
+    end
+
+    context 'with existing policy' do
+      before do
+        group.dependency_proxy_image_ttl_policy.update!(ttl: 30, enabled: true)
+      end
+
+      it 'returns the policy if it already exists', :aggregate_failures do
+        expect(ttl_policy.ttl).to eq(30)
+        expect(ttl_policy.enabled).to eq(true)
+        expect(ttl_policy.created_at).not_to be_nil
+        expect(ttl_policy.updated_at).not_to be_nil
+      end
+    end
+  end
+
+  describe '#dependency_proxy_setting' do
+    subject(:setting) { group.dependency_proxy_setting }
+
+    it 'builds a new policy if one does not exist', :aggregate_failures do
+      expect(setting.enabled).to eq(true)
+      expect(setting).not_to be_persisted
+    end
+
+    context 'with existing policy' do
+      before do
+        group.dependency_proxy_setting.update!(enabled: false)
+      end
+
+      it 'returns the policy if it already exists', :aggregate_failures do
+        expect(setting.enabled).to eq(false)
+        expect(setting).to be_persisted
+      end
+    end
+  end
+
+  describe '#crm_enabled?' do
+    it 'returns false where no crm_settings exist' do
+      expect(group.crm_enabled?).to be_falsey
+    end
+
+    it 'returns false where crm_settings.state is disabled' do
+      create(:crm_settings, enabled: false, group: group)
+
+      expect(group.crm_enabled?).to be_falsey
+    end
+
+    it 'returns true where crm_settings.state is enabled' do
+      create(:crm_settings, enabled: true, group: group)
+
+      expect(group.crm_enabled?).to be_truthy
+    end
+
+    it 'returns true where crm_settings.state is enabled for subgroup' do
+      subgroup = create(:group, :crm_enabled, parent: group)
+
+      expect(subgroup.crm_enabled?).to be_truthy
+    end
+  end
+
+  describe '.get_ids_by_ids_or_paths' do
+    let(:group_path) { 'group_path' }
+    let!(:group) { create(:group, path: group_path) }
+    let(:group_id) { group.id }
+
+    it 'returns ids matching records based on paths' do
+      expect(described_class.get_ids_by_ids_or_paths(nil, [group_path])).to match_array([group_id])
+    end
+
+    it 'returns ids matching records based on ids' do
+      expect(described_class.get_ids_by_ids_or_paths([group_id], nil)).to match_array([group_id])
+    end
+
+    it 'returns ids matching records based on both paths and ids' do
+      new_group_id = create(:group).id
+
+      expect(described_class.get_ids_by_ids_or_paths([new_group_id], [group_path])).to match_array([group_id, new_group_id])
+    end
+  end
+
+  describe '#shared_with_group_links_visible_to_user' do
+    let_it_be(:admin) { create :admin }
+    let_it_be(:normal_user) { create :user }
+    let_it_be(:user_with_access) { create :user }
+    let_it_be(:user_with_parent_access) { create :user }
+    let_it_be(:user_without_access) { create :user }
+    let_it_be(:shared_group) { create :group }
+    let_it_be(:parent_group) { create :group, :private }
+    let_it_be(:shared_with_private_group) { create :group, :private, parent: parent_group }
+    let_it_be(:shared_with_internal_group) { create :group, :internal }
+    let_it_be(:shared_with_public_group) { create :group, :public }
+    let_it_be(:private_group_group_link) { create(:group_group_link, shared_group: shared_group, shared_with_group: shared_with_private_group) }
+    let_it_be(:internal_group_group_link) { create(:group_group_link, shared_group: shared_group, shared_with_group: shared_with_internal_group) }
+    let_it_be(:public_group_group_link) { create(:group_group_link, shared_group: shared_group, shared_with_group: shared_with_public_group) }
+
+    before do
+      shared_with_private_group.add_developer(user_with_access)
+      parent_group.add_developer(user_with_parent_access)
+    end
+
+    context 'when user is admin', :enable_admin_mode do
+      it 'returns all existing shared group links' do
+        expect(shared_group.shared_with_group_links_visible_to_user(admin)).to contain_exactly(private_group_group_link, internal_group_group_link, public_group_group_link)
+      end
+    end
+
+    context 'when user is nil' do
+      it 'returns only link of public shared group' do
+        expect(shared_group.shared_with_group_links_visible_to_user(nil)).to contain_exactly(public_group_group_link)
+      end
+    end
+
+    context 'when user has no access to private shared group' do
+      it 'returns links of internal and public shared groups' do
+        expect(shared_group.shared_with_group_links_visible_to_user(normal_user)).to contain_exactly(internal_group_group_link, public_group_group_link)
+      end
+    end
+
+    context 'when user is member of private shared group' do
+      it 'returns links of private, internal and public shared groups' do
+        expect(shared_group.shared_with_group_links_visible_to_user(user_with_access)).to contain_exactly(private_group_group_link, internal_group_group_link, public_group_group_link)
+      end
+    end
+
+    context 'when user is inherited member of private shared group' do
+      it 'returns links of private, internal and public shared groups' do
+        expect(shared_group.shared_with_group_links_visible_to_user(user_with_parent_access)).to contain_exactly(private_group_group_link, internal_group_group_link, public_group_group_link)
+      end
+    end
+  end
+
+  describe '#enforced_runner_token_expiration_interval and #effective_runner_token_expiration_interval' do
+    shared_examples 'no enforced expiration interval' do
+      it { expect(subject.enforced_runner_token_expiration_interval).to be_nil }
+    end
+
+    shared_examples 'enforced expiration interval' do |enforced_interval:|
+      it { expect(subject.enforced_runner_token_expiration_interval).to eq(enforced_interval) }
+    end
+
+    shared_examples 'no effective expiration interval' do
+      it { expect(subject.effective_runner_token_expiration_interval).to be_nil }
+    end
+
+    shared_examples 'effective expiration interval' do |effective_interval:|
+      it { expect(subject.effective_runner_token_expiration_interval).to eq(effective_interval) }
+    end
+
+    context 'when there is no interval in group settings' do
+      let_it_be(:group) { create(:group) }
+
+      subject { group }
+
+      it_behaves_like 'no enforced expiration interval'
+      it_behaves_like 'no effective expiration interval'
+    end
+
+    context 'when there is a group interval' do
+      let(:group_settings) { create(:namespace_settings, runner_token_expiration_interval: 3.days.to_i) }
+
+      subject { create(:group, namespace_settings: group_settings) }
+
+      it_behaves_like 'no enforced expiration interval'
+      it_behaves_like 'effective expiration interval', effective_interval: 3.days
+    end
+
+    # runner_token_expiration_interval should not affect the expiration interval, only
+    # group_runner_token_expiration_interval should.
+    context 'when there is a site-wide enforced shared interval' do
+      before do
+        stub_application_setting(runner_token_expiration_interval: 5.days.to_i)
+      end
+
+      let_it_be(:group) { create(:group) }
+
+      subject { group }
+
+      it_behaves_like 'no enforced expiration interval'
+      it_behaves_like 'no effective expiration interval'
+    end
+
+    context 'when there is a site-wide enforced group interval' do
+      before do
+        stub_application_setting(group_runner_token_expiration_interval: 5.days.to_i)
+      end
+
+      let_it_be(:group) { create(:group) }
+
+      subject { group }
+
+      it_behaves_like 'enforced expiration interval', enforced_interval: 5.days
+      it_behaves_like 'effective expiration interval', effective_interval: 5.days
+    end
+
+    # project_runner_token_expiration_interval should not affect the expiration interval, only
+    # group_runner_token_expiration_interval should.
+    context 'when there is a site-wide enforced project interval' do
+      before do
+        stub_application_setting(project_runner_token_expiration_interval: 5.days.to_i)
+      end
+
+      let_it_be(:group) { create(:group) }
+
+      subject { group }
+
+      it_behaves_like 'no enforced expiration interval'
+      it_behaves_like 'no effective expiration interval'
+    end
+
+    # runner_token_expiration_interval should not affect the expiration interval, only
+    # subgroup_runner_token_expiration_interval should.
+    context 'when there is a grandparent group enforced group interval' do
+      let_it_be(:grandparent_group_settings) { create(:namespace_settings, runner_token_expiration_interval: 4.days.to_i) }
+      let_it_be(:grandparent_group) { create(:group, namespace_settings: grandparent_group_settings) }
+      let_it_be(:parent_group) { create(:group, parent: grandparent_group) }
+      let_it_be(:subgroup) { create(:group, parent: parent_group) }
+
+      subject { subgroup }
+
+      it_behaves_like 'no enforced expiration interval'
+      it_behaves_like 'no effective expiration interval'
+    end
+
+    context 'when there is a grandparent group enforced subgroup interval' do
+      let_it_be(:grandparent_group_settings) { create(:namespace_settings, subgroup_runner_token_expiration_interval: 4.days.to_i) }
+      let_it_be(:grandparent_group) { create(:group, namespace_settings: grandparent_group_settings) }
+      let_it_be(:parent_group) { create(:group, parent: grandparent_group) }
+      let_it_be(:subgroup) { create(:group, parent: parent_group) }
+
+      subject { subgroup }
+
+      it_behaves_like 'enforced expiration interval', enforced_interval: 4.days
+      it_behaves_like 'effective expiration interval', effective_interval: 4.days
+    end
+
+    # project_runner_token_expiration_interval should not affect the expiration interval, only
+    # subgroup_runner_token_expiration_interval should.
+    context 'when there is a grandparent group enforced project interval' do
+      let_it_be(:grandparent_group_settings) { create(:namespace_settings, project_runner_token_expiration_interval: 4.days.to_i) }
+      let_it_be(:grandparent_group) { create(:group, namespace_settings: grandparent_group_settings) }
+      let_it_be(:parent_group) { create(:group, parent: grandparent_group) }
+      let_it_be(:subgroup) { create(:group, parent: parent_group) }
+
+      subject { subgroup }
+
+      it_behaves_like 'no enforced expiration interval'
+      it_behaves_like 'no effective expiration interval'
+    end
+
+    context 'when there is a parent group enforced interval overridden by group interval' do
+      let_it_be(:parent_group_settings) { create(:namespace_settings, subgroup_runner_token_expiration_interval: 5.days.to_i) }
+      let_it_be(:parent_group) { create(:group, namespace_settings: parent_group_settings) }
+      let_it_be(:group_settings) { create(:namespace_settings, runner_token_expiration_interval: 4.days.to_i) }
+      let_it_be(:subgroup_with_settings) { create(:group, parent: parent_group, namespace_settings: group_settings) }
+
+      subject { subgroup_with_settings }
+
+      it_behaves_like 'enforced expiration interval', enforced_interval: 5.days
+      it_behaves_like 'effective expiration interval', effective_interval: 4.days
+
+      it 'has human-readable expiration intervals' do
+        expect(subject.enforced_runner_token_expiration_interval_human_readable).to eq('5d')
+        expect(subject.effective_runner_token_expiration_interval_human_readable).to eq('4d')
+      end
+    end
+
+    context 'when site-wide enforced interval overrides group interval' do
+      before do
+        stub_application_setting(group_runner_token_expiration_interval: 3.days.to_i)
+      end
+
+      let_it_be(:group_settings) { create(:namespace_settings, runner_token_expiration_interval: 4.days.to_i) }
+      let_it_be(:group_with_settings) { create(:group, namespace_settings: group_settings) }
+
+      subject { group_with_settings }
+
+      it_behaves_like 'enforced expiration interval', enforced_interval: 3.days
+      it_behaves_like 'effective expiration interval', effective_interval: 3.days
+    end
+
+    context 'when group interval overrides site-wide enforced interval' do
+      before do
+        stub_application_setting(group_runner_token_expiration_interval: 5.days.to_i)
+      end
+
+      let_it_be(:group_settings) { create(:namespace_settings, runner_token_expiration_interval: 4.days.to_i) }
+      let_it_be(:group_with_settings) { create(:group, namespace_settings: group_settings) }
+
+      subject { group_with_settings }
+
+      it_behaves_like 'enforced expiration interval', enforced_interval: 5.days
+      it_behaves_like 'effective expiration interval', effective_interval: 4.days
+    end
+
+    context 'when site-wide enforced interval overrides parent group enforced interval' do
+      before do
+        stub_application_setting(group_runner_token_expiration_interval: 3.days.to_i)
+      end
+
+      let_it_be(:parent_group_settings) { create(:namespace_settings, subgroup_runner_token_expiration_interval: 4.days.to_i) }
+      let_it_be(:parent_group) { create(:group, namespace_settings: parent_group_settings) }
+      let_it_be(:subgroup) { create(:group, parent: parent_group) }
+
+      subject { subgroup }
+
+      it_behaves_like 'enforced expiration interval', enforced_interval: 3.days
+      it_behaves_like 'effective expiration interval', effective_interval: 3.days
+    end
+
+    context 'when parent group enforced interval overrides site-wide enforced interval' do
+      before do
+        stub_application_setting(group_runner_token_expiration_interval: 5.days.to_i)
+      end
+
+      let_it_be(:parent_group_settings) { create(:namespace_settings, subgroup_runner_token_expiration_interval: 4.days.to_i) }
+      let_it_be(:parent_group) { create(:group, namespace_settings: parent_group_settings) }
+      let_it_be(:subgroup) { create(:group, parent: parent_group) }
+
+      subject { subgroup }
+
+      it_behaves_like 'enforced expiration interval', enforced_interval: 4.days
+      it_behaves_like 'effective expiration interval', effective_interval: 4.days
+    end
+
+    # Unrelated groups should not affect the expiration interval.
+    context 'when there is an enforced group interval in an unrelated group' do
+      let_it_be(:unrelated_group_settings) { create(:namespace_settings, subgroup_runner_token_expiration_interval: 4.days.to_i) }
+      let_it_be(:unrelated_group) { create(:group, namespace_settings: unrelated_group_settings) }
+      let_it_be(:group) { create(:group) }
+
+      subject { group }
+
+      it_behaves_like 'no enforced expiration interval'
+      it_behaves_like 'no effective expiration interval'
+    end
+
+    # Subgroups should not affect the parent group expiration interval.
+    context 'when there is an enforced group interval in a subgroup' do
+      let_it_be(:subgroup_settings) { create(:namespace_settings, subgroup_runner_token_expiration_interval: 4.days.to_i) }
+      let_it_be(:subgroup) { create(:group, parent: group, namespace_settings: subgroup_settings) }
+      let_it_be(:group) { create(:group) }
+
+      subject { group }
+
+      it_behaves_like 'no enforced expiration interval'
+      it_behaves_like 'no effective expiration interval'
     end
   end
 end

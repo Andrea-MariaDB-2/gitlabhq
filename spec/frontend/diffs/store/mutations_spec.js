@@ -31,13 +31,13 @@ describe('DiffsStoreMutations', () => {
     });
   });
 
-  describe('SET_BATCH_LOADING', () => {
+  describe('SET_BATCH_LOADING_STATE', () => {
     it('should set loading state', () => {
       const state = {};
 
-      mutations[types.SET_BATCH_LOADING](state, false);
+      mutations[types.SET_BATCH_LOADING_STATE](state, false);
 
-      expect(state.isBatchLoading).toEqual(false);
+      expect(state.batchLoadingState).toEqual(false);
     });
   });
 
@@ -112,6 +112,7 @@ describe('DiffsStoreMutations', () => {
       mutations[types.SET_COVERAGE_DATA](state, coverage);
 
       expect(state.coverageFiles).toEqual(coverage);
+      expect(state.coverageLoaded).toEqual(true);
     });
   });
 
@@ -633,13 +634,33 @@ describe('DiffsStoreMutations', () => {
     });
   });
 
-  describe('VIEW_DIFF_FILE', () => {
+  describe('SET_CURRENT_DIFF_FILE', () => {
     it('updates currentDiffFileId', () => {
       const state = createState();
 
-      mutations[types.VIEW_DIFF_FILE](state, 'somefileid');
+      mutations[types.SET_CURRENT_DIFF_FILE](state, 'somefileid');
 
       expect(state.currentDiffFileId).toBe('somefileid');
+    });
+  });
+
+  describe('SET_DIFF_FILE_VIEWED', () => {
+    let state;
+
+    beforeEach(() => {
+      state = {
+        viewedDiffFileIds: { 123: true },
+      };
+    });
+
+    it.each`
+      id       | bool     | outcome
+      ${'abc'} | ${true}  | ${{ 123: true, abc: true }}
+      ${'123'} | ${false} | ${{ 123: false }}
+    `('sets the viewed files list to $bool for the id $id', ({ id, bool, outcome }) => {
+      mutations[types.SET_DIFF_FILE_VIEWED](state, { id, seen: bool });
+
+      expect(state.viewedDiffFileIds).toEqual(outcome);
     });
   });
 

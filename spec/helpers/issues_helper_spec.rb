@@ -9,7 +9,7 @@ RSpec.describe IssuesHelper do
 
   describe '#work_item_type_icon' do
     it 'returns icon of all standard base types' do
-      WorkItem::Type.base_types.each do |type|
+      WorkItems::Type.base_types.each do |type|
         expect(work_item_type_icon(type[0])).to eq "issue-type-#{type[0].to_s.dasherize}"
       end
     end
@@ -246,27 +246,6 @@ RSpec.describe IssuesHelper do
     end
   end
 
-  describe '#use_startup_call' do
-    it 'returns false when a query param is present' do
-      allow(controller.request).to receive(:query_parameters).and_return({ foo: 'bar' })
-
-      expect(helper.use_startup_call?).to eq(false)
-    end
-
-    it 'returns false when user has stored sort preference' do
-      controller.instance_variable_set(:@sort, 'updated_asc')
-
-      expect(helper.use_startup_call?).to eq(false)
-    end
-
-    it 'returns true when request.query_parameters is empty with default sorting preference' do
-      controller.instance_variable_set(:@sort, 'created_date')
-      allow(controller.request).to receive(:query_parameters).and_return({})
-
-      expect(helper.use_startup_call?).to eq(true)
-    end
-  end
-
   describe '#issue_header_actions_data' do
     let(:current_user) { create(:user) }
 
@@ -278,13 +257,15 @@ RSpec.describe IssuesHelper do
     it 'returns expected result' do
       expected = {
         can_create_issue: 'true',
+        can_destroy_issue: 'true',
         can_reopen_issue: 'true',
         can_report_spam: 'false',
         can_update_issue: 'true',
         iid: issue.iid,
         is_issue_author: 'false',
+        issue_path: issue_path(issue),
         issue_type: 'issue',
-        new_issue_path: new_project_issue_path(project, { issue: { description: "Related to \##{issue.iid}.\n\n" } }),
+        new_issue_path: new_project_issue_path(project, { add_related_issue: issue.iid }),
         project_path: project.full_path,
         report_abuse_path: new_abuse_report_path(user_id: issue.author.id, ref_url: issue_url(issue)),
         submit_as_spam_path: mark_as_spam_project_issue_path(project, issue)
@@ -296,12 +277,11 @@ RSpec.describe IssuesHelper do
 
   shared_examples 'issues list data' do
     it 'returns expected result' do
-      finder = double.as_null_object
       allow(helper).to receive(:current_user).and_return(current_user)
-      allow(helper).to receive(:finder).and_return(finder)
       allow(helper).to receive(:can?).and_return(true)
       allow(helper).to receive(:image_path).and_return('#')
       allow(helper).to receive(:import_csv_namespace_project_issues_path).and_return('#')
+      allow(helper).to receive(:issue_repositioning_disabled?).and_return(true)
       allow(helper).to receive(:url_for).and_return('#')
 
       expected = {
@@ -310,7 +290,7 @@ RSpec.describe IssuesHelper do
         can_bulk_update: 'true',
         can_edit: 'true',
         can_import_issues: 'true',
-        email: current_user&.notification_email,
+        email: current_user&.notification_email_or_default,
         emails_help_page_path: help_page_path('development/emails', anchor: 'email-namespace'),
         empty_state_svg_path: '#',
         export_csv_path: export_csv_project_issues_path(project),
@@ -318,25 +298,33 @@ RSpec.describe IssuesHelper do
         has_any_issues: project_issues(project).exists?.to_s,
         import_csv_issues_path: '#',
         initial_email: project.new_issuable_address(current_user, 'issue'),
+        initial_sort: current_user&.user_preference&.issues_sort,
+        is_anonymous_search_disabled: 'true',
+        is_issue_repositioning_disabled: 'true',
+        is_project: 'true',
         is_signed_in: current_user.present?.to_s,
-        issues_path: project_issues_path(project),
         jira_integration_path: help_page_url('integration/jira/issues', anchor: 'view-jira-issues'),
         markdown_help_path: help_page_path('user/markdown'),
         max_attachment_size: number_to_human_size(Gitlab::CurrentSettings.max_attachment_size.megabytes),
-        new_issue_path: new_project_issue_path(project, issue: { milestone_id: finder.milestones.first.id }),
+        new_issue_path: new_project_issue_path(project),
         project_import_jira_path: project_import_jira_path(project),
         quick_actions_help_path: help_page_path('user/project/quick_actions'),
+        releases_path: project_releases_path(project, format: :json),
         reset_path: new_issuable_address_project_path(project, issuable_type: 'issue'),
         rss_path: '#',
         show_new_issue_link: 'true',
         sign_in_path: new_user_session_path
       }
 
-      expect(helper.issues_list_data(project, current_user, finder)).to include(expected)
+      expect(helper.project_issues_list_data(project, current_user)).to include(expected)
     end
   end
 
-  describe '#issues_list_data' do
+  describe '#project_issues_list_data' do
+    before do
+      stub_feature_flags(disable_anonymous_search: true)
+    end
+
     context 'when user is signed in' do
       it_behaves_like 'issues list data' do
         let(:current_user) { double.as_null_object }
@@ -347,6 +335,36 @@ RSpec.describe IssuesHelper do
       it_behaves_like 'issues list data' do
         let(:current_user) { nil }
       end
+    end
+  end
+
+  describe '#group_issues_list_data' do
+    let(:group) { create(:group) }
+    let(:current_user) { double.as_null_object }
+
+    it 'returns expected result' do
+      allow(helper).to receive(:current_user).and_return(current_user)
+      allow(helper).to receive(:can?).and_return(true)
+      allow(helper).to receive(:image_path).and_return('#')
+      allow(helper).to receive(:url_for).and_return('#')
+
+      assign(:has_issues, false)
+      assign(:has_projects, true)
+
+      expected = {
+        autocomplete_award_emojis_path: autocomplete_award_emojis_path,
+        calendar_path: '#',
+        empty_state_svg_path: '#',
+        full_path: group.full_path,
+        has_any_issues: false.to_s,
+        has_any_projects: true.to_s,
+        is_signed_in: current_user.present?.to_s,
+        jira_integration_path: help_page_url('integration/jira/issues', anchor: 'view-jira-issues'),
+        rss_path: '#',
+        sign_in_path: new_user_session_path
+      }
+
+      expect(helper.group_issues_list_data(group, current_user)).to include(expected)
     end
   end
 

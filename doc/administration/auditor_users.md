@@ -1,6 +1,6 @@
 ---
-stage: Enablement
-group: Distribution
+stage: Manage
+group: Authentication and Authorization
 info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
 ---
 
@@ -64,7 +64,7 @@ To create an Auditor user:
 1. Select **Create user** or **Save changes** if you created a new user or
    edited an existing one respectively.
 
-To revoke Auditor permissions from a user, make them a regular user by
+To revoke Auditor permissions from a user, make them a Regular user by
 following the previous steps.
 
 Additionally users can be set as an Auditor using [SAML groups](../integration/saml.md#auditor-groups).

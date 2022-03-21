@@ -21,6 +21,11 @@ export default {
       default: SIMPLE_BLOB_VIEWER,
       required: false,
     },
+    docIcon: {
+      type: String,
+      default: 'document',
+      required: false,
+    },
   },
   computed: {
     isSimpleViewer() {
@@ -53,6 +58,8 @@ export default {
       icon="code"
       category="primary"
       variant="default"
+      class="js-blob-viewer-switch-btn"
+      data-viewer="simple"
       @click="switchToViewer($options.SIMPLE_BLOB_VIEWER)"
     />
     <gl-button
@@ -60,9 +67,11 @@ export default {
       :aria-label="$options.RICH_BLOB_VIEWER_TITLE"
       :title="$options.RICH_BLOB_VIEWER_TITLE"
       :selected="isRichViewer"
-      icon="document"
+      :icon="docIcon"
       category="primary"
       variant="default"
+      class="js-blob-viewer-switch-btn"
+      data-viewer="rich"
       @click="switchToViewer($options.RICH_BLOB_VIEWER)"
     />
   </gl-button-group>

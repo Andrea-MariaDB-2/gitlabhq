@@ -17,9 +17,8 @@
 # 3: high priority
 # 5: _super_ high priority, this should only be used for _very_ important queues
 #
-# As per http://stackoverflow.com/a/21241357/290102 the formula for calculating
-# the likelihood of a job being popped off a queue (given all queues have work
-# to perform) is:
+# The formula for calculating the likelihood of a job being popped off a queue
+# (given all queues have work to perform) is:
 #
 #     chance = (queue weight / total weight of all queues) * 100
 ---
@@ -34,9 +33,19 @@
   - 1
 - - analytics_usage_trends_counter_job
   - 1
+- - app_sec_dast_scanner_profiles_builds_consistency
+  - 1
+- - app_sec_dast_scans_consistency
+  - 1
+- - app_sec_dast_site_profiles_builds_consistency
+  - 1
 - - approval_rules_external_approval_rule_payload
   - 1
 - - approve_blocked_pending_approval_users
+  - 1
+- - audit_events_audit_event_streaming
+  - 1
+- - audit_events_user_impersonation_event_create
   - 1
 - - authorized_keys
   - 2
@@ -49,6 +58,8 @@
 - - auto_merge
   - 3
 - - background_migration
+  - 1
+- - background_migration_ci_database
   - 1
 - - bulk_import
   - 1
@@ -67,6 +78,14 @@
 - - ci_batch_reset_minutes
   - 1
 - - ci_delete_objects
+  - 1
+- - ci_job_artifacts_expire_project_build_artifacts
+  - 1
+- - ci_upstream_projects_subscriptions_cleanup
+  - 1
+- - cluster_agent
+  - 1
+- - compliance_management_merge_requests_compliance_violations
   - 1
 - - container_repository
   - 1
@@ -91,6 +110,10 @@
 - - delete_user
   - 1
 - - dependency_proxy
+  - 1
+- - dependency_proxy_blob
+  - 1
+- - dependency_proxy_manifest
   - 1
 - - deployment
   - 3
@@ -160,6 +183,8 @@
   - 1
 - - gitlab_shell
   - 2
+- - gitlab_subscriptions_notify_seats_exceeded
+  - 1
 - - group_destroy
   - 1
 - - group_export
@@ -169,6 +194,8 @@
 - - group_saml_group_sync
   - 1
 - - group_wikis_git_garbage_collect
+  - 1
+- - groups_create_event
   - 1
 - - groups_export_memberships
   - 1
@@ -192,6 +219,12 @@
   - 1
 - - incident_management_pending_escalations_alert_create
   - 1
+- - incident_management_pending_escalations_issue_check
+  - 1
+- - incident_management_pending_escalations_issue_create
+  - 1
+- - integrations_create_external_cross_reference
+  - 1
 - - invalid_gpg_signature_update
   - 2
 - - irker
@@ -205,6 +238,10 @@
 - - issue_placement
   - 2
 - - issue_rebalancing
+  - 1
+- - issues_placement
+  - 2
+- - issues_rebalancing
   - 1
 - - iterations
   - 1
@@ -234,6 +271,8 @@
   - 1
 - - merge_requests_sync_code_owner_approval_rules
   - 1
+- - merge_requests_update_head_pipeline
+  - 1
 - - metrics_dashboard_prune_old_annotations
   - 1
 - - metrics_dashboard_sync_dashboards
@@ -242,6 +281,8 @@
   - 1
 - - namespaceless_project_destroy
   - 1
+- - namespaces_invite_team_email
+  - 1
 - - namespaces_onboarding_issue_created
   - 1
 - - namespaces_onboarding_pipeline_created
@@ -249,6 +290,12 @@
 - - namespaces_onboarding_progress
   - 1
 - - namespaces_onboarding_user_added
+  - 1
+- - namespaces_process_sync_events
+  - 1
+- - namespaces_sync_namespace_name
+  - 1
+- - namespaces_update_root_statistics
   - 1
 - - new_epic
   - 2
@@ -262,6 +309,8 @@
   - 1
 - - object_storage
   - 1
+- - package_cleanup
+  - 1
 - - package_repositories
   - 1
 - - packages_composer_cache_update
@@ -272,11 +321,7 @@
   - 1
 - - pages_domain_verification
   - 1
-- - pages_remove
-  - 1
 - - pages_transfer
-  - 1
-- - pages_update_configuration
   - 1
 - - personal_access_tokens
   - 1
@@ -316,6 +361,10 @@
   - 1
 - - projects_post_creation
   - 1
+- - projects_process_sync_events
+  - 1
+- - projects_refresh_build_artifacts_size_statistics
+  - 1
 - - projects_schedule_bulk_repository_shard_moves
   - 1
 - - projects_update_repository_storage
@@ -331,8 +380,6 @@
 - - propagate_integration_inherit_descendant
   - 1
 - - propagate_integration_project
-  - 1
-- - propagate_service_template
   - 1
 - - reactive_caching
   - 1
@@ -366,6 +413,8 @@
   - 1
 - - security_auto_fix
   - 1
+- - security_findings_delete_by_job_id
+  - 1
 - - security_scans
   - 2
 - - self_monitoring_project_create
@@ -385,6 +434,8 @@
 - - sync_seat_link_request
   - 1
 - - system_hook_push
+  - 1
+- - tasks_to_be_done_create
   - 1
 - - todos_destroyer
   - 1

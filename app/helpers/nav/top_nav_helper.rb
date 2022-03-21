@@ -98,7 +98,7 @@ module Nav
         builder.add_primary_menu_item_with_shortcut(
           active: nav == 'project' || active_nav_link?(path: %w[root#index projects#trending projects#starred dashboard/projects#index]),
           css_class: 'qa-projects-dropdown',
-          data: { track_label: "projects_dropdown", track_event: "click_dropdown" },
+          data: { track_label: "projects_dropdown", track_action: "click_dropdown" },
           view: PROJECTS_VIEW,
           shortcut_href: dashboard_projects_path,
           **projects_menu_item_attrs
@@ -112,7 +112,7 @@ module Nav
         builder.add_primary_menu_item_with_shortcut(
           active: nav == 'group' || active_nav_link?(path: %w[dashboard/groups explore/groups]),
           css_class: 'qa-groups-dropdown',
-          data: { track_label: "groups_dropdown", track_event: "click_dropdown" },
+          data: { track_label: "groups_dropdown", track_action: "click_dropdown" },
           view: GROUPS_VIEW,
           shortcut_href: dashboard_groups_path,
           **groups_menu_item_attrs
@@ -123,7 +123,7 @@ module Nav
       if dashboard_nav_link?(:milestones)
         builder.add_primary_menu_item_with_shortcut(
           id: 'milestones',
-          title: 'Milestones',
+          title: _('Milestones'),
           href: dashboard_milestones_path,
           active: active_nav_link?(controller: 'dashboard/milestones'),
           icon: 'clock',
@@ -144,7 +144,7 @@ module Nav
       if dashboard_nav_link?(:activity)
         builder.add_primary_menu_item_with_shortcut(
           id: 'activity',
-          title: 'Activity',
+          title: _('Activity'),
           href: activity_dashboard_path,
           active: active_nav_link?(path: 'dashboard#activity'),
           icon: 'history',
@@ -189,15 +189,6 @@ module Nav
         end
       end
       # rubocop: enable Cop/UserAdmin
-
-      if Gitlab::Sherlock.enabled?
-        builder.add_secondary_menu_item(
-          id: 'sherlock',
-          title: _('Sherlock Transactions'),
-          icon: 'admin',
-          href: sherlock_transactions_path
-        )
-      end
     end
 
     def projects_menu_item_attrs
@@ -212,7 +203,7 @@ module Nav
     def groups_menu_item_attrs
       {
         id: 'groups',
-        title: 'Groups',
+        title: _('Groups'),
         icon: 'group',
         shortcut_class: 'dashboard-shortcuts-groups'
       }
@@ -262,13 +253,18 @@ module Nav
     end
 
     def projects_submenu
-      # These project links come from `app/views/layouts/nav/projects_dropdown/_show.html.haml`
       builder = ::Gitlab::Nav::TopNavMenuBuilder.new
+      projects_submenu_items(builder: builder)
+      builder.build
+    end
+
+    def projects_submenu_items(builder:)
+      # These project links come from `app/views/layouts/nav/projects_dropdown/_show.html.haml`
       builder.add_primary_menu_item(id: 'your', title: _('Your projects'), href: dashboard_projects_path)
       builder.add_primary_menu_item(id: 'starred', title: _('Starred projects'), href: starred_dashboard_projects_path)
       builder.add_primary_menu_item(id: 'explore', title: _('Explore projects'), href: explore_root_path)
+      builder.add_primary_menu_item(id: 'topics', title: _('Explore topics'), href: topics_explore_projects_path)
       builder.add_secondary_menu_item(id: 'create', title: _('Create new project'), href: new_project_path)
-      builder.build
     end
 
     def groups_submenu

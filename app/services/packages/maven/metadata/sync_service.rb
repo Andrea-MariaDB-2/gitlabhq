@@ -93,10 +93,11 @@ module Packages
         def metadata_package_file_for(package)
           return unless package
 
-          package.package_files
-                 .with_file_name(Metadata.filename)
-                 .recent
-                 .first
+          package_files = package.installable_package_files
+
+          package_files.with_file_name(Metadata.filename)
+                       .recent
+                       .first
         end
 
         def versionless_package_named(name)

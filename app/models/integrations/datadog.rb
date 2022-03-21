@@ -2,19 +2,22 @@
 
 module Integrations
   class Datadog < Integration
-    include ActionView::Helpers::UrlHelper
     include HasWebHook
     extend Gitlab::Utils::Override
 
     DEFAULT_DOMAIN = 'datadoghq.com'
-    URL_TEMPLATE = 'https://webhooks-http-intake.logs.%{datadog_domain}/api/v2/webhook'
+    URL_TEMPLATE = 'https://webhook-intake.%{datadog_domain}/api/v2/webhook'
     URL_API_KEYS_DOCS = "https://docs.#{DEFAULT_DOMAIN}/account_management/api-app-keys/"
 
     SUPPORTED_EVENTS = %w[
       pipeline job
     ].freeze
 
-    prop_accessor :datadog_site, :api_url, :api_key, :datadog_service, :datadog_env
+    TAG_KEY_VALUE_RE = %r{\A [\w-]+ : .*\S.* \z}x.freeze
+
+    prop_accessor :datadog_site, :api_url, :api_key, :datadog_service, :datadog_env, :datadog_tags
+
+    before_validation :strip_properties
 
     with_options if: :activated? do
       validates :api_key, presence: true, format: { with: /\A\w+\z/ }
@@ -22,6 +25,7 @@ module Integrations
       validates :api_url, public_url: { allow_blank: true }
       validates :datadog_site, presence: true, unless: -> (obj) { obj.api_url.present? }
       validates :api_url, presence: true, unless: -> (obj) { obj.datadog_site.present? }
+      validate :datadog_tags_are_valid
     end
 
     def initialize_properties
@@ -34,12 +38,21 @@ module Integrations
       SUPPORTED_EVENTS
     end
 
+    def supported_events
+      events = super
+
+      return events + ['archive_trace'] if Feature.enabled?(:datadog_integration_logs_collection, parent)
+
+      events
+    end
+
     def self.default_test_event
       'pipeline'
     end
 
     def configurable_events
       [] # do not allow to opt out of required hooks
+      # archive_trace is opt-in but we handle it with a more detailed field below
     end
 
     def title
@@ -51,7 +64,11 @@ module Integrations
     end
 
     def help
-      docs_link = link_to s_('DatadogIntegration|How do I set up this integration?'), Rails.application.routes.url_helpers.help_page_url('integration/datadog'), target: '_blank', rel: 'noopener noreferrer'
+      docs_link = ActionController::Base.helpers.link_to(
+        s_('DatadogIntegration|How do I set up this integration?'),
+        Rails.application.routes.url_helpers.help_page_url('integration/datadog'),
+        target: '_blank', rel: 'noopener noreferrer'
+      )
       s_('DatadogIntegration|Send CI/CD pipeline information to Datadog to monitor for job failures and troubleshoot performance issues. %{docs_link}').html_safe % { docs_link: docs_link.html_safe }
     end
 
@@ -60,7 +77,7 @@ module Integrations
     end
 
     def fields
-      [
+      f = [
         {
           type: 'text',
           name: 'datadog_site',
@@ -93,7 +110,21 @@ module Integrations
             linkClose: '</a>'.html_safe
           },
           required: true
-        },
+        }
+      ]
+
+      if Feature.enabled?(:datadog_integration_logs_collection, parent)
+        f.append({
+          type: 'checkbox',
+          name: 'archive_trace_events',
+          title: s_('Logs'),
+          checkbox_label: s_('Enable logs collection'),
+          help: s_('When enabled, job logs are collected by Datadog and displayed along with pipeline execution traces.'),
+          required: false
+        })
+      end
+
+      f += [
         {
           type: 'text',
           name: 'datadog_service',
@@ -114,8 +145,24 @@ module Integrations
             linkOpen: '<a href="https://docs.datadoghq.com/getting_started/tagging/#using-tags" target="_blank" rel="noopener noreferrer">'.html_safe,
             linkClose: '</a>'.html_safe
           }
+        },
+        {
+          type: 'textarea',
+          name: 'datadog_tags',
+          title: s_('DatadogIntegration|Tags'),
+          placeholder: "tag:value\nanother_tag:value",
+          help: ERB::Util.html_escape(
+            s_('DatadogIntegration|Custom tags in Datadog. Enter one tag per line in the %{codeOpen}key:value%{codeClose} format. %{linkOpen}How do I use tags?%{linkClose}')
+          ) % {
+            codeOpen: '<code>'.html_safe,
+            codeClose: '</code>'.html_safe,
+            linkOpen: '<a href="https://docs.datadoghq.com/getting_started/tagging/#using-tags" target="_blank" rel="noopener noreferrer">'.html_safe,
+            linkClose: '</a>'.html_safe
+          }
         }
       ]
+
+      f
     end
 
     override :hook_url
@@ -125,7 +172,8 @@ module Integrations
       query = {
         "dd-api-key" => api_key,
         service: datadog_service.presence,
-        env: datadog_env.presence
+        env: datadog_env.presence,
+        tags: datadog_tags_query_param.presence
       }.compact
       url.query = query.to_query
       url.to_s
@@ -136,8 +184,7 @@ module Integrations
       object_kind = 'job' if object_kind == 'build'
       return unless supported_events.include?(object_kind)
 
-      data = data.with_retried_builds if data.respond_to?(:with_retried_builds)
-
+      data = hook_data(data, object_kind)
       execute_web_hook!(data, "#{object_kind} hook")
     end
 
@@ -157,6 +204,44 @@ module Integrations
       # https://docs.datadoghq.com/getting_started/site/ is confusing for internal URLs.
       # US3 needs to keep a prefix but other datacenters cannot have the listed "app" prefix
       datadog_site.delete_prefix("app.")
+    end
+
+    def hook_data(data, object_kind)
+      if object_kind == 'pipeline' && data.respond_to?(:with_retried_builds)
+        return data.with_retried_builds
+      end
+
+      data
+    end
+
+    def strip_properties
+      datadog_service.strip! if datadog_service && !datadog_service.frozen?
+      datadog_env.strip! if datadog_env && !datadog_env.frozen?
+      datadog_tags.strip! if datadog_tags && !datadog_tags.frozen?
+    end
+
+    def datadog_tags_are_valid
+      return unless datadog_tags
+
+      unless datadog_tags.split("\n").select(&:present?).all? { _1 =~ TAG_KEY_VALUE_RE }
+        errors.add(:datadog_tags, s_("DatadogIntegration|have an invalid format"))
+      end
+    end
+
+    def datadog_tags_query_param
+      return unless datadog_tags
+
+      datadog_tags.split("\n").filter_map do |tag|
+        tag.strip!
+
+        next if tag.blank?
+
+        if tag.include?(',')
+          "\"#{tag}\""
+        else
+          tag
+        end
+      end.join(',')
     end
   end
 end

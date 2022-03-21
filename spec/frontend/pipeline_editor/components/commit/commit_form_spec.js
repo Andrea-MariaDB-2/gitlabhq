@@ -1,9 +1,13 @@
+import { nextTick } from 'vue';
 import { GlFormInput, GlFormTextarea } from '@gitlab/ui';
 import { shallowMount, mount } from '@vue/test-utils';
 
 import CommitForm from '~/pipeline_editor/components/commit/commit_form.vue';
 
 import { mockCommitMessage, mockDefaultBranch } from '../../mock_data';
+
+const scrollIntoViewMock = jest.fn();
+HTMLElement.prototype.scrollIntoView = scrollIntoViewMock;
 
 describe('Pipeline Editor | Commit Form', () => {
   let wrapper;
@@ -13,6 +17,8 @@ describe('Pipeline Editor | Commit Form', () => {
       propsData: {
         defaultMessage: mockCommitMessage,
         currentBranch: mockDefaultBranch,
+        hasUnsavedChanges: true,
+        isNewCiConfigFile: false,
         ...props,
       },
 
@@ -29,7 +35,6 @@ describe('Pipeline Editor | Commit Form', () => {
 
   afterEach(() => {
     wrapper.destroy();
-    wrapper = null;
   });
 
   describe('when the form is displayed', () => {
@@ -75,8 +80,29 @@ describe('Pipeline Editor | Commit Form', () => {
     it('emits an event when the form resets', () => {
       findCancelBtn().trigger('click');
 
-      expect(wrapper.emitted('cancel')).toHaveLength(1);
+      expect(wrapper.emitted('resetContent')).toHaveLength(1);
     });
+  });
+
+  describe('submit button', () => {
+    it.each`
+      hasUnsavedChanges | isNewCiConfigFile | isDisabled | btnState
+      ${false}          | ${false}          | ${true}    | ${'disabled'}
+      ${true}           | ${false}          | ${false}   | ${'enabled'}
+      ${true}           | ${true}           | ${false}   | ${'enabled'}
+      ${false}          | ${true}           | ${false}   | ${'enabled'}
+    `(
+      'is $btnState when hasUnsavedChanges:$hasUnsavedChanges and isNewCiConfigfile:$isNewCiConfigFile',
+      ({ hasUnsavedChanges, isNewCiConfigFile, isDisabled }) => {
+        createComponent({ props: { hasUnsavedChanges, isNewCiConfigFile } });
+
+        if (isDisabled) {
+          expect(findSubmitBtn().attributes('disabled')).toBe('true');
+        } else {
+          expect(findSubmitBtn().attributes('disabled')).toBeUndefined();
+        }
+      },
+    );
   });
 
   describe('when user inputs values', () => {
@@ -111,6 +137,22 @@ describe('Pipeline Editor | Commit Form', () => {
       await findCommitTextarea().setValue('');
 
       expect(findSubmitBtn().attributes('disabled')).toBe('disabled');
+    });
+  });
+
+  describe('when scrollToCommitForm becomes true', () => {
+    beforeEach(async () => {
+      createComponent();
+      wrapper.setProps({ scrollToCommitForm: true });
+      await nextTick();
+    });
+
+    it('scrolls into view', () => {
+      expect(scrollIntoViewMock).toHaveBeenCalledWith({ behavior: 'smooth' });
+    });
+
+    it('emits "scrolled-to-commit-form"', () => {
+      expect(wrapper.emitted()['scrolled-to-commit-form']).toBeTruthy();
     });
   });
 });

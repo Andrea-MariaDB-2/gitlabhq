@@ -1,6 +1,6 @@
 ---
 stage: Monitor
-group: Monitor
+group: Respond
 info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
 ---
 
@@ -51,7 +51,7 @@ To set up the Grafana API in Grafana:
    section.
 1. To enable the integration, check the **Active** checkbox.
 1. For **Grafana URL**, enter the base URL of the Grafana instance.
-1. For **API Token**, enter the Admin API token you just generated.
+1. For **API Token**, enter the Administrator API token you just generated.
 1. Click **Save Changes**.
 
 ### Generate a link to a panel

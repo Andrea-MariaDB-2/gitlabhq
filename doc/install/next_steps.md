@@ -20,9 +20,11 @@ installation.
   Runners, the agents that are responsible for all of the GitLab CI/CD features.
 - [GitLab Pages](../administration/pages/index.md): Configure GitLab Pages to
   allow hosting of static sites.
-- [GitLab Registry](../administration/packages/container_registry.md): With the
-  GitLab Container Registry, every project can have its own space to store Docker
+- [GitLab Registry](../administration/packages/container_registry.md): Set up the
+  GitLab Container Registry so every project can have its own space to store Docker
   images.
+- [GitLab Dependency Proxy](../administration/packages/dependency_proxy.md): Set up the dependency
+  proxy so you can cache container images from Docker Hub for faster, more reliable builds.
 
 ## Security
 
@@ -48,11 +50,11 @@ installation.
 
 ## License
 
-- [Upload a license](../user/admin_area/license.md) or [start a free trial](https://about.gitlab.com/free-trial/):
+- [Add a license](../user/admin_area/license.md) or [start a free trial](https://about.gitlab.com/free-trial/):
   Activate all GitLab Enterprise Edition functionality with a license.
 - [Pricing](https://about.gitlab.com/pricing/): Pricing for the different tiers.
 
-## Cross-repo Code Search
+## Cross-repository Code Search
 
 - [Advanced Search](../integration/elasticsearch.md): Leverage Elasticsearch for
   faster, more advanced code search across your entire GitLab instance.

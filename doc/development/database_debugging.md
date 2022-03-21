@@ -70,6 +70,36 @@ bundle exec rails db -e development
 - `SELECT * FROM schema_migrations WHERE version = '20170926203418';`: Check if a migration was run
 - `DELETE FROM schema_migrations WHERE version = '20170926203418';`: Manually remove a migration
 
+## Access the database with a GUI
+
+Most GUIs (DataGrid, RubyMine, DBeaver) require a TCP connection to the database, but by default
+the database runs on a UNIX socket. To be able to access the database from these tools, some steps
+are needed:
+
+1. On the GDK root directory, run:
+
+   ```shell
+   gdk config set postgresql.host localhost
+   ```
+
+1. Open your `gdk.yml`, and confirm that it has the following lines:
+
+   ```yaml
+   postgresql:
+      host: localhost
+   ```
+
+1. Reconfigure GDK:
+
+   ```shell
+   gdk reconfigure
+   ```
+
+1. On your database GUI, select `localhost` as host, `5432` as port and `gitlabhq_development` as database.
+   Alternatively, you can use the connection string `postgresql://localhost:5432/gitlabhq_development`.
+
+The new connection should be working now.
+
 ## Access the GDK database with Visual Studio Code
 
 Use these instructions for exploring the GitLab database while developing with the GDK:
@@ -85,7 +115,7 @@ Use these instructions for exploring the GitLab database while developing with t
    1. **Use an SSL connection?** This depends on your installation. Options are:
       - **Use Secure Connection**
       - **Standard Connection** (default)
-   1. **(Optional) The database to connect to**: `gitlabhq_development`.
+   1. **Optional. The database to connect to**: `gitlabhq_development`.
    1. **The display name for the database connection**: `gitlabhq_development`.
 
 Your database connection should now be displayed in the PostgreSQL Explorer pane and

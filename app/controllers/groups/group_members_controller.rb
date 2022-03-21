@@ -16,7 +16,7 @@ class Groups::GroupMembersController < Groups::ApplicationController
   before_action :authorize_admin_group_member!, except: admin_not_required_endpoints
 
   skip_before_action :check_two_factor_requirement, only: :leave
-  skip_cross_project_access_check :index, :create, :update, :destroy, :request_access,
+  skip_cross_project_access_check :index, :update, :destroy, :request_access,
                                   :approve_access_request, :leave, :resend_invite,
                                   :override
 
@@ -25,31 +25,37 @@ class Groups::GroupMembersController < Groups::ApplicationController
   def index
     @sort = params[:sort].presence || sort_value_name
 
-    @members = GroupMembersFinder
-      .new(@group, current_user, params: filter_params)
-      .execute(include_relations: requested_relations)
-
     if can?(current_user, :admin_group_member, @group)
-      @skip_groups = @group.related_group_ids
-
-      @invited_members = @members.invite
+      @invited_members = invited_members
       @invited_members = @invited_members.search_invite_email(params[:search_invited]) if params[:search_invited].present?
       @invited_members = present_invited_members(@invited_members)
     end
 
-    @members = present_group_members(@members.non_invite)
+    @members = present_group_members(non_invited_members)
 
     @requesters = present_members(
       AccessRequestsFinder.new(@group).execute(current_user)
     )
-
-    @group_member = @group.group_members.new
   end
 
   # MembershipActions concern
   alias_method :membershipable, :group
 
   private
+
+  def group_members
+    @group_members ||= GroupMembersFinder
+      .new(@group, current_user, params: filter_params)
+      .execute(include_relations: requested_relations)
+  end
+
+  def invited_members
+    group_members.invite.with_invited_user_state
+  end
+
+  def non_invited_members
+    group_members.non_invite
+  end
 
   def present_invited_members(invited_members)
     present_members(invited_members

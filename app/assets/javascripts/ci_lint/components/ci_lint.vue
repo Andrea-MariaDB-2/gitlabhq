@@ -1,7 +1,7 @@
 <script>
 import { GlButton, GlFormCheckbox, GlIcon, GlLink, GlAlert } from '@gitlab/ui';
 import CiLintResults from '~/pipeline_editor/components/lint/ci_lint_results.vue';
-import lintCiMutation from '~/pipeline_editor/graphql/mutations/lint_ci.mutation.graphql';
+import lintCiMutation from '~/pipeline_editor/graphql/mutations/client/lint_ci.mutation.graphql';
 import SourceEditor from '~/vue_shared/components/source_editor.vue';
 
 export default {
@@ -103,7 +103,7 @@ export default {
           class="gl-mr-4"
           :loading="loading"
           category="primary"
-          variant="success"
+          variant="confirm"
           data-testid="ci-lint-validate"
           @click="lint"
           >{{ __('Validate') }}</gl-button

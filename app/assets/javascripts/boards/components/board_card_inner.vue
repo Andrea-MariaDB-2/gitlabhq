@@ -11,12 +11,10 @@ import { sortBy } from 'lodash';
 import { mapActions, mapGetters, mapState } from 'vuex';
 import boardCardInner from 'ee_else_ce/boards/mixins/board_card_inner';
 import { isScopedLabel } from '~/lib/utils/common_utils';
-import { updateHistory } from '~/lib/utils/url_utility';
 import { sprintf, __, n__ } from '~/locale';
-import TooltipOnTruncate from '~/vue_shared/components/tooltip_on_truncate.vue';
+import TooltipOnTruncate from '~/vue_shared/components/tooltip_on_truncate/tooltip_on_truncate.vue';
 import UserAvatarLink from '../../vue_shared/components/user_avatar/user_avatar_link.vue';
 import { ListType } from '../constants';
-import eventHub from '../eventhub';
 import BoardBlockedIcon from './board_blocked_icon.vue';
 import IssueDueDate from './issue_due_date.vue';
 import IssueTimeEstimate from './issue_time_estimate.vue';
@@ -176,18 +174,10 @@ export default {
         )
       );
     },
-    filterByLabel(label) {
-      if (!this.updateFilters) return;
+    labelTarget(label) {
       const filterPath = window.location.search ? `${window.location.search}&` : '?';
-      const filter = `label_name[]=${encodeURIComponent(label.title)}`;
-
-      if (!filterPath.includes(filter)) {
-        updateHistory({
-          url: `${filterPath}${filter}`,
-        });
-        this.performSearch();
-        eventHub.$emit('updateTokens');
-      }
+      const value = encodeURIComponent(label.title);
+      return `${filterPath}label_name[]=${value}`;
     },
     showScopedLabel(label) {
       return this.scopedLabelsAvailable && isScopedLabel(label);
@@ -214,10 +204,19 @@ export default {
           class="confidential-icon gl-mr-2"
           :aria-label="__('Confidential')"
         />
+        <gl-icon
+          v-if="item.hidden"
+          v-gl-tooltip
+          name="spam"
+          :title="__('This issue is hidden because its author has been banned')"
+          class="gl-mr-2 hidden-icon"
+          data-testid="hidden-icon"
+        />
         <a
           :href="item.path || item.webUrl || ''"
           :title="item.title"
           :class="{ 'gl-text-gray-400!': item.isLoading }"
+          class="js-no-trigger"
           @mousemove.stop
           >{{ item.title }}</a
         >
@@ -233,7 +232,7 @@ export default {
           :description="label.description"
           size="sm"
           :scoped="showScopedLabel(label)"
-          @click="filterByLabel(label)"
+          :target="labelTarget(label)"
         />
       </template>
     </div>
@@ -307,7 +306,7 @@ export default {
               </p>
             </gl-tooltip>
 
-            <span ref="countBadge" class="issue-count-badge board-card-info gl-mr-0 gl-pr-0">
+            <span ref="countBadge" class="board-card-info gl-mr-0 gl-pr-0 gl-pl-3">
               <span v-if="allowSubEpics" class="gl-mr-3">
                 <gl-icon name="epic" />
                 {{ totalEpicsCount }}
@@ -325,7 +324,7 @@ export default {
             <span
               v-if="shouldRenderEpicProgress"
               ref="progressBadge"
-              class="issue-count-badge board-card-info gl-pl-0"
+              class="board-card-info gl-pl-0"
             >
               <span class="gl-mr-3" data-testid="epic-progress">
                 <gl-icon name="progress" />

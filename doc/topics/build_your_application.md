@@ -1,6 +1,6 @@
 ---
-stage: 
-group: 
+stage: none
+group: unassigned
 info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
 ---
 
@@ -13,4 +13,4 @@ code, and use CI/CD to generate your application. Include packages in your app a
 - [Merge requests](../user/project/merge_requests/index.md)
 - [CI/CD](../ci/index.md)
 - [Packages & Registries](../user/packages/index.md)
-- [Application infrastructure](../user/project/clusters/index.md)
+- [Application infrastructure](../user/infrastructure/index.md)

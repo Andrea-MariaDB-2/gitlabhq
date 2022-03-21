@@ -5,7 +5,7 @@ info: To determine the technical writer assigned to the Stage/Group associated w
 type: reference
 ---
 
-# Git LFS Rate Limits **(FREE SELF)**
+# Rate limits on Git LFS **(FREE SELF)**
 
 [Git LFS (Large File Storage)](../../../topics/git/lfs/index.md) is a Git extension
 for handling large files. If you use Git LFS in your repository, common Git operations
@@ -29,7 +29,7 @@ supersede the [general user and IP rate limits](user_and_ip_rate_limits.md):
 1. Enter a value for **Authenticated Git LFS rate limit period in seconds**.
 1. Select **Save changes**.
 
-## Resources
+## Related topics
 
 - [Rate limiting](../../../security/rate_limits.md)
 - [User and IP rate limits](user_and_ip_rate_limits.md)

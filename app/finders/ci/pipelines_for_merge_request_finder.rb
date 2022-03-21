@@ -5,6 +5,8 @@ module Ci
   class PipelinesForMergeRequestFinder
     include Gitlab::Utils::StrongMemoize
 
+    COMMITS_LIMIT = 100
+
     def initialize(merge_request, current_user)
       @merge_request = merge_request
       @current_user = current_user
@@ -12,7 +14,7 @@ module Ci
 
     attr_reader :merge_request, :current_user
 
-    delegate :commit_shas, :target_project, :source_project, :source_branch, to: :merge_request
+    delegate :recent_diff_head_shas, :commit_shas, :target_project, :source_project, :source_branch, to: :merge_request
 
     # Fetch all pipelines that the user can read.
     def execute
@@ -29,54 +31,27 @@ module Ci
 
     # Fetch all pipelines without permission check.
     def all
-      ::Gitlab::Database.allow_cross_joins_across_databases(url: 'https://gitlab.com/gitlab-org/gitlab/-/issues/336891') do
-        strong_memoize(:all_pipelines) do
-          next Ci::Pipeline.none unless source_project
+      strong_memoize(:all_pipelines) do
+        next Ci::Pipeline.none unless source_project
 
-          pipelines =
-            if merge_request.persisted?
-              pipelines_using_cte
-            else
-              triggered_for_branch.for_sha(commit_shas)
-            end
+        pipelines =
+          if merge_request.persisted?
+            all_pipelines_for_merge_request
+          else
+            triggered_for_branch.for_sha(commit_shas)
+          end
 
-          sort(pipelines)
-        end
+        sort(pipelines)
       end
     end
 
     private
 
-    # rubocop: disable CodeReuse/ActiveRecord
-    def pipelines_using_cte
-      sha_relation = merge_request.all_commits.select(:sha).distinct
+    def all_pipelines_for_merge_request
+      pipelines_for_merge_request = triggered_by_merge_request
+      pipelines_for_branch = triggered_for_branch.for_sha(recent_diff_head_shas(COMMITS_LIMIT))
 
-      cte = Gitlab::SQL::CTE.new(:shas, sha_relation)
-
-      pipelines_for_merge_requests = triggered_by_merge_request
-      pipelines_for_branch = filter_by_sha(triggered_for_branch, cte)
-
-      Ci::Pipeline.with(cte.to_arel) # rubocop: disable CodeReuse/ActiveRecord
-        .from_union([pipelines_for_merge_requests, pipelines_for_branch])
-    end
-    # rubocop: enable CodeReuse/ActiveRecord
-
-    def filter_by_sha(pipelines, cte)
-      hex = Arel::Nodes::SqlLiteral.new("'hex'")
-      string_sha = Arel::Nodes::NamedFunction.new('encode', [cte.table[:sha], hex])
-      join_condition = string_sha.eq(Ci::Pipeline.arel_table[:sha])
-
-      filter_by(pipelines, cte, join_condition)
-    end
-
-    def filter_by(pipelines, cte, join_condition)
-      shas_table =
-        Ci::Pipeline.arel_table
-          .join(cte.table, Arel::Nodes::InnerJoin)
-          .on(join_condition)
-          .join_sources
-
-      pipelines.joins(shas_table) # rubocop: disable CodeReuse/ActiveRecord
+      Ci::Pipeline.from_union([pipelines_for_merge_request, pipelines_for_branch])
     end
 
     # NOTE: this method returns only parent merge request pipelines.

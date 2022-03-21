@@ -4,14 +4,14 @@ group: Integrations
 info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
 ---
 
-# Twitter OAuth 2.0 OmniAuth Provider **(FREE)**
+# Twitter OAuth 2.0 OmniAuth Provider **(FREE SELF)**
 
 To enable the Twitter OmniAuth provider you must register your application with
 Twitter. Twitter generates a client ID and secret key for you to use.
 
-1. Sign in to [Twitter Application Management](https://developer.twitter.com/apps).
+1. Sign in to [Twitter Application Management](https://apps.twitter.com).
 
-1. Select "Create new app"
+1. Select "Create new app".
 
 1. Fill in the application details.
    - Name: This can be anything. Consider something like `<Organization>'s GitLab` or `<Your Name>'s GitLab` or
@@ -53,7 +53,7 @@ Twitter. Twitter generates a client ID and secret key for you to use.
      sudo -u git -H editor config/gitlab.yml
    ```
 
-1. See [Initial OmniAuth Configuration](omniauth.md#initial-omniauth-configuration) for initial settings.
+1. See [Configure initial settings](omniauth.md#configure-initial-settings) for initial settings.
 
 1. Add the provider configuration:
 
@@ -62,9 +62,10 @@ Twitter. Twitter generates a client ID and secret key for you to use.
    ```ruby
      gitlab_rails['omniauth_providers'] = [
        {
-         "name" => "twitter",
-         "app_id" => "YOUR_APP_ID",
-         "app_secret" => "YOUR_APP_SECRET"
+         name: "twitter",
+         # label: "Provider name", # optional label for login button, defaults to "Twitter"
+         app_id: "YOUR_APP_ID",
+         app_secret: "YOUR_APP_SECRET"
        }
      ]
    ```
@@ -73,6 +74,7 @@ Twitter. Twitter generates a client ID and secret key for you to use.
 
    ```yaml
    - { name: 'twitter',
+       # label: 'Provider name', # optional label for login button, defaults to "Twitter"
        app_id: 'YOUR_APP_ID',
        app_secret: 'YOUR_APP_SECRET' }
    ```

@@ -10,6 +10,15 @@ class Projects::MergeRequests::CreationsController < Projects::MergeRequests::Ap
   before_action :apply_diff_view_cookie!, only: [:diffs, :diff_for_path]
   before_action :build_merge_request, except: [:create]
 
+  urgency :low, [
+    :new,
+    :create,
+    :pipelines,
+    :diffs,
+    :branch_from,
+    :branch_to
+  ]
+
   def new
     define_new_vars
   end
@@ -47,9 +56,7 @@ class Projects::MergeRequests::CreationsController < Projects::MergeRequests::Ap
 
     @diff_notes_disabled = true
 
-    @environment = @merge_request.environments_for(current_user, latest: true).last
-
-    render json: { html: view_to_html_string('projects/merge_requests/creations/_diffs', diffs: @diffs, environment: @environment) }
+    render json: { html: view_to_html_string('projects/merge_requests/creations/_diffs', diffs: @diffs) }
   end
 
   def diff_for_path

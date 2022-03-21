@@ -4,11 +4,7 @@ group: Integrations
 info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
 ---
 
-# Integrate your GitLab server with Bitbucket Cloud **(FREE)**
-
-NOTE:
-Starting from GitLab 11.4, OmniAuth is enabled by default. If you're using an
-earlier version, you must explicitly enable it.
+# Integrate your GitLab server with Bitbucket Cloud **(FREE SELF)**
 
 You can set up Bitbucket.org as an OAuth 2.0 provider to use your Bitbucket.org
 account credentials to sign in to GitLab. You can also import your projects from
@@ -42,7 +38,7 @@ to the end of the Bitbucket authorization callback URL.
 
    - **Name:** This can be anything. Consider something like `<Organization>'s GitLab`
      or `<Your Name>'s GitLab` or something else descriptive.
-   - **Application description:** *(Optional)* Fill this in if you wish.
+   - **Application description:** Optional. Fill this in if you wish.
    - **Callback URL:** (Required in GitLab versions 8.15 and greater)
      The URL to your GitLab installation, such as
      `https://gitlab.example.com/users/auth`.
@@ -87,10 +83,11 @@ to the end of the Bitbucket authorization callback URL.
    ```ruby
    gitlab_rails['omniauth_providers'] = [
      {
-       "name" => "bitbucket",
-       "app_id" => "BITBUCKET_APP_KEY",
-       "app_secret" => "BITBUCKET_APP_SECRET",
-       "url" => "https://bitbucket.org/"
+       name: "bitbucket",
+       # label: "Provider name", # optional label for login button, defaults to "Bitbucket"
+       app_id: "BITBUCKET_APP_KEY",
+       app_secret: "BITBUCKET_APP_SECRET",
+       url: "https://bitbucket.org/"
      }
    ]
    ```
@@ -102,6 +99,7 @@ to the end of the Bitbucket authorization callback URL.
      enabled: true
      providers:
        - { name: 'bitbucket',
+           # label: 'Provider name', # optional label for login button, defaults to "Bitbucket"
            app_id: 'BITBUCKET_APP_KEY',
            app_secret: 'BITBUCKET_APP_SECRET',
            url: 'https://bitbucket.org/' }

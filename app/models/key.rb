@@ -22,7 +22,7 @@ class Key < ApplicationRecord
   validates :key,
     presence: true,
     length: { maximum: 5000 },
-    format: { with: /\A(ssh|ecdsa)-.*\Z/ }
+    format: { with: /\A(#{Gitlab::SSHPublicKey.supported_algorithms.join('|')})/ }
 
   validates :fingerprint,
     uniqueness: true,
@@ -46,7 +46,7 @@ class Key < ApplicationRecord
   scope :order_last_used_at_desc, -> { reorder(::Gitlab::Database.nulls_last_order('last_used_at', 'DESC')) }
 
   # Date is set specifically in this scope to improve query time.
-  scope :expired_and_not_notified, -> { where(["date(expires_at AT TIME ZONE 'UTC') BETWEEN '2000-01-01' AND CURRENT_DATE AND expiry_notification_delivered_at IS NULL"]) }
+  scope :expired_today_and_not_notified, -> { where(["date(expires_at AT TIME ZONE 'UTC') = CURRENT_DATE AND expiry_notification_delivered_at IS NULL"]) }
   scope :expiring_soon_and_not_notified, -> { where(["date(expires_at AT TIME ZONE 'UTC') > CURRENT_DATE AND date(expires_at AT TIME ZONE 'UTC') < ? AND before_expiry_notification_delivered_at IS NULL", DAYS_TO_EXPIRE.days.from_now.to_date]) }
 
   def self.regular_keys
@@ -130,7 +130,7 @@ class Key < ApplicationRecord
     return unless public_key.valid?
 
     self.fingerprint_md5 = public_key.fingerprint
-    self.fingerprint_sha256 = public_key.fingerprint("SHA256").gsub("SHA256:", "")
+    self.fingerprint_sha256 = public_key.fingerprint_sha256.gsub("SHA256:", "")
   end
 
   def key_meets_restrictions

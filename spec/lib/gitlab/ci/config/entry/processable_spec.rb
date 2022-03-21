@@ -33,6 +33,28 @@ RSpec.describe Gitlab::Ci::Config::Entry::Processable do
         end
       end
 
+      context 'when config uses both "when:" and "rules:"' do
+        let(:config) do
+          {
+            script: 'echo',
+            when: 'on_failure',
+            rules: [{ if: '$VARIABLE', when: 'on_success' }]
+          }
+        end
+
+        it 'is valid' do
+          expect(entry).to be_valid
+        end
+      end
+
+      context 'when job name is more than 255' do
+        let(:entry) { node_class.new(config, name: ('a' * 256).to_sym) }
+
+        it 'shows a validation error' do
+          expect(entry.errors).to include "job name is too long (maximum is 255 characters)"
+        end
+      end
+
       context 'when job name is empty' do
         let(:entry) { node_class.new(config, name: ''.to_sym) }
 
@@ -79,21 +101,6 @@ RSpec.describe Gitlab::Ci::Config::Entry::Processable do
         it 'returns error about wrong value type' do
           expect(entry).not_to be_valid
           expect(entry.errors).to include "job resource group should be a string"
-        end
-      end
-
-      context 'when it uses both "when:" and "rules:"' do
-        let(:config) do
-          {
-            script: 'echo',
-            when: 'on_failure',
-            rules: [{ if: '$VARIABLE', when: 'on_success' }]
-          }
-        end
-
-        it 'returns an error about when: being combined with rules' do
-          expect(entry).not_to be_valid
-          expect(entry.errors).to include 'job config key may not be used with `rules`: when'
         end
       end
 

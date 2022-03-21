@@ -25,16 +25,6 @@ RSpec.describe Gitlab::Ci::Trace, :clean_gitlab_redis_shared_state, factory_defa
       artifact1.file.migrate!(ObjectStorage::Store::REMOTE)
     end
 
-    it 'reloads the trace after is it migrated' do
-      stub_const('Gitlab::HttpIO::BUFFER_SIZE', test_data.length)
-
-      expect_next_instance_of(Gitlab::HttpIO) do |http_io|
-        expect(http_io).to receive(:get_chunk).and_return(test_data, "")
-      end
-
-      expect(artifact2.job.trace.raw).to eq(test_data)
-    end
-
     it 'reloads the trace in case of a chunk error' do
       chunk_error = described_class::ChunkedIO::FailedToGetChunkError
 
@@ -128,6 +118,20 @@ RSpec.describe Gitlab::Ci::Trace, :clean_gitlab_redis_shared_state, factory_defa
         expect { trace.lock }
           .to raise_error described_class::LockedError
       end
+    end
+  end
+
+  describe '#can_attempt_archival_now?' do
+    it 'creates the record and returns true' do
+      expect(trace.can_attempt_archival_now?).to be_truthy
+    end
+  end
+
+  describe '#increment_archival_attempts!' do
+    it 'creates the record and increments its value' do
+      expect { trace.increment_archival_attempts! }
+        .to change { build.reload.trace_metadata&.archival_attempts }.from(nil).to(1)
+        .and change { build.reload.trace_metadata&.last_archival_attempt_at }
     end
   end
 end

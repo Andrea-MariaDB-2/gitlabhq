@@ -1,12 +1,12 @@
 <script>
-/* eslint-disable vue/no-v-html, @gitlab/require-string-literal-i18n-helpers */
 import { GlButton } from '@gitlab/ui';
-import { escape } from 'lodash';
-import { __, n__, sprintf, s__ } from '~/locale';
+import { __ } from '~/locale';
+import AddedCommitMessage from '../added_commit_message.vue';
 
 export default {
   components: {
     GlButton,
+    AddedCommitMessage,
   },
   props: {
     isSquashEnabled: {
@@ -36,9 +36,6 @@ export default {
     collapseIcon() {
       return this.expanded ? 'chevron-down' : 'chevron-right';
     },
-    commitsCountMessage() {
-      return n__(__('%d commit'), __('%d commits'), this.isSquashEnabled ? 1 : this.commitsCount);
-    },
     modifyLinkMessage() {
       if (this.isFastForwardEnabled) return __('Modify commit message');
       else if (this.isSquashEnabled) return __('Modify commit messages');
@@ -46,23 +43,6 @@ export default {
     },
     ariaLabel() {
       return this.expanded ? __('Collapse') : __('Expand');
-    },
-    message() {
-      const message = this.isFastForwardEnabled
-        ? s__('mrWidgetCommitsAdded|%{commitCount} will be added to %{targetBranch}.')
-        : s__(
-            'mrWidgetCommitsAdded|%{commitCount} and %{mergeCommitCount} will be added to %{targetBranch}.',
-          );
-
-      return sprintf(
-        message,
-        {
-          commitCount: `<strong class="commits-count-message">${this.commitsCountMessage}</strong>`,
-          mergeCommitCount: `<strong>${s__('mrWidgetCommitsAdded|1 merge commit')}</strong>`,
-          targetBranch: `<span class="label-branch">${escape(this.targetBranch)}</span>`,
-        },
-        false,
-      );
     },
   },
   methods: {
@@ -89,8 +69,15 @@ export default {
       />
       <span v-if="expanded">{{ __('Collapse') }}</span>
       <span v-else>
-        <span class="vertical-align-middle" v-html="message"></span>
-        <gl-button variant="link" class="modify-message-button">
+        <span class="vertical-align-middle">
+          <added-commit-message
+            :is-squash-enabled="isSquashEnabled"
+            :is-fast-forward-enabled="isFastForwardEnabled"
+            :commits-count="commitsCount"
+            :target-branch="targetBranch"
+          />
+        </span>
+        <gl-button category="tertiary" variant="confirm" size="small" class="modify-message-button">
           {{ modifyLinkMessage }}
         </gl-button>
       </span>

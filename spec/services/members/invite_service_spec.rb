@@ -4,7 +4,7 @@ require 'spec_helper'
 
 RSpec.describe Members::InviteService, :aggregate_failures, :clean_gitlab_redis_shared_state, :sidekiq_inline do
   let_it_be(:project, reload: true) { create(:project) }
-  let_it_be(:user) { project.owner }
+  let_it_be(:user) { project.first_owner }
   let_it_be(:project_user) { create(:user) }
   let_it_be(:namespace) { project.namespace }
 
@@ -22,6 +22,11 @@ RSpec.describe Members::InviteService, :aggregate_failures, :clean_gitlab_redis_
     end
 
     it_behaves_like 'records an onboarding progress action', :user_added
+
+    it 'does not create task issues' do
+      expect(TasksToBeDone::CreateWorker).not_to receive(:perform_async)
+      expect { result }.not_to change { project.issues.count }
+    end
   end
 
   context 'when email belongs to an existing user as a secondary email' do
@@ -150,7 +155,7 @@ RSpec.describe Members::InviteService, :aggregate_failures, :clean_gitlab_redis_
       expect_to_create_members(count: 1)
       expect(result[:status]).to eq(:error)
       expect(result[:message][invited_member.invite_email])
-        .to eq("Invite email has already been taken")
+        .to eq("The member's email address has already been taken")
       expect(project.users).to include project_user
     end
   end

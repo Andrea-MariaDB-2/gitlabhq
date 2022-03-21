@@ -79,11 +79,33 @@ job:
 - In **all other cases**, the job is added to the pipeline, with `when: on_success`.
 
 WARNING:
-If you use a `when:` clause as the final rule (not including `when: never`), two
+If you use a `when` clause as the final rule (not including `when: never`), two
 simultaneous pipelines may start. Both push pipelines and merge request pipelines can
 be triggered by the same event (a push to the source branch for an open merge request).
 See how to [prevent duplicate pipelines](#avoid-duplicate-pipelines)
 for more details.
+
+#### Run jobs for scheduled pipelines
+
+To configure a job to be executed only when the pipeline has been
+scheduled, use the [`rules`](../yaml/index.md#rules) keyword.
+
+In this example, `make world` runs in scheduled pipelines, and `make build`
+runs in branch and tag pipelines:
+
+```yaml
+job:on-schedule:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+  script:
+    - make world
+
+job:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "push"
+  script:
+    - make build
+```
 
 ### Complex rules
 
@@ -115,7 +137,7 @@ job1:
   script:
     - echo This rule uses parentheses.
   rules:
-    if: ($CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_COMMIT_BRANCH == "develop") && $MY_VARIABLE
+    - if: ($CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_COMMIT_BRANCH == "develop") && $MY_VARIABLE
 ```
 
 WARNING:
@@ -153,7 +175,7 @@ To avoid duplicate pipelines, you can:
 - Use [`workflow`](../yaml/index.md#workflow) to specify which types of pipelines
   can run.
 - Rewrite the rules to run the job only in very specific cases,
-  and avoid a final `when:` rule:
+  and avoid a final `when` rule:
 
   ```yaml
   job:
@@ -179,7 +201,7 @@ job:
 ```
 
 You should not include both push and merge request pipelines in the same job without
-[`workflow:rules` that prevent duplicate pipelines](../yaml/index.md#switch-between-branch-pipelines-and-merge-request-pipelines):
+[`workflow:rules` that prevent duplicate pipelines](../yaml/workflow.md#switch-between-branch-pipelines-and-merge-request-pipelines):
 
 ```yaml
 job:
@@ -220,12 +242,12 @@ check the value of the `$CI_PIPELINE_SOURCE` variable:
 | `chat`                        | For pipelines created by using a [GitLab ChatOps](../chatops/index.md) command.                                                                                                                                                 |
 | `external`                    | When you use CI services other than GitLab.                                                                                                                                                                                        |
 | `external_pull_request_event` | When an external pull request on GitHub is created or updated. See [Pipelines for external pull requests](../ci_cd_for_external_repos/index.md#pipelines-for-external-pull-requests).                                            |
-| `merge_request_event`         | For pipelines created when a merge request is created or updated. Required to enable [merge request pipelines](../pipelines/merge_request_pipelines.md), [merged results pipelines](../pipelines/pipelines_for_merged_results.md), and [merge trains](../pipelines/merge_trains.md). |
+| `merge_request_event`         | For pipelines created when a merge request is created or updated. Required to enable [merge request pipelines](../pipelines/merge_request_pipelines.md), [merged results pipelines](../pipelines/merged_results_pipelines.md), and [merge trains](../pipelines/merge_trains.md). |
 | `parent_pipeline`             | For pipelines triggered by a [parent/child pipeline](../pipelines/parent_child_pipelines.md) with `rules`. Use this pipeline source in the child pipeline configuration so that it can be triggered by the parent pipeline.                |
 | `pipeline`                    | For [multi-project pipelines](../pipelines/multi_project_pipelines.md) created by [using the API with `CI_JOB_TOKEN`](../pipelines/multi_project_pipelines.md#create-multi-project-pipelines-by-using-the-api), or the [`trigger`](../yaml/index.md#trigger) keyword. |
 | `push`                        | For pipelines triggered by a `git push` event, including for branches and tags.                                                                                                                                                  |
 | `schedule`                    | For [scheduled pipelines](../pipelines/schedules.md).                                                                                                                                                                            |
-| `trigger`                     | For pipelines created by using a [trigger token](../triggers/index.md#trigger-token).                                                                                                                                           |
+| `trigger`                     | For pipelines created by using a [trigger token](../triggers/index.md#configure-cicd-jobs-to-run-in-triggered-pipelines).                                                                                                                                           |
 | `web`                         | For pipelines created by using **Run pipeline** button in the GitLab UI, from the project's **CI/CD > Pipelines** section.                                                                                                       |
 | `webide`                      | For pipelines created by using the [WebIDE](../../user/project/web_ide/index.md).                                                                                                                                                |
 
@@ -263,6 +285,9 @@ Other commonly used variables for `if` clauses:
   branch. Use when you want to have the same configuration in multiple
   projects with different default branches.
 - `if: '$CI_COMMIT_BRANCH =~ /regex-expression/'`: If the commit branch matches a regular expression.
+- `if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_COMMIT_TITLE =~ /Merge branch.*/`:
+   If the commit branch is the default branch and the commit message title matches a regular expression.
+   For example, the default commit message for a merge commit starts with `Merge branch`.
 - `if: '$CUSTOM_VARIABLE !~ /regex-expression/'`: If the [custom variable](../variables/index.md#custom-cicd-variables)
   `CUSTOM_VARIABLE` does **not** match a regular expression.
 - `if: '$CUSTOM_VARIABLE == "value1"'`: If the custom variable `CUSTOM_VARIABLE` is
@@ -292,9 +317,9 @@ You can use the `$` character for both variables and paths. For example, if the
 
 ## Reuse rules in different jobs
 
-> [Introduced in](https://gitlab.com/gitlab-org/gitlab/-/issues/322992) GitLab 14.3.
+> [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/322992) in GitLab 14.3.
 
-Use [`!reference` tags](../yaml/index.md#reference-tags) to reuse rules in different
+Use [`!reference` tags](../yaml/yaml_optimization.md#reference-tags) to reuse rules in different
 jobs. You can combine `!reference` rules with regular job-defined rules:
 
 ```yaml
@@ -335,7 +360,7 @@ to control when to add jobs to pipelines.
 In the following example, `job` runs only for:
 
 - Git tags
-- [Triggers](../triggers/index.md#trigger-token)
+- [Triggers](../triggers/index.md#configure-cicd-jobs-to-run-in-triggered-pipelines)
 - [Scheduled pipelines](../pipelines/schedules.md)
 
 ```yaml
@@ -404,14 +429,11 @@ build:
 If you change multiple files, but only one file ends in `.md`,
 the `build` job is still skipped. The job does not run for any of the files.
 
-Read more about how to use `only:changes` and `except:changes`:
+With some configurations that use `changes`, [jobs or pipelines might run unexpectedly](#jobs-or-pipelines-run-unexpectedly-when-using-changes)
 
-- [New branches or tags *without* pipelines for merge requests](#use-onlychanges-without-pipelines-for-merge-requests).
-- [Scheduled pipelines](#use-onlychanges-with-scheduled-pipelines).
+#### Use `only:changes` with merge request pipelines
 
-#### Use `only:changes` with pipelines for merge requests
-
-With [pipelines for merge requests](../pipelines/merge_request_pipelines.md),
+With [merge request pipelines](../pipelines/merge_request_pipelines.md),
 it's possible to define a job to be created based on files modified
 in a merge request.
 
@@ -459,29 +481,13 @@ it doesn't matter that an earlier pipeline failed because of a change that has n
 When you use this configuration, ensure that the most recent pipeline
 properly corrects any failures from previous pipelines.
 
-#### Use `only:changes` without pipelines for merge requests
-
-Without [pipelines for merge requests](../pipelines/merge_request_pipelines.md), pipelines
-run on branches or tags that don't have an explicit association with a merge request.
-In this case, a previous SHA is used to calculate the diff, which is equivalent to `git diff HEAD~`.
-This can result in some unexpected behavior, including:
-
-- When pushing a new branch or a new tag to GitLab, the policy always evaluates to true.
-- When pushing a new commit, the changed files are calculated by using the previous commit
-  as the base SHA.
-
-#### Use `only:changes` with scheduled pipelines
-
-`only:changes` always evaluates as true in [Scheduled pipelines](../pipelines/schedules.md).
-All files are considered to have changed when a scheduled pipeline runs.
-
 ### Combine multiple keywords with `only` or `except`
 
 If you use multiple keywords with `only` or `except`, the keywords are evaluated
 as a single conjoined expression. That is:
 
-- `only:` includes the job if **all** of the keys have at least one condition that matches.
-- `except:` excludes the job if **any** of the keys have at least one condition that matches.
+- `only` includes the job if **all** of the keys have at least one condition that matches.
+- `except` excludes the job if **any** of the keys have at least one condition that matches.
 
 With `only`, individual keys are logically joined by an `AND`. A job is added to
 the pipeline if the following is true:
@@ -634,11 +640,146 @@ timed rollout 10%:
   start_in: 30 minutes
 ```
 
-To stop the active timer of a delayed job, click the **{time-out}** (**Unschedule**) button.
+To stop the active timer of a delayed job, select **Unschedule** (**{time-out}**).
 This job can no longer be scheduled to run automatically. You can, however, execute the job manually.
 
 To start a delayed job immediately, select **Play** (**{play}**).
 Soon GitLab Runner starts the job.
+
+## Parallelize large jobs
+
+To split a large job into multiple smaller jobs that run in parallel, use the
+[`parallel`](../yaml/index.md#parallel) keyword in your `.gitlab-ci.yml` file.
+
+Different languages and test suites have different methods to enable parallelization.
+For example, use [Semaphore Test Boosters](https://github.com/renderedtext/test-boosters)
+and RSpec to run Ruby tests in parallel:
+
+```ruby
+# Gemfile
+source 'https://rubygems.org'
+
+gem 'rspec'
+gem 'semaphore_test_boosters'
+```
+
+```yaml
+test:
+  parallel: 3
+  script:
+    - bundle
+    - bundle exec rspec_booster --job $CI_NODE_INDEX/$CI_NODE_TOTAL
+```
+
+You can then navigate to the **Jobs** tab of a new pipeline build and see your RSpec
+job split into three separate jobs.
+
+WARNING:
+Test Boosters reports usage statistics to the author.
+
+### Run a one-dimensional matrix of parallel jobs
+
+> [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/26362) in GitLab 13.5.
+
+You can create a one-dimensional matrix of parallel jobs:
+
+```yaml
+deploystacks:
+  stage: deploy
+  script:
+    - bin/deploy
+  parallel:
+    matrix:
+      - PROVIDER: [aws, ovh, gcp, vultr]
+```
+
+You can also [create a multi-dimensional matrix](../yaml/index.md#parallelmatrix).
+
+### Run a matrix of parallel trigger jobs
+
+> [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/270957) in GitLab 13.10.
+
+You can run a [trigger](../yaml/index.md#trigger) job multiple times in parallel in a single pipeline,
+but with different variable values for each instance of the job.
+
+```yaml
+deploystacks:
+  stage: deploy
+  trigger:
+    include: path/to/child-pipeline.yml
+  parallel:
+    matrix:
+      - PROVIDER: aws
+        STACK: [monitoring, app1]
+      - PROVIDER: ovh
+        STACK: [monitoring, backup]
+      - PROVIDER: [gcp, vultr]
+        STACK: [data]
+```
+
+This example generates 6 parallel `deploystacks` trigger jobs, each with different values
+for `PROVIDER` and `STACK`, and they create 6 different child pipelines with those variables.
+
+```plaintext
+deploystacks: [aws, monitoring]
+deploystacks: [aws, app1]
+deploystacks: [ovh, monitoring]
+deploystacks: [ovh, backup]
+deploystacks: [gcp, data]
+deploystacks: [vultr, data]
+```
+
+### Select different runner tags for each parallel matrix job
+
+> [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/239737) in GitLab 14.1.
+
+You can use variables defined in `parallel: matrix` with the [`tags`](../yaml/index.md#tags)
+keyword for dynamic runner selection:
+
+```yaml
+deploystacks:
+  stage: deploy
+  parallel:
+    matrix:
+      - PROVIDER: aws
+        STACK: [monitoring, app1]
+      - PROVIDER: gcp
+        STACK: [data]
+  tags:
+    - ${PROVIDER}-${STACK}
+```
+
+#### Fetch artifacts from a `parallel:matrix` job
+
+You can fetch artifacts from a job created with [`parallel:matrix`](../yaml/index.md#parallelmatrix)
+by using the [`dependencies`](../yaml/index.md#dependencies) keyword. Use the job name
+as the value for `dependencies` as a string in the form:
+
+```plaintext
+<job_name> [<matrix argument 1>, <matrix argument 2>, ... <matrix argument N>]
+```
+
+For example, to fetch the artifacts from the job with a `RUBY_VERSION` of `2.7` and
+a `PROVIDER` of `aws`:
+
+```yaml
+ruby:
+  image: ruby:${RUBY_VERSION}
+  parallel:
+    matrix:
+      - RUBY_VERSION: ["2.5", "2.6", "2.7", "3.0", "3.1"]
+        PROVIDER: [aws, gcp]
+  script: bundle install
+
+deploy:
+  image: ruby:2.7
+  stage: deploy
+  dependencies:
+    - "ruby: [2.7, aws]"
+  script: echo hello
+```
+
+Quotes around the `dependencies` entry are required.
 
 ## Use predefined CI/CD variables to run jobs only in specific pipeline types
 
@@ -677,7 +818,7 @@ job1:
     - echo
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
-    - if: $CI_PIPELINE_SOURCE == "scheduled"
+    - if: $CI_PIPELINE_SOURCE == "schedule"
     - if: $CI_PIPELINE_SOURCE == "push"
       when: never
 ```
@@ -725,13 +866,9 @@ due to computational complexity, and some features, like negative lookaheads, be
 Only a subset of features provided by [Ruby Regexp](https://ruby-doc.org/core/Regexp.html)
 are now supported.
 
-From GitLab 11.9.7 to GitLab 12.0, GitLab provided a feature flag to
-let you use unsafe regexp syntax. After migrating to safe syntax, you should disable
-this feature flag again:
-
-```ruby
-Feature.enable(:allow_unsafe_ruby_regexp)
-```
+From GitLab 11.9.7 to GitLab 14.9, GitLab provided a feature flag to let you
+use unsafe regexp syntax. We've fully migrated to RE2 now, and that feature
+flag is no longer available.
 
 ## CI/CD variable expressions
 
@@ -843,3 +980,39 @@ For example:
 - `($VARIABLE1 =~ /^content.*/ || $VARIABLE2) && ($VARIABLE3 =~ /thing$/ || $VARIABLE4)`
 - `($VARIABLE1 =~ /^content.*/ || $VARIABLE2 =~ /thing$/) && $VARIABLE3`
 - `$CI_COMMIT_BRANCH == "my-branch" || (($VARIABLE1 == "thing" || $VARIABLE2 == "thing") && $VARIABLE3)`
+
+## Troubleshooting
+
+### Jobs or pipelines run unexpectedly when using `changes:`
+
+You might have jobs or pipelines that run unexpectedly when using [`rules: changes`](../yaml/index.md#ruleschanges)
+or [`only: changes`](../yaml/index.md#onlychanges--exceptchanges) without
+[merge request pipelines](../pipelines/merge_request_pipelines.md).
+
+Pipelines on branches or tags that don't have an explicit association with a merge request
+use a previous SHA to calculate the diff. This calculation is equivalent to `git diff HEAD~`
+and can cause unexpected behavior, including:
+
+- The `changes` rule always evaluates to true when pushing a new branch or a new tag to GitLab.
+- When pushing a new commit, the changed files are calculated by using the previous commit
+  as the base SHA.
+
+Additionally, rules with `changes` always evaluate as true in [scheduled pipelines](../pipelines/schedules.md).
+All files are considered to have changed when a scheduled pipeline runs, so jobs
+might always be added to scheduled pipelines that use `changes`.
+
+### `You are not allowed to download code from this project.` error message
+
+You might see pipelines fail when a GitLab administrator runs a protected manual job
+in a private project.
+
+CI/CD jobs usually clone the project when the job starts, and this uses [the permissions](../../user/permissions.md#job-permissions)
+of the user that runs the job. All users, including administrators, must be direct members
+of a private project to clone the source of that project. [An issue exists](https://gitlab.com/gitlab-org/gitlab/-/issues/23130)
+to change this behavior.
+
+To run protected manual jobs:
+
+- Add the administrator as a direct member of the private project (any role)
+- [Impersonate a user](../../user/admin_area/index.md#user-impersonation) who is a
+  direct member of the project.

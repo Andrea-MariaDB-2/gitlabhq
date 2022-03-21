@@ -81,7 +81,7 @@ to execute scripts. Each shell has its own set of reserved variable names.
 Make sure each variable is defined for the [scope you want to use it in](where_variables_can_be_used.md).
 
 By default, pipelines from forked projects can't access CI/CD variables in the parent project.
-If you [run a merge request pipeline in the parent project for a merge request from a fork](../pipelines/merge_request_pipelines.md#run-pipelines-in-the-parent-project-for-merge-requests-from-a-forked-project),
+If you [run a merge request pipeline in the parent project for a merge request from a fork](../pipelines/merge_request_pipelines.md#run-pipelines-in-the-parent-project),
 all variables become available to the pipeline.
 
 ### Create a custom CI/CD variable in the `.gitlab-ci.yml` file
@@ -121,11 +121,11 @@ job1:
     - echo This job does not need any variables
 ```
 
-Use the [`value` and `description`](../yaml/index.md#prefill-variables-in-manual-pipelines)
+Use the [`value` and `description`](../yaml/index.md#variablesdescription)
 keywords to define [variables that are prefilled](../pipelines/index.md#prefill-variables-in-manual-pipelines)
 for [manually-triggered pipelines](../pipelines/index.md#run-a-pipeline-manually).
 
-### Use variables or `$` in other variables
+### Use variables in other variables
 
 You can use variables inside other variables:
 
@@ -138,7 +138,9 @@ job:
     - 'eval "$LS_CMD"'  # Executes 'ls -al'
 ```
 
-If you do not want the `$` interpreted as the start of a variable, use `$$` instead:
+#### Use the `$` character in variables
+
+If you do not want the `$` character interpreted as the start of a variable, use `$$` instead:
 
 ```yaml
 job:
@@ -152,7 +154,7 @@ job:
 ### Add a CI/CD variable to a project
 
 You can add CI/CD variables to a project's settings. Only project members with the
-[Maintainer role](../../user/permissions.md#project-members-permissions)
+Maintainer role
 can add or update project CI/CD variables. To keep a CI/CD variable secret, put it
 in the project settings, not in the `.gitlab-ci.yml` file.
 
@@ -164,10 +166,10 @@ To add or update variables in the project settings:
    - **Key**: Must be one line, with no spaces, using only letters, numbers, or `_`.
    - **Value**: No limitations.
    - **Type**: [`File` or `Variable`](#cicd-variable-types).
-   - **Environment scope**: (Optional) `All`, or specific [environments](../environments/index.md).
-   - **Protect variable** (Optional): If selected, the variable is only available
+   - **Environment scope**: Optional. `All`, or specific [environments](../environments/index.md).
+   - **Protect variable** Optional. If selected, the variable is only available
      in pipelines that run on protected branches or tags.
-   - **Mask variable** (Optional): If selected, the variable's **Value** is masked
+   - **Mask variable** Optional. If selected, the variable's **Value** is masked
      in job logs. The variable fails to save if the value does not meet the
      [masking requirements](#mask-a-cicd-variable).
 
@@ -189,7 +191,7 @@ The output is:
 
 ### Add a CI/CD variable to a group
 
-> Support for [environment scopes](https://gitlab.com/gitlab-org/gitlab/-/issues/2874) added to GitLab Premium in 13.11
+> Support for environment scopes [introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/2874) in GitLab Premium 13.11
 
 To make a CI/CD variable available to all projects in a group, define a group CI/CD variable.
 
@@ -206,10 +208,10 @@ To add a group variable:
    - **Key**: Must be one line, with no spaces, using only letters, numbers, or `_`.
    - **Value**: No limitations.
    - **Type**: [`File` or `Variable`](#cicd-variable-types).
-   - **Environment scope** (Optional): `All`, or specific [environments](#limit-the-environment-scope-of-a-cicd-variable). **(PREMIUM)**
-   - **Protect variable** (Optional): If selected, the variable is only available
+   - **Environment scope** Optional. `All`, or specific [environments](#limit-the-environment-scope-of-a-cicd-variable). **(PREMIUM)**
+   - **Protect variable** Optional. If selected, the variable is only available
      in pipelines that run on protected branches or tags.
-   - **Mask variable** (Optional): If selected, the variable's **Value** is masked
+   - **Mask variable** Optional. If selected, the variable's **Value** is masked
      in job logs. The variable fails to save if the value does not meet the
      [masking requirements](#mask-a-cicd-variable).
 
@@ -231,7 +233,7 @@ inherited.
 > - [Feature flag removed](https://gitlab.com/gitlab-org/gitlab/-/issues/299879) in GitLab 13.11.
 
 To make a CI/CD variable available to all projects and groups in a GitLab instance,
-add an instance CI/CD variable. You must have the [Administrator role](../../user/permissions.md).
+add an instance CI/CD variable. You must have administrator access.
 
 You can define instance variables via the UI or [API](../../api/instance_level_ci_variables.md).
 
@@ -242,13 +244,13 @@ To add an instance variable:
 1. Select the **Add variable** button, and fill in the details:
 
    - **Key**: Must be one line, with no spaces, using only letters, numbers, or `_`.
-   - **Value**: [In GitLab 13.3 and later](https://gitlab.com/gitlab-org/gitlab/-/issues/220028),
+   - **Value**: In [GitLab 13.3 and later](https://gitlab.com/gitlab-org/gitlab/-/issues/220028),
      10,000 characters is allowed. This is also bounded by the limits of the selected
      runner operating system. In GitLab 13.0 to 13.2, 700 characters is allowed.
    - **Type**: [`File` or `Variable`](#cicd-variable-types).
-   - **Protect variable** (Optional): If selected, the variable is only available
+   - **Protect variable** Optional. If selected, the variable is only available
      in pipelines that run on protected branches or tags.
-   - **Mask variable** (Optional): If selected, the variable's **Value** is not shown
+   - **Mask variable** Optional. If selected, the variable's **Value** is not shown
      in job logs. The variable is not saved if the value does not meet the [masking requirements](#mask-a-cicd-variable).
 
 ### CI/CD variable types
@@ -291,6 +293,11 @@ Use the variables in a job script like this:
 kubectl config set-cluster e2e --server="$KUBE_URL" --certificate-authority="$KUBE_CA_PEM"
 ```
 
+WARNING:
+Be careful when assigning the value of a file variable to another variable. The other
+variable takes the content of the file as its value, **not** the path to the file.
+See [issue 29407](https://gitlab.com/gitlab-org/gitlab/-/issues/29407) for more details.
+
 An alternative to `File` type variables is to:
 
 - Read the value of a CI/CD variable (`variable` type).
@@ -299,9 +306,29 @@ An alternative to `File` type variables is to:
 
 ```shell
 # Read certificate stored in $KUBE_CA_PEM variable and save it in a new file
-echo "$KUBE_CA_PEM" > "$(pwd)/kube.ca.pem"
+cat "$KUBE_CA_PEM" > "$(pwd)/kube.ca.pem"
 # Pass the newly created file to kubectl
 kubectl config set-cluster e2e --server="$KUBE_URL" --certificate-authority="$(pwd)/kube.ca.pem"
+```
+
+#### Store multiple values in one variable
+
+It is not possible to create a CI/CD variable that is an array of values, but you
+can use shell scripting techniques for similar behavior.
+
+For example, you can store multiple variables separated by a space in a variable,
+then loop through the values with a script:
+
+```yaml
+job1:
+  variables:
+    FOLDERS: src test docs
+  script:
+    - |
+      for FOLDER in $FOLDERS
+        do
+          echo "The path is root/${FOLDER}"
+        done
 ```
 
 ### Mask a CI/CD variable
@@ -324,9 +351,9 @@ The value of the variable must:
 - Be a single line.
 - Be 8 characters or longer, consisting only of:
   - Characters from the Base64 alphabet (RFC4648).
-  - The `@` and `:` characters ([In GitLab 12.2](https://gitlab.com/gitlab-org/gitlab-foss/-/issues/63043) and later).
-  - The `.` character ([In GitLab 12.10](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/29022) and later).
-  - The `~` character ([In GitLab 13.12](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/61517) and later).
+  - The `@` and `:` characters (In [GitLab 12.2 and later](https://gitlab.com/gitlab-org/gitlab-foss/-/issues/63043)).
+  - The `.` character (In [GitLab 12.10 and later](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/29022)).
+  - The `~` character (In [GitLab 13.12 and later](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/61517)).
 - Not match the name of an existing predefined or custom CI/CD variable.
 
 NOTE:
@@ -345,7 +372,7 @@ You can protect a project, group or instance CI/CD variable so it is only passed
 to pipelines running on [protected branches](../../user/project/protected_branches.md)
 or [protected tags](../../user/project/protected_tags.md).
 
-[Pipelines for merge requests](../pipelines/merge_request_pipelines.md) do not have access to protected variables.
+[Merge request pipelines](../pipelines/merge_request_pipelines.md) do not have access to protected variables.
 An [issue exists](https://gitlab.com/gitlab-org/gitlab/-/issues/28002) regarding this limitation.
 
 To protect a variable:
@@ -367,7 +394,7 @@ runs on a [protected branch](../../user/project/protected_branches.md) or
 
 Review all merge requests that introduce changes to the `.gitlab-ci.yml` file before you:
 
-- [Run a pipeline in the parent project for a merge request submitted from a forked project](../pipelines/merge_request_pipelines.md#run-pipelines-in-the-parent-project-for-merge-requests-from-a-forked-project).
+- [Run a pipeline in the parent project for a merge request submitted from a forked project](../pipelines/merge_request_pipelines.md#run-pipelines-in-the-parent-project).
 - Merge the changes.
 
 The following example shows malicious code in a `.gitlab-ci.yml` file:
@@ -527,18 +554,45 @@ export GITLAB_USER_ID="42"
 > - [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/22638) in GitLab 13.0.
 > - [Feature flag removed](https://gitlab.com/gitlab-org/gitlab/-/issues/217834) in GitLab 13.1.
 
-You can pass environment variables from one job to another job in a later stage.
+You can pass environment variables from one job to another job in a later stage
+through variable inheritance.
 These variables cannot be used as CI/CD variables to configure a pipeline, but
 they can be used in job scripts.
 
 1. In the job script, save the variable as a `.env` file.
-1. Save the `.env` file as an [`artifacts:reports:dotenv`](../yaml/index.md#artifactsreportsdotenv)
+   - The format of the file must be one variable definition per line.
+   - Each defined line must be of the form `VARIABLE_NAME=ANY VALUE HERE`.
+   - Values can be wrapped in quotes, but cannot contain newline characters.
+1. Save the `.env` file as an [`artifacts:reports:dotenv`](../yaml/artifacts_reports.md#artifactsreportsdotenv)
 artifact.
-1. Set a job in a later stage to receive the artifact by using the [`dependencies`](../yaml/index.md#dependencies)
-   or the [`needs`](../yaml/index.md#artifact-downloads-with-needs) keywords.
-1. The later job can then [use the variable in scripts](#use-cicd-variables-in-job-scripts).
+1. Jobs in later stages can then [use the variable in scripts](#use-cicd-variables-in-job-scripts).
 
-For example, with the [`dependencies`](../yaml/index.md#dependencies) keyword:
+Inherited variables [take precedence](#cicd-variable-precedence) over
+certain types of new variable definitions such as job defined variables.
+
+```yaml
+build:
+  stage: build
+  script:
+    - echo "BUILD_VARIABLE=value_from_build_job" >> build.env
+  artifacts:
+    reports:
+      dotenv: build.env
+
+deploy:
+  stage: deploy
+  variables:
+    BUILD_VARIABLE: value_from_deploy_job
+  script:
+    - echo "$BUILD_VARIABLE"  # Output is: 'value_from_build_job' due to precedence
+```
+
+The [`dependencies`](../yaml/index.md#dependencies) or
+[`needs`](../yaml/index.md#needs) keywords can be used to control
+which jobs receive inherited values.
+
+To have no inherited dotenv environment variables, pass an empty `dependencies` or
+`needs` list, or pass [`needs:artifacts`](../yaml/index.md#needsartifacts) as `false`
 
 ```yaml
 build:
@@ -549,33 +603,45 @@ build:
     reports:
       dotenv: build.env
 
-deploy:
+deploy_one:
   stage: deploy
   script:
     - echo "$BUILD_VERSION"  # Output is: 'hello'
   dependencies:
     - build
-```
 
-For example, with the [`needs`](../yaml/index.md#artifact-downloads-with-needs) keyword:
-
-```yaml
-build:
-  stage: build
+deploy_two:
+  stage: deploy
   script:
-    - echo "BUILD_VERSION=hello" >> build.env
-  artifacts:
-    reports:
-      dotenv: build.env
+    - echo "$BUILD_VERSION"  # Output is empty
+  dependencies: []
 
-deploy:
+deploy_three:
   stage: deploy
   script:
     - echo "$BUILD_VERSION"  # Output is: 'hello'
   needs:
-    - job: build
-      artifacts: true
+    - build
+
+deploy_four:
+  stage: deploy
+  script:
+    - echo "$BUILD_VERSION"  # Output is: 'hello'
+  needs:
+    job: build
+    artifacts: true
+
+deploy_five:
+  stage: deploy
+  script:
+    - echo "$BUILD_VERSION"  # Output is empty
+  needs:
+    job: build
+    artifacts: false
 ```
+
+[Multi-project pipelines](../pipelines/multi_project_pipelines.md#pass-cicd-variables-to-a-downstream-pipeline-by-using-variable-inheritance)
+can also inherit variables from their upstream pipelines.
 
 ## CI/CD variable precedence
 
@@ -585,9 +651,11 @@ which variables take precedence.
 
 The order of precedence for variables is (from highest to lowest):
 
-1. [Trigger variables](../triggers/index.md#making-use-of-trigger-variables),
-   [scheduled pipeline variables](../pipelines/schedules.md#using-variables),
-   and [manual pipeline run variables](#override-a-variable-when-running-a-pipeline-manually).
+1. These all have the same (highest) precedence:
+   - [Trigger variables](../triggers/index.md#pass-cicd-variables-in-the-api-call).
+   - [Scheduled pipeline variables](../pipelines/schedules.md#add-a-pipeline-schedule).
+   - [Manual pipeline run variables](#override-a-variable-when-running-a-pipeline-manually).
+   - Variables added when [creating a pipeline with the API](../../api/pipelines.md#create-a-new-pipeline).
 1. Project [variables](#custom-cicd-variables).
 1. Group [variables](#add-a-cicd-variable-to-a-group).
 1. Instance [variables](#add-a-cicd-variable-to-an-instance).
@@ -619,7 +687,7 @@ You can override the value of a variable when you:
 1. Create a pipeline by using [the API](../../api/pipelines.md#create-a-new-pipeline).
 1. Run a job manually in the UI.
 1. Use [push options](../../user/project/push_options.md#push-options-for-gitlab-cicd).
-1. Trigger a pipeline by using [the API](../triggers/index.md#making-use-of-trigger-variables).
+1. Trigger a pipeline by using [the API](../triggers/index.md#pass-cicd-variables-in-the-api-call).
 1. Pass variables to a downstream pipeline [by using the `variable` keyword](../pipelines/multi_project_pipelines.md#pass-cicd-variables-to-a-downstream-pipeline-by-using-the-variables-keyword)
    or [by using variable inheritance](../pipelines/multi_project_pipelines.md#pass-cicd-variables-to-a-downstream-pipeline-by-using-variable-inheritance).
 
@@ -834,7 +902,7 @@ if [[ -d "/builds/gitlab-examples/ci-debug-trace/.git" ]]; then
 > - [Feature flag removed](https://gitlab.com/gitlab-org/gitlab/-/issues/292661) in GitLab 13.8.
 
 You can restrict access to debug logging. When restricted, only users with
-[developer or higher permissions](../../user/permissions.md#project-members-permissions)
+at least the Developer role
 can view job logs when debug logging is enabled with a variable in:
 
 - The [`.gitlab-ci.yml` file](#create-a-custom-cicd-variable-in-the-gitlab-ciyml-file).

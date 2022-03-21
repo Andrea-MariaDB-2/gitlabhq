@@ -7,7 +7,7 @@ type: concepts, howto
 
 # Protected environments API **(PREMIUM)**
 
-> [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/30595) in [GitLab Premium](https://about.gitlab.com/pricing/) 12.8.
+> [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/30595) in GitLab 12.8.
 
 ## Valid access levels
 
@@ -49,7 +49,8 @@ Example response:
             "user_id":null,
             "group_id":null
          }
-      ]
+      ],
+     "required_approval_count": 0
    }
 ]
 ```
@@ -78,12 +79,13 @@ Example response:
    "name":"production",
    "deploy_access_levels":[
       {
-         "access_level":40,
-         "access_level_description":"Maintainers",
-         "user_id":null,
-         "group_id":null
+         "access_level": 40,
+         "access_level_description": "Maintainers",
+         "user_id": null,
+         "group_id": null
       }
-   ]
+   ],
+  "required_approval_count": 0
 }
 ```
 
@@ -107,6 +109,7 @@ curl --header 'Content-Type: application/json' --request POST \
 | `id`                            | integer/string | yes | The ID or [URL-encoded path of the project](index.md#namespaced-path-encoding) owned by the authenticated user. |
 | `name`                          | string         | yes | The name of the environment. |
 | `deploy_access_levels`          | array          | yes | Array of access levels allowed to deploy, with each described by a hash. |
+| `required_approval_count` | integer        | no       | The number of approvals required to deploy to this environment. This is part of Deployment Approvals, which isn't yet available for use. For details, see [issue](https://gitlab.com/gitlab-org/gitlab/-/issues/343864). |
 
 Elements in the `deploy_access_levels` array should be one of `user_id`, `group_id` or
 `access_level`, and take the form `{user_id: integer}`, `{group_id: integer}` or
@@ -117,15 +120,16 @@ Example response:
 
 ```json
 {
-   "name":"production",
-   "deploy_access_levels":[
+   "name": "production",
+   "deploy_access_levels": [
       {
-         "access_level":40,
-         "access_level_description":"protected-access-group",
-         "user_id":null,
-         "group_id":9899826
+         "access_level": 40,
+         "access_level_description": "protected-access-group",
+         "user_id": null,
+         "group_id": 9899826
       }
-   ]
+   ],
+  "required_approval_count": 0
 }
 ```
 

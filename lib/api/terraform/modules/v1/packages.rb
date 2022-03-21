@@ -21,7 +21,7 @@ module API
             module_version: SEMVER_REGEX
           }.freeze
 
-          feature_category :package_registry
+          feature_category :infrastructure_as_code
 
           after_validation do
             require_packages_enabled!
@@ -46,7 +46,8 @@ module API
             def finder_params
               {
                 package_type: :terraform_module,
-                package_name: "#{params[:module_name]}/#{params[:module_system]}"
+                package_name: "#{params[:module_name]}/#{params[:module_system]}",
+                exact_name: true
               }.tap do |finder_params|
                 finder_params[:package_version] = params[:module_version] if params.has_key?(:module_version)
               end
@@ -70,7 +71,7 @@ module API
 
             def package_file
               strong_memoize(:package_file) do
-                package.package_files.first
+                package.installable_package_files.first
               end
             end
           end

@@ -46,7 +46,7 @@ GitLab has integrated with several security partners. For more information, see
 
 ## Continuous integration
 
-GitLab can be integrated with the following external service for continuous integration:
+GitLab can be integrated with the following external services for continuous integration:
 
 - [Jenkins](jenkins.md) CI.
 - [Datadog](datadog.md), to monitor for CI/CD job failures and performance issues.
@@ -89,7 +89,7 @@ at Super User also has relevant information.
 
 **Omnibus Trusted Chain**
 
-[Install the self signed certificate or custom certificate authorities](https://docs.gitlab.com/omnibus/common_installation_problems/README.html#using-self-signed-certificate-or-custom-certificate-authorities)
+[Install the self signed certificate or custom certificate authorities](https://docs.gitlab.com/omnibus/common_installation_problems/index.html#using-self-signed-certificate-or-custom-certificate-authorities)
 in to Omnibus GitLab.
 
 It is enough to concatenate the certificate to the main trusted certificate

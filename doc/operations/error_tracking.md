@@ -1,14 +1,30 @@
 ---
 stage: Monitor
-group: Monitor
+group: Respond
 info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
 ---
 
 # Error Tracking **(FREE)**
 
-> [Introduced](https://gitlab.com/groups/gitlab-org/-/epics/169) in GitLab 11.8.
-
 Error Tracking allows developers to easily discover and view the errors that their application may be generating. By surfacing error information where the code is being developed, efficiency and awareness can be increased.
+
+## How error tracking works
+
+For error tracking to work, you need two pieces:
+
+- **Your application with Sentry SDK:** when the error happens, Sentry SDK captures information
+  about it and sends it over the network to the backend. The backend stores information about all
+  errors.
+
+- **Error tracking backend:** the backend can be either GitLab itself or Sentry. When it's GitLab,
+  we name it _integrated error tracking_ because you don't need to set up a separate backend. It's
+  already part of the product.
+
+  - To use the GitLab backend, see [integrated error tracking](#integrated-error-tracking).
+  - To use Sentry as the backend, see [Sentry error tracking](#sentry-error-tracking).
+
+  No matter what backend you choose, the [error tracking UI](#error-tracking-list)
+  is the same.
 
 ## Sentry error tracking
 
@@ -16,7 +32,7 @@ Error Tracking allows developers to easily discover and view the errors that the
 
 ### Deploying Sentry
 
-You can sign up to the cloud hosted [Sentry](https://sentry.io), deploy your own [on-premise instance](https://github.com/getsentry/onpremise/), or use GitLab to [install Sentry to a Kubernetes cluster](../user/clusters/applications.md#install-sentry-using-gitlab-cicd). To make this easier, we are [considering shipping Sentry with GitLab](https://gitlab.com/gitlab-org/omnibus-gitlab/-/issues/5343).
+You can sign up to the cloud hosted [Sentry](https://sentry.io), deploy your own [on-premise instance](https://github.com/getsentry/onpremise/), or use GitLab to [install Sentry to a Kubernetes cluster](../user/clusters/applications.md#install-sentry-using-gitlab-cicd).
 
 ### Enabling Sentry
 
@@ -25,8 +41,10 @@ least Maintainer [permissions](../user/permissions.md) to enable the Sentry inte
 
 1. Sign up to Sentry.io or [deploy your own](#deploying-sentry) Sentry instance.
 1. [Create](https://docs.sentry.io/product/sentry-basics/guides/integrate-frontend/create-new-project/) a new Sentry project. For each GitLab project that you want to integrate, we recommend that you create a new Sentry project.
-1. [Find or generate](https://docs.sentry.io/api/auth/) a Sentry auth token for your Sentry project.
-   Make sure to give the token at least the following scopes: `event:read`, `project:read`, and `event:write` (for resolving events).
+1. Find or generate a [Sentry auth token](https://docs.sentry.io/api/auth/#auth-tokens).
+   For the SaaS version of Sentry, you can find or generate the auth token at [https://sentry.io/api/](https://sentry.io/api/).
+   Make sure to give the token at least the following scopes: `project:read`, `event:read`, and
+   `event:write` (for resolving events).
 1. In GitLab, enable error tracking:
    1. On the top bar, select **Menu > Projects** and find your project.
    1. On the left sidebar, select **Monitor > Error Tracking**.
@@ -50,7 +68,7 @@ You may also want to enable Sentry's GitLab integration by following the steps i
 ### Enable GitLab Runner
 
 To configure GitLab Runner with Sentry, you must add the value for `sentry_dsn` to your GitLab
-Runner's `config.toml` configuration file, as referenced in [GitLab Runner Advanced Configuraton](https://docs.gitlab.com/runner/configuration/advanced-configuration.html).
+Runner's `config.toml` configuration file, as referenced in [GitLab Runner Advanced Configuration](https://docs.gitlab.com/runner/configuration/advanced-configuration.html).
 While setting up Sentry, select **Go** if you're asked for the project type.
 
 If you see the following error in your GitLab Runner logs, then you should specify the deprecated
@@ -111,7 +129,17 @@ If another event occurs, the error reverts to unresolved.
 
 ## Integrated error tracking
 
-> [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/329596) in GitLab 14.3.
+> - [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/329596) in GitLab 14.4.
+> - [Disabled](https://gitlab.com/gitlab-org/gitlab/-/issues/353639) in GitLab 14.9 [with a flag](../administration/feature_flags.md) named `integrated_error_tracking`. Disabled by default.
+
+FLAG:
+By default this feature is not available. To make it available on self-managed GitLab, ask an
+administrator to [enable the feature flag](../administration/feature_flags.md)
+named `integrated_error_tracking`. The feature is not ready for production use.
+On GitLab.com, this feature is not available.
+
+WARNING:
+Turning on integrated error tracking may impact performance, depending on your error rates.
 
 Integrated error tracking is a lightweight alternative to Sentry backend.
 You still use Sentry SDK with your application. But you don't need to deploy Sentry
@@ -123,53 +151,34 @@ settings. By using a GitLab-provided DSN, your application connects to GitLab to
 Those errors are stored in the GitLab database and rendered by the GitLab UI, in the same way as
 Sentry integration.
 
-### Feature flag
-
-The integrated error tracking feature is behind a feature flag that is disabled by default.
-
-To enable it:
-
-```ruby
-Feature.enable(:integrated_error_tracking)
-```
-
-To disable it:
-
-```ruby
-Feature.disable(:integrated_error_tracking)
-```
-
 ### Project settings
 
-The feature should be enabled on the project level. However, there is no UI to enable this feature yet.
-You must use the GitLab API to enable it.
+You can find the feature configuration at **Settings > Monitor > Error Tracking**.
 
 #### How to enable
 
-1. Enable the `integrated` error tracking setting for your project:
+1. Select **GitLab** as the error tracking backend for your project:
 
-   ```shell
-   curl --request PATCH --header "PRIVATE-TOKEN: <your_access_token>" \
-       "https://gitlab.example.com/api/v4/projects/PROJECT_ID/error_tracking/settings?active=true&integrated=true"
-   ```
+    ![Error Tracking Settings](img/error_tracking_setting_v14_3.png)
 
-1. Create a client key (DSN) to use with Sentry SDK in your application. Make sure to save the
-   response, as it contains a DSN:
+1. Select **Save changes**. After page reload you should see a text field with the DSN string. Copy it.
 
-   ```shell
-   curl --request POST --header "PRIVATE-TOKEN: <your_access_token>" \
-       "https://gitlab.example.com/api/v4/projects/PROJECT_ID/error_tracking/client_keys"
-   ```
+    ![Error Tracking Settings DSN](img/error_tracking_setting_dsn_v14_4.png)
 
 1. Take the DSN from the previous step and configure your Sentry SDK with it. Errors are now
    reported to the GitLab collector and are visible in the [GitLab UI](#error-tracking-list).
 
-#### How to disable
+#### Managing DSN
 
-To disable the feature, run this command. This is the same command as the one that enables the
-feature, but with a `false` value instead:
+When you enable the feature you receive a DSN. It includes a hash used for authentication. This hash
+is a client key. GitLab uses client keys to authenticate error tracking requests from your
+application to the GitLab backend.
 
-```shell
-curl --request PATCH --header "PRIVATE-TOKEN: <your_access_token>" \
-    "https://gitlab.example.com/api/v4/projects/PROJECT_ID/error_tracking/settings?active=false&integrated=false"
-```
+In some situations, you may want to create a new client key and remove an existing one.
+You can do so by managing client keys with the [error tracking API](../api/error_tracking.md).
+
+#### Limitations
+
+The Integrated Error Tracking feature was built and tested with Sentry SDK for Ruby on Rails.
+Support for other languages and frameworks is not guaranteed. For up-to-date information, see the
+[compatibility issue](https://gitlab.com/gitlab-org/gitlab/-/issues/340178).

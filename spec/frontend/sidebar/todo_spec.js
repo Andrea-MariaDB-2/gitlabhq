@@ -1,6 +1,7 @@
 import { GlLoadingIcon, GlIcon } from '@gitlab/ui';
 import { shallowMount } from '@vue/test-utils';
 
+import { nextTick } from 'vue';
 import SidebarTodos from '~/sidebar/components/todo_toggle/todo.vue';
 
 const defaultProps = {
@@ -27,7 +28,7 @@ describe('SidebarTodo', () => {
   it.each`
     state    | classes
     ${false} | ${['gl-button', 'btn', 'btn-default', 'btn-todo', 'issuable-header-btn', 'float-right']}
-    ${true}  | ${['btn-blank', 'btn-todo', 'sidebar-collapsed-icon', 'dont-change-state']}
+    ${true}  | ${['btn-blank', 'btn-todo', 'sidebar-collapsed-icon', 'js-dont-change-state']}
   `('returns todo button classes for when `collapsed` prop is `$state`', ({ state, classes }) => {
     createComponent({ collapsed: state });
     expect(wrapper.find('button').classes()).toStrictEqual(classes);
@@ -49,13 +50,12 @@ describe('SidebarTodo', () => {
   );
 
   describe('template', () => {
-    it('emits `toggleTodo` event when clicked on button', () => {
+    it('emits `toggleTodo` event when clicked on button', async () => {
       createComponent();
       wrapper.find('button').trigger('click');
 
-      return wrapper.vm.$nextTick().then(() => {
-        expect(wrapper.emitted().toggleTodo).toBeTruthy();
-      });
+      await nextTick();
+      expect(wrapper.emitted().toggleTodo).toBeTruthy();
     });
 
     it('renders component container element with proper data attributes', () => {

@@ -2,7 +2,11 @@
 
 module Gitlab
   module Database
+    DATABASE_NAMES = %w[main ci].freeze
+
+    MAIN_DATABASE_NAME = 'main'
     CI_DATABASE_NAME = 'ci'
+    DEFAULT_POOL_HEADROOM = 10
 
     # This constant is used when renaming tables concurrently.
     # If you plan to rename a table using the `rename_table_safely` method, add your table here one milestone before the rename.
@@ -45,18 +49,45 @@ module Gitlab
     # It does not include the default public schema
     EXTRA_SCHEMAS = [DYNAMIC_PARTITIONS_SCHEMA, STATIC_PARTITIONS_SCHEMA].freeze
 
-    DATABASES = ActiveRecord::Base
-      .connection_handler
-      .connection_pools
-      .each_with_object({}) do |pool, hash|
-        hash[pool.db_config.name.to_sym] = Connection.new(pool.connection_klass)
-      end
-      .freeze
-
     PRIMARY_DATABASE_NAME = ActiveRecord::Base.connection_db_config.name.to_sym
 
-    def self.main
-      DATABASES[PRIMARY_DATABASE_NAME]
+    def self.database_base_models
+      @database_base_models ||= {
+        # Note that we use ActiveRecord::Base here and not ApplicationRecord.
+        # This is deliberate, as we also use these classes to apply load
+        # balancing to, and the load balancer must be enabled for _all_ models
+        # that inher from ActiveRecord::Base; not just our own models that
+        # inherit from ApplicationRecord.
+        main: ::ActiveRecord::Base,
+        ci: ::Ci::ApplicationRecord.connection_class? ? ::Ci::ApplicationRecord : nil
+      }.compact.with_indifferent_access.freeze
+    end
+
+    # This returns a list of base models with connection associated for a given gitlab_schema
+    def self.schemas_to_base_models
+      @schemas_to_base_models ||= {
+        gitlab_main: [self.database_base_models.fetch(:main)],
+        gitlab_ci: [self.database_base_models[:ci] || self.database_base_models.fetch(:main)], # use CI or fallback to main
+        gitlab_shared: self.database_base_models.values # all models
+      }.with_indifferent_access.freeze
+    end
+
+    def self.all_database_names
+      DATABASE_NAMES
+    end
+
+    # We configure the database connection pool size automatically based on the
+    # configured concurrency. We also add some headroom, to make sure we don't
+    # run out of connections when more threads besides the 'user-facing' ones
+    # are running.
+    #
+    # Read more about this in
+    # doc/development/database/client_side_connection_pool.md
+    def self.default_pool_size
+      headroom =
+        (ENV["DB_POOL_HEADROOM"].presence || DEFAULT_POOL_HEADROOM).to_i
+
+      Gitlab::Runtime.max_threads + headroom
     end
 
     def self.has_config?(database_name)
@@ -78,11 +109,33 @@ module Gitlab
       name.to_s == CI_DATABASE_NAME
     end
 
+    class PgUser < ApplicationRecord
+      self.table_name = 'pg_user'
+      self.primary_key = :usename
+    end
+
+    # rubocop: disable CodeReuse/ActiveRecord
+    def self.check_for_non_superuser
+      user = PgUser.find_by('usename = CURRENT_USER')
+      am_i_superuser = user.usesuper
+
+      Gitlab::AppLogger.info(
+        "Account details: User: \"#{user.usename}\", UseSuper: (#{am_i_superuser})"
+      )
+
+      raise 'Error: detected superuser' if am_i_superuser
+    rescue ActiveRecord::StatementInvalid
+      raise 'User CURRENT_USER not found'
+    end
+    # rubocop: enable CodeReuse/ActiveRecord
+
     def self.check_postgres_version_and_print_warning
       return if Gitlab::Runtime.rails_runner?
 
-      DATABASES.each do |name, connection|
-        next if connection.postgresql_minimum_supported_version?
+      database_base_models.each do |name, model|
+        database = Gitlab::Database::Reflection.new(model)
+
+        next if database.postgresql_minimum_supported_version?
 
         Kernel.warn ERB.new(Rainbow.new.wrap(<<~EOS).red).result
 
@@ -93,7 +146,7 @@ module Gitlab
                      ███ ███  ██   ██ ██   ██ ██   ████ ██ ██   ████  ██████  
 
           ******************************************************************************
-            You are using PostgreSQL <%= Gitlab::Database.main.version %> for the #{name} database, but PostgreSQL >= <%= Gitlab::Database::MINIMUM_POSTGRES_VERSION %>
+            You are using PostgreSQL #{database.version} for the #{name} database, but PostgreSQL >= <%= Gitlab::Database::MINIMUM_POSTGRES_VERSION %>
             is required for this version of GitLab.
             <% if Rails.env.development? || Rails.env.test? %>
             If using gitlab-development-kit, please find the relevant steps here:
@@ -142,21 +195,19 @@ module Gitlab
       MAX_TIMESTAMP_VALUE > timestamp ? timestamp : MAX_TIMESTAMP_VALUE.dup
     end
 
+    def self.all_uncached(&block)
+      # Calls to #uncached only disable caching for the current connection. Since the load balancer
+      # can potentially upgrade from read to read-write mode (using a different connection), we specify
+      # up-front that we'll explicitly use the primary for the duration of the operation.
+      Gitlab::Database::LoadBalancing::Session.current.use_primary do
+        base_models = database_base_models.values
+        base_models.reduce(block) { |blk, model| -> { model.uncached(&blk) } }.call
+      end
+    end
+
     def self.allow_cross_joins_across_databases(url:)
       # this method is implemented in:
       # spec/support/database/prevent_cross_joins.rb
-      yield
-    end
-
-    # This method will allow cross database modifications within the block
-    # Example:
-    #
-    # allow_cross_database_modification_within_transaction(url: 'url-to-an-issue') do
-    #   create(:build) # inserts ci_build and project record in one transaction
-    # end
-    def self.allow_cross_database_modification_within_transaction(url:)
-      # this method will be overridden in:
-      # spec/support/database/cross_database_modification_check.rb
       yield
     end
 
@@ -180,14 +231,44 @@ module Gitlab
       ::ActiveRecord::Base.configurations.configs_for(env_name: Rails.env).map(&:name)
     end
 
-    def self.db_config_name(ar_connection)
-      if ar_connection.respond_to?(:pool) &&
-          ar_connection.pool.respond_to?(:db_config) &&
-          ar_connection.pool.db_config.respond_to?(:name)
-        return ar_connection.pool.db_config.name
+    # This returns all matching schemas that a given connection can use
+    # Since the `ActiveRecord::Base` might change the connection (from main to ci)
+    # This does not look at literal connection names, but rather compares
+    # models that are holders for a given db_config_name
+    def self.gitlab_schemas_for_connection(connection)
+      connection_name = self.db_config_name(connection)
+      primary_model = self.database_base_models.fetch(connection_name)
+
+      self.schemas_to_base_models
+        .select { |_, models| models.include?(primary_model) }
+        .keys
+        .map!(&:to_sym)
+    end
+
+    def self.db_config_for_connection(connection)
+      return unless connection
+
+      if connection.is_a?(::Gitlab::Database::LoadBalancing::ConnectionProxy)
+        return connection.load_balancer.configuration.primary_db_config
       end
 
-      'unknown'
+      # During application init we might receive `NullPool`
+      return unless connection.respond_to?(:pool) &&
+        connection.pool.respond_to?(:db_config)
+
+      connection.pool.db_config
+    end
+
+    # At the moment, the connection can only be retrieved by
+    # Gitlab::Database::LoadBalancer#read or #read_write or from the
+    # ActiveRecord directly. Therefore, if the load balancer doesn't
+    # recognize the connection, this method returns the primary role
+    # directly. In future, we may need to check for other sources.
+    # Expected returned names:
+    # main, main_replica, ci, ci_replica, unknown
+    def self.db_config_name(connection)
+      db_config = db_config_for_connection(connection)
+      db_config&.name || 'unknown'
     end
 
     def self.read_only?
@@ -218,13 +299,27 @@ module Gitlab
         # A patch over ActiveRecord::Base.transaction that provides
         # observability into transactional methods.
         def transaction(**options, &block)
-          if options[:requires_new] && connection.transaction_open?
-            ::Gitlab::Database::Metrics.subtransactions_increment(self.name)
-          end
+          transaction_type = get_transaction_type(connection.transaction_open?, options[:requires_new])
 
-          ActiveSupport::Notifications.instrument('transaction.active_record', { connection: connection }) do
+          ::Gitlab::Database::Metrics.subtransactions_increment(self.name) if transaction_type == :sub_transaction
+
+          payload = { connection: connection, transaction_type: transaction_type }
+
+          ActiveSupport::Notifications.instrument('transaction.active_record', payload) do
             super(**options, &block)
           end
+        end
+
+        private
+
+        def get_transaction_type(transaction_open, requires_new_flag)
+          if transaction_open
+            return :sub_transaction if requires_new_flag
+
+            return :fake_transaction
+          end
+
+          :real_transaction
         end
       end
     end

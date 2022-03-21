@@ -2,21 +2,19 @@
 stage: Release
 group: Release
 info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
-type: howto
 ---
 
-# Deploy tokens
+# Deploy tokens **(FREE)**
 
-> - [Introduced](https://gitlab.com/gitlab-org/gitlab-foss/-/merge_requests/17894) in GitLab 10.7.
-> - [Moved](https://gitlab.com/gitlab-org/gitlab/-/issues/199370) from **Settings > Repository** in GitLab 12.9.
-> - [Added `write_registry` scope](https://gitlab.com/gitlab-org/gitlab/-/issues/22743) in GitLab 12.10.
-> - [Moved](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/29280) from **Settings > CI/CD** in GitLab 12.10.1.
-> - [Added package registry scopes](https://gitlab.com/gitlab-org/gitlab/-/issues/213566) in GitLab 13.0.
+> - [Moved](https://gitlab.com/gitlab-org/gitlab/-/issues/199370) from **Settings > Repository** to **Settings > CI/CD** in GitLab 12.9.
+> - [Added](https://gitlab.com/gitlab-org/gitlab/-/issues/22743) `write_registry` scope in GitLab 12.10.
+> - [Moved](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/29280) from **Settings > CI/CD** to **Settings > Repository** in GitLab 12.10.1.
+> - [Added](https://gitlab.com/gitlab-org/gitlab/-/issues/213566) package registry scopes in GitLab 13.0.
 
 Deploy tokens allow you to download (`git clone`) or push and pull packages and
 container registry images of a project without having a user and a password.
 
-Deploy tokens can be managed by [maintainers only](../../permissions.md).
+Deploy tokens can be managed only by users with the Maintainer role.
 
 Deploy tokens cannot be used with the GitLab API.
 
@@ -31,14 +29,15 @@ You can create as many deploy tokens as you need from the settings of your
 project. Alternatively, you can also create [group-scoped deploy tokens](#group-deploy-token).
 
 1. Sign in to your GitLab account.
-1. Go to the project (or group) you want to create deploy tokens for.
-1. Go to **Settings > Repository**.
-1. Expand the **Deploy tokens** section.
-1. Choose a name, expiry date (optional), and username (optional) for the token.
+1. On the top bar, select **Menu > Projects** or **Menu > Groups** to find your project or group.
+1. On the left sidebar, select **Settings > Repository**.
+1. Expand **Deploy tokens**.
+1. Choose a name, and optionally, an expiration date and username for the token.
 1. Choose the [desired scopes](#limiting-scopes-of-a-deploy-token).
 1. Select **Create deploy token**.
-1. Save the deploy token somewhere safe. After you leave or refresh
-   the page, **you can't access it again**.
+
+Save the deploy token somewhere safe. After you leave or refresh
+the page, **you can't access it again**.
 
 ![Personal access tokens page](img/deploy_tokens_ui.png)
 
@@ -48,8 +47,12 @@ Deploy tokens expire at midnight UTC on the date you define.
 
 ## Revoking a deploy token
 
-To revoke a deploy token, under the **Active deploy tokens** area,
-select the respective **Revoke** button.
+To revoke a deploy token:
+
+1. On the top bar, select **Menu > Projects** or **Menu > Groups** to find your project or group.
+1. On the left sidebar, select **Settings > Repository**.
+1. Expand **Deploy tokens**.
+1. In the **Active Deploy Tokens** section, by the token you want to revoke, select **Revoke**.
 
 ## Limiting scopes of a deploy token
 
@@ -59,8 +62,8 @@ following table along with GitLab version it was introduced in:
 
 | Scope                    | Description | Introduced in GitLab Version |
 |--------------------------|-------------|------------------------------|
-| `read_repository`        | Allows read-access to the repository through `git clone` | 10.7 |
-| `read_registry`          | Allows read-access to [container registry](../../packages/container_registry/index.md) images if a project is private and authorization is required. | 10.7 |
+| `read_repository`        | Allows read-access to the repository through `git clone` | -- |
+| `read_registry`          | Allows read-access to [container registry](../../packages/container_registry/index.md) images if a project is private and authorization is required. | -- |
 | `write_registry`         | Allows write-access (push) to [container registry](../../packages/container_registry/index.md). | 12.10 |
 | `read_package_registry`  | Allows read access to the package registry. | 13.0 |
 | `write_package_registry` | Allows write access to the package registry. | 13.0 |
@@ -181,11 +184,9 @@ To pull images from the Dependency Proxy, you must:
 
 1. Create a group deploy token with both `read_registry` and `write_registry` scopes.
 1. Take note of your `username` and `token`.
-1. Follow the Depenency Proxy [authentication instructions](../../packages/dependency_proxy/index.md).
+1. Follow the Dependency Proxy [authentication instructions](../../packages/dependency_proxy/index.md).
 
 ### GitLab deploy token
-
-> [Introduced](https://gitlab.com/gitlab-org/gitlab-foss/-/merge_requests/18414) in GitLab 10.8.
 
 There's a special case when it comes to deploy tokens. If a user creates one
 named `gitlab-deploy-token`, the username and token of the deploy token is
@@ -203,3 +204,18 @@ NOTE:
 The special handling for the `gitlab-deploy-token` deploy token is not
 implemented for group deploy tokens. To make the group-level deploy token available for
 CI/CD jobs, the `CI_DEPLOY_USER` and `CI_DEPLOY_PASSWORD` variables should be set under **Settings** to the name and token of the group deploy token respectively.
+
+## Troubleshooting
+
+### Group deploy tokens and LFS
+
+A bug
+[prevents Group Deploy Tokens from cloning LFS objects](https://gitlab.com/gitlab-org/gitlab/-/issues/235398).
+If you receive `404 Not Found` errors and this error,
+use a Project Deploy Token to work around the bug:
+
+```plaintext
+api error: Repository or object not found:
+https://<URL-with-token>.git/info/lfs/objects/batch
+Check that it exists and that you have proper access to it
+```

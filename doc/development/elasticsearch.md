@@ -9,7 +9,7 @@ info: To determine the technical writer assigned to the Stage/Group associated w
 This area is to maintain a compendium of useful information when working with Elasticsearch.
 
 Information on how to enable Elasticsearch and perform the initial indexing is in
-the [Elasticsearch integration documentation](../integration/elasticsearch.md#enabling-advanced-search).
+the [Elasticsearch integration documentation](../integration/elasticsearch.md#enable-advanced-search).
 
 ## Deep Dive
 
@@ -233,6 +233,11 @@ Any data or index cleanup needed to support migration retries should be handled 
 will re-enqueue itself with a delay which is set using the `throttle_delay` option described below. The batching
 must be handled within the `migrate` method, this setting controls the re-enqueuing only.
 
+- `batch_size` - Sets the number of documents modified during a `batched!` migration run. This size should be set to a value which allows the updates
+enough time to finish. This can be tuned in combination with the `throttle_delay` option described below. The batching
+must be handled within a custom `migrate` method or by using the [`Elastic::MigrationBackfillHelper`](https://gitlab.com/gitlab-org/gitlab/-/blob/master/ee/app/workers/concerns/elastic/migration_backfill_helper.rb)
+`migrate` method which uses this setting. Default value is 1000 documents.
+
 - `throttle_delay` - Sets the wait time in between batch runs. This time should be set high enough to allow each migration batch
 enough time to finish. Additionally, the time should be less than 30 minutes since that is how often the
 [`Elastic::MigrationWorker`](https://gitlab.com/gitlab-org/gitlab/-/blob/master/ee/app/workers/elastic/migration_worker.rb)
@@ -245,6 +250,11 @@ the migration runs and set it back to that value when the migration is completed
   will halt the migration if the storage required is not available when the migration runs. The migration must provide
   the space required in bytes by defining a `space_required_bytes` method.
 
+- `retry_on_failure` - Enable the retry on failure feature. By default, it retries
+  the migration 30 times. After it runs out of retries, the migration is marked as halted.
+  To customize the number of retries, pass the `max_attempts` argument:
+  `retry_on_failure max_attempts: 10`
+
 ```ruby
 # frozen_string_literal: true
 
@@ -254,6 +264,7 @@ class BatchedMigrationName < Elastic::Migration
   throttle_delay 10.minutes
   pause_indexing!
   space_requirements!
+  retry_on_failure
 
   # ...
 end
@@ -354,17 +365,15 @@ being upgraded to, we do the following:
 
 ### Prometheus
 
-GitLab exports [Prometheus
-metrics](../administration/monitoring/prometheus/gitlab_metrics.md) relating to
-the number of requests and timing for all web/API requests and Sidekiq jobs,
+GitLab exports [Prometheus metrics](../administration/monitoring/prometheus/gitlab_metrics.md)
+relating to the number of requests and timing for all web/API requests and Sidekiq jobs,
 which can help diagnose performance trends and compare how Elasticsearch timing
 is impacting overall performance relative to the time spent doing other things.
 
 #### Indexing queues
 
-GitLab also exports [Prometheus
-metrics](../administration/monitoring/prometheus/gitlab_metrics.md) for
-indexing queues, which can help diagnose performance bottlenecks and determine
+GitLab also exports [Prometheus metrics](../administration/monitoring/prometheus/gitlab_metrics.md)
+for indexing queues, which can help diagnose performance bottlenecks and determine
 whether or not your GitLab instance or Elasticsearch server can keep up with
 the volume of updates.
 

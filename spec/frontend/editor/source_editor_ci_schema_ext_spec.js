@@ -1,13 +1,17 @@
 import { languages } from 'monaco-editor';
 import { TEST_HOST } from 'helpers/test_constants';
-import { EXTENSION_CI_SCHEMA_FILE_NAME_MATCH } from '~/editor/constants';
 import { CiSchemaExtension } from '~/editor/extensions/source_editor_ci_schema_ext';
+import ciSchemaPath from '~/editor/schema/ci.json';
 import SourceEditor from '~/editor/source_editor';
+
+// Webpack is configured to use file-loader for the CI schema; mimic that here
+jest.mock('~/editor/schema/ci.json', () => '/assets/ci.json');
 
 const mockRef = 'AABBCCDD';
 
 describe('~/editor/editor_ci_config_ext', () => {
   const defaultBlobPath = '.gitlab-ci.yml';
+  const expectedSchemaUri = `${TEST_HOST}${ciSchemaPath}`;
 
   let editor;
   let instance;
@@ -23,7 +27,7 @@ describe('~/editor/editor_ci_config_ext', () => {
       blobPath,
       blobContent: '',
     });
-    instance.use(new CiSchemaExtension());
+    instance.use({ definition: CiSchemaExtension });
   };
 
   beforeAll(() => {
@@ -84,14 +88,13 @@ describe('~/editor/editor_ci_config_ext', () => {
         });
 
         expect(getConfiguredYmlSchema()).toEqual({
-          uri: `${TEST_HOST}/${mockProjectNamespace}/${mockProjectPath}/-/schema/${mockRef}/${EXTENSION_CI_SCHEMA_FILE_NAME_MATCH}`,
+          uri: expectedSchemaUri,
           fileMatch: [defaultBlobPath],
         });
       });
 
       it('with an alternative file name match', () => {
         createMockEditor({ blobPath: 'dir1/dir2/another-ci-filename.yml' });
-
         instance.registerCiSchema({
           projectNamespace: mockProjectNamespace,
           projectPath: mockProjectPath,
@@ -99,7 +102,7 @@ describe('~/editor/editor_ci_config_ext', () => {
         });
 
         expect(getConfiguredYmlSchema()).toEqual({
-          uri: `${TEST_HOST}/${mockProjectNamespace}/${mockProjectPath}/-/schema/${mockRef}/${EXTENSION_CI_SCHEMA_FILE_NAME_MATCH}`,
+          uri: expectedSchemaUri,
           fileMatch: ['another-ci-filename.yml'],
         });
       });

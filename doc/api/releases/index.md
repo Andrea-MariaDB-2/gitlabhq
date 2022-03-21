@@ -4,16 +4,16 @@ group: Release
 info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
 ---
 
-# Releases API
+# Releases API **(FREE)**
 
-> - [Introduced](https://gitlab.com/gitlab-org/gitlab-foss/-/issues/41766) in GitLab 11.7.
-> - Using this API you can manipulate GitLab [Release](../../user/project/releases/index.md) entries.
-> - For manipulating links as a release asset, see [Release Links API](links.md).
 > - Release Evidences were [introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/26019) in GitLab 12.5.
 > - `description_html` became an opt-in field [with GitLab 13.12 for performance reasons](https://gitlab.com/gitlab-org/gitlab/-/issues/299447).
     Please pass the `include_html_description` query string parameter if you need it.
 > - [The permission model for create, update and delete actions was fixed](https://gitlab.com/gitlab-org/gitlab/-/issues/327505) in GitLab 14.1.
     See [Release permissions](../../user/project/releases/index.md#release-permissions) for more information.
+
+Use this API to manipulate GitLab [Release](../../user/project/releases/index.md)
+entries. For manipulating links as a release asset, see [Release Links API](links.md).
 
 ## Authentication
 
@@ -21,10 +21,12 @@ For authentication, the Releases API accepts either:
 
 - A [Personal Access Token](../../user/profile/personal_access_tokens.md) using the
   `PRIVATE-TOKEN` header.
-- The [GitLab CI/CD job token](../index.md#gitlab-cicd-job-token) `$CI_JOB_TOKEN` using
+- The [GitLab CI/CD job token](../../ci/jobs/ci_job_token.md) `$CI_JOB_TOKEN` using
   the `JOB-TOKEN` header.
 
 ## List Releases
+
+> [Changed](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/72448) to allow for `JOB-TOKEN` in GitLab 14.5.
 
 Paginated list of Releases, sorted by `released_at`.
 
@@ -89,8 +91,8 @@ Example response:
             "state":"closed",
             "created_at":"2019-07-12T19:45:44.256Z",
             "updated_at":"2019-07-12T19:45:44.256Z",
-            "due_date":"2019-08-16T11:00:00.256Z",
-            "start_date":"2019-07-30T12:00:00.256Z",
+            "due_date":"2019-08-16",
+            "start_date":"2019-07-30",
             "web_url":"https://gitlab.example.com/root/awesome-app/-/milestones/1",
             "issue_stats": {
                "total": 98,
@@ -106,8 +108,8 @@ Example response:
             "state":"closed",
             "created_at":"2019-07-16T14:00:12.256Z",
             "updated_at":"2019-07-16T14:00:12.256Z",
-            "due_date":"2019-08-16T11:00:00.256Z",
-            "start_date":"2019-07-30T12:00:00.256Z",
+            "due_date":"2019-08-16",
+            "start_date":"2019-07-30",
             "web_url":"https://gitlab.example.com/root/awesome-app/-/milestones/2",
             "issue_stats": {
                "total": 24,
@@ -231,6 +233,8 @@ Example response:
 
 ## Get a Release by a tag name
 
+> [Changed](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/72448) to allow for `JOB-TOKEN` in GitLab 14.5.
+
 Get a Release for the given tag.
 
 ```plaintext
@@ -292,8 +296,8 @@ Example response:
          "state":"closed",
          "created_at":"2019-07-12T19:45:44.256Z",
          "updated_at":"2019-07-12T19:45:44.256Z",
-         "due_date":"2019-08-16T11:00:00.256Z",
-         "start_date":"2019-07-30T12:00:00.256Z",
+         "due_date":"2019-08-16",
+         "start_date":"2019-07-30",
          "web_url":"https://gitlab.example.com/root/awesome-app/-/milestones/1",
          "issue_stats": {
             "total": 98,
@@ -309,8 +313,8 @@ Example response:
          "state":"closed",
          "created_at":"2019-07-16T14:00:12.256Z",
          "updated_at":"2019-07-16T14:00:12.256Z",
-         "due_date":"2019-08-16T11:00:00.256Z",
-         "start_date":"2019-07-30T12:00:00.256Z",
+         "due_date":"2019-08-16",
+         "start_date":"2019-07-30",
          "web_url":"https://gitlab.example.com/root/awesome-app/-/milestones/2",
          "issue_stats": {
             "total": 24,
@@ -434,8 +438,8 @@ Example response:
          "state":"closed",
          "created_at":"2019-07-12T19:45:44.256Z",
          "updated_at":"2019-07-12T19:45:44.256Z",
-         "due_date":"2019-08-16T11:00:00.256Z",
-         "start_date":"2019-07-30T12:00:00.256Z",
+         "due_date":"2019-08-16",
+         "start_date":"2019-07-30",
          "web_url":"https://gitlab.example.com/root/awesome-app/-/milestones/1",
          "issue_stats": {
             "total": 99,
@@ -451,8 +455,8 @@ Example response:
          "state":"closed",
          "created_at":"2019-07-16T14:00:12.256Z",
          "updated_at":"2019-07-16T14:00:12.256Z",
-         "due_date":"2019-08-16T11:00:00.256Z",
-         "start_date":"2019-07-30T12:00:00.256Z",
+         "due_date":"2019-08-16",
+         "start_date":"2019-07-30",
          "web_url":"https://gitlab.example.com/root/awesome-app/-/milestones/2",
          "issue_stats": {
             "total": 24,
@@ -499,7 +503,7 @@ Example response:
 
 ### Group milestones **(PREMIUM SELF)**
 
-> [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/235391) in [GitLab Premium](https://about.gitlab.com/pricing/) 13.5.
+> [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/235391) in GitLab 13.5.
 
 Group milestones associated with the project may be specified in the `milestones`
 array for [Create a release](#create-a-release) and [Update a release](#update-a-release)
@@ -508,7 +512,8 @@ adding milestones for ancestor groups raises an error.
 
 ## Collect release evidence **(PREMIUM SELF)**
 
-> [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/199065) in [GitLab Premium](https://about.gitlab.com/pricing/) 12.10.
+> - [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/199065) in GitLab 12.10.
+> - [Changed](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/72448) to allow for `JOB-TOKEN` in GitLab 14.5.
 
 Create Evidence for an existing Release.
 
@@ -534,6 +539,8 @@ Example response:
 ```
 
 ## Update a release
+
+> [Changed](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/72448) to allow for `JOB-TOKEN` in GitLab 14.5.
 
 Update a release. Developer level access to the project is required to update a release.
 
@@ -600,8 +607,8 @@ Example response:
          "state":"active",
          "created_at":"2019-09-01T13:00:00.256Z",
          "updated_at":"2019-09-01T13:00:00.256Z",
-         "due_date":"2019-09-20T13:00:00.256Z",
-         "start_date":"2019-09-05T12:00:00.256Z",
+         "due_date":"2019-09-20",
+         "start_date":"2019-09-05",
          "web_url":"https://gitlab.example.com/root/awesome-app/-/milestones/3",
          "issue_stats": {
             "opened": 11,
@@ -641,6 +648,8 @@ Example response:
 ```
 
 ## Delete a Release
+
+> [Changed](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/72448) to allow for `JOB-TOKEN` in GitLab 14.5.
 
 Delete a release. Deleting a release doesn't delete the associated tag. Maintainer level access to the project is required to delete a release.
 
@@ -729,3 +738,5 @@ Example response:
 
 A release with a `released_at` attribute set to a future date is labeled
 as an **Upcoming Release** [in the UI](../../user/project/releases/index.md#upcoming-releases).
+
+Additionally, if a [release is requested from the API](#list-releases), for each release with a `release_at` attribute set to a future date, an additional attribute `upcoming_release` (set to true) will be returned as part of the response.

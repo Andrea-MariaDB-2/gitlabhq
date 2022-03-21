@@ -5,9 +5,9 @@ description: The number of unique users who visited any analytics feature by wee
 product_section: dev
 product_stage: manage
 product_group: group::optimize
-product_category: 
+product_category:
 value_type: number
-status: data_available
+status: active
 time_frame: 7d
 data_source: redis_hll
 instrumentation_class: RedisHLLMetric
@@ -24,6 +24,9 @@ options:
     - g_analytics_productivity
     - g_analytics_valuestream
     - p_analytics_pipelines
+    - p_analytics_ci_cd_pipelines
+    - p_analytics_ci_cd_deployment_frequency
+    - p_analytics_ci_cd_lead_time
     - p_analytics_code_reviews
     - p_analytics_valuestream
     - p_analytics_insights
@@ -31,7 +34,11 @@ options:
     - p_analytics_repo
     - i_analytics_cohorts
 distribution:
-- ee
-tier: []
-skip_validation: true
+  - ce
+  - ee
+tier:
+  - free
+  - premium
+  - ultimate
 performance_indicator_type: []
+milestone: '<13.9'

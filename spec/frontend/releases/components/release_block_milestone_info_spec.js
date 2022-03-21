@@ -1,23 +1,24 @@
 import { GlProgressBar, GlLink, GlBadge, GlButton } from '@gitlab/ui';
 import { mount } from '@vue/test-utils';
-import { getJSONFixture } from 'helpers/fixtures';
+import { nextTick } from 'vue';
+import originalRelease from 'test_fixtures/api/releases/release.json';
 import { trimText } from 'helpers/text_helper';
 import { convertObjectPropsToCamelCase } from '~/lib/utils/common_utils';
 import ReleaseBlockMilestoneInfo from '~/releases/components/release_block_milestone_info.vue';
 import { MAX_MILESTONES_TO_DISPLAY } from '~/releases/constants';
 
-const { milestones: originalMilestones } = getJSONFixture('api/releases/release.json');
+const { milestones: originalMilestones } = originalRelease;
 
 describe('Release block milestone info', () => {
   let wrapper;
   let milestones;
 
-  const factory = (props) => {
+  const factory = async (props) => {
     wrapper = mount(ReleaseBlockMilestoneInfo, {
       propsData: props,
     });
 
-    return wrapper.vm.$nextTick();
+    await nextTick();
   };
 
   beforeEach(() => {
@@ -105,10 +106,10 @@ describe('Release block milestone info', () => {
       return factory({ milestones: lotsOfMilestones });
     });
 
-    const clickShowMoreFewerButton = () => {
+    const clickShowMoreFewerButton = async () => {
       milestoneListContainer().find(GlButton).trigger('click');
 
-      return wrapper.vm.$nextTick();
+      await nextTick();
     };
 
     const milestoneListText = () => trimText(milestoneListContainer().text());
@@ -117,19 +118,16 @@ describe('Release block milestone info', () => {
       expect(milestoneListText()).toContain(`Milestones ${abbreviatedListString} • show 10 more`);
     });
 
-    it('renders all milestones when "show more" is clicked', () =>
-      clickShowMoreFewerButton().then(() => {
-        expect(milestoneListText()).toContain(`Milestones ${fullListString} • show fewer`);
-      }));
+    it('renders all milestones when "show more" is clicked', async () => {
+      await clickShowMoreFewerButton();
+      expect(milestoneListText()).toContain(`Milestones ${fullListString} • show fewer`);
+    });
 
-    it('returns to the original view when "show fewer" is clicked', () =>
-      clickShowMoreFewerButton()
-        .then(clickShowMoreFewerButton)
-        .then(() => {
-          expect(milestoneListText()).toContain(
-            `Milestones ${abbreviatedListString} • show 10 more`,
-          );
-        }));
+    it('returns to the original view when "show fewer" is clicked', async () => {
+      await clickShowMoreFewerButton();
+      await clickShowMoreFewerButton();
+      expect(milestoneListText()).toContain(`Milestones ${abbreviatedListString} • show 10 more`);
+    });
   });
 
   const expectAllZeros = () => {

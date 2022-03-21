@@ -31,6 +31,23 @@ RSpec.describe InstanceConfiguration do
           expect(result.size).to eq(InstanceConfiguration::SSH_ALGORITHMS.size)
         end
 
+        it 'includes all algorithms' do
+          stub_pub_file(pub_file)
+
+          result = subject.settings[:ssh_algorithms_hashes]
+
+          expect(result.map { |a| a[:name] }).to match_array(%w(DSA ECDSA ED25519 RSA))
+        end
+
+        it 'does not include disabled algorithm' do
+          Gitlab::CurrentSettings.current_application_settings.update!(dsa_key_restriction: ApplicationSetting::FORBIDDEN_KEY_VALUE)
+          stub_pub_file(pub_file)
+
+          result = subject.settings[:ssh_algorithms_hashes]
+
+          expect(result.map { |a| a[:name] }).to match_array(%w(ECDSA ED25519 RSA))
+        end
+
         def pub_file(exist: true)
           path = exist ? 'spec/fixtures/ssh_host_example_key.pub' : 'spec/fixtures/ssh_host_example_key.pub.random'
 
@@ -127,6 +144,7 @@ RSpec.describe InstanceConfiguration do
           create(:plan_limits,
             plan: plan1,
             conan_max_file_size: 1001,
+            helm_max_file_size: 1008,
             maven_max_file_size: 1002,
             npm_max_file_size: 1003,
             nuget_max_file_size: 1004,
@@ -137,6 +155,7 @@ RSpec.describe InstanceConfiguration do
           create(:plan_limits,
             plan: plan2,
             conan_max_file_size: 1101,
+            helm_max_file_size: 1108,
             maven_max_file_size: 1102,
             npm_max_file_size: 1103,
             nuget_max_file_size: 1104,
@@ -149,8 +168,8 @@ RSpec.describe InstanceConfiguration do
         it 'returns package file size limits' do
           file_size_limits = subject.settings[:package_file_size_limits]
 
-          expect(file_size_limits[:Plan1]).to eq({ conan: 1001, maven: 1002, npm: 1003, nuget: 1004, pypi: 1005, terraform_module: 1006, generic: 1007 })
-          expect(file_size_limits[:Plan2]).to eq({ conan: 1101, maven: 1102, npm: 1103, nuget: 1104, pypi: 1105, terraform_module: 1106, generic: 1107 })
+          expect(file_size_limits[:Plan1]).to eq({ conan: 1001, helm: 1008, maven: 1002, npm: 1003, nuget: 1004, pypi: 1005, terraform_module: 1006, generic: 1007 })
+          expect(file_size_limits[:Plan2]).to eq({ conan: 1101, helm: 1108, maven: 1102, npm: 1103, nuget: 1104, pypi: 1105, terraform_module: 1106, generic: 1107 })
         end
       end
 
@@ -175,6 +194,9 @@ RSpec.describe InstanceConfiguration do
             throttle_authenticated_packages_api_enabled: true,
             throttle_authenticated_packages_api_requests_per_period: 1011,
             throttle_authenticated_packages_api_period_in_seconds: 1012,
+            throttle_authenticated_git_lfs_enabled: true,
+            throttle_authenticated_git_lfs_requests_per_period: 1022,
+            throttle_authenticated_git_lfs_period_in_seconds: 1023,
             issues_create_limit: 1013,
             notes_create_limit: 1014,
             project_export_limit: 1015,
@@ -183,7 +205,10 @@ RSpec.describe InstanceConfiguration do
             group_export_limit: 1018,
             group_download_export_limit: 1019,
             group_import_limit: 1020,
-            raw_blob_request_limit: 1021
+            raw_blob_request_limit: 1021,
+            search_rate_limit: 1022,
+            search_rate_limit_unauthenticated: 1000,
+            users_get_by_id_limit: 1023
           )
         end
 
@@ -196,6 +221,7 @@ RSpec.describe InstanceConfiguration do
           expect(rate_limits[:protected_paths]).to eq({ enabled: true, requests_per_period: 1007, period_in_seconds: 1008 })
           expect(rate_limits[:unauthenticated_packages_api]).to eq({ enabled: false, requests_per_period: 1009, period_in_seconds: 1010 })
           expect(rate_limits[:authenticated_packages_api]).to eq({ enabled: true, requests_per_period: 1011, period_in_seconds: 1012 })
+          expect(rate_limits[:authenticated_git_lfs_api]).to eq({ enabled: true, requests_per_period: 1022, period_in_seconds: 1023 })
           expect(rate_limits[:issue_creation]).to eq({ enabled: true, requests_per_period: 1013, period_in_seconds: 60 })
           expect(rate_limits[:note_creation]).to eq({ enabled: true, requests_per_period: 1014, period_in_seconds: 60 })
           expect(rate_limits[:project_export]).to eq({ enabled: true, requests_per_period: 1015, period_in_seconds: 60 })
@@ -205,6 +231,9 @@ RSpec.describe InstanceConfiguration do
           expect(rate_limits[:group_export_download]).to eq({ enabled: true, requests_per_period: 1019, period_in_seconds: 60 })
           expect(rate_limits[:group_import]).to eq({ enabled: true, requests_per_period: 1020, period_in_seconds: 60 })
           expect(rate_limits[:raw_blob]).to eq({ enabled: true, requests_per_period: 1021, period_in_seconds: 60 })
+          expect(rate_limits[:search_rate_limit]).to eq({ enabled: true, requests_per_period: 1022, period_in_seconds: 60 })
+          expect(rate_limits[:search_rate_limit_unauthenticated]).to eq({ enabled: true, requests_per_period: 1000, period_in_seconds: 60 })
+          expect(rate_limits[:users_get_by_id]).to eq({ enabled: true, requests_per_period: 1023, period_in_seconds: 600 })
         end
       end
     end

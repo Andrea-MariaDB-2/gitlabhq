@@ -37,7 +37,10 @@ RSpec.describe 'OpenID Connect requests' do
       'website'        => 'https://example.com',
       'profile'        => 'http://localhost/alice',
       'picture'        => "http://localhost/uploads/-/system/user/avatar/#{user.id}/dk.png",
-      'groups'         => kind_of(Array)
+      'groups'         => kind_of(Array),
+      'https://gitlab.org/claims/groups/owner'      => kind_of(Array),
+      'https://gitlab.org/claims/groups/maintainer' => kind_of(Array),
+      'https://gitlab.org/claims/groups/developer'  => kind_of(Array)
     }
   end
 
@@ -119,6 +122,7 @@ RSpec.describe 'OpenID Connect requests' do
       before do
         group1.add_user(user, GroupMember::OWNER)
         group3.add_user(user, Gitlab::Access::DEVELOPER)
+        group4.add_user(user, Gitlab::Access::MAINTAINER)
 
         request_user_info!
       end
@@ -129,6 +133,10 @@ RSpec.describe 'OpenID Connect requests' do
         expected_groups = [group1.full_path, group3.full_path]
         expected_groups << group4.full_path
         expect(json_response['groups']).to match_array(expected_groups)
+
+        expect(json_response['https://gitlab.org/claims/groups/owner']).to match_array([group1.full_path])
+        expect(json_response['https://gitlab.org/claims/groups/maintainer']).to match_array([group4.full_path])
+        expect(json_response['https://gitlab.org/claims/groups/developer']).to match_array([group3.full_path])
       end
 
       it 'does not include any unknown claims' do
@@ -149,7 +157,15 @@ RSpec.describe 'OpenID Connect requests' do
     end
 
     context 'ID token payload' do
+      let!(:group1) { create :group }
+      let!(:group2) { create :group }
+      let!(:group3) { create :group, parent: group2 }
+      let!(:group4) { create :group, parent: group3 }
+
       before do
+        group1.add_user(user, Gitlab::Access::OWNER)
+        group3.add_user(user, Gitlab::Access::DEVELOPER)
+
         request_access_token!
         @payload = JSON::JWT.decode(json_response['id_token'], :skip_verification)
       end
@@ -175,7 +191,12 @@ RSpec.describe 'OpenID Connect requests' do
       end
 
       it 'does not include any unknown properties' do
-        expect(@payload.keys).to eq %w[iss sub aud exp iat auth_time sub_legacy email email_verified]
+        expect(@payload.keys).to eq %w[iss sub aud exp iat auth_time sub_legacy email email_verified groups_direct]
+      end
+
+      it 'does include groups' do
+        expected_groups = [group1.full_path, group3.full_path]
+        expect(@payload['groups_direct']).to match_array(expected_groups)
       end
     end
 
@@ -254,7 +275,7 @@ RSpec.describe 'OpenID Connect requests' do
       expect(response).to have_gitlab_http_status(:ok)
       expect(json_response['issuer']).to eq('http://localhost')
       expect(json_response['jwks_uri']).to eq('http://www.example.com/oauth/discovery/keys')
-      expect(json_response['scopes_supported']).to eq(%w[api read_user read_api read_repository write_repository sudo openid profile email])
+      expect(json_response['scopes_supported']).to match_array %w[api read_user read_api read_repository write_repository sudo openid profile email]
     end
 
     context 'with a cross-origin request' do
@@ -264,7 +285,7 @@ RSpec.describe 'OpenID Connect requests' do
         expect(response).to have_gitlab_http_status(:ok)
         expect(json_response['issuer']).to eq('http://localhost')
         expect(json_response['jwks_uri']).to eq('http://www.example.com/oauth/discovery/keys')
-        expect(json_response['scopes_supported']).to eq(%w[api read_user read_api read_repository write_repository sudo openid profile email])
+        expect(json_response['scopes_supported']).to match_array %w[api read_user read_api read_repository write_repository sudo openid profile email]
       end
 
       it_behaves_like 'cross-origin GET request'
@@ -331,7 +352,15 @@ RSpec.describe 'OpenID Connect requests' do
     end
 
     context 'ID token payload' do
+      let!(:group1) { create :group }
+      let!(:group2) { create :group }
+      let!(:group3) { create :group, parent: group2 }
+      let!(:group4) { create :group, parent: group3 }
+
       before do
+        group1.add_user(user, Gitlab::Access::OWNER)
+        group3.add_user(user, Gitlab::Access::DEVELOPER)
+
         request_access_token!
         @payload = JSON::JWT.decode(json_response['id_token'], :skip_verification)
       end
@@ -342,6 +371,11 @@ RSpec.describe 'OpenID Connect requests' do
 
       it 'has true in email_verified claim' do
         expect(@payload['email_verified']).to eq(true)
+      end
+
+      it 'does include groups' do
+        expected_groups = [group1.full_path, group3.full_path]
+        expect(@payload['groups_direct']).to match_array(expected_groups)
       end
     end
   end

@@ -27,6 +27,10 @@ RSpec.describe Admin::ClustersController do
           create(:cluster, :disabled, :provided_by_gcp, :production_environment, :instance)
         end
 
+        include_examples ':certificate_based_clusters feature flag controller responses' do
+          let(:subject) { get_index }
+        end
+
         it 'lists available clusters and displays html' do
           get_index
 
@@ -103,6 +107,10 @@ RSpec.describe Admin::ClustersController do
 
     def go(provider: 'gcp')
       get :new, params: { provider: provider }
+    end
+
+    include_examples ':certificate_based_clusters feature flag controller responses' do
+      let(:subject) { go }
     end
 
     describe 'functionality for new cluster' do
@@ -226,6 +234,10 @@ RSpec.describe Admin::ClustersController do
       post :create_gcp, params: params
     end
 
+    include_examples ':certificate_based_clusters feature flag controller responses' do
+      let(:subject) { post_create_gcp }
+    end
+
     describe 'functionality' do
       context 'when access token is valid' do
         before do
@@ -278,7 +290,8 @@ RSpec.describe Admin::ClustersController do
         end
         allow_next_instance_of(GoogleApi::CloudPlatform::Client) do |instance|
           allow(instance).to receive(:projects_zones_clusters_create) do
-            OpenStruct.new(
+            double(
+              'instance',
               self_link: 'projects/gcp-project-12345/zones/us-central1-a/operations/ope-123',
               status: 'RUNNING'
             )
@@ -315,6 +328,10 @@ RSpec.describe Admin::ClustersController do
 
     def post_create_aws
       post :create_aws, params: params
+    end
+
+    include_examples ':certificate_based_clusters feature flag controller responses' do
+      let(:subject) { post_create_aws }
     end
 
     it 'creates a new cluster' do
@@ -372,6 +389,10 @@ RSpec.describe Admin::ClustersController do
 
     def post_create_user
       post :create_user, params: params
+    end
+
+    include_examples ':certificate_based_clusters feature flag controller responses' do
+      let(:subject) { post_create_user }
     end
 
     describe 'functionality' do
@@ -444,6 +465,10 @@ RSpec.describe Admin::ClustersController do
       post :authorize_aws_role, params: params
     end
 
+    include_examples ':certificate_based_clusters feature flag controller responses' do
+      let(:subject) { go }
+    end
+
     before do
       allow(Clusters::Aws::FetchCredentialsService).to receive(:new)
         .and_return(double(execute: double))
@@ -494,6 +519,10 @@ RSpec.describe Admin::ClustersController do
       delete :clear_cache, params: { id: cluster }
     end
 
+    include_examples ':certificate_based_clusters feature flag controller responses' do
+      let(:subject) { go }
+    end
+
     it 'deletes the namespaces associated with the cluster' do
       expect { go }.to change { Clusters::KubernetesNamespace.count }
 
@@ -517,6 +546,10 @@ RSpec.describe Admin::ClustersController do
           id: cluster
         },
         format: :json
+    end
+
+    include_examples ':certificate_based_clusters feature flag controller responses' do
+      let(:subject) { get_cluster_status }
     end
 
     describe 'functionality' do
@@ -552,6 +585,10 @@ RSpec.describe Admin::ClustersController do
           id: cluster,
           tab: tab
         }
+    end
+
+    include_examples ':certificate_based_clusters feature flag controller responses' do
+      let(:subject) { get_show }
     end
 
     describe 'functionality' do
@@ -600,6 +637,10 @@ RSpec.describe Admin::ClustersController do
           base_domain: domain
         }
       }
+    end
+
+    include_examples ':certificate_based_clusters feature flag controller responses' do
+      let(:subject) { put_update }
     end
 
     it 'updates and redirects back to show page' do
@@ -691,6 +732,10 @@ RSpec.describe Admin::ClustersController do
         params: {
           id: cluster
         }
+    end
+
+    include_examples ':certificate_based_clusters feature flag controller responses' do
+      let(:subject) { delete_destroy }
     end
 
     describe 'functionality' do

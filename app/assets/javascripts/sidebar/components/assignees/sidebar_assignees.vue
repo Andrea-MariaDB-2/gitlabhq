@@ -63,7 +63,7 @@ export default {
   computed: {
     shouldEnableRealtime() {
       // Note: Realtime is only available on issues right now, future support for MR wil be built later.
-      return this.glFeatures.realTimeIssueSidebar && this.issuableType === 'issue';
+      return this.issuableType === 'issue';
     },
     queryVariables() {
       return {
@@ -125,6 +125,9 @@ export default {
         availability: this.assigneeAvailabilityStatus[username] || '',
       }));
     },
+    toggleAttentionRequested(data) {
+      this.mediator.toggleAttentionRequested('assignee', data);
+    },
   },
 };
 </script>
@@ -152,6 +155,7 @@ export default {
       :editable="store.editable"
       :issuable-type="issuableType"
       @assign-self="assignSelf"
+      @toggle-attention-requested="toggleAttentionRequested"
     />
   </div>
 </template>

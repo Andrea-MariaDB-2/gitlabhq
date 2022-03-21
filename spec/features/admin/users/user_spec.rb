@@ -4,11 +4,13 @@ require 'spec_helper'
 
 RSpec.describe 'Admin::Users::User' do
   include Spec::Support::Helpers::Features::AdminUsersHelpers
+  include Spec::Support::Helpers::ModalHelpers
 
   let_it_be(:user) { create(:omniauth_user, provider: 'twitter', extern_uid: '123456') }
   let_it_be(:current_user) { create(:admin) }
 
   before do
+    stub_feature_flags(bootstrap_confirmation_modals: false)
     sign_in(current_user)
     gitlab_enable_admin_mode_sign_in(current_user)
   end
@@ -112,7 +114,7 @@ RSpec.describe 'Admin::Users::User' do
 
         click_action_in_user_dropdown(user_sole_owner_of_group.id, 'Delete user and contributions')
 
-        page.within('[role="dialog"]') do
+        within_modal do
           fill_in('username', with: user_sole_owner_of_group.name)
           click_button('Delete user and contributions')
         end
@@ -120,6 +122,26 @@ RSpec.describe 'Admin::Users::User' do
         wait_for_requests
 
         expect(page).to have_content('The user is being deleted.')
+      end
+    end
+
+    context 'when a user is locked', time_travel_to: '2020-02-02 10:30:45 -0700' do
+      let_it_be(:locked_user) { create(:user, locked_at: DateTime.parse('2020-02-02 10:30:00 -0700')) }
+
+      before do
+        visit admin_user_path(locked_user)
+      end
+
+      it "displays `(Locked)` next to user's name" do
+        expect(page).to have_content("#{locked_user.name} (Locked)")
+      end
+
+      it 'allows a user to be unlocked from the `User administration dropdown', :js do
+        accept_gl_confirm("Unlock user #{locked_user.name}?", button_text: 'Unlock') do
+          click_action_in_user_dropdown(locked_user.id, 'Unlock')
+        end
+
+        expect(page).not_to have_content("#{locked_user.name} (Locked)")
       end
     end
 
@@ -198,13 +220,13 @@ RSpec.describe 'Admin::Users::User' do
 
         context 'a user with an expired password' do
           before do
-            another_user.update!(password_expires_at: Time.now - 5.minutes)
+            another_user.update!(password_expires_at: Time.zone.now - 5.minutes)
           end
 
           it 'does not redirect to password change page' do
             subject
 
-            expect(current_path).to eq('/')
+            expect(page).to have_current_path('/')
           end
         end
       end
@@ -228,18 +250,18 @@ RSpec.describe 'Admin::Users::User' do
         it 'is redirected back to the impersonated users page in the admin after stopping' do
           subject
 
-          expect(current_path).to eq("/admin/users/#{another_user.username}")
+          expect(page).to have_current_path("/admin/users/#{another_user.username}", ignore_query: true)
         end
 
         context 'a user with an expired password' do
           before do
-            another_user.update!(password_expires_at: Time.now - 5.minutes)
+            another_user.update!(password_expires_at: Time.zone.now - 5.minutes)
           end
 
           it 'is redirected back to the impersonated users page in the admin after stopping' do
             subject
 
-            expect(current_path).to eq("/admin/users/#{another_user.username}")
+            expect(page).to have_current_path("/admin/users/#{another_user.username}", ignore_query: true)
           end
         end
       end
@@ -425,7 +447,7 @@ RSpec.describe 'Admin::Users::User' do
 
         click_button 'Confirm user'
 
-        page.within('[role="dialog"]') do
+        within_modal do
           expect(page).to have_content("Confirm user #{unconfirmed_user.name}?")
           expect(page).to have_content('This user has an unconfirmed email address. You may force a confirmation.')
 

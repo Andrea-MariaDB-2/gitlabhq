@@ -19,18 +19,6 @@ RSpec.describe GroupsHelper do
     end
   end
 
-  describe '#group_dependency_proxy_image_prefix' do
-    let_it_be(:group) { build_stubbed(:group, path: 'GroupWithUPPERcaseLetters') }
-
-    it 'converts uppercase letters to lowercase' do
-      expect(group_dependency_proxy_image_prefix(group)).to end_with("/groupwithuppercaseletters#{DependencyProxy::URL_SUFFIX}")
-    end
-
-    it 'removes the protocol' do
-      expect(group_dependency_proxy_image_prefix(group)).not_to include('http')
-    end
-  end
-
   describe '#group_lfs_status' do
     let_it_be_with_reload(:group) { create(:group) }
     let_it_be_with_reload(:project) { create(:project, namespace_id: group.id) }
@@ -104,7 +92,7 @@ RSpec.describe GroupsHelper do
       shared_examples 'correct ancestor order' do
         it 'outputs the groups in the correct order' do
           expect(subject)
-            .to match(%r{<li style="text-indent: 16px;"><a.*>#{deep_nested_group.name}.*</li>.*<a.*>#{very_deep_nested_group.name}</a>}m)
+            .to match(%r{<li><a.*>#{deep_nested_group.name}.*</li>.*<a.*>#{very_deep_nested_group.name}</a>}m)
         end
       end
 
@@ -158,7 +146,7 @@ RSpec.describe GroupsHelper do
 
       let(:possible_help_texts) do
         {
-          default_help: "This setting will be applied to all subgroups unless overridden by a group owner",
+          default_help: "Applied to all subgroups unless overridden by a group owner.",
           ancestor_locked_but_you_can_override: %r{This setting is applied on <a .+>.+</a>\. You can override the setting or .+},
           ancestor_locked_so_ask_the_owner: /This setting is applied on .+\. To share projects in this group with another group, ask the owner to override the setting or remove the share with group lock from .+/,
           ancestor_locked_and_has_been_overridden: /This setting is applied on .+ and has been overridden on this subgroup/
@@ -384,67 +372,6 @@ RSpec.describe GroupsHelper do
       allow(controller).to receive(:params) { { purchased_quantity: '' } }
 
       is_expected.to be_falsey
-    end
-  end
-
-  describe '#show_invite_banner?' do
-    let_it_be(:current_user) { create(:user) }
-    let_it_be_with_refind(:group) { create(:group) }
-    let_it_be(:subgroup) { create(:group, parent: group) }
-    let_it_be(:users) { [current_user, create(:user)] }
-
-    before do
-      allow(helper).to receive(:current_user) { current_user }
-      allow(helper).to receive(:can?).with(current_user, :admin_group, group).and_return(can_admin_group)
-      allow(helper).to receive(:can?).with(current_user, :admin_group, subgroup).and_return(can_admin_group)
-      users.take(group_members_count).each { |user| group.add_guest(user) }
-    end
-
-    using RSpec::Parameterized::TableSyntax
-
-    where(:can_admin_group, :group_members_count, :expected_result) do
-      true  | 1 | true
-      false | 1 | false
-      true  | 2 | false
-      false | 2 | false
-    end
-
-    with_them do
-      context 'for a parent group' do
-        subject { helper.show_invite_banner?(group) }
-
-        context 'when the group was just created' do
-          before do
-            flash[:notice] = "Group #{group.name} was successfully created"
-          end
-
-          it { is_expected.to be_falsey }
-        end
-
-        context 'when no flash message' do
-          it 'returns the expected result' do
-            expect(subject).to eq(expected_result)
-          end
-        end
-      end
-
-      context 'for a subgroup' do
-        subject { helper.show_invite_banner?(subgroup) }
-
-        context 'when the subgroup was just created' do
-          before do
-            flash[:notice] = "Group #{subgroup.name} was successfully created"
-          end
-
-          it { is_expected.to be_falsey }
-        end
-
-        context 'when no flash message' do
-          it 'returns the expected result' do
-            expect(subject).to eq(expected_result)
-          end
-        end
-      end
     end
   end
 

@@ -120,13 +120,13 @@ module Ci
     def has_cyclic_dependency?
       return false if @bridge.triggers_child_pipeline?
 
-      if Feature.enabled?(:ci_drop_cyclical_triggered_pipelines, @bridge.project, default_enabled: :yaml)
-        pipeline_checksums = @bridge.pipeline.self_and_upstreams.filter_map do |pipeline|
-          config_checksum(pipeline) unless pipeline.child?
-        end
-
-        pipeline_checksums.uniq.length != pipeline_checksums.length
+      pipeline_checksums = @bridge.pipeline.self_and_upstreams.filter_map do |pipeline|
+        config_checksum(pipeline) unless pipeline.child?
       end
+
+      # To avoid false positives we allow 1 cycle in the ancestry and
+      # fail when 2 cycles are detected: A -> B -> A -> B -> A
+      pipeline_checksums.tally.any? { |_checksum, occurrences| occurrences > 2 }
     end
 
     def has_max_descendants_depth?
@@ -137,7 +137,7 @@ module Ci
     end
 
     def config_checksum(pipeline)
-      [pipeline.project_id, pipeline.ref].hash
+      [pipeline.project_id, pipeline.ref, pipeline.source].hash
     end
   end
 end

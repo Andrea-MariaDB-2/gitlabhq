@@ -228,100 +228,9 @@ can take a very long time to complete, preventing a deployment from proceeding.
 They can also produce a lot of pressure on the database due to it rapidly
 updating many rows in sequence.
 
-To reduce database pressure you should instead use
-`change_column_type_using_background_migration` or `rename_column_using_background_migration`
-when migrating a column in a large table (for example, `issues`). These methods work
-similarly to the concurrent counterparts but uses background migration to spread
-the work / load over a longer time period, without slowing down deployments.
-
-For example, to change the column type using a background migration:
-
-```ruby
-class ExampleMigration < Gitlab::Database::Migration[1.0]
-  disable_ddl_transaction!
-
-  class Issue < ActiveRecord::Base
-    self.table_name = 'issues'
-
-    include EachBatch
-
-    def self.to_migrate
-      where('closed_at IS NOT NULL')
-    end
-  end
-
-  def up
-    change_column_type_using_background_migration(
-      Issue.to_migrate,
-      :closed_at,
-      :datetime_with_timezone
-    )
-  end
-
-  def down
-    change_column_type_using_background_migration(
-      Issue.to_migrate,
-      :closed_at,
-      :datetime
-    )
-  end
-end
-```
-
-This would change the type of `issues.closed_at` to `timestamp with time zone`.
-
-Keep in mind that the relation passed to
-`change_column_type_using_background_migration` _must_ include `EachBatch`,
-otherwise it will raise a `TypeError`.
-
-This migration then needs to be followed in a separate release (_not_ a patch
-release) by a cleanup migration, which should steal from the queue and handle
-any remaining rows. For example:
-
-```ruby
-class MigrateRemainingIssuesClosedAt < Gitlab::Database::Migration[1.0]
-  disable_ddl_transaction!
-
-  class Issue < ActiveRecord::Base
-    self.table_name = 'issues'
-    include EachBatch
-  end
-
-  def up
-    Gitlab::BackgroundMigration.steal('CopyColumn')
-    Gitlab::BackgroundMigration.steal('CleanupConcurrentTypeChange')
-
-    migrate_remaining_rows if migrate_column_type?
-  end
-
-  def down
-    # Previous migrations already revert the changes made here.
-  end
-
-  def migrate_remaining_rows
-    Issue.where('closed_at_for_type_change IS NULL AND closed_at IS NOT NULL').each_batch do |batch|
-      batch.update_all('closed_at_for_type_change = closed_at')
-    end
-
-    cleanup_concurrent_column_type_change(:issues, :closed_at)
-  end
-
-  def migrate_column_type?
-    # Some environments may have already executed the previous version of this
-    # migration, thus we don't need to migrate those environments again.
-    column_for('issues', 'closed_at').type == :datetime # rubocop:disable Migration/Datetime
-  end
-end
-```
-
-The same applies to `rename_column_using_background_migration`:
-
-1. Create a migration using the helper, which will schedule background
-   migrations to spread the writes over a longer period of time.
-1. In the next monthly release, create a clean-up migration to steal from the
-   Sidekiq queues, migrate any missing rows, and cleanup the rename. This
-   migration should skip the steps after stealing from the Sidekiq queues if the
-   column has already been renamed.
+To reduce database pressure you should instead use a background migration
+when migrating a column in a large table (for example, `issues`). This will
+spread the work / load over a longer time period, without slowing down deployments.
 
 For more information, see [the documentation on cleaning up background
 migrations](background_migrations.md#cleaning-up).
@@ -377,7 +286,181 @@ ensures that no downtime is needed.
 
 This operation does not require downtime.
 
-## Data Migrations
+## Migrating `integer` primary keys to `bigint`
+
+To [prevent the overflow risk](https://gitlab.com/groups/gitlab-org/-/epics/4785) for some tables
+with `integer` primary key (PK), we have to migrate their PK to `bigint`. The process to do this
+without downtime and causing too much load on the database is described below.
+
+### Initialize the conversion and start migrating existing data (release N)
+
+To start the process, add a regular migration to create the new `bigint` columns. Use the provided
+`initialize_conversion_of_integer_to_bigint` helper. The helper also creates a database trigger
+to keep in sync both columns for any new records ([see an example](https://gitlab.com/gitlab-org/gitlab/-/blob/41fbe34a4725a4e357a83fda66afb382828767b2/db/migrate/20210608072312_initialize_conversion_of_ci_stages_to_bigint.rb)):
+
+```ruby
+class InitializeConversionOfCiStagesToBigint < ActiveRecord::Migration[6.1]
+  include Gitlab::Database::MigrationHelpers
+
+  TABLE = :ci_stages
+  COLUMNS = %i(id)
+
+  def up
+    initialize_conversion_of_integer_to_bigint(TABLE, COLUMNS)
+  end
+
+  def down
+    revert_initialize_conversion_of_integer_to_bigint(TABLE, COLUMNS)
+  end
+end
+```
+
+Ignore the new `bigint` columns:
+
+```ruby
+module Ci
+  class Stage < Ci::ApplicationRecord
+    include IgnorableColumns
+    ignore_column :id_convert_to_bigint, remove_with: '14.2', remove_after: '2021-08-22'
+  end
+```
+
+To migrate existing data, we introduced new type of _batched background migrations_.
+Unlike the classic background migrations, built on top of Sidekiq, batched background migrations
+don't have to enqueue and schedule all the background jobs at the beginning.
+They also have other advantages, like automatic tuning of the batch size, better progress visibility,
+and collecting metrics. To start the process, use the provided `backfill_conversion_of_integer_to_bigint`
+helper ([example](https://gitlab.com/gitlab-org/gitlab/-/blob/41fbe34a4725a4e357a83fda66afb382828767b2/db/migrate/20210608072346_backfill_ci_stages_for_bigint_conversion.rb)):
+
+```ruby
+class BackfillCiStagesForBigintConversion < ActiveRecord::Migration[6.1]
+  include Gitlab::Database::MigrationHelpers
+
+  TABLE = :ci_stages
+  COLUMNS = %i(id)
+
+  def up
+    backfill_conversion_of_integer_to_bigint(TABLE, COLUMNS)
+  end
+
+  def down
+    revert_backfill_conversion_of_integer_to_bigint(TABLE, COLUMNS)
+  end
+end
+```
+
+### Monitor the background migration
+
+Check how the migration is performing while it's running. Multiple ways to do this are described below.
+
+#### High-level status of batched background migrations
+
+See how to [check the status of batched background migrations](../update/index.md#checking-for-background-migrations-before-upgrading).
+
+#### Query the database
+
+We can query the related database tables directly. Requires access to read-only replica.
+Example queries:
+
+```sql
+-- Get details for batched background migration for given table
+SELECT * FROM batched_background_migrations WHERE table_name = 'namespaces'\gx
+
+-- Get count of batched background migration jobs by status for given table
+SELECT
+  batched_background_migrations.id, batched_background_migration_jobs.status, COUNT(*)
+FROM
+  batched_background_migrations
+  JOIN batched_background_migration_jobs ON batched_background_migrations.id = batched_background_migration_jobs.batched_background_migration_id
+WHERE
+  table_name = 'namespaces'
+GROUP BY
+  batched_background_migrations.id, batched_background_migration_jobs.status;
+
+-- Batched background migration progress for given table (based on estimated total number of tuples)
+SELECT
+  m.table_name,
+  LEAST(100 * sum(j.batch_size) / pg_class.reltuples, 100) AS percentage_complete
+FROM
+  batched_background_migrations m
+  JOIN batched_background_migration_jobs j ON j.batched_background_migration_id = m.id
+  JOIN pg_class ON pg_class.relname = m.table_name
+WHERE
+  j.status = 3 AND m.table_name = 'namespaces'
+GROUP BY m.id, pg_class.reltuples;
+```
+
+#### Sidekiq logs
+
+We can also use the Sidekiq logs to monitor the worker that executes the batched background
+migrations:
+
+1. Sign in to [Kibana](https://log.gprd.gitlab.net) with a `@gitlab.com` email address.
+1. Change the index pattern to `pubsub-sidekiq-inf-gprd*`.
+1. Add filter for `json.queue: cronjob:database_batched_background_migration`.
+
+#### PostgreSQL slow queries log
+
+Slow queries log keeps track of low queries that took above 1 second to execute. To see them
+for batched background migration:
+
+1. Sign in to [Kibana](https://log.gprd.gitlab.net) with a `@gitlab.com` email address.
+1. Change the index pattern to `pubsub-postgres-inf-gprd*`.
+1. Add filter for `json.endpoint_id.keyword: Database::BatchedBackgroundMigrationWorker`.
+1. Optional. To see only updates, add a filter for `json.command_tag.keyword: UPDATE`.
+1. Optional. To see only failed statements, add a filter for `json.error_severity.keyword: ERROR`.
+1. Optional. Add a filter by table name.
+
+#### Grafana dashboards
+
+To monitor the health of the database, use these additional metrics:
+
+- [PostgreSQL Tuple Statistics](https://dashboards.gitlab.net/d/000000167/postgresql-tuple-statistics?orgId=1&refresh=1m): if you see high rate of updates for the tables being actively converted, or increasing percentage of dead tuples for this table, it might mean that autovacuum cannot keep up.
+- [PostgreSQL Overview](https://dashboards.gitlab.net/d/000000144/postgresql-overview?orgId=1): if you see high system usage or transactions per second (TPS) on the primary database server, it might mean that the migration is causing problems.
+
+### Prometheus metrics
+
+Number of [metrics](https://gitlab.com/gitlab-org/gitlab/-/blob/294a92484ce4611f660439aa48eee4dfec2230b5/lib/gitlab/database/background_migration/batched_migration_wrapper.rb#L90-128)
+for each batched background migration are published to Prometheus. These metrics can be searched for and
+visualized in Thanos ([see an example](https://thanos-query.ops.gitlab.net/graph?g0.expr=sum%20(rate(batched_migration_job_updated_tuples_total%7Benv%3D%22gprd%22%7D%5B5m%5D))%20by%20(migration_id)%20&g0.tab=0&g0.stacked=0&g0.range_input=3d&g0.max_source_resolution=0s&g0.deduplicate=1&g0.partial_response=0&g0.store_matches=%5B%5D&g0.end_input=2021-06-13%2012%3A18%3A24&g0.moment_input=2021-06-13%2012%3A18%3A24)).
+
+### Swap the columns (release N + 1)
+
+After the background is completed and the new `bigint` columns are populated for all records, we can
+swap the columns. Swapping is done with post-deployment migration. The exact process depends on the
+table being converted, but in general it's done in the following steps:
+
+1. Using the provided `ensure_batched_background_migration_is_finished` helper, make sure the batched
+migration has finished ([see an example](https://gitlab.com/gitlab-org/gitlab/-/blob/41fbe34a4725a4e357a83fda66afb382828767b2/db/post_migrate/20210707210916_finalize_ci_stages_bigint_conversion.rb#L13-18)).
+If the migration has not completed, the subsequent steps fail anyway. By checking in advance we
+aim to have more helpful error message.
+1. Create indexes using the `bigint` columns that match the existing indexes using the `integer`
+column ([see an example](https://gitlab.com/gitlab-org/gitlab/-/blob/41fbe34a4725a4e357a83fda66afb382828767b2/db/post_migrate/20210707210916_finalize_ci_stages_bigint_conversion.rb#L28-34)).
+1. Create foreign keys (FK) using the `bigint` columns that match the existing FKs using the
+`integer` column. Do this both for FK referencing other tables, and FKs that reference the table
+that is being migrated ([see an example](https://gitlab.com/gitlab-org/gitlab/-/blob/41fbe34a4725a4e357a83fda66afb382828767b2/db/post_migrate/20210707210916_finalize_ci_stages_bigint_conversion.rb#L36-43)).
+1. Inside a transaction, swap the columns:
+    1. Lock the tables involved. To reduce the chance of hitting a deadlock, we recommended to do this in parent to child order ([see an example](https://gitlab.com/gitlab-org/gitlab/-/blob/41fbe34a4725a4e357a83fda66afb382828767b2/db/post_migrate/20210707210916_finalize_ci_stages_bigint_conversion.rb#L47)).
+    1. Rename the columns to swap names ([see an example](https://gitlab.com/gitlab-org/gitlab/-/blob/41fbe34a4725a4e357a83fda66afb382828767b2/db/post_migrate/20210707210916_finalize_ci_stages_bigint_conversion.rb#L49-54))
+    1. Reset the trigger function ([see an example](https://gitlab.com/gitlab-org/gitlab/-/blob/41fbe34a4725a4e357a83fda66afb382828767b2/db/post_migrate/20210707210916_finalize_ci_stages_bigint_conversion.rb#L56-57)).
+    1. Swap the defaults ([see an example](https://gitlab.com/gitlab-org/gitlab/-/blob/41fbe34a4725a4e357a83fda66afb382828767b2/db/post_migrate/20210707210916_finalize_ci_stages_bigint_conversion.rb#L59-62)).
+    1. Swap the PK constraint (if any) ([see an example](https://gitlab.com/gitlab-org/gitlab/-/blob/41fbe34a4725a4e357a83fda66afb382828767b2/db/post_migrate/20210707210916_finalize_ci_stages_bigint_conversion.rb#L64-68)).
+    1. Remove old indexes and rename new ones ([see an example](https://gitlab.com/gitlab-org/gitlab/-/blob/41fbe34a4725a4e357a83fda66afb382828767b2/db/post_migrate/20210707210916_finalize_ci_stages_bigint_conversion.rb#L70-72)).
+    1. Remove old FKs (if still present) and rename new ones ([see an example](https://gitlab.com/gitlab-org/gitlab/-/blob/41fbe34a4725a4e357a83fda66afb382828767b2/db/post_migrate/20210707210916_finalize_ci_stages_bigint_conversion.rb#L74)).
+
+See example [merge request](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/66088), and [migration](https://gitlab.com/gitlab-org/gitlab/-/blob/41fbe34a4725a4e357a83fda66afb382828767b2/db/post_migrate/20210707210916_finalize_ci_stages_bigint_conversion.rb).
+
+### Remove the trigger and old `integer` columns (release N + 2)
+
+Using post-deployment migration and the provided `cleanup_conversion_of_integer_to_bigint` helper,
+drop the database trigger and the old `integer` columns ([see an example](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/69714)).
+
+### Remove ignore rules (release N + 3)
+
+In the next release after the columns were dropped, remove the ignore rules as we do not need them
+anymore ([see an example](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/71161)).
+
+## Data migrations
 
 Data migrations can be tricky. The usual approach to migrate data is to take a 3
 step approach:

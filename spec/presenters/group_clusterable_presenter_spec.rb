@@ -43,6 +43,12 @@ RSpec.describe GroupClusterablePresenter do
     it { is_expected.to eq(new_group_cluster_path(group)) }
   end
 
+  describe '#connect_path' do
+    subject { presenter.connect_path }
+
+    it { is_expected.to eq(connect_group_clusters_path(group)) }
+  end
+
   describe '#authorize_aws_role_path' do
     subject { presenter.authorize_aws_role_path }
 
@@ -83,5 +89,11 @@ RSpec.describe GroupClusterablePresenter do
     subject { presenter.metrics_dashboard_path(cluster) }
 
     it { is_expected.to eq(metrics_dashboard_group_cluster_path(group, cluster)) }
+  end
+
+  describe '#learn_more_link' do
+    subject { presenter.learn_more_link }
+
+    it { is_expected.to include('user/group/clusters/index') }
   end
 end

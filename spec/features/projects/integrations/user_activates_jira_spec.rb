@@ -3,14 +3,14 @@
 require 'spec_helper'
 
 RSpec.describe 'User activates Jira', :js do
-  include_context 'project service activation'
-  include_context 'project service Jira context'
+  include_context 'project integration activation'
+  include_context 'project integration Jira context'
 
   before do
     stub_request(:get, test_url).to_return(body: { key: 'value' }.to_json)
   end
 
-  describe 'user tests Jira Service' do
+  describe 'user tests Jira integration' do
     context 'when Jira connection test succeeds' do
       before do
         visit_project_integration('Jira')
@@ -18,16 +18,15 @@ RSpec.describe 'User activates Jira', :js do
         click_test_then_save_integration(expect_test_to_fail: false)
       end
 
-      it 'activates the Jira service' do
+      it 'activates the Jira integration' do
         expect(page).to have_content('Jira settings saved and active.')
-        expect(current_path).to eq(edit_project_service_path(project, :jira))
+        expect(page).to have_current_path(edit_project_integration_path(project, :jira), ignore_query: true)
       end
 
       unless Gitlab.ee?
         it 'adds Jira link to sidebar menu' do
           page.within('.nav-sidebar') do
-            expect(page).not_to have_link('Jira Issues')
-            expect(page).not_to have_link('Issue List', visible: false)
+            expect(page).not_to have_link('Jira issues', visible: false)
             expect(page).not_to have_link('Open Jira', href: url, visible: false)
             expect(page).to have_link('Jira', href: url)
           end
@@ -42,12 +41,12 @@ RSpec.describe 'User activates Jira', :js do
         fill_in 'service_password', with: 'password'
         click_test_integration
 
-        page.within('.service-settings') do
+        page.within('[data-testid="integration-settings-form"]') do
           expect(page).to have_content('This field is required.')
         end
       end
 
-      it 'activates the Jira service' do
+      it 'activates the Jira integration' do
         stub_request(:get, test_url).with(basic_auth: %w(username password))
           .to_raise(JIRA::HTTPError.new(double(message: 'message')))
 
@@ -56,12 +55,12 @@ RSpec.describe 'User activates Jira', :js do
         click_test_then_save_integration
 
         expect(page).to have_content('Jira settings saved and active.')
-        expect(current_path).to eq(edit_project_service_path(project, :jira))
+        expect(page).to have_current_path(edit_project_integration_path(project, :jira), ignore_query: true)
       end
     end
   end
 
-  describe 'user disables the Jira Service' do
+  describe 'user disables the Jira integration' do
     include JiraServiceHelper
 
     before do
@@ -71,9 +70,9 @@ RSpec.describe 'User activates Jira', :js do
       click_save_integration
     end
 
-    it 'saves but does not activate the Jira service' do
+    it 'saves but does not activate the Jira integration' do
       expect(page).to have_content('Jira settings saved, but not active.')
-      expect(current_path).to eq(edit_project_service_path(project, :jira))
+      expect(page).to have_current_path(edit_project_integration_path(project, :jira), ignore_query: true)
     end
 
     it 'does not show the Jira link in the menu' do

@@ -5,6 +5,8 @@ require 'spec_helper'
 RSpec.describe Gitlab::Database::BackgroundMigration::BatchedMigration, type: :model do
   it_behaves_like 'having unique enum values'
 
+  it { is_expected.to be_a Gitlab::Database::SharedModel }
+
   describe 'associations' do
     it { is_expected.to have_many(:batched_jobs).with_foreign_key(:batched_background_migration_id) }
 
@@ -23,6 +25,28 @@ RSpec.describe Gitlab::Database::BackgroundMigration::BatchedMigration, type: :m
     subject { build(:batched_background_migration) }
 
     it { is_expected.to validate_uniqueness_of(:job_arguments).scoped_to(:job_class_name, :table_name, :column_name) }
+
+    context 'when there are failed jobs' do
+      let(:batched_migration) { create(:batched_background_migration, status: :active, total_tuple_count: 100) }
+      let!(:batched_job) { create(:batched_background_migration_job, :failed, batched_migration: batched_migration) }
+
+      it 'raises an exception' do
+        expect { batched_migration.finished! }.to raise_error(ActiveRecord::RecordInvalid)
+
+        expect(batched_migration.reload.status).to eql 'active'
+      end
+    end
+
+    context 'when the jobs are completed' do
+      let(:batched_migration) { create(:batched_background_migration, status: :active, total_tuple_count: 100) }
+      let!(:batched_job) { create(:batched_background_migration_job, :succeeded, batched_migration: batched_migration) }
+
+      it 'finishes the migration' do
+        batched_migration.finished!
+
+        expect(batched_migration.status).to eql 'finished'
+      end
+    end
   end
 
   describe '.queue_order' do
@@ -42,7 +66,7 @@ RSpec.describe Gitlab::Database::BackgroundMigration::BatchedMigration, type: :m
 
     it 'returns the first active migration according to queue order' do
       expect(described_class.active_migration).to eq(migration2)
-      create(:batched_background_migration_job, batched_migration: migration1, batch_size: 1000, status: :succeeded)
+      create(:batched_background_migration_job, :succeeded, batched_migration: migration1, batch_size: 1000)
     end
   end
 
@@ -62,10 +86,10 @@ RSpec.describe Gitlab::Database::BackgroundMigration::BatchedMigration, type: :m
     let!(:migration_without_jobs) { create(:batched_background_migration) }
 
     before do
-      create(:batched_background_migration_job, batched_migration: migration1, batch_size: 1000, status: :succeeded)
-      create(:batched_background_migration_job, batched_migration: migration1, batch_size: 200, status: :failed)
-      create(:batched_background_migration_job, batched_migration: migration2, batch_size: 500, status: :succeeded)
-      create(:batched_background_migration_job, batched_migration: migration2, batch_size: 200, status: :running)
+      create(:batched_background_migration_job, :succeeded, batched_migration: migration1, batch_size: 1000)
+      create(:batched_background_migration_job, :failed, batched_migration: migration1, batch_size: 200)
+      create(:batched_background_migration_job, :succeeded, batched_migration: migration2, batch_size: 500)
+      create(:batched_background_migration_job, :running, batched_migration: migration2, batch_size: 200)
     end
 
     it 'returns totals from successful jobs' do
@@ -214,14 +238,20 @@ RSpec.describe Gitlab::Database::BackgroundMigration::BatchedMigration, type: :m
     end
   end
 
-  shared_examples_for 'an attr_writer that demodulizes assigned class names' do |attribute_name|
+  shared_examples_for 'an attr_writer that assigns class names' do |attribute_name|
     let(:batched_migration) { build(:batched_background_migration) }
 
     context 'when a module name exists' do
-      it 'removes the module name' do
+      it 'keeps the class with module name' do
+        batched_migration.public_send(:"#{attribute_name}=", 'Foo::Bar')
+
+        expect(batched_migration[attribute_name]).to eq('Foo::Bar')
+      end
+
+      it 'removes leading namespace resolution operator' do
         batched_migration.public_send(:"#{attribute_name}=", '::Foo::Bar')
 
-        expect(batched_migration[attribute_name]).to eq('Bar')
+        expect(batched_migration[attribute_name]).to eq('Foo::Bar')
       end
     end
 
@@ -240,11 +270,17 @@ RSpec.describe Gitlab::Database::BackgroundMigration::BatchedMigration, type: :m
     subject(:retry_failed_jobs) { batched_migration.retry_failed_jobs! }
 
     context 'when there are failed migration jobs' do
-      let!(:batched_background_migration_job) { create(:batched_background_migration_job, batched_migration: batched_migration, batch_size: 10, min_value: 6, max_value: 15, status: :failed, attempts: 3) }
+      let!(:batched_background_migration_job) { create(:batched_background_migration_job, :failed, batched_migration: batched_migration, batch_size: 10, min_value: 6, max_value: 15, attempts: 3) }
 
       before do
         allow_next_instance_of(Gitlab::BackgroundMigration::BatchingStrategies::PrimaryKeyBatchingStrategy) do |batch_class|
-          allow(batch_class).to receive(:next_batch).with(anything, anything, batch_min_value: 6, batch_size: 5).and_return([6, 10])
+          allow(batch_class).to receive(:next_batch).with(
+            anything,
+            anything,
+            batch_min_value: 6,
+            batch_size: 5,
+            job_arguments: batched_migration.job_arguments
+          ).and_return([6, 10])
         end
       end
 
@@ -271,11 +307,11 @@ RSpec.describe Gitlab::Database::BackgroundMigration::BatchedMigration, type: :m
   end
 
   describe '#job_class_name=' do
-    it_behaves_like 'an attr_writer that demodulizes assigned class names', :job_class_name
+    it_behaves_like 'an attr_writer that assigns class names', :job_class_name
   end
 
   describe '#batch_class_name=' do
-    it_behaves_like 'an attr_writer that demodulizes assigned class names', :batch_class_name
+    it_behaves_like 'an attr_writer that assigns class names', :batch_class_name
   end
 
   describe '#migrated_tuple_count' do
@@ -284,9 +320,9 @@ RSpec.describe Gitlab::Database::BackgroundMigration::BatchedMigration, type: :m
     let(:batched_migration) { create(:batched_background_migration) }
 
     before do
-      create_list(:batched_background_migration_job, 5, status: :succeeded, batch_size: 1_000, batched_migration: batched_migration)
-      create_list(:batched_background_migration_job, 1, status: :running, batch_size: 1_000, batched_migration: batched_migration)
-      create_list(:batched_background_migration_job, 1, status: :failed, batch_size: 1_000, batched_migration: batched_migration)
+      create_list(:batched_background_migration_job, 5, :succeeded, batch_size: 1_000, batched_migration: batched_migration)
+      create_list(:batched_background_migration_job, 1, :running, batch_size: 1_000, batched_migration: batched_migration)
+      create_list(:batched_background_migration_job, 1, :failed, batch_size: 1_000, batched_migration: batched_migration)
     end
 
     it 'sums the batch_size of succeeded jobs' do
@@ -308,8 +344,8 @@ RSpec.describe Gitlab::Database::BackgroundMigration::BatchedMigration, type: :m
   end
 
   describe '#smoothed_time_efficiency' do
-    let(:migration) { create(:batched_background_migration, interval: 120.seconds) }
-    let(:end_time) { Time.zone.now }
+    let_it_be(:migration) { create(:batched_background_migration, interval: 120.seconds) }
+    let_it_be(:end_time) { Time.zone.now }
 
     around do |example|
       freeze_time do
@@ -317,9 +353,8 @@ RSpec.describe Gitlab::Database::BackgroundMigration::BatchedMigration, type: :m
       end
     end
 
-    let(:common_attrs) do
+    let_it_be(:common_attrs) do
       {
-        status: :succeeded,
         batched_migration: migration,
         finished_at: end_time
       }
@@ -329,20 +364,23 @@ RSpec.describe Gitlab::Database::BackgroundMigration::BatchedMigration, type: :m
       subject { migration.smoothed_time_efficiency(number_of_jobs: 10) }
 
       it 'returns nil' do
-        create_list(:batched_background_migration_job, 9, **common_attrs)
+        create_list(:batched_background_migration_job, 9, :succeeded, **common_attrs)
 
         expect(subject).to be_nil
       end
     end
 
     context 'when there are enough jobs' do
+      let_it_be(:number_of_jobs) { 10 }
+      let_it_be(:jobs) { create_list(:batched_background_migration_job, number_of_jobs, **common_attrs.merge(batched_migration: migration)) }
+
       subject { migration.smoothed_time_efficiency(number_of_jobs: number_of_jobs) }
 
-      let!(:jobs) { create_list(:batched_background_migration_job, number_of_jobs, **common_attrs.merge(batched_migration: migration)) }
-      let(:number_of_jobs) { 10 }
+      let!(:jobs) { create_list(:batched_background_migration_job, number_of_jobs, :succeeded, **common_attrs.merge(batched_migration: migration)) }
 
       before do
-        expect(migration).to receive_message_chain(:batched_jobs, :successful_in_execution_order, :reverse_order, :limit).with(no_args).with(no_args).with(number_of_jobs).and_return(jobs)
+        expect(migration).to receive_message_chain(:batched_jobs, :successful_in_execution_order, :reverse_order, :limit, :with_preloads)
+                               .and_return(jobs)
       end
 
       def mock_efficiencies(*effs)
@@ -381,6 +419,18 @@ RSpec.describe Gitlab::Database::BackgroundMigration::BatchedMigration, type: :m
 
           expect(subject).to be_within(0.02).of(0.96)
         end
+      end
+    end
+
+    context 'with preloaded batched migration' do
+      it 'avoids N+1' do
+        create_list(:batched_background_migration_job, 11, **common_attrs.merge(started_at: end_time - 10.seconds))
+
+        control = ActiveRecord::QueryRecorder.new do
+          migration.smoothed_time_efficiency(number_of_jobs: 10)
+        end
+
+        expect { migration.smoothed_time_efficiency(number_of_jobs: 11) }.not_to exceed_query_limit(control)
       end
     end
   end

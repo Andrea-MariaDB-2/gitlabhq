@@ -1,36 +1,24 @@
 package zipartifacts
 
 import (
-	"archive/zip"
 	"context"
 	"fmt"
 	"io"
-	"net"
 	"net/http"
 	"os"
 	"strings"
-	"time"
 
+	"gitlab.com/gitlab-org/gitlab/workhorse/internal/helper/httptransport"
 	"gitlab.com/gitlab-org/gitlab/workhorse/internal/httprs"
 
-	"gitlab.com/gitlab-org/labkit/correlation"
+	zip "gitlab.com/gitlab-org/golang-archive-zip"
 	"gitlab.com/gitlab-org/labkit/mask"
-	"gitlab.com/gitlab-org/labkit/tracing"
 )
 
 var httpClient = &http.Client{
-	Transport: tracing.NewRoundTripper(correlation.NewInstrumentedRoundTripper(&http.Transport{
-		Proxy: http.ProxyFromEnvironment,
-		DialContext: (&net.Dialer{
-			Timeout:   30 * time.Second,
-			KeepAlive: 10 * time.Second,
-		}).DialContext,
-		IdleConnTimeout:       30 * time.Second,
-		TLSHandshakeTimeout:   10 * time.Second,
-		ExpectContinueTimeout: 10 * time.Second,
-		ResponseHeaderTimeout: 30 * time.Second,
-		DisableCompression:    true,
-	})),
+	Transport: httptransport.New(
+		httptransport.WithDisabledCompression(), // To avoid bugs when serving compressed files from object storage
+	),
 }
 
 type archive struct {

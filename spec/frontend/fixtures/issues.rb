@@ -11,10 +11,6 @@ RSpec.describe Projects::IssuesController, '(JavaScript fixtures)', type: :contr
 
   render_views
 
-  before(:all) do
-    clean_frontend_fixtures('issues/')
-  end
-
   before do
     project.add_maintainer(user)
     sign_in(user)
@@ -39,17 +35,6 @@ RSpec.describe Projects::IssuesController, '(JavaScript fixtures)', type: :contr
 
   it 'issues/closed-issue.html' do
     render_issue(create(:closed_issue, project: project))
-  end
-
-  it 'issues/issue_list.html' do
-    create(:issue, project: project)
-
-    get :index, params: {
-      namespace_id: project.namespace.to_param,
-      project_id: project
-    }
-
-    expect(response).to be_successful
   end
 
   private

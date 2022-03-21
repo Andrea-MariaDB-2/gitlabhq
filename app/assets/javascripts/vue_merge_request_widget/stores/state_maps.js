@@ -1,10 +1,10 @@
-const stateToComponentMap = {
+export const stateToComponentMap = {
   merged: 'mr-widget-merged',
   closed: 'mr-widget-closed',
   merging: 'mr-widget-merging',
   conflicts: 'mr-widget-conflicts',
   missingBranch: 'mr-widget-missing-branch',
-  workInProgress: 'mr-widget-wip',
+  draft: 'mr-widget-wip',
   readyToMerge: 'mr-widget-ready-to-merge',
   nothingToMerge: 'mr-widget-nothing-to-merge',
   notAllowedToMerge: 'mr-widget-not-allowed',
@@ -18,12 +18,13 @@ const stateToComponentMap = {
   autoMergeFailed: 'mr-widget-auto-merge-failed',
   shaMismatch: 'sha-mismatch',
   rebase: 'mr-widget-rebase',
+  mergeChecksFailed: 'mergeChecksFailed',
 };
 
-const statesToShowHelpWidget = [
+export const statesToShowHelpWidget = [
   'merging',
   'conflicts',
-  'workInProgress',
+  'draft',
   'readyToMerge',
   'checking',
   'unresolvedDiscussions',
@@ -39,7 +40,7 @@ export const stateKey = {
   nothingToMerge: 'nothingToMerge',
   checking: 'checking',
   conflicts: 'conflicts',
-  workInProgress: 'workInProgress',
+  draft: 'draft',
   pipelineFailed: 'pipelineFailed',
   unresolvedDiscussions: 'unresolvedDiscussions',
   pipelineBlocked: 'pipelineBlocked',
@@ -49,10 +50,7 @@ export const stateKey = {
   notAllowedToMerge: 'notAllowedToMerge',
   readyToMerge: 'readyToMerge',
   rebase: 'rebase',
+  merging: 'merging',
   merged: 'merged',
-};
-
-export default {
-  stateToComponentMap,
-  statesToShowHelpWidget,
+  mergeChecksFailed: 'mergeChecksFailed',
 };

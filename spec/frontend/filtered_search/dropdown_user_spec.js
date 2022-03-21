@@ -1,8 +1,5 @@
-import DropdownUtils from '~/filtered_search/dropdown_utils';
-// TODO: Moving this line up throws an error about `FilteredSearchDropdown`
-// being undefined in test. See gitlab-org/gitlab#321476 for more info.
-// eslint-disable-next-line import/order
 import DropdownUser from '~/filtered_search/dropdown_user';
+import DropdownUtils from '~/filtered_search/dropdown_utils';
 import FilteredSearchTokenizer from '~/filtered_search/filtered_search_tokenizer';
 import IssuableFilteredTokenKeys from '~/filtered_search/issuable_filtered_search_token_keys';
 
@@ -77,7 +74,7 @@ describe('Dropdown User', () => {
   });
 
   describe('hideCurrentUser', () => {
-    const fixtureTemplate = 'issues/issue_list.html';
+    const fixtureTemplate = 'merge_requests/merge_request_list.html';
 
     let dropdown;
     let authorFilterDropdownElement;

@@ -3,6 +3,8 @@
 module Projects
   module Alerting
     class NotificationsController < Projects::ApplicationController
+      include ActionController::HttpAuthentication::Basic
+
       respond_to :json
 
       skip_before_action :verify_authenticity_token
@@ -16,7 +18,11 @@ module Projects
         token = extract_alert_manager_token(request)
         result = notify_service.execute(token, integration)
 
-        head result.http_status
+        if result.success?
+          render json: AlertManagement::AlertSerializer.new.represent(result.payload[:alerts]), code: result.http_status
+        else
+          head result.http_status
+        end
       end
 
       private
@@ -27,7 +33,17 @@ module Projects
       end
 
       def extract_alert_manager_token(request)
+        extract_bearer_token(request) || extract_basic_auth_token(request)
+      end
+
+      def extract_bearer_token(request)
         Doorkeeper::OAuth::Token.from_bearer_authorization(request)
+      end
+
+      def extract_basic_auth_token(request)
+        _username, token = user_name_and_password(request)
+
+        token
       end
 
       def notify_service

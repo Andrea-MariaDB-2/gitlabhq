@@ -36,6 +36,8 @@ module Ci
         update_pipeline!
         update_statuses_processed!
 
+        Ci::ExpirePipelineCacheService.new.execute(pipeline)
+
         true
       end
 

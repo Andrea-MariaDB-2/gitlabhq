@@ -14,6 +14,10 @@ module Auth
       :build_destroy_container_image
     ].freeze
 
+    FORBIDDEN_IMPORTING_SCOPES = %w[push delete *].freeze
+
+    ActiveImportError = Class.new(StandardError)
+
     def execute(authentication_abilities:)
       @authentication_abilities = authentication_abilities
 
@@ -26,17 +30,27 @@ module Auth
       end
 
       { token: authorized_token(*scopes).encoded }
+    rescue ActiveImportError
+      error(
+        'DENIED',
+        status: 403,
+        message: 'Your repository is currently being migrated to a new platform and writes are temporarily disabled. Go to https://gitlab.com/groups/gitlab-org/-/epics/5523 to learn more.'
+      )
     end
 
     def self.full_access_token(*names)
       access_token(%w(*), names)
     end
 
+    def self.import_access_token
+      access_token(%w(*), ['import'], 'registry')
+    end
+
     def self.pull_access_token(*names)
       access_token(['pull'], names)
     end
 
-    def self.access_token(actions, names)
+    def self.access_token(actions, names, type = 'repository')
       names = names.flatten
       registry = Gitlab.config.registry
       token = JSONWebToken::RSAToken.new(registry.key)
@@ -45,12 +59,7 @@ module Auth
       token.expire_time = token_expire_at
 
       token[:access] = names.map do |name|
-        {
-          type: 'repository',
-          name: name,
-          actions: actions,
-          migration_eligible: migration_eligible(repository_path: name)
-        }.compact
+        { type: type, name: name, actions: actions }
       end
 
       token.encoded
@@ -104,6 +113,8 @@ module Auth
     def process_repository_access(type, path, actions)
       return unless path.valid?
 
+      raise ActiveImportError if actively_importing?(actions, path)
+
       requested_project = path.repository_project
 
       return unless requested_project
@@ -120,31 +131,16 @@ module Auth
       #
       ensure_container_repository!(path, authorized_actions)
 
-      {
-        type: type,
-        name: path.to_s,
-        actions: authorized_actions,
-        migration_eligible: self.class.migration_eligible(project: requested_project)
-      }.compact
+      { type: type, name: path.to_s, actions: authorized_actions }
     end
 
-    def self.migration_eligible(project: nil, repository_path: nil)
-      return unless Feature.enabled?(:container_registry_migration_phase1)
+    def actively_importing?(actions, path)
+      return false if FORBIDDEN_IMPORTING_SCOPES.intersection(actions).empty?
 
-      # project has precedence over repository_path. If only the latter is provided, we find the corresponding Project.
-      unless project
-        return unless repository_path
+      container_repository = ContainerRepository.find_by_path(path)
+      return false unless container_repository
 
-        project = ContainerRegistry::Path.new(repository_path).repository_project
-      end
-
-      # The migration process will start by allowing only specific test and gitlab-org projects using the
-      # `container_registry_migration_phase1_allow` FF. We'll then move on to a percentage rollout using this same FF.
-      # To remove the risk of impacting enterprise customers that rely heavily on the registry during the percentage
-      # rollout, we'll add their top-level group/namespace to the `container_registry_migration_phase1_deny` FF. Later,
-      # we'll remove them manually from this deny list, and their new repositories will become eligible.
-      Feature.disabled?(:container_registry_migration_phase1_deny, project.root_ancestor) &&
-        Feature.enabled?(:container_registry_migration_phase1_allow, project)
+      container_repository.migration_importing?
     end
 
     ##
@@ -156,7 +152,7 @@ module Auth
       return if path.has_repository?
       return unless actions.include?('push')
 
-      ContainerRepository.create_from_path!(path)
+      ContainerRepository.find_or_create_from_path(path)
     end
 
     # Overridden in EE

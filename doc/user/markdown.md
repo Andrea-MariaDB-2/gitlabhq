@@ -1,8 +1,7 @@
 ---
 stage: Create
 group: Source Code
-info: "To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments"
-type: reference, howto
+info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
 ---
 
 # GitLab Flavored Markdown **(FREE)**
@@ -11,7 +10,7 @@ GitLab automatically renders Markdown content. For example, when you add a comme
 you type the text in the Markdown language. When you save the issue, the text is rendered
 with a set of styles. These styles are described on this page.
 
-For example, in Markdown, an ordered list looks like this:
+For example, in Markdown, an unordered list looks like this:
 
 ```markdown
 - Cat
@@ -31,7 +30,7 @@ and the [main GitLab website](https://about.gitlab.com) use [Kramdown](https://k
 You should not view this page in the documentation, but instead [view these styles as they appear on GitLab](https://gitlab.com/gitlab-org/gitlab/-/blob/master/doc/user/markdown.md).
 
 GitLab Flavored Markdown extends the [CommonMark specification](https://spec.commonmark.org/current/).
-It was inspired by [GitHub Flavored Markdown](https://docs.github.com/en/github/writing-on-github/getting-started-with-writing-and-formatting-on-github/basic-writing-and-formatting-syntax).
+It was inspired by [GitHub Flavored Markdown](https://docs.github.com/en/get-started/writing-on-github/getting-started-with-writing-and-formatting-on-github/basic-writing-and-formatting-syntax).
 
 ## Where you can use GitLab Flavored Markdown
 
@@ -68,15 +67,15 @@ Features not found in standard Markdown:
 
 Features [extended from standard Markdown](#features-extended-from-standard-markdown):
 
-| Standard Markdown                     | Extended Markdown in GitLab |
-| ------------------------------------- | ------------------------- |
-| [blockquotes](#blockquotes)           | [multi-line blockquotes](#multiline-blockquote) |
-| [code blocks](#code-spans-and-blocks) | [colored code and syntax highlighting](#colored-code-and-syntax-highlighting) |
-| [emphasis](#emphasis)                 | [multiple underscores in words](#multiple-underscores-in-words-and-mid-word-emphasis)
-| [headers](#headers)                   | [linkable Header IDs](#header-ids-and-links) |
-| [images](#images)                     | [embedded videos](#videos) and [audio](#audio) |
-| [line breaks](#line-breaks)           | [more line break control](#newlines) |
-| [links](#links)                       | [automatically linking URLs](#url-auto-linking) |
+| Standard Markdown                     | Extended Markdown in GitLab                                                           |
+|---------------------------------------|---------------------------------------------------------------------------------------|
+| [blockquotes](#blockquotes)           | [multi-line blockquotes](#multiline-blockquote)                                       |
+| [code blocks](#code-spans-and-blocks) | [colored code and syntax highlighting](#colored-code-and-syntax-highlighting)         |
+| [emphasis](#emphasis)                 | [multiple underscores in words](#multiple-underscores-in-words-and-mid-word-emphasis) |
+| [headers](#headers)                   | [linkable Header IDs](#header-ids-and-links)                                          |
+| [images](#images)                     | [embedded videos](#videos) and [audio](#audio)                                        |
+| [line breaks](#line-breaks)           | [more line break control](#newlines)                                                  |
+| [links](#links)                       | [automatically linking URLs](#url-auto-linking)                                       |
 
 ## Features not found in standard Markdown
 
@@ -124,8 +123,6 @@ You can generate diagrams and flowcharts from text by using [Mermaid](https://me
 You can also use [Kroki](https://kroki.io) to create a wide variety of diagrams.
 
 #### Mermaid
-
-> [Introduced](https://gitlab.com/gitlab-org/gitlab-foss/-/merge_requests/15107) in GitLab 10.3.
 
 Visit the [official page](https://mermaidjs.github.io/) for more details. The
 [Mermaid Live Editor](https://mermaid-js.github.io/mermaid-live-editor/) helps you
@@ -211,20 +208,20 @@ Sometimes you want to :monkey: around a bit and add some :star2: to your :speech
 
 You can use it to point out a :bug: or warn about :speak_no_evil: patches. And if someone improves your really :snail: code, send them some :birthday:. People :heart: you for that.
 
-If you're new to this, don't be :fearful:. You can join the emoji :family:. All you need to do is to look up one of the supported codes.
+If you're new to this, don't be :fearful:. You can join the emoji :family:. Just look up one of the supported codes.
 
 Consult the [Emoji Cheat Sheet](https://www.emojicopy.com) for a list of all supported emoji codes. :thumbsup:
 ```
 
-Sometimes you want to <img src="https://gitlab.com/gitlab-org/gitlab-foss/raw/master/app/assets/images/emoji/monkey.png" width="20px" height="20px" style="display:inline;margin:0;border: 0"> around a bit and add some <img src="https://gitlab.com/gitlab-org/gitlab-foss/raw/master/app/assets/images/emoji/star2.png" width="20px" height="20px" style="display:inline;margin:0;border: 0"> to your <img src="https://gitlab.com/gitlab-org/gitlab-foss/raw/master/app/assets/images/emoji/speech_balloon.png" width="20px" height="20px" style="display:inline;margin:0;border: 0">. Well we have a gift for you:
+Sometimes you want to <img src="https://gitlab.com/gitlab-org/gitlab-foss/raw/master/public/-/emojis/2/monkey.png" width="20px" height="20px" style="display:inline;margin:0;border: 0"> around a bit and add some <img src="https://gitlab.com/gitlab-org/gitlab-foss/raw/master/public/-/emojis/2/star2.png" width="20px" height="20px" style="display:inline;margin:0;border: 0"> to your <img src="https://gitlab.com/gitlab-org/gitlab-foss/raw/master/public/-/emojis/2/speech_balloon.png" width="20px" height="20px" style="display:inline;margin:0;border: 0">. Well we have a gift for you:
 
-<img src="https://gitlab.com/gitlab-org/gitlab-foss/raw/master/app/assets/images/emoji/zap.png" width="20px" height="20px" style="display:inline;margin:0;border: 0">You can use emoji anywhere GitLab Flavored Markdown is supported. <img src="https://gitlab.com/gitlab-org/gitlab-foss/raw/master/app/assets/images/emoji/v.png" width="20px" height="20px" style="display:inline;margin:0;border: 0">
+<img src="https://gitlab.com/gitlab-org/gitlab-foss/raw/master/public/-/emojis/2/zap.png" width="20px" height="20px" style="display:inline;margin:0;border: 0">You can use emoji anywhere GitLab Flavored Markdown is supported. <img src="https://gitlab.com/gitlab-org/gitlab-foss/raw/master/public/-/emojis/2/v.png" width="20px" height="20px" style="display:inline;margin:0;border: 0">
 
-You can use it to point out a<img src="https://gitlab.com/gitlab-org/gitlab-foss/raw/master/app/assets/images/emoji/bug.png" width="20px" height="20px" style="display:inline;margin:0;border: 0"> or warn about <img src="https://gitlab.com/gitlab-org/gitlab-foss/raw/master/app/assets/images/emoji/speak_no_evil.png" width="20px" height="20px" style="display:inline;margin:0;border: 0"> patches. If someone improves your really <img src="https://gitlab.com/gitlab-org/gitlab-foss/raw/master/app/assets/images/emoji/snail.png" width="20px" height="20px" style="display:inline;margin:0;border: 0"> code, send them some <img src="https://gitlab.com/gitlab-org/gitlab-foss/raw/master/app/assets/images/emoji/birthday.png" width="20px" height="20px" style="display:inline;margin:0;border: 0">. People <img src="https://gitlab.com/gitlab-org/gitlab-foss/raw/master/app/assets/images/emoji/heart.png" width="20px" height="20px" style="display:inline;margin:0;border: 0"> you for that.
+You can use it to point out a<img src="https://gitlab.com/gitlab-org/gitlab-foss/raw/master/public/-/emojis/2/bug.png" width="20px" height="20px" style="display:inline;margin:0;border: 0"> or warn about <img src="https://gitlab.com/gitlab-org/gitlab-foss/raw/master/public/-/emojis/2/speak_no_evil.png" width="20px" height="20px" style="display:inline;margin:0;border: 0"> patches. If someone improves your really <img src="https://gitlab.com/gitlab-org/gitlab-foss/raw/master/public/-/emojis/2/snail.png" width="20px" height="20px" style="display:inline;margin:0;border: 0"> code, send them some <img src="https://gitlab.com/gitlab-org/gitlab-foss/raw/master/public/-/emojis/2/birthday.png" width="20px" height="20px" style="display:inline;margin:0;border: 0">. People <img src="https://gitlab.com/gitlab-org/gitlab-foss/raw/master/public/-/emojis/2/heart.png" width="20px" height="20px" style="display:inline;margin:0;border: 0"> you for that.
 
-If you're new to this, don't be <img src="https://gitlab.com/gitlab-org/gitlab-foss/raw/master/app/assets/images/emoji/fearful.png" width="20px" height="20px" style="display:inline;margin:0;border: 0">. You can join the emoji <img src="https://gitlab.com/gitlab-org/gitlab-foss/raw/master/app/assets/images/emoji/family.png" width="20px" height="20px" style="display:inline;margin:0;border: 0">. All you need to do is to look up one of the supported codes.
+If you're new to this, don't be <img src="https://gitlab.com/gitlab-org/gitlab-foss/raw/master/public/-/emojis/2/fearful.png" width="20px" height="20px" style="display:inline;margin:0;border: 0">. You can join the emoji <img src="https://gitlab.com/gitlab-org/gitlab-foss/raw/master/public/-/emojis/2/family.png" width="20px" height="20px" style="display:inline;margin:0;border: 0">. Just look up one of the supported codes.
 
-Consult the [Emoji Cheat Sheet](https://www.webfx.com/tools/emoji-cheat-sheet/) for a list of all supported emoji codes. <img src="https://gitlab.com/gitlab-org/gitlab-foss/raw/master/app/assets/images/emoji/thumbsup.png" width="20px" height="20px" style="display:inline;margin:0;border: 0">
+Consult the [Emoji Cheat Sheet](https://www.webfx.com/tools/emoji-cheat-sheet/) for a list of all supported emoji codes. <img src="https://gitlab.com/gitlab-org/gitlab-foss/raw/master/public/-/emojis/2/thumbsup.png" width="20px" height="20px" style="display:inline;margin:0;border: 0">
 
 #### Emojis and your operating system
 
@@ -236,15 +233,13 @@ emojis where there is no support.
 
 <!-- vale gitlab.Spelling = NO -->
 
-On Linux, you can download [Noto Color Emoji](https://www.google.com/get/noto/help/emoji/)
+On Linux, you can download [Noto Color Emoji](https://github.com/googlefonts/noto-emoji)
 to get full native emoji support. Ubuntu 18.04 (like many modern Linux distributions) has
 this font installed by default.
 
 <!-- vale gitlab.Spelling = YES -->
 
 ### Front matter
-
-> [Introduced](https://gitlab.com/gitlab-org/gitlab-foss/-/merge_requests/23331) in GitLab 11.6.
 
 Front matter is metadata included at the beginning of a Markdown document, preceding
 the content. This data can be used by static site generators like [Jekyll](https://jekyllrb.com/docs/front-matter/),
@@ -253,7 +248,7 @@ the content. This data can be used by static site generators like [Jekyll](https
 When you view a Markdown file rendered by GitLab, front matter is displayed as-is,
 in a box at the top of the document. The HTML content displays after the front matter. To view an example,
 you can toggle between the source and rendered version of a
-[GitLab documentation file](https://gitlab.com/gitlab-org/gitlab/-/blob/master/doc/README.md).
+[GitLab documentation file](https://gitlab.com/gitlab-org/gitlab/-/blob/master/doc/index.md).
 
 In GitLab, front matter is used only in Markdown files and wiki pages, not the other
 places where Markdown formatting is supported. It must be at the very top of the document
@@ -267,7 +262,7 @@ The following delimiters are supported:
   ---
   title: About Front Matter
   example:
-  language: yaml
+    language: yaml
   ---
   ```
 
@@ -356,18 +351,18 @@ in a [code block](#code-spans-and-blocks) with the language declared as `math` i
 on a separate line:
 
 ````markdown
-This math is inline $`a^2+b^2=c^2`$.
+This math is inline: $`a^2+b^2=c^2`$.
 
-This is on a separate line:
+This math is on a separate line:
 
 ```math
 a^2+b^2=c^2
 ```
 ````
 
-This math is inline $`a^2+b^2=c^2`$.
+This math is inline: $`a^2+b^2=c^2`$.
 
-This is on a separate line
+This math is on a separate line:
 
 ```math
 a^2+b^2=c^2
@@ -408,16 +403,17 @@ To create a task list, follow the format of an ordered or unordered list:
 ### Table of contents
 
 A table of contents is an unordered list that links to subheadings in the document.
-
-To add a table of contents to a Markdown file, wiki page, issue request, or merge request
-description, add either the `[[_TOC_]]` or `[TOC]` tag on its own line.
-
-NOTE:
 You can add a table of contents to issues and merge requests, but you can't add one
-to notes or comments.
+to notes or comments. Add either the `[[_TOC_]]` or `[TOC]` tag on its own line
+to the **Description** field of any of the supported content types:
+
+- Markdown files.
+- Wiki pages.
+- Issues.
+- Merge requests.
 
 ```markdown
-This is an intro sentence to my Wiki page.
+This sentence introduces my wiki page.
 
 [[_TOC_]]
 
@@ -519,30 +515,31 @@ version to reference other projects from the same namespace.
 
 GitLab Flavored Markdown recognizes the following:
 
-| references                      | input                      | cross-project reference                 | shortcut inside same namespace |
-| :------------------------------ | :------------------------- | :-------------------------------------- | :----------------------------- |
-| specific user                   | `@user_name`               |                                         |                                |
-| specific group                  | `@group_name`              |                                         |                                |
-| entire team                     | `@all`                     |                                         |                                |
-| project                         | `namespace/project`        |                                         |                                |
-| issue                           | ``#123``                   | `namespace/project#123`                 | `project#123`                  |
-| merge request                   | `!123`                     | `namespace/project!123`                 | `project!123`                  |
-| snippet                         | `$123`                     | `namespace/project$123`                 | `project$123`                  |
-| epic **(ULTIMATE)**             | `&123`                     | `group1/subgroup&123`                   |                                |
-| vulnerability **(ULTIMATE)** (1)| `[vulnerability:123]`      | `[vulnerability:namespace/project/123]` | `[vulnerability:project/123]`  |
-| feature flag                    | `[feature_flag:123]`       | `[feature_flag:namespace/project/123]`  | `[feature_flag:project/123]`   |
-| label by ID                     | `~123`                     | `namespace/project~123`                 | `project~123`                  |
-| one-word label by name          | `~bug`                     | `namespace/project~bug`                 | `project~bug`                  |
-| multi-word label by name        | `~"feature request"`       | `namespace/project~"feature request"`   | `project~"feature request"`    |
-| scoped label by name            | `~"priority::high"`        | `namespace/project~"priority::high"`    | `project~"priority::high"`     |
-| project milestone by ID         | `%123`                     | `namespace/project%123`                 | `project%123`                  |
-| one-word milestone by name      | `%v1.23`                   | `namespace/project%v1.23`               | `project%v1.23`                |
-| multi-word milestone by name    | `%"release candidate"`     | `namespace/project%"release candidate"` | `project%"release candidate"`  |
-| specific commit                 | `9ba12248`                 | `namespace/project@9ba12248`            | `project@9ba12248`             |
-| commit range comparison         | `9ba12248...b19a04f5`      | `namespace/project@9ba12248...b19a04f5` | `project@9ba12248...b19a04f5`  |
-| repository file references      | `[README](doc/README.md)`  |                                         |                                |
-| repository file line references | `[README](doc/README.md#L13)` |                                      |                                |
-| [alert](../operations/incident_management/alerts.md) | `^alert#123` | `namespace/project^alert#123`    | `project^alert#123`            |
+| references                                                                  | input                         | cross-project reference                 | shortcut inside same namespace |
+|:----------------------------------------------------------------------------|:------------------------------|:----------------------------------------|:-------------------------------|
+| specific user                                                               | `@user_name`                  |                                         |                                |
+| specific group                                                              | `@group_name`                 |                                         |                                |
+| entire team                                                                 | `@all`                        |                                         |                                |
+| project                                                                     | `namespace/project>`          |                                         |                                |
+| issue                                                                       | ``#123``                      | `namespace/project#123`                 | `project#123`                  |
+| merge request                                                               | `!123`                        | `namespace/project!123`                 | `project!123`                  |
+| snippet                                                                     | `$123`                        | `namespace/project$123`                 | `project$123`                  |
+| [epic](group/epics/index.md)                                                | `&123`                        | `group1/subgroup&123`                   |                                |
+| [vulnerability](application_security/vulnerabilities/index.md) <sup>1</sup> | `[vulnerability:123]`         | `[vulnerability:namespace/project/123]` | `[vulnerability:project/123]`  |
+| feature flag                                                                | `[feature_flag:123]`          | `[feature_flag:namespace/project/123]`  | `[feature_flag:project/123]`   |
+| label by ID                                                                 | `~123`                        | `namespace/project~123`                 | `project~123`                  |
+| one-word label by name                                                      | `~bug`                        | `namespace/project~bug`                 | `project~bug`                  |
+| multi-word label by name                                                    | `~"feature request"`          | `namespace/project~"feature request"`   | `project~"feature request"`    |
+| scoped label by name                                                        | `~"priority::high"`           | `namespace/project~"priority::high"`    | `project~"priority::high"`     |
+| project milestone by ID                                                     | `%123`                        | `namespace/project%123`                 | `project%123`                  |
+| one-word milestone by name                                                  | `%v1.23`                      | `namespace/project%v1.23`               | `project%v1.23`                |
+| multi-word milestone by name                                                | `%"release candidate"`        | `namespace/project%"release candidate"` | `project%"release candidate"`  |
+| specific commit                                                             | `9ba12248`                    | `namespace/project@9ba12248`            | `project@9ba12248`             |
+| commit range comparison                                                     | `9ba12248...b19a04f5`         | `namespace/project@9ba12248...b19a04f5` | `project@9ba12248...b19a04f5`  |
+| repository file references                                                  | `[README](doc/README.md)`     |                                         |                                |
+| repository file line references                                             | `[README](doc/README.md#L13)` |                                         |                                |
+| [alert](../operations/incident_management/alerts.md)                        | `^alert#123`                  | `namespace/project^alert#123`           | `project^alert#123`            |
+| contact                                                                     | `[contact:test@example.com]`  |                                         |                                |
 
 1. [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/222483) in GitLab 13.7.
 
@@ -556,6 +553,16 @@ In addition to this, links to some objects are also recognized and formatted. So
 - Comments on issues: `"https://gitlab.com/gitlab-org/gitlab/-/issues/1234#note_101075757"`, which are rendered as `#1234 (comment 101075757)`
 - The issues designs tab: `"https://gitlab.com/gitlab-org/gitlab/-/issues/1234/designs"`, which are rendered as `#1234 (designs)`.
 - Links to individual designs: `"https://gitlab.com/gitlab-org/gitlab/-/issues/1234/designs/layout.png"`, which are rendered as `#1234[layout.png]`.
+
+### Show the issue, merge request, or epic title in the reference
+
+> [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/15694) in GitLab 14.6.
+
+To include the title in the rendered link of an issue, merge request, or epic, add a plus (`+`)
+at the end of the reference. For example, a reference like `#123+` is rendered as
+`The issue title (#123)`.
+
+URL references like `https://gitlab.com/gitlab-org/gitlab/-/issues/1234+` are also expanded.
 
 ### Embedding metrics in GitLab Flavored Markdown
 
@@ -579,7 +586,7 @@ by starting the lines of the blockquote with `>`:
 
 Quote break.
 
-> This is a very long line that is still quoted properly when it wraps. Keep writing to make sure this line is long enough to actually wrap for everyone. You can also *add* **Markdown** into a blockquote.
+> This very long line is still quoted properly when it wraps. Keep writing to make sure this line is long enough to actually wrap for everyone. You can also *add* **Markdown** into a blockquote.
 ```
 
 > Blockquotes help you emulate reply text.
@@ -587,7 +594,7 @@ Quote break.
 
 Quote break.
 
-> This is a very long line that is still quoted properly when it wraps. Keep writing to make sure this line is long enough to actually wrap for everyone. You can also *add* **Markdown** into a blockquote.
+> This very long line is still quoted properly when it wraps. Keep writing to make sure this line is long enough to actually wrap for everyone. You can also *add* **Markdown** into a blockquote.
 
 #### Multiline blockquote
 
@@ -706,7 +713,7 @@ puts markdown.to_html
 
 ```
 No language indicated, so no syntax highlighting.
-s = "There is no highlighting for this."
+s = "No highlighting is shown for this line."
 But let's throw in a <b>tag</b>.
 ```
 ````
@@ -733,13 +740,13 @@ puts markdown.to_html
 
 ```plaintext
 No language indicated, so no syntax highlighting.
-s = "There is no highlighting for this."
+s = "No highlighting is shown for this line."
 But let's throw in a <b>tag</b>.
 ```
 
 ### Emphasis
 
-There are multiple ways to emphasize text in Markdown. You can italicize, bold, strikethrough,
+In Markdown, you can emphasize text in multiple ways. You can italicize, bold, strikethrough,
 and combine these emphasis styles together.
 Strikethrough is not part of the core Markdown standard, but is part of GitLab Flavored Markdown.
 
@@ -811,21 +818,18 @@ the note content.
 Regardless of the tag names, the relative order of the reference tags determines the rendered
 numbering.
 
-Reference tags can use letters and other characters. Avoid using lowercase `w` or an underscore
-(`_`) in footnote tag names until [this bug](https://gitlab.com/gitlab-org/gitlab/-/issues/24423) is
-resolved.
-
 <!--
-Do not edit the following codeblock. It uses HTML to skip the Vale ReferenceLinks test.
+The following codeblock uses HTML to skip the Vale ReferenceLinks test.
+Do not change it back to a markdown codeblock.
 -->
 
 <pre class="highlight"><code>A footnote reference tag looks like this: [^1]
 
 This reference tag is a mix of letters and numbers. [^footnote-42]
 
-&#91;^1]: This is the text inside a footnote.
+&#91;^1]: This text is inside a footnote.
 
-&#91;^footnote-42]: This is another footnote.
+&#91;^footnote-42]: This text is another footnote.
 </code></pre>
 
 A footnote reference tag looks like this:[^1]
@@ -837,9 +841,9 @@ Do not delete the single space before the [^1] and [^footnotes] references below
 These are used to force the Vale ReferenceLinks check to skip these examples.
 -->
 
- [^1]: This is the text inside a footnote.
+ [^1]: This text is inside a footnote.
 
- [^footnote-42]: This is another footnote.
+ [^footnote-42]: This text is another footnote.
 
 ### Headers
 
@@ -897,8 +901,8 @@ Would generate the following link IDs:
 1. `this-header-has-spaces-in-it-2`
 1. `this-header-has-3-5-in-it-and-parentheses`
 
-Note that the emoji processing happens before the header IDs are generated, so the
-emoji is converted to an image which is then removed from the ID.
+Emoji processing happens before the header IDs are generated. The
+emoji is converted to an image, which is then removed from the ID.
 
 ### Horizontal Rule
 
@@ -923,7 +927,8 @@ ___
 Examples:
 
 <!--
-Do not edit the following codeblock. It uses HTML to skip the Vale ReferenceLinks test.
+The following codeblock uses HTML to skip the Vale ReferenceLinks test.
+Do not change it back to a markdown codeblock.
 -->
 
 <pre class="highlight"><code>Inline-style (hover to see title text):
@@ -938,7 +943,7 @@ Reference-style (hover to see title text):
 </code></pre>
 
 <!--
-DO NOT change the name of markdown_logo.png. This is used for a test in
+DO NOT change the name of markdown_logo.png. This file is used for a test in
 spec/controllers/help_controller_spec.rb.
 -->
 
@@ -954,6 +959,10 @@ Do not change to a reference style link.
 -->
 
 ![alt text](img/markdown_logo.png "Title Text")
+
+In the rare case where you must set a specific height or width for an image,
+you can use the `img` HTML tag instead of Markdown and set its `height` and
+`width` parameters.
 
 #### Videos
 
@@ -991,6 +1000,8 @@ Here's a sample audio clip:
 
 ### Inline HTML
 
+> Allowing `rel="license"` [introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/20857) in GitLab 14.6.
+
 To see the second example of Markdown rendered in HTML,
 [view it in GitLab](https://gitlab.com/gitlab-org/gitlab/-/blob/master/doc/user/markdown.md#inline-html).
 
@@ -999,6 +1010,7 @@ You can also use raw HTML in your Markdown, and it usually works pretty well.
 See the documentation for HTML::Pipeline's [SanitizationFilter](https://github.com/jch/html-pipeline/blob/v2.12.3/lib/html/pipeline/sanitization_filter.rb#L42)
 class for the list of allowed HTML tags and attributes. In addition to the default
 `SanitizationFilter` allowlist, GitLab allows `span`, `abbr`, `details` and `summary` elements.
+`rel="license"` is allowed on links to support the [Rel-License microformat](https://microformats.org/wiki/rel-license) and license attribution.
 
 ```html
 <dl>
@@ -1129,8 +1141,8 @@ These details <em>remain</em> <b>hidden</b> until expanded.
 ### Line breaks
 
 A line break is inserted (a new paragraph starts) if the previous text is
-ended with two newlines, like when you hit <kbd>Enter</kbd> twice in a row. If you only
-use one newline (hit <kbd>Enter</kbd> once), the next sentence remains part of the
+ended with two newlines, like when you press <kbd>Enter</kbd> twice in a row. If you only
+use one newline (select <kbd>Enter</kbd> once), the next sentence remains part of the
 same paragraph. Use this approach if you want to keep long lines from wrapping, and keep
 them editable:
 
@@ -1156,7 +1168,8 @@ in the *same paragraph*.
 
 #### Newlines
 
-GitLab Flavored Markdown adheres to the Markdown specification in how [paragraphs and line breaks are handled](https://spec.commonmark.org/current/).
+GitLab Flavored Markdown adheres to the Markdown specification for handling
+[paragraphs and line breaks](https://spec.commonmark.org/current/).
 
 A paragraph is one or more consecutive lines of text, separated by one or
 more blank lines (two newlines at the end of the first paragraph), as [explained above](#line-breaks).
@@ -1178,25 +1191,26 @@ A new line due to the previous backslash.
 
 ### Links
 
-There are two ways to create links, inline-style and reference-style:
+You can create links two ways: inline-style and reference-style. For example:
 
 <!--
-Do not edit the following codeblock. It uses HTML to skip the Vale ReferenceLinks test.
+The following codeblock uses HTML to skip the Vale ReferenceLinks test.
+Do not change it back to a markdown codeblock.
 -->
 
-<pre class="highlight"><code>- This is an [inline-style link](https://www.google.com)
-- This is a [link to a repository file in the same directory](index.md)
-- This is a [relative link to a readme one directory higher](../index.md)
-- This is a [link that also has title text](https://www.google.com "This link takes you to Google!")
+<pre class="highlight"><code>- This line shows an [inline-style link](https://www.google.com)
+- This line shows a [link to a repository file in the same directory](permissions.md)
+- This line shows a [relative link to a file one directory higher](../index.md)
+- This line shows a [link that also has title text](https://www.google.com "This link takes you to Google!")
 
 Using header ID anchors:
 
-- This links to [a section on a different Markdown page, using a "#" and the header ID](index.md#overview)
-- This links to [a different section on the same page, using a "#" and the header ID](#header-ids-and-links)
+- This line links to [a section on a different Markdown page, using a "#" and the header ID](permissions.md#project-features-permissions)
+- This line links to [a different section on the same page, using a "#" and the header ID](#header-ids-and-links)
 
 Using references:
 
-- This is a [reference-style link, see below][Arbitrary case-insensitive reference text]
+- This line shows a [reference-style link, see below][Arbitrary case-insensitive reference text]
 - You can [use numbers for reference-style link definitions, see below][1]
 - Or leave it empty and use the [link text itself][], see below.
 
@@ -1207,15 +1221,15 @@ Some text to show that the reference links can follow later.
 &#91;link text itself]: https://www.reddit.com
 </code></pre>
 
-- This is an [inline-style link](https://www.google.com)
-- This is a [link to a repository file in the same directory](index.md)
-- This is a [relative link to a README one directory higher](../index.md)
-- This is a [link that also has title text](https://www.google.com "This link takes you to Google!")
+- This line shows an [inline-style link](https://www.google.com)
+- This line shows a [link to a repository file in the same directory](permissions.md)
+- This line shows a [relative link to a file one directory higher](../index.md)
+- This line shows a [link that also has title text](https://www.google.com "This link takes you to Google!")
 
 Using header ID anchors:
 
-- This links to [a section on a different Markdown page, using a "#" and the header ID](index.md#overview)
-- This links to [a different section on the same page, using a "#" and the header ID](#header-ids-and-links)
+- This line links to [a section on a different Markdown page, using a "#" and the header ID](permissions.md#project-features-permissions)
+- This line links to [a different section on the same page, using a "#" and the header ID](#header-ids-and-links)
 
 Using references:
 
@@ -1224,7 +1238,7 @@ The example below uses in-line links to pass the Vale ReferenceLinks test.
 Do not change to reference style links.
 -->
 
-- This is a [reference-style link, see below](https://www.mozilla.org/en-US/)
+- This line is a [reference-style link, see below](https://www.mozilla.org/en-US/)
 - You can [use numbers for reference-style link definitions, see below](https://slashdot.org)
 - Or leave it empty and use the [link text itself](https://www.reddit.com), see below.
 
@@ -1232,7 +1246,7 @@ Some text to show that the reference links can follow later.
 
 NOTE:
 Relative links do not allow the referencing of project files in a wiki
-page, or a wiki page in a project file. The reason for this is that a wiki is always
+page, or a wiki page in a project file. The reason: a wiki is always
 in a separate Git repository in GitLab. For example, `[I'm a reference-style link](style)`
 points the link to `wikis/style` only when the link is inside of a wiki Markdown file.
 
@@ -1261,14 +1275,14 @@ GitLab Flavored Markdown auto-links almost any URL you put into your text:
 <!-- vale gitlab.Spelling = YES -->
 ### Lists
 
-Ordered and unordered lists can be created.
+You can create ordered and unordered lists.
 
 For an ordered list, add the number you want the list
 to start with, like `1.`, followed by a space, at the start of each line for ordered lists.
-After the first number, it does not matter what number you use, ordered lists are
+After the first number, it does not matter what number you use. Ordered lists are
 numbered automatically by vertical order, so repeating `1.` for all items in the
 same list is common. If you start with a number other than `1.`, it uses that as the first
-number, and count up from there.
+number, and counts up from there.
 
 Examples:
 
@@ -1360,10 +1374,9 @@ Example:
 
 ---
 
-If the paragraph of the first item is not indented with the proper number of spaces,
+If the first item's paragraph isn't indented with the proper number of spaces,
 the paragraph appears outside the list, instead of properly indented under the list item.
-
-Example:
+For example:
 
 ```markdown
 1. First ordered list item
@@ -1455,13 +1468,13 @@ use `<br>` tags to force a cell to have multiple lines:
 ```markdown
 | Name | Details |
 | ---  | ---     |
-| Item1 | This is on one line |
+| Item1 | This text is on one line |
 | Item2 | This item has:<br>- Multiple items<br>- That we want listed separately |
 ```
 
 | Name | Details |
 | ---  | ---     |
-| Item1 | This is on one line |
+| Item1 | This text is on one line |
 | Item2 | This item has:<br>- Multiple items<br>- That we want listed separately |
 
 You can use HTML formatting in GitLab itself to add [task lists](#task-lists) with checkboxes,
@@ -1476,7 +1489,7 @@ but they do not render properly on `docs.gitlab.com`:
 
 #### Copy from spreadsheet and paste in Markdown
 
-[Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/27205) in GitLab 12.7.
+> [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/27205) in GitLab 12.7.
 
 If you're working in spreadsheet software (for example, Microsoft Excel, Google
 Sheets, or Apple Numbers), GitLab creates a Markdown table when you copy-and-paste
@@ -1497,56 +1510,3 @@ entry and paste the spreadsheet:
   at Daring Fireball is an excellent resource for a detailed explanation of standard Markdown.
 - You can find the detailed specification for CommonMark in the [CommonMark Spec](https://spec.commonmark.org/current/).
 - The [CommonMark Dingus](https://spec.commonmark.org/dingus/) helps you test CommonMark syntax.
-
-## Transition from Redcarpet to CommonMark
-
-- In GitLab 11.8, the [Redcarpet Ruby library](https://github.com/vmg/redcarpet)
-  was removed. All issues and comments, including those in 11.1 and earlier, are now processed
-  by using the [CommonMark Ruby Library](https://github.com/gjtorikian/commonmarker).
-- In GitLab 11.3 and later, CommonMark processes wiki pages and Markdown
-  files (`*.md`) in repositories.
-- In GitLab 11.1 and later, the [CommonMark Ruby Library](https://github.com/gjtorikian/commonmarker)
-  for Markdown processes all new issues, merge requests, comments, and other Markdown
-  content.
-
-The documentation website migrated its Markdown engine
-[from Redcarpet to Kramdown](https://gitlab.com/gitlab-org/gitlab-docs/-/merge_requests/108)
-in October 2018.
-
-You may have older issues, merge requests, or Markdown documents in your
-repository that relied upon nuances of the GitLab RedCarpet version
-of Markdown. Because CommonMark uses slightly stricter syntax, these documents
-may now appear differently after the transition to CommonMark.
-
-For example, numbered lists with nested lists may
-render incorrectly:
-
-```markdown
-1. Chocolate
-  - dark
-  - milk
-```
-
-To fix this issue, add a space to each nested item. The `-` must be aligned with the first
-character of the top list item (`C` in this case):
-
-```markdown
-1. Chocolate
-   - dark
-   - milk
-```
-
-1. Chocolate
-   - dark
-   - milk
-
-We flag any significant differences between Redcarpet and CommonMark Markdown in this document.
-
-If you have many Markdown files, it can be tedious to determine
-if they display correctly or not. You can use the
-[`diff_redcarpet_cmark`](https://gitlab.com/digitalmoksha/diff_redcarpet_cmark)
-tool to generate a list of files and the
-differences between how RedCarpet and CommonMark render the files. It indicates
-if any changes are needed.
-
-`diff_redcarpet_cmark` is not an officially supported product.

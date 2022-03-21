@@ -6,7 +6,7 @@
 variables:
   # Setting this variable will affect all Security templates
   # (SAST, Dependency Scanning, ...)
-  SECURE_ANALYZERS_PREFIX: "registry.gitlab.com/gitlab-org/security-products/analyzers"
+  SECURE_ANALYZERS_PREFIX: "registry.gitlab.com/security-products"
 
   SAST_EXCLUDED_ANALYZERS: ""
   SAST_EXCLUDED_PATHS: "spec, test, tests, tmp"
@@ -221,14 +221,22 @@ security-code-scan-sast:
   image:
     name: "$SAST_ANALYZER_IMAGE"
   variables:
-    SAST_ANALYZER_IMAGE_TAG: 2
+    SAST_ANALYZER_IMAGE_TAG: '2'
     SAST_ANALYZER_IMAGE: "$SECURE_ANALYZERS_PREFIX/security-code-scan:$SAST_ANALYZER_IMAGE_TAG"
   rules:
     - if: $SAST_DISABLED
       when: never
     - if: $SAST_EXCLUDED_ANALYZERS =~ /security-code-scan/
       when: never
+    # This rule shim will be removed in %15.0,
+    # See https://gitlab.com/gitlab-org/gitlab/-/issues/350935
+    - if: $CI_COMMIT_BRANCH && $CI_SERVER_VERSION_MAJOR == '14'
+      exists:
+        - '**/*.csproj'
+        - '**/*.vbproj'
     - if: $CI_COMMIT_BRANCH
+      variables:
+        SAST_ANALYZER_IMAGE_TAG: '3'
       exists:
         - '**/*.csproj'
         - '**/*.vbproj'
@@ -253,6 +261,7 @@ semgrep-sast:
         - '**/*.ts'
         - '**/*.tsx'
         - '**/*.c'
+        - '**/*.go'
 
 sobelow-sast:
   extends: .sast-analyzer

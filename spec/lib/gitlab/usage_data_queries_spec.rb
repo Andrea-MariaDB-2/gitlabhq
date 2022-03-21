@@ -3,10 +3,6 @@
 require 'spec_helper'
 
 RSpec.describe Gitlab::UsageDataQueries do
-  before do
-    allow(ActiveRecord::Base.connection).to receive(:transaction_open?).and_return(false)
-  end
-
   describe '#add_metric' do
     let(:metric) { 'CountBoardsMetric' }
 
@@ -46,6 +42,19 @@ RSpec.describe Gitlab::UsageDataQueries do
     it 'returns a stringified block for redis_usage_data with a block' do
       is_expected.to include(:redis_usage_data_block)
       expect(redis_usage_data[:redis_usage_data_block]).to start_with('#<Proc:')
+    end
+  end
+
+  describe '.alt_usage_data' do
+    subject(:alt_usage_data) { described_class.alt_usage_data { 42 } }
+
+    it 'returns value when used with value' do
+      expect(described_class.alt_usage_data(1))
+        .to eq(alt_usage_data_value: 1)
+    end
+
+    it 'returns a stringified block for alt_usage_data with a block' do
+      expect(alt_usage_data[:alt_usage_data_block]).to start_with('#<Proc:')
     end
   end
 

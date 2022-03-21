@@ -2,7 +2,6 @@
 
 class ProjectPresenter < Gitlab::View::Presenter::Delegated
   include ActionView::Helpers::NumberHelper
-  include ActionView::Helpers::UrlHelper
   include GitlabRoutingHelper
   include StorageHelper
   include TreeHelper
@@ -12,7 +11,10 @@ class ProjectPresenter < Gitlab::View::Presenter::Delegated
   include Gitlab::Utils::StrongMemoize
   include Gitlab::Experiment::Dsl
 
-  presents :project
+  delegator_override_with GitlabRoutingHelper # TODO: Remove `GitlabRoutingHelper` inclusion as it's duplicate
+  delegator_override_with Gitlab::Utils::StrongMemoize # This module inclusion is expected. See https://gitlab.com/gitlab-org/gitlab/-/issues/352884.
+
+  presents ::Project, as: :project
 
   AnchorData = Struct.new(:is_link, :label, :link, :class_modifier, :icon, :itemprop, :data)
   MAX_TOPICS_TO_SHOW = 3
@@ -135,17 +137,6 @@ class ProjectPresenter < Gitlab::View::Presenter::Delegated
     ide_edit_path(project, default_branch_or_main, 'README.md')
   end
 
-  def add_code_quality_ci_yml_path
-    add_special_file_path(
-      file_name: ci_config_path_or_default,
-      commit_message: s_("CommitMessage|Add %{file_name} and create a code quality job") % { file_name: ci_config_path_or_default },
-      additional_params: {
-        template: 'Code-Quality',
-        code_quality_walkthrough: true
-      }
-    )
-  end
-
   def license_short_name
     license = repository.license
     license&.nickname || license&.name || 'LICENSE'
@@ -246,31 +237,21 @@ class ProjectPresenter < Gitlab::View::Presenter::Delegated
     strong_memoize(:upload_anchor_data) do
       next unless can_current_user_push_to_default_branch?
 
-      experiment(:empty_repo_upload, project: project) do |e|
-        e.use {}
-        e.try do
-          AnchorData.new(false,
-                         statistic_icon('upload') + _('Upload file'),
-                         '#modal-upload-blob',
-                         'js-upload-file-experiment-trigger',
-                         nil,
-                         nil,
-                         {
-                           'target_branch' => default_branch_or_main,
-                           'original_branch' => default_branch_or_main,
-                           'can_push_code' => 'true',
-                           'path' => project_create_blob_path(project, default_branch_or_main),
-                           'project_path' => project.full_path
-                         }
-                        )
-        end
-        e.run
-      end
+      AnchorData.new(false,
+                     statistic_icon('upload') + _('Upload file'),
+                     '#modal-upload-blob',
+                     'js-upload-file-trigger',
+                     nil,
+                     nil,
+                     {
+                       'target_branch' => default_branch_or_main,
+                       'original_branch' => default_branch_or_main,
+                       'can_push_code' => 'true',
+                       'path' => project_create_blob_path(project, default_branch_or_main),
+                       'project_path' => project.full_path
+                     }
+                    )
     end
-  end
-
-  def empty_repo_upload_experiment?
-    upload_anchor_data.present?
   end
 
   def new_file_anchor_data
@@ -371,7 +352,7 @@ class ProjectPresenter < Gitlab::View::Presenter::Delegated
       if clusters.empty?
         AnchorData.new(false,
                        statistic_icon + _('Add Kubernetes cluster'),
-                       new_project_cluster_path(project))
+                       project_clusters_path(project))
       else
         cluster_link = clusters.count == 1 ? project_cluster_path(project, clusters.first) : project_clusters_path(project)
 
@@ -479,6 +460,11 @@ class ProjectPresenter < Gitlab::View::Presenter::Delegated
     strong_memoize(:project_topic_list) do
       project.topics.map(&:name)
     end
+  end
+
+  # Avoid including ActionView::Helpers::UrlHelper
+  def content_tag(*args)
+    ActionController::Base.helpers.content_tag(*args)
   end
 end
 

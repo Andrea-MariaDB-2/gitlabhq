@@ -20,6 +20,18 @@ Before proceeding with the troubleshooting below, check your firewall rules:
   - Connect to other Sentinel machines via TCP in `26379`
   - Connect to the Redis machines via TCP in `6379`
 
+## Basic Redis activity check
+
+Start Redis troubleshooting with a basic Redis activity check:
+
+1. Open a terminal on your GitLab server.
+1. Run `gitlab-redis-cli --stat` and observe the output while it runs.
+1. Go to your GitLab UI and browse to a handful of pages. Any page works, like
+   group or project overviews, issues, files in repositories, and so on.
+1. Check the `stat` output again and verify that the values for `keys`, `clients`,
+   `requests`, and `connections` increases as you browse. If the numbers go up,
+   basic Redis functionality is working and GitLab can connect to it.
+
 ## Troubleshooting Redis replication
 
 You can check if everything is correct by connecting to each server using
@@ -73,7 +85,7 @@ there may be something wrong with your configuration files or it can be related
 to [this issue](https://github.com/redis/redis-rb/issues/531).
 
 You must make sure you are defining the same value in `redis['master_name']`
-and `redis['master_pasword']` as you defined for your sentinel node.
+and `redis['master_password']` as you defined for your sentinel node.
 
 The way the Redis connector `redis-rb` works with sentinel is a bit
 non-intuitive. We try to hide the complexity in omnibus, but it still requires

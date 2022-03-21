@@ -7,6 +7,7 @@ import {
   EDITOR_CODE_INSTANCE_FN,
   EDITOR_DIFF_INSTANCE_FN,
 } from '~/editor/constants';
+import { SourceEditorExtension } from '~/editor/extensions/source_editor_extension_base';
 import { EditorWebIdeExtension } from '~/editor/extensions/source_editor_webide_ext';
 import SourceEditor from '~/editor/source_editor';
 import createFlash from '~/flash';
@@ -146,6 +147,9 @@ export default {
     fileType() {
       return this.previewMode?.id || '';
     },
+    showTabs() {
+      return !this.shouldHideEditor && this.isEditModeActive && this.previewMode;
+    },
   },
   watch: {
     'file.name': {
@@ -192,6 +196,9 @@ export default {
       if (!this.panelResizing) {
         this.refreshEditorDimensions();
       }
+    },
+    showTabs() {
+      this.$nextTick(() => this.refreshEditorDimensions());
     },
     rightPaneIsOpen() {
       this.refreshEditorDimensions();
@@ -302,30 +309,32 @@ export default {
           ...instanceOptions,
           ...this.editorOptions,
         });
-
-        this.editor.use(
-          new EditorWebIdeExtension({
-            instance: this.editor,
-            modelManager: this.modelManager,
-            store: this.$store,
-            file: this.file,
-            options: this.editorOptions,
-          }),
-        );
+        this.editor.use([
+          {
+            definition: SourceEditorExtension,
+          },
+          {
+            definition: EditorWebIdeExtension,
+            setupOptions: {
+              modelManager: this.modelManager,
+              store: this.$store,
+              file: this.file,
+              options: this.editorOptions,
+            },
+          },
+        ]);
 
         if (
           this.fileType === MARKDOWN_FILE_TYPE &&
           this.editor?.getEditorType() === EDITOR_TYPE_CODE &&
           this.previewMarkdownPath
         ) {
-          import('~/editor/extensions/source_editor_markdown_ext')
-            .then(({ EditorMarkdownExtension: MarkdownExtension } = {}) => {
-              this.editor.use(
-                new MarkdownExtension({
-                  instance: this.editor,
-                  previewMarkdownPath: this.previewMarkdownPath,
-                }),
-              );
+          import('~/editor/extensions/source_editor_markdown_livepreview_ext')
+            .then(({ EditorMarkdownPreviewExtension: MarkdownLivePreview }) => {
+              this.editor.use({
+                definition: MarkdownLivePreview,
+                setupOptions: { previewMarkdownPath: this.previewMarkdownPath },
+              });
             })
             .catch((e) =>
               createFlash({
@@ -407,7 +416,7 @@ export default {
       }
     },
     refreshEditorDimensions() {
-      if (this.showEditor) {
+      if (this.showEditor && this.editor) {
         this.editor.updateDimensions();
       }
     },
@@ -492,7 +501,7 @@ export default {
 
 <template>
   <div id="ide" class="blob-viewer-container blob-editor-container">
-    <div v-if="!shouldHideEditor && isEditModeActive" class="ide-mode-tabs clearfix">
+    <div v-if="showTabs" class="ide-mode-tabs clearfix">
       <ul class="nav-links float-left border-bottom-0">
         <li :class="editTabCSS">
           <a
@@ -503,7 +512,7 @@ export default {
             >{{ __('Edit') }}</a
           >
         </li>
-        <li v-if="previewMode" :class="previewTabCSS">
+        <li :class="previewTabCSS">
           <a
             href="javascript:void(0);"
             role="button"

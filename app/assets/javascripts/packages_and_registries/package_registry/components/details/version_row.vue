@@ -1,8 +1,8 @@
 <script>
 import { GlLink, GlSprintf, GlTruncate } from '@gitlab/ui';
 import { getIdFromGraphQLId } from '~/graphql_shared/utils';
-import PackageTags from '~/packages/shared/components/package_tags.vue';
-import PublishMethod from '~/packages/shared/components/publish_method.vue';
+import PackageTags from '~/packages_and_registries/shared/components/package_tags.vue';
+import PublishMethod from '~/packages_and_registries/shared/components/publish_method.vue';
 import ListItem from '~/vue_shared/components/registry/list_item.vue';
 import TimeAgoTooltip from '~/vue_shared/components/time_ago_tooltip.vue';
 import { PACKAGE_DEFAULT_STATUS } from '../../constants';
@@ -61,11 +61,13 @@ export default {
     </template>
 
     <template #right-secondary>
-      <gl-sprintf :message="__('Created %{timestamp}')">
-        <template #timestamp>
-          <time-ago-tooltip :time="packageEntity.createdAt" />
-        </template>
-      </gl-sprintf>
+      <span>
+        <gl-sprintf :message="__('Created %{timestamp}')">
+          <template #timestamp>
+            <time-ago-tooltip :time="packageEntity.createdAt" />
+          </template>
+        </gl-sprintf>
+      </span>
     </template>
   </list-item>
 </template>

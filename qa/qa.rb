@@ -2,14 +2,20 @@
 
 Encoding.default_external = 'UTF-8'
 
-require_relative '../lib/gitlab'
+require_relative '../lib/gitlab_edition'
 require_relative '../lib/gitlab/utils'
 require_relative '../config/initializers/0_inject_enterprise_edition_module'
 
 require_relative 'lib/gitlab'
 
-require 'bundler/setup'
+require_relative '../config/bundler_setup'
 Bundler.require(:default)
+
+require 'securerandom'
+require 'pathname'
+require 'active_support/core_ext/hash'
+require 'active_support/core_ext/object/blank'
+require 'rainbow/refinement'
 
 module QA
   root = "#{__dir__}/qa"
@@ -36,6 +42,7 @@ module QA
     "rspec" => "RSpec",
     "web_ide" => "WebIDE",
     "ci_cd" => "CiCd",
+    "project_imported_from_url" => "ProjectImportedFromURL",
     "repo_by_url" => "RepoByURL",
     "oauth" => "OAuth",
     "saml_sso_sign_in" => "SamlSSOSignIn",
@@ -49,7 +56,11 @@ module QA
     "user_gpg" => "UserGPG",
     "smtp" => "SMTP",
     "otp" => "OTP",
-    "jira_api" => "JiraAPI"
+    "jira_api" => "JiraAPI",
+    "registry_tls" => "RegistryTLS",
+    "jetbrains" => "JetBrains",
+    "vscode" => "VSCode",
+    "registry_with_cdn" => "RegistryWithCDN"
   )
 
   loader.setup

@@ -2,7 +2,7 @@
 
 module QA
   RSpec.describe 'Create' do
-    context 'Add batch suggestions to a Merge Request', :transient do
+    context 'Add batch suggestions to a Merge Request' do
       let(:project) do
         Resource::Project.fabricate_via_api! do |project|
           project.name = 'suggestions_project'
@@ -46,13 +46,13 @@ module QA
         merge_request.visit!
       end
 
-      it 'applies multiple suggestions', testcase: 'https://gitlab.com/gitlab-org/quality/testcases/-/quality/test_cases/1838' do
+      it 'applies multiple suggestions', testcase: 'https://gitlab.com/gitlab-org/gitlab/-/quality/test_cases/347682' do
         Page::MergeRequest::Show.perform do |merge_request|
           merge_request.click_diffs_tab
           4.times { merge_request.add_suggestion_to_batch }
-          merge_request.apply_suggestions_batch
+          merge_request.apply_suggestion_with_message("Custom commit message")
 
-          expect(merge_request).to have_css('.badge-success', text: "Applied", count: 4)
+          expect(merge_request).to have_suggestions_applied(4)
         end
       end
     end

@@ -3,14 +3,15 @@ import { GlButton } from '@gitlab/ui';
 import { produce } from 'immer';
 import $ from 'jquery';
 import createFlash from '~/flash';
+import toast from '~/vue_shared/plugins/global_toast';
 import { __ } from '~/locale';
 import MergeRequest from '~/merge_request';
 import glFeatureFlagMixin from '~/vue_shared/mixins/gl_feature_flags_mixin';
 import eventHub from '../../event_hub';
 import mergeRequestQueryVariablesMixin from '../../mixins/merge_request_query_variables';
 import getStateQuery from '../../queries/get_state.query.graphql';
-import workInProgressQuery from '../../queries/states/work_in_progress.query.graphql';
-import removeWipMutation from '../../queries/toggle_wip.mutation.graphql';
+import draftQuery from '../../queries/states/draft.query.graphql';
+import removeDraftMutation from '../../queries/toggle_draft.mutation.graphql';
 import StatusIcon from '../mr_widget_status_icon.vue';
 
 export default {
@@ -22,7 +23,7 @@ export default {
   mixins: [glFeatureFlagMixin(), mergeRequestQueryVariablesMixin],
   apollo: {
     userPermissions: {
-      query: workInProgressQuery,
+      query: draftQuery,
       skip() {
         return !this.glFeatures.mergeRequestWidgetGraphql;
       },
@@ -52,25 +53,25 @@ export default {
     },
   },
   methods: {
-    removeWipMutation() {
+    removeDraftMutation() {
       const { mergeRequestQueryVariables } = this;
 
       this.isMakingRequest = true;
 
       this.$apollo
         .mutate({
-          mutation: removeWipMutation,
+          mutation: removeDraftMutation,
           variables: {
             ...mergeRequestQueryVariables,
-            wip: false,
+            draft: false,
           },
           update(
             store,
             {
               data: {
-                mergeRequestSetWip: {
+                mergeRequestSetDraft: {
                   errors,
-                  mergeRequest: { mergeableDiscussionsState, workInProgress, title },
+                  mergeRequest: { mergeableDiscussionsState, draft, title },
                 },
               },
             },
@@ -90,7 +91,7 @@ export default {
 
             const data = produce(sourceData, (draftState) => {
               draftState.project.mergeRequest.mergeableDiscussionsState = mergeableDiscussionsState;
-              draftState.project.mergeRequest.workInProgress = workInProgress;
+              draftState.project.mergeRequest.draft = draft;
               draftState.project.mergeRequest.title = title;
             });
 
@@ -103,14 +104,14 @@ export default {
           optimisticResponse: {
             // eslint-disable-next-line @gitlab/require-i18n-strings
             __typename: 'Mutation',
-            mergeRequestSetWip: {
+            mergeRequestSetDraft: {
               __typename: 'MergeRequestSetWipPayload',
               errors: [],
               mergeRequest: {
                 __typename: 'MergeRequest',
                 mergeableDiscussionsState: true,
                 title: this.mr.title,
-                workInProgress: false,
+                draft: false,
               },
             },
           },
@@ -118,15 +119,12 @@ export default {
         .then(
           ({
             data: {
-              mergeRequestSetWip: {
+              mergeRequestSetDraft: {
                 mergeRequest: { title },
               },
             },
           }) => {
-            createFlash({
-              message: __('The merge request can now be merged.'),
-              type: 'notice',
-            });
+            toast(__('Marked as ready. Merging is now allowed.'));
             $('.merge-request .detail-page-description .title').text(title);
           },
         )
@@ -139,9 +137,9 @@ export default {
           this.isMakingRequest = false;
         });
     },
-    handleRemoveWIP() {
+    handleRemoveDraft() {
       if (this.glFeatures.mergeRequestWidgetGraphql) {
-        this.removeWipMutation();
+        this.removeDraftMutation();
       } else {
         this.isMakingRequest = true;
         this.service
@@ -167,21 +165,23 @@ export default {
   <div class="mr-widget-body media">
     <status-icon :show-disabled-button="canUpdate" status="warning" />
     <div class="media-body">
-      <div class="gl-ml-3 float-left">
-        <span class="gl-font-weight-bold">
-          {{ __('This merge request is still a draft.') }}
+      <div class="float-left">
+        <span
+          :class="{ 'gl-ml-0! gl-text-body!': glFeatures.restructuredMrWidget }"
+          class="gl-font-weight-bold"
+        >
+          {{
+            __("Merge blocked: merge request must be marked as ready. It's still marked as draft.")
+          }}
         </span>
-        <span class="gl-display-block text-muted">{{
-          __("Draft merge requests can't be merged.")
-        }}</span>
       </div>
       <gl-button
         v-if="canUpdate"
         size="small"
         :disabled="isMakingRequest"
         :loading="isMakingRequest"
-        class="js-remove-wip gl-ml-3"
-        @click="handleRemoveWIP"
+        class="js-remove-draft gl-ml-3"
+        @click="handleRemoveDraft"
       >
         {{ s__('mrWidget|Mark as ready') }}
       </gl-button>

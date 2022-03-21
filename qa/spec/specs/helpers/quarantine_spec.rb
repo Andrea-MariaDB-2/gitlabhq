@@ -8,7 +8,7 @@ RSpec.describe QA::Specs::Helpers::Quarantine do
 
   around do |ex|
     RSpec::Core::Sandbox.sandboxed do |config|
-      config.formatter = QA::Specs::Helpers::QuarantineFormatter
+      config.formatter = QA::Support::Formatters::QuarantineFormatter
 
       # If there is an example-within-an-example, we want to make sure the inner example
       # does not get a reference to the outer example (the real spec) if it calls
@@ -104,6 +104,20 @@ RSpec.describe QA::Specs::Helpers::Quarantine do
   end
 
   describe '.skip_or_run_quarantined_tests_or_contexts' do
+    context 'with explicitly disabled quarantine' do
+      before do
+        stub_env('DISABLE_QUARANTINE', 'true')
+      end
+
+      it 'runs quarantined test' do
+        group = describe_successfully do
+          it('is pending', :quarantine) {}
+        end
+
+        expect(group.examples.first.execution_result.status).to eq(:passed)
+      end
+    end
+
     context 'with no tag focused' do
       it 'skips quarantined tests' do
         group = describe_successfully do

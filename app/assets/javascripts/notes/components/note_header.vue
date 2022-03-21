@@ -1,11 +1,17 @@
 <script>
-/* eslint-disable vue/no-v-html */
-import { GlIcon, GlLoadingIcon, GlTooltipDirective } from '@gitlab/ui';
+import {
+  GlIcon,
+  GlLoadingIcon,
+  GlTooltipDirective,
+  GlSafeHtmlDirective as SafeHtml,
+} from '@gitlab/ui';
 import { mapActions } from 'vuex';
+import { __ } from '~/locale';
 import timeAgoTooltip from '~/vue_shared/components/time_ago_tooltip.vue';
 import UserNameWithStatus from '../../sidebar/components/assignees/user_name_with_status.vue';
 
 export default {
+  safeHtmlConfig: { ADD_TAGS: ['gl-emoji'] },
   components: {
     timeAgoTooltip,
     GitlabTeamMemberBadge: () =>
@@ -15,6 +21,7 @@ export default {
     UserNameWithStatus,
   },
   directives: {
+    SafeHtml,
     GlTooltip: GlTooltipDirective,
   },
   props: {
@@ -133,6 +140,10 @@ export default {
       return selectedAuthor?.availability || '';
     },
   },
+  i18n: {
+    showThread: __('Show thread'),
+    hideThread: __('Hide thread'),
+  },
 };
 </script>
 
@@ -142,10 +153,16 @@ export default {
       <button
         class="note-action-button discussion-toggle-button js-vue-toggle-button"
         type="button"
+        data-testid="thread-toggle"
         @click="handleToggle"
       >
         <gl-icon ref="chevronIcon" :name="toggleChevronIconName" />
-        {{ __('Toggle thread') }}
+        <template v-if="expanded">
+          {{ $options.i18n.hideThread }}
+        </template>
+        <template v-else>
+          {{ $options.i18n.showThread }}
+        </template>
       </button>
     </div>
     <template v-if="hasAuthor">
@@ -166,10 +183,10 @@ export default {
       <span
         v-if="authorStatus"
         ref="authorStatus"
+        v-safe-html:[$options.safeHtmlConfig]="authorStatus"
         v-on="
           authorStatusHasTooltip ? { mouseenter: removeEmojiTitle, mouseleave: addEmojiTitle } : {}
         "
-        v-html="authorStatus"
       ></span>
       <span class="text-nowrap author-username">
         <a

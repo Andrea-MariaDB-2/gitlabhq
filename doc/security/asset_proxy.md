@@ -1,13 +1,13 @@
 ---
-stage: none
-group: unassigned
+stage: Manage
+group: Authentication and Authorization
 info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
 ---
 
 # Proxying assets **(FREE SELF)**
 
 A possible security concern when managing a public-facing GitLab instance is
-the ability to steal a users IP address by referencing images in issues and comments.
+the ability to steal a user's IP address by referencing images in issues and comments.
 
 For example, adding `![Example image](http://example.com/example.png)` to
 an issue description causes the image to be loaded from the external

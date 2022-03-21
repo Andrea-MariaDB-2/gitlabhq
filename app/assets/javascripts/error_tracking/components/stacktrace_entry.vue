@@ -1,6 +1,5 @@
 <script>
-/* eslint-disable vue/no-v-html */
-import { GlTooltip, GlSprintf, GlIcon } from '@gitlab/ui';
+import { GlTooltip, GlSprintf, GlIcon, GlSafeHtmlDirective as SafeHtml } from '@gitlab/ui';
 import ClipboardButton from '~/vue_shared/components/clipboard_button.vue';
 import FileIcon from '~/vue_shared/components/file_icon.vue';
 
@@ -13,6 +12,7 @@ export default {
   },
   directives: {
     GlTooltip,
+    SafeHtml,
   },
   props: {
     lines: {
@@ -130,9 +130,9 @@ export default {
               {{ lineNum(line) }}
             </td>
             <td
+              v-safe-html="lineCode(line)"
               class="line_content"
               :class="{ old: isHighlighted(lineNum(line)) }"
-              v-html="lineCode(line)"
             ></td>
           </tr>
         </template>

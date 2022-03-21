@@ -1,10 +1,20 @@
 <script>
-import { GlButton, GlModalDirective, GlSafeHtmlDirective as SafeHtml } from '@gitlab/ui';
+import { GlButton, GlModalDirective, GlSafeHtmlDirective as SafeHtml, GlForm } from '@gitlab/ui';
+import axios from 'axios';
+import * as Sentry from '@sentry/browser';
 import { mapState, mapActions, mapGetters } from 'vuex';
-import glFeatureFlagsMixin from '~/vue_shared/mixins/gl_feature_flags_mixin';
-import { integrationLevels } from '../constants';
-import eventHub from '../event_hub';
 
+import glFeatureFlagsMixin from '~/vue_shared/mixins/gl_feature_flags_mixin';
+import {
+  I18N_FETCH_TEST_SETTINGS_DEFAULT_ERROR_MESSAGE,
+  I18N_DEFAULT_ERROR_MESSAGE,
+  I18N_SUCCESSFUL_CONNECTION_MESSAGE,
+  integrationLevels,
+  integrationFormSectionComponents,
+} from '~/integrations/constants';
+import { refreshCurrentPage } from '~/lib/utils/url_utility';
+import csrf from '~/lib/utils/csrf';
+import { testIntegrationSettings } from '../api';
 import ActiveCheckbox from './active_checkbox.vue';
 import ConfirmationModal from './confirmation_modal.vue';
 import DynamicField from './dynamic_field.vue';
@@ -25,30 +35,48 @@ export default {
     DynamicField,
     ConfirmationModal,
     ResetConfirmationModal,
+    IntegrationSectionConnection: () =>
+      import(
+        /* webpackChunkName: 'integrationSectionConnection' */ '~/integrations/edit/components/sections/connection.vue'
+      ),
+    IntegrationSectionJiraIssues: () =>
+      import(
+        /* webpackChunkName: 'integrationSectionJiraIssues' */ '~/integrations/edit/components/sections/jira_issues.vue'
+      ),
+    IntegrationSectionJiraTrigger: () =>
+      import(
+        /* webpackChunkName: 'integrationSectionJiraTrigger' */ '~/integrations/edit/components/sections/jira_trigger.vue'
+      ),
     GlButton,
+    GlForm,
   },
   directives: {
     GlModal: GlModalDirective,
     SafeHtml,
   },
   mixins: [glFeatureFlagsMixin()],
-  props: {
+  provide() {
+    return {
+      hasSections: this.hasSections,
+    };
+  },
+  inject: {
     helpHtml: {
-      type: String,
-      required: false,
       default: '',
     },
   },
+  data() {
+    return {
+      integrationActive: false,
+      isTesting: false,
+      isSaving: false,
+      isResetting: false,
+      isValidated: false,
+    };
+  },
   computed: {
-    ...mapGetters(['currentKey', 'propsSource', 'isDisabled']),
-    ...mapState([
-      'defaultState',
-      'customState',
-      'override',
-      'isSaving',
-      'isTesting',
-      'isResetting',
-    ]),
+    ...mapGetters(['currentKey', 'propsSource']),
+    ...mapState(['defaultState', 'customState', 'override']),
     isEditable() {
       return this.propsSource.editable;
     },
@@ -61,28 +89,99 @@ export default {
         this.customState.integrationLevel === integrationLevels.GROUP
       );
     },
-    showReset() {
+    showResetButton() {
       return this.isInstanceOrGroupLevel && this.propsSource.resetPath;
+    },
+    showTestButton() {
+      return this.propsSource.canTest;
+    },
+    disableButtons() {
+      return Boolean(this.isSaving || this.isResetting || this.isTesting);
+    },
+    sectionsEnabled() {
+      return this.glFeatures.integrationFormSections;
+    },
+    hasSections() {
+      return this.sectionsEnabled && this.customState.sections.length !== 0;
+    },
+    fieldsWithoutSection() {
+      return this.sectionsEnabled
+        ? this.propsSource.fields.filter((field) => !field.section)
+        : this.propsSource.fields;
     },
   },
   methods: {
-    ...mapActions([
-      'setOverride',
-      'setIsSaving',
-      'setIsTesting',
-      'setIsResetting',
-      'fetchResetIntegration',
-    ]),
+    ...mapActions(['setOverride', 'requestJiraIssueTypes']),
+    fieldsForSection(section) {
+      return this.propsSource.fields.filter((field) => field.section === section.type);
+    },
+    form() {
+      return this.$refs.integrationForm.$el;
+    },
+    setIsValidated() {
+      this.isValidated = true;
+    },
     onSaveClick() {
-      this.setIsSaving(true);
-      eventHub.$emit('saveIntegration');
+      this.isSaving = true;
+
+      if (this.integrationActive && !this.form().checkValidity()) {
+        this.isSaving = false;
+        this.setIsValidated();
+        return;
+      }
+
+      this.form().submit();
     },
     onTestClick() {
-      this.setIsTesting(true);
-      eventHub.$emit('testIntegration');
+      if (!this.form().checkValidity()) {
+        this.setIsValidated();
+        return;
+      }
+
+      this.isTesting = true;
+
+      testIntegrationSettings(this.propsSource.testPath, this.getFormData())
+        .then(({ data: { error, message = I18N_FETCH_TEST_SETTINGS_DEFAULT_ERROR_MESSAGE } }) => {
+          if (error) {
+            this.setIsValidated();
+            this.$toast.show(message);
+            return;
+          }
+
+          this.$toast.show(I18N_SUCCESSFUL_CONNECTION_MESSAGE);
+        })
+        .catch((error) => {
+          this.$toast.show(I18N_DEFAULT_ERROR_MESSAGE);
+          Sentry.captureException(error);
+        })
+        .finally(() => {
+          this.isTesting = false;
+        });
     },
     onResetClick() {
-      this.fetchResetIntegration();
+      this.isResetting = true;
+
+      return axios
+        .post(this.propsSource.resetPath)
+        .then(() => {
+          refreshCurrentPage();
+        })
+        .catch((error) => {
+          this.$toast.show(I18N_DEFAULT_ERROR_MESSAGE);
+          Sentry.captureException(error);
+        })
+        .finally(() => {
+          this.isResetting = false;
+        });
+    },
+    onRequestJiraIssueTypes() {
+      this.requestJiraIssueTypes(this.getFormData());
+    },
+    getFormData() {
+      return new FormData(this.form());
+    },
+    onToggleIntegrationState(integrationActive) {
+      this.integrationActive = integrationActive;
     },
   },
   helpHtmlConfig: {
@@ -90,11 +189,28 @@ export default {
     ADD_TAGS: ['use'], // to support icon SVGs
     FORBID_ATTR: [], // This is trusted input so we can override the default config to allow data-* attributes
   },
+  csrf,
+  integrationFormSectionComponents,
 };
 </script>
 
 <template>
-  <div class="gl-mb-3">
+  <gl-form
+    ref="integrationForm"
+    method="post"
+    class="gl-mb-3 gl-show-field-errors integration-settings-form"
+    :action="propsSource.formPath"
+    :novalidate="!integrationActive"
+  >
+    <input type="hidden" name="_method" value="put" />
+    <input type="hidden" name="authenticity_token" :value="$options.csrf.token" />
+    <input
+      type="hidden"
+      name="redirect_to"
+      :value="propsSource.redirectTo"
+      data-testid="redirect-to-field"
+    />
+
     <override-dropdown
       v-if="defaultState !== null"
       :inherit-from-id="defaultState.id"
@@ -103,91 +219,137 @@ export default {
       @change="setOverride"
     />
 
+    <template v-if="hasSections">
+      <div
+        v-for="(section, index) in customState.sections"
+        :key="section.type"
+        :class="{ 'gl-border-b gl-pb-3 gl-mb-6': index !== customState.sections.length - 1 }"
+        data-testid="integration-section"
+      >
+        <div class="row">
+          <div class="col-lg-4">
+            <h4 class="gl-mt-0">{{ section.title }}</h4>
+            <p v-safe-html="section.description"></p>
+          </div>
+
+          <div class="col-lg-8">
+            <component
+              :is="$options.integrationFormSectionComponents[section.type]"
+              :fields="fieldsForSection(section)"
+              :is-validated="isValidated"
+              @toggle-integration-active="onToggleIntegrationState"
+              @request-jira-issue-types="onRequestJiraIssueTypes"
+            />
+          </div>
+        </div>
+      </div>
+    </template>
+
     <div class="row">
       <div class="col-lg-4"></div>
 
       <div class="col-lg-8">
         <!-- helpHtml is trusted input -->
-        <div v-if="helpHtml" v-safe-html:[$options.helpHtmlConfig]="helpHtml"></div>
+        <div v-if="helpHtml && !hasSections" v-safe-html:[$options.helpHtmlConfig]="helpHtml"></div>
 
-        <active-checkbox v-if="propsSource.showActive" :key="`${currentKey}-active-checkbox`" />
+        <active-checkbox
+          v-if="propsSource.showActive && !hasSections"
+          :key="`${currentKey}-active-checkbox`"
+          @toggle-integration-active="onToggleIntegrationState"
+        />
         <jira-trigger-fields
-          v-if="isJira"
+          v-if="isJira && !hasSections"
           :key="`${currentKey}-jira-trigger-fields`"
           v-bind="propsSource.triggerFieldsProps"
+          :is-validated="isValidated"
         />
         <trigger-fields
-          v-else-if="propsSource.triggerEvents.length"
+          v-else-if="propsSource.triggerEvents.length && !hasSections"
           :key="`${currentKey}-trigger-fields`"
           :events="propsSource.triggerEvents"
           :type="propsSource.type"
         />
         <dynamic-field
-          v-for="field in propsSource.fields"
+          v-for="field in fieldsWithoutSection"
           :key="`${currentKey}-${field.name}`"
           v-bind="field"
+          :is-validated="isValidated"
         />
         <jira-issues-fields
-          v-if="isJira && !isInstanceOrGroupLevel"
+          v-if="isJira && !isInstanceOrGroupLevel && !hasSections"
           :key="`${currentKey}-jira-issues-fields`"
           v-bind="propsSource.jiraIssuesProps"
+          :is-validated="isValidated"
+          @request-jira-issue-types="onRequestJiraIssueTypes"
         />
-        <div v-if="isEditable" class="footer-block row-content-block">
-          <template v-if="isInstanceOrGroupLevel">
+      </div>
+    </div>
+
+    <div v-if="isEditable" class="row">
+      <div :class="hasSections ? 'col' : 'col-lg-8 offset-lg-4'">
+        <div
+          class="footer-block row-content-block gl-display-flex gl-justify-content-space-between"
+        >
+          <div>
+            <template v-if="isInstanceOrGroupLevel">
+              <gl-button
+                v-gl-modal.confirmSaveIntegration
+                category="primary"
+                variant="confirm"
+                :loading="isSaving"
+                :disabled="disableButtons"
+                data-testid="save-button-instance-group"
+                data-qa-selector="save_changes_button"
+              >
+                {{ __('Save changes') }}
+              </gl-button>
+              <confirmation-modal @submit="onSaveClick" />
+            </template>
             <gl-button
-              v-gl-modal.confirmSaveIntegration
+              v-else
               category="primary"
               variant="confirm"
+              type="submit"
               :loading="isSaving"
-              :disabled="isDisabled"
+              :disabled="disableButtons"
+              data-testid="save-button"
               data-qa-selector="save_changes_button"
+              @click.prevent="onSaveClick"
             >
               {{ __('Save changes') }}
             </gl-button>
-            <confirmation-modal @submit="onSaveClick" />
-          </template>
-          <gl-button
-            v-else
-            category="primary"
-            variant="confirm"
-            type="submit"
-            :loading="isSaving"
-            :disabled="isDisabled"
-            data-qa-selector="save_changes_button"
-            @click.prevent="onSaveClick"
-          >
-            {{ __('Save changes') }}
-          </gl-button>
 
-          <gl-button
-            v-if="propsSource.canTest"
-            category="secondary"
-            variant="confirm"
-            :loading="isTesting"
-            :disabled="isDisabled"
-            :href="propsSource.testPath"
-            @click.prevent="onTestClick"
-          >
-            {{ __('Test settings') }}
-          </gl-button>
-
-          <template v-if="showReset">
             <gl-button
-              v-gl-modal.confirmResetIntegration
+              v-if="showTestButton"
               category="secondary"
               variant="confirm"
+              :loading="isTesting"
+              :disabled="disableButtons"
+              data-testid="test-button"
+              @click.prevent="onTestClick"
+            >
+              {{ __('Test settings') }}
+            </gl-button>
+
+            <gl-button :href="propsSource.cancelPath">{{ __('Cancel') }}</gl-button>
+          </div>
+
+          <template v-if="showResetButton">
+            <gl-button
+              v-gl-modal.confirmResetIntegration
+              category="tertiary"
+              variant="danger"
               :loading="isResetting"
-              :disabled="isDisabled"
+              :disabled="disableButtons"
               data-testid="reset-button"
             >
               {{ __('Reset') }}
             </gl-button>
+
             <reset-confirmation-modal @reset="onResetClick" />
           </template>
-
-          <gl-button :href="propsSource.cancelPath">{{ __('Cancel') }}</gl-button>
         </div>
       </div>
     </div>
-  </div>
+  </gl-form>
 </template>

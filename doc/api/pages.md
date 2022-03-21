@@ -4,7 +4,7 @@ group: Release
 info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
 ---
 
-# Pages API
+# Pages API **(FREE)**
 
 Endpoints for managing [GitLab Pages](https://about.gitlab.com/stages-devops-lifecycle/pages/).
 
@@ -12,7 +12,7 @@ The GitLab Pages feature must be enabled to use these endpoints. Find out more a
 
 ## Unpublish pages
 
-Remove pages. The user must have admin privileges.
+Remove pages. The user must have administrator access.
 
 ```plaintext
 DELETE /projects/:id/pages

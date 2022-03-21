@@ -5,7 +5,7 @@ comments: false
 description: 'Improve scalability of GitLab CI/CD'
 ---
 
-# Next CI/CD scale target: 20M builds per day by 2024
+# CI/CD Scaling
 
 ## Summary
 
@@ -20,13 +20,8 @@ store all the builds in PostgreSQL in `ci_builds` table, and because we are
 creating more than [2 million builds each day on GitLab.com](https://docs.google.com/spreadsheets/d/17ZdTWQMnTHWbyERlvj1GA7qhw_uIfCoI5Zfrrsh95zU),
 we are reaching database limits that are slowing our development velocity down.
 
-On February 1st, 2021, a billionth CI/CD job was created and the number of
-builds is growing exponentially. We will run out of the available primary keys
-for builds before December 2021 unless we improve the database model used to
-store CI/CD data.
-
-We expect to see 20M builds created daily on GitLab.com in the first half of
-2024.
+On February 1st, 2021, GitLab.com surpassed 1 billion CI/CD builds created and the number of
+builds continues to grow exponentially.
 
 ![CI builds cumulative with forecast](ci_builds_cumulative_forecast.png)
 
@@ -60,6 +55,9 @@ that have the same problem.
 
 Primary keys problem will be tackled by our Database Team.
 
+**Status**: As of October 2021 the primary keys in CI tables have been migrated
+to big integers.
+
 ### The table is too large
 
 There is more than a billion rows in `ci_builds` table. We store more than 2
@@ -81,6 +79,14 @@ seem fine in the development environment may not work on GitLab.com. The
 difference in the dataset size between the environments makes it difficult to
 predict the performance of even the most simple queries.
 
+Team members and the wider community members are struggling to contribute the
+Verify area, because we restricted the possibility of extending `ci_builds`
+even further. Our static analysis tools prevent adding more columns to this
+table. Adding new queries is unpredictable because of the size of the dataset
+and the amount of queries executed using the table. This significantly hinders
+the development velocity and contributes to incidents on the production
+environment.
+
 We also expect a significant, exponential growth in the upcoming years.
 
 One of the forecasts done using [Facebook's
@@ -90,6 +96,10 @@ to around 2M we see created today, this is 10x growth our product might need to
 sustain in upcoming years.
 
 ![CI builds daily forecast](ci_builds_daily_forecast.png)
+
+**Status**: As of October 2021 we reduced the growth rate of `ci_builds` table
+by writing build options and variables to `ci_builds_metadata` table. We plan
+to ship further improvements that will be described in a separate blueprint.
 
 ### Queuing mechanisms are using the large table
 
@@ -111,6 +121,12 @@ table that will accelerate SQL queries used to build
 queues](https://gitlab.com/gitlab-org/gitlab/-/issues/322766) and we want to
 explore them.
 
+**Status**: As of October 2021 the new architecture [has been implemented on
+GitLab.com](https://gitlab.com/groups/gitlab-org/-/epics/5909#note_680407908).
+The following epic tracks making it generally available: [Make the new pending
+builds architecture generally available](
+https://gitlab.com/groups/gitlab-org/-/epics/6954).
+
 ### Moving big amounts of data is challenging
 
 We store a significant amount of data in `ci_builds` table. Some of the columns
@@ -127,15 +143,8 @@ columns, tables, partitions or database shards.
 
 Effort to improve background migrations will be owned by our Database Team.
 
-### Development velocity is negatively affected
-
-Team members and the wider community members are struggling to contribute the
-Verify area, because we restricted the possibility of extending `ci_builds`
-even further. Our static analysis tools prevent adding more columns to this
-table. Adding new queries is unpredictable because of the size of the dataset
-and the amount of queries executed using the table. This significantly hinders
-the development velocity and contributes to incidents on the production
-environment.
+**Status**: In progress. We plan to ship further improvements that will be
+described in a separate architectural blueprint.
 
 ## Proposal
 
@@ -146,29 +155,36 @@ First, we want to focus on things that are urgently needed right now. We need
 to fix primary keys overflow risk and unblock other teams that are working on
 database partitioning and sharding.
 
-We want to improve situation around bottlenecks that are known already, like
-queuing mechanisms using the large table and things that are holding other
-teams back.
+We want to improve known bottlenecks, like
+builds queuing mechanisms that is using the large table, and other things that
+are holding other teams back.
 
 Extending CI/CD metrics is important to get a better sense of how the system
 performs and to what growth should we expect. This will make it easier for us
 to identify bottlenecks and perform more advanced capacity planning.
 
-As we work on first iterations we expect our Database Sharding team and
-Database Scalability Working Group to make progress on patterns we will be able
-to use to partition the large CI/CD dataset. We consider the strong time-decay
-effect, related to the diminishing importance of pipelines with time, as an
-opportunity we might want to seize.
+Next step is to better understand how we can leverage strong time-decay
+characteristic of CI/CD data. This might help us to partition CI/CD dataset to
+reduce the size of CI/CD database tables.
 
 ## Iterations
 
 Work required to achieve our next CI/CD scaling target is tracked in the
-[GitLab CI/CD 20M builds per day scaling
-target](https://gitlab.com/groups/gitlab-org/-/epics/5745) epic.
+[CI/CD Scaling](https://gitlab.com/groups/gitlab-org/-/epics/5745) epic.
+
+1. ✓ Migrate primary keys to big integers on GitLab.com.
+1. ✓ Implement the new architecture of builds queuing on GitLab.com.
+1. [Make the new builds queuing architecture generally available](https://gitlab.com/groups/gitlab-org/-/epics/6954).
+1. [Partition CI/CD data using time-decay pattern](../ci_data_decay/).
 
 ## Status
 
-In progress.
+|-------------|--------------|
+| Created at  | 21.01.2021   |
+| Approved at | 26.04.2021   |
+| Updated at  | 28.02.2022   |
+
+Status: In progress.
 
 ## Who
 
@@ -180,7 +196,7 @@ Proposal:
 |------------------------------|-------------------------|
 | Author                       | Grzegorz Bizon          |
 | Architecture Evolution Coach | Kamil Trzciński         |
-| Engineering Leader           | Darby Frey              |
+| Engineering Leader           | Cheryl Li               |
 | Product Manager              | Jackie Porter           |
 | Domain Expert / Verify       | Fabio Pitino            |
 | Domain Expert / Database     | Jose Finotto            |
@@ -190,7 +206,7 @@ DRIs:
 
 | Role                         | Who
 |------------------------------|------------------------|
-| Leadership                   | Darby Frey             |
+| Leadership                   | Cheryl Li              |
 | Product                      | Jackie Porter          |
 | Engineering                  | Grzegorz Bizon         |
 
@@ -199,6 +215,7 @@ Domain experts:
 | Area                         | Who
 |------------------------------|------------------------|
 | Domain Expert / Verify       | Fabio Pitino           |
+| Domain Expert / Verify       | Marius Bobin           |
 | Domain Expert / Database     | Jose Finotto           |
 | Domain Expert / PostgreSQL   | Nikolay Samokhvalov    |
 

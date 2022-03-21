@@ -1,6 +1,12 @@
-query ProjectBoardMilestones($fullPath: ID!, $searchTerm: String) {
+query ProjectBoardMilestones($fullPath: ID!, $searchTerm: String, $state: MilestoneStateEnum) {
   project(fullPath: $fullPath) {
-    milestones(searchTitle: $searchTerm, includeAncestors: true) {
+    id
+    milestones(
+      searchTitle: $searchTerm
+      includeAncestors: true
+      state: $state
+      sort: EXPIRED_LAST_DUE_DATE_ASC
+    ) {
       nodes {
         id
         title

@@ -5,20 +5,20 @@ info: To determine the technical writer assigned to the Stage/Group associated w
 type: howto
 ---
 
-# Active sessions
+# Active sessions **(FREE)**
 
 > [Introduced](https://gitlab.com/gitlab-org/gitlab-foss/-/merge_requests/17867) in GitLab 10.8.
 
-GitLab lists all devices that have logged into your account. This allows you to
+GitLab lists all devices that have logged into your account. You can
 review the sessions, and revoke any you don't recognize.
 
-## Listing all active sessions
+## List all active sessions
 
 To list all active sessions:
 
-1. In the top-right corner, select your avatar.
+1. On the top bar, in the top right corner, select your avatar.
 1. Select **Edit profile**.
-1. In the left sidebar, select **Active Sessions**.
+1. On the left sidebar, select **Active Sessions**.
 
 ![Active sessions list](img/active_sessions_list.png)
 
@@ -29,18 +29,18 @@ To list all active sessions:
 GitLab allows users to have up to 100 active sessions at once. If the number of active sessions
 exceeds 100, the oldest ones are deleted.
 
-## Revoking a session
+## Revoke a session
 
 To revoke an active session:
 
-1. In the top-right corner, select your avatar.
+1. On the top bar, in the top right corner, select your avatar.
 1. Select **Edit profile**.
-1. In the left sidebar, select **Active Sessions**.
+1. On the left sidebar, select **Active Sessions**.
 1. Select **Revoke** next to a session. The current session cannot be revoked, as this would sign you out of GitLab.
 
 NOTE:
 When any session is revoked all **Remember me** tokens for all
-devices are revoked. See ['Why do I keep getting signed out?'](index.md#why-do-i-keep-getting-signed-out)
+devices are revoked. See [Why do I keep getting signed out?](index.md#why-do-i-keep-getting-signed-out)
 for more information about the **Remember me** feature.
 
 <!-- ## Troubleshooting

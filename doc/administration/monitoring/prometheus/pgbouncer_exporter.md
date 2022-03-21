@@ -1,12 +1,10 @@
 ---
 stage: Monitor
-group: Monitor
+group: Respond
 info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
 ---
 
 # PgBouncer exporter **(FREE SELF)**
-
-> Introduced in [Omnibus GitLab 11.0](https://gitlab.com/gitlab-org/omnibus-gitlab/-/merge_requests/2493).
 
 The [PgBouncer exporter](https://github.com/prometheus-community/pgbouncer_exporter) enables
 you to measure various [PgBouncer](https://www.pgbouncer.org/) metrics.

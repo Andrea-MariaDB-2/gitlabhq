@@ -31,6 +31,7 @@ module Gitlab
       instrument_thread_memory_allocations(payload)
       instrument_load_balancing(payload)
       instrument_pid(payload)
+      instrument_uploads(payload)
     end
 
     def instrument_gitaly(payload)
@@ -116,6 +117,10 @@ module Gitlab
       payload.merge!(load_balancing_payload)
     end
 
+    def instrument_uploads(payload)
+      payload.merge! ::Gitlab::Instrumentation::Uploads.payload
+    end
+
     # Returns the queuing duration for a Sidekiq job in seconds, as a float, if the
     # `enqueued_at` field or `created_at` field is available.
     #
@@ -131,18 +136,43 @@ module Gitlab
       enqueued_at_time = convert_to_time(enqueued_at)
       return unless enqueued_at_time
 
-      # Its possible that if theres clock-skew between two nodes
-      # this value may be less than zero. In that event, we record the value
+      round_elapsed_time(enqueued_at_time)
+    end
+
+    # Returns the time it took for a scheduled job to be enqueued in seconds, as a float,
+    # if the `scheduled_at` and `enqueued_at` fields are available.
+    #
+    # * If the job doesn't contain sufficient information, returns nil
+    # * If the job has a start time in the future, returns 0
+    # * If the job contains an invalid start time value, returns nil
+    # @param [Hash] job a Sidekiq job, represented as a hash
+    def self.enqueue_latency_for_scheduled_job(job)
+      scheduled_at = job['scheduled_at']
+      enqueued_at = job['enqueued_at']
+
+      return unless scheduled_at && enqueued_at
+
+      scheduled_at_time = convert_to_time(scheduled_at)
+      enqueued_at_time = convert_to_time(enqueued_at)
+
+      return unless scheduled_at_time && enqueued_at_time
+
+      round_elapsed_time(scheduled_at_time, enqueued_at_time)
+    end
+
+    def self.round_elapsed_time(start, end_time = Time.now)
+      # It's possible that if there is clock-skew between two nodes this
+      # value may be less than zero. In that event, we record the value
       # as zero.
-      [elapsed_by_absolute_time(enqueued_at_time), 0].max.round(DURATION_PRECISION)
+      [elapsed_by_absolute_time(start, end_time), 0].max.round(DURATION_PRECISION)
     end
 
     # Calculates the time in seconds, as a float, from
     # the provided start time until now
     #
     # @param [Time] start
-    def self.elapsed_by_absolute_time(start)
-      (Time.now - start).to_f.round(DURATION_PRECISION)
+    def self.elapsed_by_absolute_time(start, end_time)
+      (end_time - start).to_f.round(DURATION_PRECISION)
     end
     private_class_method :elapsed_by_absolute_time
 

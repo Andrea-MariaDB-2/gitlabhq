@@ -57,16 +57,25 @@ module QA
         end
       end
 
-      def retry_until(max_attempts: 3, reload: false, sleep_interval: 0, raise_on_failure: true)
-        Support::Retrier.retry_until(max_attempts: max_attempts, reload_page: (reload && self), sleep_interval: sleep_interval, raise_on_failure: raise_on_failure) do
-          yield
-        end
+      def retry_until(max_attempts: 3, reload: false, sleep_interval: 0, raise_on_failure: true, message: nil, &block)
+        Support::Retrier.retry_until(
+          max_attempts: max_attempts,
+          reload_page: (reload && self),
+          sleep_interval: sleep_interval,
+          raise_on_failure: raise_on_failure,
+          message: message,
+          &block
+        )
       end
 
-      def retry_on_exception(max_attempts: 3, reload: false, sleep_interval: 0.5)
-        Support::Retrier.retry_on_exception(max_attempts: max_attempts, reload_page: (reload && self), sleep_interval: sleep_interval) do
-          yield
-        end
+      def retry_on_exception(max_attempts: 3, reload: false, sleep_interval: 0.5, message: nil, &block)
+        Support::Retrier.retry_on_exception(
+          max_attempts: max_attempts,
+          reload_page: (reload && self),
+          sleep_interval: sleep_interval,
+          message: message,
+          &block
+        )
       end
 
       def scroll_to(selector, text: nil)
@@ -377,6 +386,10 @@ module QA
         end
       end
 
+      def current_host
+        URI(page.current_url).host
+      end
+
       def self.path
         raise NotImplementedError
       end
@@ -433,6 +446,29 @@ module QA
         box = find_element(name, visible: visibility)
         # Some checkboxes and radio buttons are hidden by their labels and cannot be clicked directly
         click_by_js ? page.execute_script("arguments[0].click();", box) : box.click
+      end
+
+      def feature_flag_controlled_element(feature_flag, element_when_flag_enabled, element_when_flag_disabled)
+        # Feature flags can change the UI elements shown, but we need admin access to get feature flag values, which
+        # prevents us running the tests on production. Instead we detect the UI element that should be shown when the
+        # feature flag is enabled and otherwise use the element that should be displayed when the feature flag is
+        # disabled.
+
+        # Check both options once quickly so that the test doesn't wait unnecessarily if the UI has loaded
+        # We wait for requests first and wait one second for the element because it can take a moment for a Vue app to
+        # load and render the UI
+        wait_for_requests
+
+        return element_when_flag_enabled if has_element?(element_when_flag_enabled, wait: 1)
+        return element_when_flag_disabled if has_element?(element_when_flag_disabled, wait: 1)
+
+        # Check both options again, this time waiting for the default duration
+        return element_when_flag_enabled if has_element?(element_when_flag_enabled)
+        return element_when_flag_disabled if has_element?(element_when_flag_disabled)
+
+        raise ElementNotFound,
+          "Could not find the expected element as #{element_when_flag_enabled} or #{element_when_flag_disabled}." \
+          "The relevant feature flag is #{feature_flag}"
       end
     end
   end

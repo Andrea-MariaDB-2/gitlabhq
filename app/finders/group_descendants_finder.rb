@@ -25,7 +25,7 @@ class GroupDescendantsFinder
   def initialize(current_user: nil, parent_group:, params: {})
     @current_user = current_user
     @parent_group = parent_group
-    @params = params.reverse_merge(non_archived: params[:archived].blank?)
+    @params = params.reverse_merge(non_archived: params[:archived].blank?, not_aimed_for_deletion: true)
   end
 
   def execute
@@ -87,9 +87,7 @@ class GroupDescendantsFinder
       visible_to_user = visible_to_user.or(authorized_to_user)
     end
 
-    hierarchy_for_parent
-      .descendants
-      .where(visible_to_user)
+    parent_group.descendants.where(visible_to_user)
     # rubocop: enable CodeReuse/Finder
   end
   # rubocop: enable CodeReuse/ActiveRecord
@@ -112,8 +110,13 @@ class GroupDescendantsFinder
   # rubocop: disable CodeReuse/ActiveRecord
   def ancestors_of_groups(base_for_ancestors)
     group_ids = base_for_ancestors.except(:select, :sort).select(:id)
-    Gitlab::ObjectHierarchy.new(Group.where(id: group_ids))
-      .base_and_ancestors(upto: parent_group.id)
+    groups = Group.where(id: group_ids)
+
+    if Feature.enabled?(:linear_group_descendants_finder_upto, current_user, default_enabled: :yaml)
+      groups.self_and_ancestors(upto: parent_group.id)
+    else
+      Gitlab::ObjectHierarchy.new(groups).base_and_ancestors(upto: parent_group.id)
+    end
   end
   # rubocop: enable CodeReuse/ActiveRecord
 
@@ -155,7 +158,7 @@ class GroupDescendantsFinder
   # rubocop: disable CodeReuse/ActiveRecord
   def projects_matching_filter
     # rubocop: disable CodeReuse/Finder
-    projects_nested_in_group = Project.where(namespace_id: hierarchy_for_parent.base_and_descendants.select(:id))
+    projects_nested_in_group = Project.where(namespace_id: parent_group.self_and_descendants.as_ids)
     params_with_search = params.merge(search: params[:filter])
 
     ProjectsFinder.new(params: params_with_search,

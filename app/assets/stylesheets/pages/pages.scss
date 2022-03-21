@@ -42,8 +42,6 @@
   }
 
   :first-child {
-    border-bottom-right-radius: 0;
-    border-top-right-radius: 0;
     line-height: $gl-line-height;
   }
 
@@ -52,19 +50,6 @@
   }
 
   :last-child {
-    border-bottom-right-radius: $border-radius-default;
-    border-top-right-radius: $border-radius-default;
+    border-radius: $border-radius-default;
   }
-
-  &.floating-status-badge {
-    position: absolute;
-    right: $gl-padding-24;
-    bottom: $gl-padding-4;
-    margin-bottom: 0;
-  }
-}
-
-.form-control.has-floating-status-badge {
-  position: relative;
-  padding-right: 120px;
 }

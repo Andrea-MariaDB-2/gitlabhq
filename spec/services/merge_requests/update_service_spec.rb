@@ -102,16 +102,16 @@ RSpec.describe MergeRequests::UpdateService, :mailer do
           MergeRequests::UpdateService.new(project: project, current_user: user, params: opts).execute(merge_request2)
         end
 
-        it 'tracks Draft/WIP marking' do
+        it 'tracks Draft marking' do
           expect(Gitlab::UsageDataCounters::MergeRequestActivityUniqueCounter)
             .to receive(:track_marked_as_draft_action).once.with(user: user)
 
-          opts[:title] = "WIP: #{opts[:title]}"
+          opts[:title] = "Draft: #{opts[:title]}"
 
           MergeRequests::UpdateService.new(project: project, current_user: user, params: opts).execute(merge_request2)
         end
 
-        it 'tracks Draft/WIP un-marking' do
+        it 'tracks Draft un-marking' do
           expect(Gitlab::UsageDataCounters::MergeRequestActivityUniqueCounter)
             .to receive(:track_unmarked_as_draft_action).once.with(user: user)
 
@@ -214,6 +214,14 @@ RSpec.describe MergeRequests::UpdateService, :mailer do
               opts[:reviewers] = [user2]
 
               MergeRequests::UpdateService.new(project: project, current_user: user, params: opts).execute(merge_request)
+            end
+
+            it 'updates attention requested by of reviewer' do
+              opts[:reviewers] = [user2]
+
+              MergeRequests::UpdateService.new(project: project, current_user: user, params: opts).execute(merge_request)
+
+              expect(merge_request.find_reviewer(user2).updated_state_by).to eq(user)
             end
           end
 
@@ -1132,7 +1140,7 @@ RSpec.describe MergeRequests::UpdateService, :mailer do
     context 'updating `force_remove_source_branch`' do
       let(:target_project) { create(:project, :repository, :public) }
       let(:source_project) { fork_project(target_project, nil, repository: true) }
-      let(:user) { target_project.owner }
+      let(:user) { target_project.first_owner }
       let(:merge_request) do
         create(:merge_request,
                source_project: source_project,

@@ -4,7 +4,7 @@ group: Import
 info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
 ---
 
-# Import API
+# Import API **(FREE)**
 
 ## Import repository from GitHub
 
@@ -83,3 +83,8 @@ curl --request POST \
     "bitbucket_server_repo": "my-repo"
 }'
 ```
+
+## Automate group and project import **(PREMIUM)**
+
+For information on automating user, group, and project import API calls, see
+[Automate group and project import](../user/project/import/index.md#automate-group-and-project-import).

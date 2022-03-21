@@ -31,7 +31,7 @@ RSpec.describe Ci::Pipelines::AddJobService do
         execute
       end.to change { job.slice(:pipeline, :project, :ref) }.to(
         pipeline: pipeline, project: pipeline.project, ref: pipeline.ref
-      )
+      ).and change { job.metadata.project }.to(pipeline.project)
     end
 
     it 'returns a service response with the job as payload' do
@@ -59,18 +59,6 @@ RSpec.describe Ci::Pipelines::AddJobService do
       end
     end
 
-    context 'when the FF ci_fix_commit_status_retried is disabled' do
-      before do
-        stub_feature_flags(ci_fix_commit_status_retried: false)
-      end
-
-      it 'does not call update_older_statuses_retried!' do
-        expect(job).not_to receive(:update_older_statuses_retried!)
-
-        execute
-      end
-    end
-
     context 'exclusive lock' do
       let(:lock_uuid) { 'test' }
       let(:lock_key) { "ci:pipelines:#{pipeline.id}:add-job" }
@@ -88,19 +76,6 @@ RSpec.describe Ci::Pipelines::AddJobService do
 
         expect(execute).to be_success
         expect(execute.payload[:job]).to eq(job)
-      end
-
-      context 'when the FF ci_pipeline_add_job_with_lock is disabled' do
-        before do
-          stub_feature_flags(ci_pipeline_add_job_with_lock: false)
-        end
-
-        it 'does not use exclusive lock' do
-          expect(Gitlab::ExclusiveLease).not_to receive(:new).with(lock_key, timeout: lock_timeout)
-
-          expect(execute).to be_success
-          expect(execute.payload[:job]).to eq(job)
-        end
       end
     end
   end

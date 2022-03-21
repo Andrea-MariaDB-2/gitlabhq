@@ -83,6 +83,46 @@ RSpec.describe QA::Runtime::Env do
     end
   end
 
+  describe '.running_on_dot_com?' do
+    using RSpec::Parameterized::TableSyntax
+
+    where(:url, :result) do
+      'https://www.gitlab.com'     | true
+      'https://staging.gitlab.com' | true
+      'http://www.gitlab.com'      | true
+      'http://localhost:3000'      | false
+      'http://localhost'           | false
+      'http://gdk.test:3000'       | false
+    end
+
+    with_them do
+      before do
+        QA::Runtime::Scenario.define(:gitlab_address, url)
+      end
+
+      it { expect(described_class.running_on_dot_com?).to eq result }
+    end
+  end
+
+  describe '.running_on_dev?' do
+    using RSpec::Parameterized::TableSyntax
+
+    where(:url, :result) do
+      'https://www.gitlab.com' | false
+      'http://localhost:3000'  | true
+      'http://localhost'       | false
+      'http://gdk.test:3000'   | true
+    end
+
+    with_them do
+      before do
+        QA::Runtime::Scenario.define(:gitlab_address, url)
+      end
+
+      it { expect(described_class.running_on_dev?).to eq result }
+    end
+  end
+
   describe '.personal_access_token' do
     around do |example|
       described_class.instance_variable_set(:@personal_access_token, nil)
@@ -169,49 +209,28 @@ RSpec.describe QA::Runtime::Env do
   end
 
   describe '.knapsack?' do
-    it 'returns true if KNAPSACK_GENERATE_REPORT is defined' do
-      stub_env('KNAPSACK_GENERATE_REPORT', 'true')
+    before do
+      stub_env('CI_NODE_TOTAL', '2')
+    end
 
+    it 'returns true if running in parallel CI run' do
       expect(described_class.knapsack?).to be_truthy
     end
 
-    it 'returns true if KNAPSACK_REPORT_PATH is defined' do
-      stub_env('KNAPSACK_REPORT_PATH', '/a/path')
-
-      expect(described_class.knapsack?).to be_truthy
-    end
-
-    it 'returns true if KNAPSACK_TEST_FILE_PATTERN is defined' do
-      stub_env('KNAPSACK_TEST_FILE_PATTERN', '/a/**/pattern')
-
-      expect(described_class.knapsack?).to be_truthy
-    end
-
-    it 'returns false if neither KNAPSACK_GENERATE_REPORT nor KNAPSACK_REPORT_PATH nor KNAPSACK_TEST_FILE_PATTERN are defined' do
+    it 'returns false if knapsack disabled' do
+      stub_env('NO_KNAPSACK', 'true')
       expect(described_class.knapsack?).to be_falsey
     end
-  end
 
-  describe '.knapsack?' do
-    it 'returns true if KNAPSACK_GENERATE_REPORT is defined' do
-      stub_env('KNAPSACK_GENERATE_REPORT', 'true')
+    it 'returns false if not running in a parallel job' do
+      stub_env('CI_NODE_TOTAL', '1')
 
-      expect(described_class.knapsack?).to be_truthy
+      expect(described_class.knapsack?).to be_falsey
     end
 
-    it 'returns true if KNAPSACK_REPORT_PATH is defined' do
-      stub_env('KNAPSACK_REPORT_PATH', '/a/path')
+    it 'returns false if not running in ci' do
+      stub_env('CI_NODE_TOTAL', nil)
 
-      expect(described_class.knapsack?).to be_truthy
-    end
-
-    it 'returns true if KNAPSACK_TEST_FILE_PATTERN is defined' do
-      stub_env('KNAPSACK_TEST_FILE_PATTERN', '/a/**/pattern')
-
-      expect(described_class.knapsack?).to be_truthy
-    end
-
-    it 'returns false if neither KNAPSACK_GENERATE_REPORT nor KNAPSACK_REPORT_PATH nor KNAPSACK_TEST_FILE_PATTERN are defined' do
       expect(described_class.knapsack?).to be_falsey
     end
   end

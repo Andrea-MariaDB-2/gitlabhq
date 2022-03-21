@@ -5,7 +5,7 @@ info: To determine the technical writer assigned to the Stage/Group associated w
 type: concepts, howto
 ---
 
-# Deployments API
+# Deployments API **(FREE)**
 
 ## List project deployments
 
@@ -23,7 +23,7 @@ GET /projects/:id/deployments
 | `updated_after`  | datetime       | no       | Return deployments updated after the specified date. Expected in ISO 8601 format (`2019-03-15T08:00:00Z`). |
 | `updated_before` | datetime       | no       | Return deployments updated before the specified date. Expected in ISO 8601 format (`2019-03-15T08:00:00Z`). |
 | `environment`    | string         | no       | The [name of the environment](../ci/environments/index.md) to filter deployments by.       |
-| `status`         | string         | no       | The status to filter deployments by. One of `created`, `running`, `success`, `failed`, `canceled`.
+| `status`         | string         | no       | The status to filter deployments by. One of `created`, `running`, `success`, `failed`, `canceled`, `blocked`.
 
 ```shell
 curl --header "PRIVATE-TOKEN: <your_access_token>" "https://gitlab.example.com/api/v4/projects/1/deployments"
@@ -201,6 +201,7 @@ Example response:
   "sha": "a91957a858320c0e17f3a0eca7cfacbff50ea29a",
   "created_at": "2016-08-11T11:32:35.444Z",
   "updated_at": "2016-08-11T11:34:01.123Z",
+  "status": "success",
   "user": {
     "name": "Administrator",
     "username": "root",
@@ -264,6 +265,30 @@ Example response:
 }
 ```
 
+Deployments created by users on GitLab Premium or higher include the `approvals` and `pending_approval_count` properties:
+
+```json
+{
+  "status": "created",
+  "pending_approval_count": 0,
+  "approvals": [
+    {
+      "user": {
+        "id": 49,
+        "username": "project_6_bot",
+        "name": "****",
+        "state": "active",
+        "avatar_url": "https://www.gravatar.com/avatar/e83ac685f68ea07553ad3054c738c709?s=80&d=identicon",
+        "web_url": "http://localhost:3000/project_6_bot"
+      },
+      "status": "approved",
+      "created_at": "2022-02-24T20:22:30.097Z"
+    }
+  ],
+  ...
+}
+```
+
 ## Create a deployment
 
 ```plaintext
@@ -311,6 +336,30 @@ Example response:
 }
 ```
 
+Deployments created by users on GitLab Premium or higher include the `approvals` and `pending_approval_count` properties:
+
+```json
+{
+  "status": "created",
+  "pending_approval_count": 0,
+  "approvals": [
+    {
+      "user": {
+        "id": 49,
+        "username": "project_6_bot",
+        "name": "****",
+        "state": "active",
+        "avatar_url": "https://www.gravatar.com/avatar/e83ac685f68ea07553ad3054c738c709?s=80&d=identicon",
+        "web_url": "http://localhost:3000/project_6_bot"
+      },
+      "status": "approved",
+      "created_at": "2022-02-24T20:22:30.097Z"
+    }
+  ],
+  ...
+}
+```
+
 ## Update a deployment
 
 ```plaintext
@@ -354,9 +403,39 @@ Example response:
 }
 ```
 
+Deployments created by users on GitLab Premium or higher include the `approvals` and `pending_approval_count` properties:
+
+```json
+{
+  "status": "created",
+  "pending_approval_count": 0,
+  "approvals": [
+    {
+      "user": {
+        "id": 49,
+        "username": "project_6_bot",
+        "name": "****",
+        "state": "active",
+        "avatar_url": "https://www.gravatar.com/avatar/e83ac685f68ea07553ad3054c738c709?s=80&d=identicon",
+        "web_url": "http://localhost:3000/project_6_bot"
+      },
+      "status": "approved",
+      "created_at": "2022-02-24T20:22:30.097Z"
+    }
+  ],
+  ...
+}
+```
+
 ## List of merge requests associated with a deployment
 
 > [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/35739) in GitLab 12.7.
+
+NOTE:
+Not all deployments can be associated with merge requests.
+Please see
+[Track what merge requests were deployed to an environment](../ci/environments/index.md#track-newly-included-merge-requests-per-deployment)
+for more information.
 
 This API retrieves the list of merge requests shipped with a given deployment:
 
@@ -368,4 +447,45 @@ It supports the same parameters as the [Merge Requests API](merge_requests.md#li
 
 ```shell
 curl --header "PRIVATE-TOKEN: <your_access_token>" "https://gitlab.example.com/api/v4/projects/1/deployments/42/merge_requests"
+```
+
+## Approve or reject a blocked deployment **(PREMIUM)**
+
+> - [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/343864) in GitLab 14.7 [with a flag](../administration/feature_flags.md) named `deployment_approvals`. Disabled by default.
+> - [Feature flag removed](https://gitlab.com/gitlab-org/gitlab/-/issues/347342) in GitLab 14.8.
+
+See [Deployment Approvals](../ci/environments/deployment_approvals.md) for more information about this feature.
+
+```plaintext
+POST /projects/:id/deployments/:deployment_id/approval
+```
+
+| Attribute       | Type           | Required | Description                                                                                                     |
+|-----------------|----------------|----------|-----------------------------------------------------------------------------------------------------------------|
+| `id`            | integer/string | yes      | The ID or [URL-encoded path of the project](index.md#namespaced-path-encoding) owned by the authenticated user. |
+| `deployment_id` | integer        | yes      | The ID of the deployment.                                                                                       |
+| `status`        | string         | yes      | The status of the approval (either `approved` or `rejected`).                                                   |
+| `comment`       | string         | no       | A comment to go with the approval                                                                               |
+
+```shell
+curl --data "status=approved&comment=Looks good to me" \
+     --header "PRIVATE-TOKEN: <your_access_token>" "https://gitlab.example.com/api/v4/projects/1/deployments/1/approval"
+```
+
+Example response:
+
+```json
+{
+  "user": {
+    "name": "Administrator",
+    "username": "root",
+    "id": 1,
+    "state": "active",
+    "avatar_url": "http://www.gravatar.com/avatar/e64c7d89f26bd1972efa854d13d7dd61?s=80&d=identicon",
+    "web_url": "http://localhost:3000/root"
+  },
+  "status": "approved",
+  "created_at": "2022-02-24T20:22:30.097Z",
+  "comment":"Looks good to me"
+}
 ```

@@ -27,7 +27,7 @@ RSpec.describe 'devise/shared/_signup_box' do
 
     context 'when on .com' do
       before do
-        allow(Gitlab).to receive(:dev_env_or_com?).and_return(true)
+        allow(Gitlab).to receive(:com?).and_return(true)
       end
 
       it 'shows expected GitLab text' do
@@ -39,7 +39,7 @@ RSpec.describe 'devise/shared/_signup_box' do
 
     context 'when not on .com' do
       before do
-        allow(Gitlab).to receive(:dev_env_or_com?).and_return(false)
+        allow(Gitlab).to receive(:com?).and_return(false)
       end
 
       it 'shows expected text without GitLab' do
@@ -53,13 +53,29 @@ RSpec.describe 'devise/shared/_signup_box' do
   context 'when terms are not enforced' do
     before do
       allow(Gitlab::CurrentSettings.current_application_settings).to receive(:enforce_terms?).and_return(false)
-      allow(Gitlab).to receive(:dev_env_or_com?).and_return(true)
+      allow(Gitlab).to receive(:com?).and_return(true)
     end
 
     it 'shows expected text with placeholders' do
       render
 
       expect(rendered).not_to have_content('By clicking')
+    end
+  end
+
+  context 'using the borderless option' do
+    let(:border_css_classes) { '.gl-border-gray-100.gl-border-1.gl-border-solid.gl-rounded-base' }
+
+    it 'renders with a border by default' do
+      render
+
+      expect(rendered).to have_selector(border_css_classes)
+    end
+
+    it 'renders without a border when borderless is truthy' do
+      render('devise/shared/signup_box', borderless: true)
+
+      expect(rendered).not_to have_selector(border_css_classes)
     end
   end
 

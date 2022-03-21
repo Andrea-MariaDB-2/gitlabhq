@@ -14,8 +14,8 @@ module MergeRequests
 
     def async_execute
       return service_error if service_error
-      return unless merge_request.mark_as_checking
 
+      merge_request.mark_as_checking
       MergeRequestMergeabilityCheckWorker.perform_async(merge_request.id)
     end
 
@@ -157,9 +157,7 @@ module MergeRequests
 
     def merge_to_ref
       params = { allow_conflicts: Feature.enabled?(:display_merge_conflicts_in_diff, project) }
-      result = MergeRequests::MergeToRefService
-        .new(project: project, current_user: merge_request.author, params: params)
-        .execute(merge_request, true)
+      result = MergeRequests::MergeToRefService.new(project: project, current_user: merge_request.author, params: params).execute(merge_request)
 
       result[:status] == :success
     end

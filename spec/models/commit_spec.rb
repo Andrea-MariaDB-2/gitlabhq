@@ -486,7 +486,7 @@ eos
     it 'uses the CachedMarkdownField cache instead of the Mentionable cache', :use_clean_rails_redis_caching do
       expect(commit.title_html).not_to be_present
 
-      commit.all_references(project.owner).all
+      commit.all_references(project.first_owner).all
 
       expect(commit.title_html).to be_present
       expect(Rails.cache.read("banzai/commit:#{commit.id}/safe_message/single_line")).to be_nil
@@ -676,68 +676,18 @@ eos
   describe '.diff_max_files' do
     subject(:diff_max_files) { described_class.diff_max_files }
 
-    let(:increased_diff_limits) { false }
-    let(:configurable_diff_limits) { false }
-
-    before do
-      stub_feature_flags(increased_diff_limits: increased_diff_limits, configurable_diff_limits: configurable_diff_limits)
-    end
-
-    context 'when increased_diff_limits is enabled' do
-      let(:increased_diff_limits) { true }
-
-      it 'returns 3000' do
-        expect(diff_max_files).to eq(3000)
-      end
-    end
-
-    context 'when configurable_diff_limits is enabled' do
-      let(:configurable_diff_limits) { true }
-
-      it 'returns the current settings' do
-        Gitlab::CurrentSettings.update!(diff_max_files: 1234)
-        expect(diff_max_files).to eq(1234)
-      end
-    end
-
-    context 'when neither feature flag is enabled' do
-      it 'returns 1000' do
-        expect(diff_max_files).to eq(1000)
-      end
+    it 'returns the current settings' do
+      Gitlab::CurrentSettings.update!(diff_max_files: 1234)
+      expect(diff_max_files).to eq(1234)
     end
   end
 
   describe '.diff_max_lines' do
     subject(:diff_max_lines) { described_class.diff_max_lines }
 
-    let(:increased_diff_limits) { false }
-    let(:configurable_diff_limits) { false }
-
-    before do
-      stub_feature_flags(increased_diff_limits: increased_diff_limits, configurable_diff_limits: configurable_diff_limits)
-    end
-
-    context 'when increased_diff_limits is enabled' do
-      let(:increased_diff_limits) { true }
-
-      it 'returns 100000' do
-        expect(diff_max_lines).to eq(100000)
-      end
-    end
-
-    context 'when configurable_diff_limits is enabled' do
-      let(:configurable_diff_limits) { true }
-
-      it 'returns the current settings' do
-        Gitlab::CurrentSettings.update!(diff_max_lines: 65321)
-        expect(diff_max_lines).to eq(65321)
-      end
-    end
-
-    context 'when neither feature flag is enabled' do
-      it 'returns 50000' do
-        expect(diff_max_lines).to eq(50000)
-      end
+    it 'returns the current settings' do
+      Gitlab::CurrentSettings.update!(diff_max_lines: 65321)
+      expect(diff_max_lines).to eq(65321)
     end
   end
 
@@ -798,38 +748,28 @@ eos
 
   describe '#work_in_progress?' do
     [
-      'squash! ', 'fixup! ', 'wip: ', 'WIP: ', '[WIP] ',
-      'draft: ', 'Draft - ', '[Draft] ', '(draft) ', 'Draft: '
-    ].each do |wip_prefix|
-      it "detects the '#{wip_prefix}' prefix" do
-        commit.message = "#{wip_prefix}#{commit.message}"
+      'squash! ', 'fixup! ',
+      'draft: ', '[Draft] ', '(draft) ', 'Draft: '
+    ].each do |draft_prefix|
+      it "detects the '#{draft_prefix}' prefix" do
+        commit.message = "#{draft_prefix}#{commit.message}"
 
         expect(commit).to be_work_in_progress
       end
     end
 
-    it "detects WIP for a commit just saying 'wip'" do
-      commit.message = "wip"
-
-      expect(commit).to be_work_in_progress
-    end
-
-    it "detects WIP for a commit just saying 'draft'" do
+    it "does not detect WIP for a commit just saying 'draft'" do
       commit.message = "draft"
 
-      expect(commit).to be_work_in_progress
-    end
-
-    it "doesn't detect WIP for a commit that begins with 'FIXUP! '" do
-      commit.message = "FIXUP! #{commit.message}"
-
       expect(commit).not_to be_work_in_progress
     end
 
-    it "doesn't detect WIP for words starting with WIP" do
-      commit.message = "Wipout #{commit.message}"
+    ["FIXUP!", "Draft - ", "Wipeout", "WIP: ", "[WIP] ", "wip: "].each do |draft_prefix|
+      it "doesn't detect '#{draft_prefix}' at the start of the title as a draft" do
+        commit.message = "#{draft_prefix} #{commit.message}"
 
-      expect(commit).not_to be_work_in_progress
+        expect(commit).not_to be_work_in_progress
+      end
     end
   end
 

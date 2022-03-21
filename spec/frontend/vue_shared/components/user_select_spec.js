@@ -1,16 +1,19 @@
-import { GlSearchBoxByType, GlDropdown } from '@gitlab/ui';
-import { shallowMount, createLocalVue } from '@vue/test-utils';
+import { GlSearchBoxByType } from '@gitlab/ui';
+import { shallowMount } from '@vue/test-utils';
 import { cloneDeep } from 'lodash';
-import { nextTick } from 'vue';
+import Vue, { nextTick } from 'vue';
 import VueApollo from 'vue-apollo';
 import createMockApollo from 'helpers/mock_apollo_helper';
 import waitForPromises from 'helpers/wait_for_promises';
 import searchUsersQuery from '~/graphql_shared/queries/users_search.query.graphql';
-import { ASSIGNEES_DEBOUNCE_DELAY } from '~/sidebar/constants';
+import searchUsersQueryOnMR from '~/graphql_shared/queries/users_search_with_mr_permissions.graphql';
+import { IssuableType } from '~/issues/constants';
+import { DEFAULT_DEBOUNCE_AND_THROTTLE_MS } from '~/lib/utils/constants';
 import getIssueParticipantsQuery from '~/vue_shared/components/sidebar/queries/get_issue_participants.query.graphql';
 import UserSelect from '~/vue_shared/components/user_select/user_select.vue';
 import {
   searchResponse,
+  searchResponseOnMR,
   projectMembersResponse,
   participantsQueryResponse,
 } from '../../sidebar/mock_data';
@@ -28,13 +31,12 @@ const assignee = {
 const mockError = jest.fn().mockRejectedValue('Error!');
 
 const waitForSearch = async () => {
-  jest.advanceTimersByTime(ASSIGNEES_DEBOUNCE_DELAY);
+  jest.advanceTimersByTime(DEFAULT_DEBOUNCE_AND_THROTTLE_MS);
   await nextTick();
   await waitForPromises();
 };
 
-const localVue = createLocalVue();
-localVue.use(VueApollo);
+Vue.use(VueApollo);
 
 describe('User select dropdown', () => {
   let wrapper;
@@ -59,10 +61,10 @@ describe('User select dropdown', () => {
   } = {}) => {
     fakeApollo = createMockApollo([
       [searchUsersQuery, searchQueryHandler],
+      [searchUsersQueryOnMR, jest.fn().mockResolvedValue(searchResponseOnMR)],
       [getIssueParticipantsQuery, participantsQueryHandler],
     ]);
     wrapper = shallowMount(UserSelect, {
-      localVue,
       apolloProvider: fakeApollo,
       propsData: {
         headerText: 'test',
@@ -78,7 +80,18 @@ describe('User select dropdown', () => {
         ...props,
       },
       stubs: {
-        GlDropdown,
+        GlDropdown: {
+          template: `
+            <div>
+              <slot name="header"></slot>
+              <slot></slot>
+              <slot name="footer"></slot>
+            </div>
+          `,
+          methods: {
+            hide: jest.fn(),
+          },
+        },
       },
     });
   };
@@ -106,14 +119,14 @@ describe('User select dropdown', () => {
     createComponent({ participantsQueryHandler: mockError });
     await waitForPromises();
 
-    expect(wrapper.emitted('error')).toEqual([[], []]);
+    expect(wrapper.emitted('error')).toEqual([[]]);
   });
 
   it('emits an `error` event if search query was rejected', async () => {
     createComponent({ searchQueryHandler: mockError });
     await waitForSearch();
 
-    expect(wrapper.emitted('error')).toEqual([[], []]);
+    expect(wrapper.emitted('error')).toEqual([[]]);
   });
 
   it('renders current user if they are not in participants or assignees', async () => {
@@ -134,11 +147,19 @@ describe('User select dropdown', () => {
     expect(findSelectedParticipants()).toHaveLength(1);
   });
 
+  it('does not render a `Cannot merge` tooltip', async () => {
+    createComponent();
+    await waitForPromises();
+
+    expect(findUnselectedParticipants().at(0).attributes('title')).toBe('');
+  });
+
   describe('when search is empty', () => {
     it('renders a merged list of participants and project members', async () => {
       createComponent();
       await waitForPromises();
-      expect(findUnselectedParticipants()).toHaveLength(3);
+
+      expect(findUnselectedParticipants()).toHaveLength(4);
     });
 
     it('renders `Unassigned` link with the checkmark when there are no selected users', async () => {
@@ -164,7 +185,7 @@ describe('User select dropdown', () => {
         },
       });
       await waitForPromises();
-      findUnassignLink().vm.$emit('click');
+      findUnassignLink().trigger('click');
 
       expect(wrapper.emitted('input')).toEqual([[[]]]);
     });
@@ -177,7 +198,7 @@ describe('User select dropdown', () => {
       });
       await waitForPromises();
 
-      findSelectedParticipants().at(0).vm.$emit('click', new Event('click'));
+      findSelectedParticipants().at(0).trigger('click');
       expect(wrapper.emitted('input')).toEqual([[[]]]);
     });
 
@@ -189,8 +210,9 @@ describe('User select dropdown', () => {
       });
       await waitForPromises();
 
-      findUnselectedParticipants().at(0).vm.$emit('click');
-      expect(wrapper.emitted('input')).toEqual([
+      findUnselectedParticipants().at(0).trigger('click');
+
+      expect(wrapper.emitted('input')).toMatchObject([
         [
           [
             {
@@ -216,7 +238,7 @@ describe('User select dropdown', () => {
       });
       await waitForPromises();
 
-      findUnselectedParticipants().at(0).vm.$emit('click');
+      findUnselectedParticipants().at(0).trigger('click');
       expect(wrapper.emitted('input')[0][0]).toHaveLength(2);
     });
   });
@@ -234,7 +256,7 @@ describe('User select dropdown', () => {
       createComponent();
       await waitForPromises();
       findSearchField().vm.$emit('input', 'roo');
-      jest.advanceTimersByTime(ASSIGNEES_DEBOUNCE_DELAY);
+      jest.advanceTimersByTime(DEFAULT_DEBOUNCE_AND_THROTTLE_MS);
       await nextTick();
 
       expect(findParticipantsLoading().exists()).toBe(true);
@@ -273,6 +295,21 @@ describe('User select dropdown', () => {
 
       expect(findUnselectedParticipants()).toHaveLength(0);
       expect(findEmptySearchResults().exists()).toBe(true);
+    });
+  });
+
+  describe('when on merge request sidebar', () => {
+    beforeEach(() => {
+      createComponent({ props: { issuableType: IssuableType.MergeRequest, issuableId: 1 } });
+      return waitForPromises();
+    });
+
+    it('does not render a `Cannot merge` tooltip for a user that has merge permission', () => {
+      expect(findUnselectedParticipants().at(0).attributes('title')).toBe('');
+    });
+
+    it('renders a `Cannot merge` tooltip for a user that does not have merge permission', () => {
+      expect(findUnselectedParticipants().at(1).attributes('title')).toBe('Cannot merge');
     });
   });
 });

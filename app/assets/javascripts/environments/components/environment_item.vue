@@ -1,11 +1,11 @@
 <script>
-import { GlTooltipDirective, GlIcon, GlLink, GlSprintf } from '@gitlab/ui';
+import { GlDropdown, GlTooltipDirective, GlIcon, GlLink, GlSprintf, GlBadge } from '@gitlab/ui';
 import { isEmpty } from 'lodash';
 import { convertObjectPropsToCamelCase } from '~/lib/utils/common_utils';
 import { __, s__, sprintf } from '~/locale';
 import CiIcon from '~/vue_shared/components/ci_icon.vue';
 import CommitComponent from '~/vue_shared/components/commit.vue';
-import TooltipOnTruncate from '~/vue_shared/components/tooltip_on_truncate.vue';
+import TooltipOnTruncate from '~/vue_shared/components/tooltip_on_truncate/tooltip_on_truncate.vue';
 import UserAvatarLink from '~/vue_shared/components/user_avatar/user_avatar_link.vue';
 import timeagoMixin from '~/vue_shared/mixins/timeago';
 import eventHub from '../event_hub';
@@ -29,6 +29,8 @@ export default {
     ActionsComponent,
     CommitComponent,
     ExternalUrlComponent,
+    GlDropdown,
+    GlBadge,
     GlIcon,
     GlLink,
     GlSprintf,
@@ -521,6 +523,10 @@ export default {
       return this.model.metrics_path || '';
     },
 
+    terminalPath() {
+      return this.model?.terminal_path ?? '';
+    },
+
     autoStopUrl() {
       return this.model.cancel_auto_stop_path || '';
     },
@@ -548,6 +554,15 @@ export default {
     },
     tableNameSpacingClass() {
       return this.isFolder ? 'section-100' : this.tableData.name.spacing;
+    },
+    hasExtraActions() {
+      return Boolean(
+        this.canRetry ||
+          this.canShowAutoStopDate ||
+          this.monitoringUrl ||
+          this.terminalPath ||
+          this.canDeleteEnvironment,
+      );
     },
   },
 
@@ -607,9 +622,9 @@ export default {
           <span v-if="model.size === 1">{{ model.name }}</span>
           <span v-else>{{ model.name_without_type }}</span>
         </a>
-        <span v-if="isProtected" class="badge badge-success">
-          {{ s__('Environments|protected') }}
-        </span>
+        <gl-badge v-if="isProtected" variant="success">{{
+          s__('Environments|protected')
+        }}</gl-badge>
       </span>
       <span
         v-else
@@ -625,7 +640,7 @@ export default {
 
         <span> {{ model.folderName }} </span>
 
-        <span class="badge badge-pill"> {{ model.size }} </span>
+        <gl-badge>{{ model.size }}</gl-badge>
       </span>
     </div>
 
@@ -776,25 +791,11 @@ export default {
       role="gridcell"
     >
       <div class="btn-group table-action-buttons" role="group">
-        <pin-component
-          v-if="canShowAutoStopDate"
-          :auto-stop-url="autoStopUrl"
-          data-track-action="click_button"
-          data-track-label="environment_pin"
-        />
-
         <external-url-component
           v-if="externalURL"
           :external-url="externalURL"
           data-track-action="click_button"
           data-track-label="environment_url"
-        />
-
-        <monitoring-button-component
-          v-if="monitoringUrl"
-          :monitoring-url="monitoringUrl"
-          data-track-action="click_button"
-          data-track-label="environment_monitoring"
         />
 
         <actions-component
@@ -804,35 +805,59 @@ export default {
           data-track-label="environment_actions"
         />
 
-        <terminal-button-component
-          v-if="model && model.terminal_path"
-          :terminal-path="model.terminal_path"
-          data-track-action="click_button"
-          data-track-label="environment_terminal"
-        />
-
-        <rollback-component
-          v-if="canRetry"
-          :environment="model"
-          :is-last-deployment="isLastDeployment"
-          :retry-url="retryUrl"
-          data-track-action="click_button"
-          data-track-label="environment_rollback"
-        />
-
         <stop-component
           v-if="canStopEnvironment"
           :environment="model"
+          class="gl-z-index-2"
           data-track-action="click_button"
           data-track-label="environment_stop"
         />
 
-        <delete-component
-          v-if="canDeleteEnvironment"
-          :environment="model"
-          data-track-action="click_button"
-          data-track-label="environment_delete"
-        />
+        <gl-dropdown
+          v-if="hasExtraActions"
+          icon="ellipsis_v"
+          text-sr-only
+          :text="__('More actions')"
+          category="secondary"
+          no-caret
+        >
+          <rollback-component
+            v-if="canRetry"
+            :environment="model"
+            :is-last-deployment="isLastDeployment"
+            :retry-url="retryUrl"
+            data-track-action="click_button"
+            data-track-label="environment_rollback"
+          />
+
+          <pin-component
+            v-if="canShowAutoStopDate"
+            :auto-stop-url="autoStopUrl"
+            data-track-action="click_button"
+            data-track-label="environment_pin"
+          />
+
+          <monitoring-button-component
+            v-if="monitoringUrl"
+            :monitoring-url="monitoringUrl"
+            data-track-action="click_button"
+            data-track-label="environment_monitoring"
+          />
+
+          <terminal-button-component
+            v-if="terminalPath"
+            :terminal-path="terminalPath"
+            data-track-action="click_button"
+            data-track-label="environment_terminal"
+          />
+
+          <delete-component
+            v-if="canDeleteEnvironment"
+            :environment="model"
+            data-track-action="click_button"
+            data-track-label="environment_delete"
+          />
+        </gl-dropdown>
       </div>
     </div>
   </div>

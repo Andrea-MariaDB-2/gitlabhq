@@ -3,6 +3,8 @@
 require 'spec_helper'
 
 RSpec.describe API::Issues do
+  using RSpec::Parameterized::TableSyntax
+
   let_it_be(:user) { create(:user) }
   let_it_be(:project, reload: true) { create(:project, :public, :repository, creator_id: user.id, namespace: user.namespace) }
   let_it_be(:private_mrs_project) do
@@ -136,6 +138,12 @@ RSpec.describe API::Issues do
         expect(json_response).to be_an Array
       end
 
+      it_behaves_like 'issuable anonymous search' do
+        let(:url) { '/issues' }
+        let(:issuable) { issue }
+        let(:result) { issuable.id }
+      end
+
       it 'returns authentication error without any scope' do
         get api('/issues')
 
@@ -253,6 +261,38 @@ RSpec.describe API::Issues do
           let(:counts) { { all: 2, closed: 1, opened: 1 } }
 
           it_behaves_like 'issues statistics'
+        end
+
+        context 'with search param' do
+          let(:params) { { scope: 'all', search: 'foo' } }
+          let(:counts) { { all: 1, closed: 0, opened: 1 } }
+
+          it_behaves_like 'issues statistics'
+
+          context 'with anonymous user' do
+            let(:user) { nil }
+
+            context 'with disable_anonymous_search disabled' do
+              before do
+                stub_feature_flags(disable_anonymous_search: false)
+              end
+
+              it_behaves_like 'issues statistics'
+            end
+
+            context 'with disable_anonymous_search enabled' do
+              before do
+                stub_feature_flags(disable_anonymous_search: true)
+              end
+
+              it 'returns a unprocessable entity 422' do
+                get api("/issues_statistics"), params: params
+
+                expect(response).to have_gitlab_http_status(:unprocessable_entity)
+                expect(json_response['message']).to include('User must be authenticated to use search')
+              end
+            end
+          end
         end
       end
     end
@@ -448,6 +488,8 @@ RSpec.describe API::Issues do
         let_it_be(:issue3) { create(:issue, project: project, author: user, due_date: frozen_time + 10.days) }
         let_it_be(:issue4) { create(:issue, project: project, author: user, due_date: frozen_time + 34.days) }
         let_it_be(:issue5) { create(:issue, project: project, author: user, due_date: frozen_time - 8.days) }
+        let_it_be(:issue6) { create(:issue, project: project, author: user, due_date: frozen_time) }
+        let_it_be(:issue7) { create(:issue, project: project, author: user, due_date: frozen_time + 1.day) }
 
         before do
           travel_to(frozen_time)
@@ -460,7 +502,13 @@ RSpec.describe API::Issues do
         it 'returns them all when argument is empty' do
           get api('/issues?due_date=', user)
 
-          expect_paginated_array_response(issue5.id, issue4.id, issue3.id, issue2.id, issue.id, closed_issue.id)
+          expect_paginated_array_response(issue7.id, issue6.id, issue5.id, issue4.id, issue3.id, issue2.id, issue.id, closed_issue.id)
+        end
+
+        it 'returns issues with due date' do
+          get api('/issues?due_date=any', user)
+
+          expect_paginated_array_response(issue7.id, issue6.id, issue5.id, issue4.id, issue3.id, issue2.id)
         end
 
         it 'returns issues without due date' do
@@ -472,25 +520,58 @@ RSpec.describe API::Issues do
         it 'returns issues due for this week' do
           get api('/issues?due_date=week', user)
 
-          expect_paginated_array_response(issue2.id)
+          expect_paginated_array_response(issue7.id, issue6.id, issue2.id)
         end
 
         it 'returns issues due for this month' do
           get api('/issues?due_date=month', user)
 
-          expect_paginated_array_response(issue3.id, issue2.id)
+          expect_paginated_array_response(issue7.id, issue6.id, issue3.id, issue2.id)
         end
 
         it 'returns issues that are due previous two weeks and next month' do
           get api('/issues?due_date=next_month_and_previous_two_weeks', user)
 
-          expect_paginated_array_response(issue5.id, issue4.id, issue3.id, issue2.id)
+          expect_paginated_array_response(issue7.id, issue6.id, issue5.id, issue4.id, issue3.id, issue2.id)
+        end
+
+        it 'returns issues that are due today' do
+          get api('/issues?due_date=today', user)
+
+          expect_paginated_array_response(issue6.id)
+        end
+
+        it 'returns issues that are due tomorrow' do
+          get api('/issues?due_date=tomorrow', user)
+
+          expect_paginated_array_response(issue7.id)
         end
 
         it 'returns issues that are overdue' do
           get api('/issues?due_date=overdue', user)
 
           expect_paginated_array_response(issue5.id)
+        end
+      end
+
+      context 'with incident issues' do
+        let_it_be(:incident) { create(:incident, project: project) }
+
+        it 'avoids N+1 queries' do
+          get api('/issues', user) # warm up
+
+          control = ActiveRecord::QueryRecorder.new do
+            get api('/issues', user)
+          end
+
+          create(:incident, project: project)
+          create(:incident, project: project)
+
+          expect do
+            get api('/issues', user)
+          end.not_to exceed_query_limit(control)
+          # 2 pre-existed issues + 3 incidents
+          expect(json_response.count).to eq(5)
         end
       end
 
@@ -680,6 +761,71 @@ RSpec.describe API::Issues do
         end
       end
 
+      context 'filtering by milestone_id' do
+        let_it_be(:upcoming_milestone) { create(:milestone, project: project, title: "upcoming milestone", start_date: 1.day.ago, due_date: 1.day.from_now) }
+        let_it_be(:started_milestone) { create(:milestone, project: project, title: "started milestone", start_date: 2.days.ago, due_date: 1.day.ago) }
+        let_it_be(:future_milestone) { create(:milestone, project: project, title: "future milestone", start_date: 7.days.from_now, due_date: 14.days.from_now) }
+        let_it_be(:issue_upcoming) { create(:issue, project: project, state: :opened, milestone: upcoming_milestone) }
+        let_it_be(:issue_started) { create(:issue, project: project, state: :opened, milestone: started_milestone) }
+        let_it_be(:issue_future) { create(:issue, project: project, state: :opened, milestone: future_milestone) }
+        let_it_be(:issue_none) { create(:issue, project: project, state: :opened) }
+
+        let(:wildcard_started) { 'Started' }
+        let(:wildcard_upcoming) { 'Upcoming' }
+        let(:wildcard_any) { 'Any' }
+        let(:wildcard_none) { 'None' }
+
+        where(:milestone_id, :not_milestone, :expected_issues) do
+          ref(:wildcard_none)     | nil | lazy { [issue_none.id] }
+          ref(:wildcard_any)      | nil | lazy { [issue_future.id, issue_started.id, issue_upcoming.id, issue.id, closed_issue.id] }
+          ref(:wildcard_started)  | nil | lazy { [issue_started.id, issue_upcoming.id] }
+          ref(:wildcard_upcoming) | nil | lazy { [issue_upcoming.id] }
+          ref(:wildcard_any)      | "upcoming milestone" | lazy { [issue_future.id, issue_started.id, issue.id, closed_issue.id] }
+          ref(:wildcard_upcoming) | "upcoming milestone" | []
+        end
+
+        with_them do
+          it "returns correct issues when filtering with 'milestone_id' and optionally negated 'milestone'" do
+            get api('/issues', user), params: { milestone_id: milestone_id, not: not_milestone ? { milestone: not_milestone } : {} }
+
+            expect_paginated_array_response(expected_issues)
+          end
+        end
+
+        context 'negated filtering' do
+          where(:not_milestone_id, :expected_issues) do
+            ref(:wildcard_started)  | lazy { [issue_future.id] }
+            ref(:wildcard_upcoming) | lazy { [issue_started.id] }
+          end
+
+          with_them do
+            it "returns correct issues when filtering with negated 'milestone_id'" do
+              get api('/issues', user), params: { not: { milestone_id: not_milestone_id } }
+
+              expect_paginated_array_response(expected_issues)
+            end
+          end
+        end
+
+        context 'when mutually exclusive params are passed' do
+          where(:params) do
+            [
+              [lazy { { milestone: "foo", milestone_id: wildcard_any } }],
+              [lazy { { not: { milestone: "foo", milestone_id: wildcard_any } } }]
+            ]
+          end
+
+          with_them do
+            it "raises an error", :aggregate_failures do
+              get api('/issues', user), params: params
+
+              expect(response).to have_gitlab_http_status(:bad_request)
+              expect(json_response["error"]).to include("mutually exclusive")
+            end
+          end
+        end
+      end
+
       it 'returns an array of issues found by iids' do
         get api('/issues', user), params: { iids: [closed_issue.iid] }
 
@@ -748,6 +894,18 @@ RSpec.describe API::Issues do
         expect_paginated_array_response([closed_issue.id, issue.id])
       end
 
+      it 'sorts by title asc when requested' do
+        get api('/issues', user), params: { order_by: :title, sort: :asc }
+
+        expect_paginated_array_response([issue.id, closed_issue.id])
+      end
+
+      it 'sorts by title desc when requested' do
+        get api('/issues', user), params: { order_by: :title, sort: :desc }
+
+        expect_paginated_array_response([closed_issue.id, issue.id])
+      end
+
       context 'with issues list sort options' do
         it 'accepts only predefined order by params' do
           API::Helpers::IssuesHelpers.sort_options.each do |sort_opt|
@@ -757,7 +915,7 @@ RSpec.describe API::Issues do
         end
 
         it 'fails to sort with non predefined options' do
-          %w(milestone title abracadabra).each do |sort_opt|
+          %w(milestone abracadabra).each do |sort_opt|
             get api('/issues', user), params: { order_by: sort_opt, sort: 'asc' }
             expect(response).to have_gitlab_http_status(:bad_request)
           end
@@ -1047,14 +1205,15 @@ RSpec.describe API::Issues do
   end
 
   describe 'PUT /projects/:id/issues/:issue_iid/reorder' do
-    let_it_be(:project) { create(:project) }
+    let_it_be(:group) { create(:group) }
+    let_it_be(:project) { create(:project, group: group) }
     let_it_be(:issue1) { create(:issue, project: project, relative_position: 10) }
     let_it_be(:issue2) { create(:issue, project: project, relative_position: 20) }
     let_it_be(:issue3) { create(:issue, project: project, relative_position: 30) }
 
     context 'when user has access' do
-      before do
-        project.add_developer(user)
+      before_all do
+        group.add_developer(user)
       end
 
       context 'with valid params' do
@@ -1078,6 +1237,19 @@ RSpec.describe API::Issues do
           put api("/projects/#{project.id}/issues/#{non_existing_record_iid}/reorder", user), params: { move_after_id: issue2.id, move_before_id: issue3.id }
 
           expect(response).to have_gitlab_http_status(:not_found)
+        end
+      end
+
+      context 'with issue in different project' do
+        let(:other_project) { create(:project, group: group) }
+        let(:other_issue) { create(:issue, project: other_project, relative_position: 80) }
+
+        it 'reorders issues and returns a successful 200 response' do
+          put api("/projects/#{other_project.id}/issues/#{other_issue.iid}/reorder", user), params: { move_after_id: issue2.id, move_before_id: issue3.id }
+
+          expect(response).to have_gitlab_http_status(:ok)
+          expect(other_issue.reload.relative_position)
+                .to be_between(issue2.reload.relative_position, issue3.reload.relative_position)
         end
       end
     end

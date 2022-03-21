@@ -1,5 +1,6 @@
 <script>
-import { s__, sprintf } from '~/locale';
+import { __, s__, sprintf } from '~/locale';
+import { parseUserDeletionObstacles } from '~/vue_shared/components/user_deletion_obstacles/utils';
 import ActionButtonGroup from './action_button_group.vue';
 import LeaveButton from './leave_button.vue';
 import RemoveMemberButton from './remove_member_button.vue';
@@ -19,6 +20,10 @@ export default {
       required: true,
     },
     isCurrentUser: {
+      type: Boolean,
+      required: true,
+    },
+    isInvitedUser: {
       type: Boolean,
       required: true,
     },
@@ -49,9 +54,20 @@ export default {
         },
       );
     },
-    oncallScheduleUserData() {
-      const { user: { name, oncallSchedules: schedules } = {} } = this.member;
-      return { name, schedules };
+    userDeletionObstaclesUserData() {
+      return {
+        name: this.member.user?.name,
+        obstacles: parseUserDeletionObstacles(this.member.user),
+      };
+    },
+    removeMemberButtonText() {
+      return this.isInvitedUser ? null : __('Remove member');
+    },
+    removeMemberButtonIcon() {
+      return this.isInvitedUser ? 'remove' : '';
+    },
+    removeMemberButtonCategory() {
+      return this.isInvitedUser ? 'primary' : 'secondary';
     },
   },
 };
@@ -65,9 +81,11 @@ export default {
         v-else
         :member-id="member.id"
         :member-type="member.type"
-        :oncall-schedules="oncallScheduleUserData"
+        :user-deletion-obstacles="userDeletionObstaclesUserData"
         :message="message"
-        :title="s__('Member|Remove member')"
+        :icon="removeMemberButtonIcon"
+        :button-text="removeMemberButtonText"
+        :button-category="removeMemberButtonCategory"
       />
     </div>
     <div v-else-if="permissions.canOverride && !member.isOverridden" class="gl-px-1">

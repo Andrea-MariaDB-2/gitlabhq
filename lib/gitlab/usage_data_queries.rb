@@ -5,14 +5,10 @@ module Gitlab
   # See https://gitlab.com/gitlab-org/gitlab/-/merge_requests/41091
   class UsageDataQueries < UsageData
     class << self
-      def uncached_data
-        super.with_indifferent_access.deep_merge(instrumentation_metrics_queries.with_indifferent_access)
-      end
-
-      def add_metric(metric, time_frame: 'none')
+      def add_metric(metric, time_frame: 'none', options: {})
         metric_class = "Gitlab::Usage::Metrics::Instrumentations::#{metric}".constantize
 
-        metric_class.new(time_frame: time_frame).instrumentation
+        metric_class.new(time_frame: time_frame, options: options).instrumentation
       end
 
       def count(relation, column = nil, *args, **kwargs)
@@ -45,9 +41,19 @@ module Gitlab
       end
 
       def maximum_id(model, column = nil)
+        # no-op: shadowing super for performance reasons
       end
 
       def minimum_id(model, column = nil)
+        # no-op: shadowing super for performance reasons
+      end
+
+      def alt_usage_data(value = nil, fallback: FALLBACK, &block)
+        if block_given?
+          { alt_usage_data_block: block.to_s }
+        else
+          { alt_usage_data_value: value }
+        end
       end
 
       def redis_usage_data(counter = nil, &block)
@@ -67,12 +73,6 @@ module Gitlab
 
       def epics_deepest_relationship_level
         { epics_deepest_relationship_level: 0 }
-      end
-
-      private
-
-      def instrumentation_metrics_queries
-        ::Gitlab::Usage::Metric.all.map(&:with_instrumentation).reduce({}, :deep_merge)
       end
     end
   end

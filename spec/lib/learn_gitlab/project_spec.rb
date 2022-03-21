@@ -45,6 +45,12 @@ RSpec.describe LearnGitlab::Project do
     subject { described_class.new(current_user).project }
 
     it { is_expected.to eq learn_gitlab_project }
+
+    context 'when it is created during trial signup' do
+      let_it_be(:learn_gitlab_project) { create(:project, name: LearnGitlab::Project::PROJECT_NAME_ULTIMATE_TRIAL, path: 'learn-gitlab-ultimate-trial') }
+
+      it { is_expected.to eq learn_gitlab_project }
+    end
   end
 
   describe '.board' do

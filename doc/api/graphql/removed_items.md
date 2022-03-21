@@ -1,10 +1,10 @@
 ---
-stage: Plan
-group: Product Planning
+stage: Ecosystem
+group: Integrations
 info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
 ---
 
-# GraphQL API removed items
+# GraphQL API removed items **(FREE)**
 
 GraphQL is a versionless API, unlike the REST API.
 Occasionally, items have to be updated or removed from the GraphQL API.
@@ -12,7 +12,7 @@ According to our [process for removing items](index.md#deprecation-and-removal-p
 
 ## GitLab 14.0
 
-Fields removed in [GitLab 14.0](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/63293):
+Fields [removed](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/63293) in GitLab 14.0:
 
 ### GraphQL Mutations
 
@@ -38,7 +38,9 @@ Fields removed in [GitLab 14.0](https://gitlab.com/gitlab-org/gitlab/-/merge_req
 
 ## GitLab 13.6
 
-Fields removed in [GitLab 13.6](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/44866):
+Prior to GitLab 14.0, deprecated items could be removed in `XX.6` releases.
+
+Fields [removed](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/44866) in GitLab 13.6:
 
 | Field name           | GraphQL type             | Deprecated in | Use instead                |
 |----------------------|--------------------------|---------------|----------------------------|

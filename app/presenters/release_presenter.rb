@@ -1,11 +1,7 @@
 # frozen_string_literal: true
 
 class ReleasePresenter < Gitlab::View::Presenter::Delegated
-  include ActionView::Helpers::UrlHelper
-
-  presents :release
-
-  delegate :project, :tag, to: :release
+  presents ::Release, as: :release
 
   def commit_path
     return unless release.commit && can_download_code?
@@ -20,8 +16,6 @@ class ReleasePresenter < Gitlab::View::Presenter::Delegated
   end
 
   def self_url
-    return unless can_download_code?
-
     project_release_url(project, release)
   end
 
@@ -51,6 +45,7 @@ class ReleasePresenter < Gitlab::View::Presenter::Delegated
     edit_project_release_url(project, release)
   end
 
+  delegator_override :assets_count
   def assets_count
     if can_download_code?
       release.assets_count
@@ -59,8 +54,9 @@ class ReleasePresenter < Gitlab::View::Presenter::Delegated
     end
   end
 
+  delegator_override :name
   def name
-    can_download_code? ? release.name : "Release-#{release.id}"
+    release.name
   end
 
   def download_url(filepath)

@@ -1,0 +1,18 @@
+fragment ClusterAgentFragment on ClusterAgent {
+  id
+  name
+  webPath
+  connections {
+    nodes {
+      metadata {
+        version
+      }
+    }
+  }
+  tokens {
+    nodes {
+      id
+      lastUsedAt
+    }
+  }
+}

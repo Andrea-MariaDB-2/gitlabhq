@@ -98,9 +98,7 @@ export const createTestContentEditorExtension = ({ commands = [] } = {}) => {
         return {
           labelName: {
             default: null,
-            parseHTML: (element) => {
-              return { labelName: element.dataset.labelName };
-            },
+            parseHTML: (element) => element.dataset.labelName,
           },
         };
       },
@@ -120,4 +118,47 @@ export const createTestContentEditorExtension = ({ commands = [] } = {}) => {
       state.closeBlock(node);
     },
   };
+};
+
+export const triggerNodeInputRule = ({ tiptapEditor, inputRuleText }) => {
+  const { view } = tiptapEditor;
+  const { state } = tiptapEditor;
+  const { selection } = state;
+
+  // Triggers the event handler that input rules listen to
+  view.someProp('handleTextInput', (f) => f(view, selection.from, selection.to, inputRuleText));
+};
+
+export const triggerMarkInputRule = ({ tiptapEditor, inputRuleText }) => {
+  const { view } = tiptapEditor;
+
+  tiptapEditor.chain().setContent(inputRuleText).setTextSelection(1).run();
+
+  const { state } = tiptapEditor;
+  const { selection } = state;
+
+  // Triggers the event handler that input rules listen to
+  view.someProp('handleTextInput', (f) =>
+    f(view, selection.from, inputRuleText.length + 1, inputRuleText),
+  );
+};
+
+/**
+ * Executes an action that triggers a transaction in the
+ * tiptap Editor. Returns a promise that resolves
+ * after the transaction completes
+ * @param {*} params.tiptapEditor Tiptap editor
+ * @param {*} params.action A function that triggers a transaction in the tiptap Editor
+ * @returns A promise that resolves when the transaction completes
+ */
+export const waitUntilNextDocTransaction = ({ tiptapEditor, action }) => {
+  return new Promise((resolve) => {
+    const handleTransaction = () => {
+      tiptapEditor.off('update', handleTransaction);
+      resolve();
+    };
+
+    tiptapEditor.on('update', handleTransaction);
+    action();
+  });
 };

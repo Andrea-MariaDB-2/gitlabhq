@@ -1,13 +1,12 @@
 ---
 stage: Verify
-group: Testing
+group: Pipeline Insights
 info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
-type: reference, howto
 ---
 
 # Load Performance Testing **(PREMIUM)**
 
-> [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/10683) in [GitLab Premium](https://about.gitlab.com/pricing/) 13.2.
+> [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/10683) in GitLab 13.2.
 
 With Load Performance Testing, you can test the impact of any pending code changes
 to your application's backend in [GitLab CI/CD](../../../ci/index.md).
@@ -28,7 +27,7 @@ GET calls to a popular API endpoint in your application to see how it performs.
 ## How Load Performance Testing works
 
 First, define a job in your `.gitlab-ci.yml` file that generates the
-[Load Performance report artifact](../../../ci/yaml/index.md#artifactsreportsload_performance).
+[Load Performance report artifact](../../../ci/yaml/artifacts_reports.md#artifactsreportsload_performance).
 GitLab checks this report, compares key load performance metrics
 between the source and target branches, and then shows the information in a merge request widget:
 
@@ -93,7 +92,7 @@ template that is included with GitLab.
 NOTE:
 For large scale k6 tests you need to ensure the GitLab Runner instance performing the actual
 test is able to handle running the test. Refer to [k6's guidance](https://k6.io/docs/testing-guides/running-large-tests#hardware-considerations)
-for spec details. The [default shared GitLab.com runners](../../../ci/runners/build_cloud/linux_build_cloud.md)
+for spec details. The [default shared GitLab.com runners](../../../ci/runners/saas/linux_saas_runner.md)
 likely have insufficient specs to handle most large k6 tests.
 
 This template runs the
@@ -103,7 +102,7 @@ job.
 An example configuration workflow:
 
 1. Set up GitLab Runner to run Docker containers, like the
-   [Docker-in-Docker workflow](../../../ci/docker/using_docker_build.md#use-the-docker-executor-with-the-docker-image-docker-in-docker).
+   [Docker-in-Docker workflow](../../../ci/docker/using_docker_build.md#use-docker-in-docker).
 1. Configure the default Load Performance Testing CI/CD job in your `.gitlab-ci.yml` file.
    You need to include the template and configure it with CI/CD variables:
 
@@ -140,7 +139,7 @@ For example, you can override the duration of the test with a CLI option:
 
 GitLab only displays the key performance metrics in the MR widget if k6's results are saved
 via [summary export](https://k6.io/docs/results-visualization/json#summary-export)
-as a [Load Performance report artifact](../../../ci/yaml/index.md#artifactsreportsload_performance).
+as a [Load Performance report artifact](../../../ci/yaml/artifacts_reports.md#artifactsreportsload_performance).
 The latest Load Performance artifact available is always used, using the
 summary values from the test.
 
@@ -161,7 +160,7 @@ such as: ``http.get(`${__ENV.ENVIRONMENT_URL}`)``.
 For example:
 
 1. In the `review` job:
-   1. Capture the dynamic URL and save it into a `.env` file, e.g. `echo "ENVIRONMENT_URL=$CI_ENVIRONMENT_URL" >> review.env`.
+   1. Capture the dynamic URL and save it into a `.env` file, for example, `echo "ENVIRONMENT_URL=$CI_ENVIRONMENT_URL" >> review.env`.
    1. Set the `.env` file to be a [job artifact](../../../ci/pipelines/job_artifacts.md#job-artifacts).
 1. In the `load_performance` job:
    1. Set it to depend on the review job, so it inherits the environment file.
@@ -181,7 +180,7 @@ include:
 review:
   stage: deploy
   environment:
-    name: review/$CI_COMMIT_REF_NAME
+    name: review/$CI_COMMIT_REF_SLUG
     url: http://$CI_ENVIRONMENT_SLUG.example.com
   script:
     - run_deploy_script

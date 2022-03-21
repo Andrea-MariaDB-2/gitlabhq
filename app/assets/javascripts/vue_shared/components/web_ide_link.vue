@@ -1,17 +1,33 @@
 <script>
-import $ from 'jquery';
-import { __ } from '~/locale';
+import { GlModal, GlSprintf, GlLink } from '@gitlab/ui';
+import { s__, __ } from '~/locale';
 import ActionsButton from '~/vue_shared/components/actions_button.vue';
 import LocalStorageSync from '~/vue_shared/components/local_storage_sync.vue';
+import ConfirmForkModal from '~/vue_shared/components/confirm_fork_modal.vue';
 
 const KEY_EDIT = 'edit';
 const KEY_WEB_IDE = 'webide';
 const KEY_GITPOD = 'gitpod';
+const KEY_PIPELINE_EDITOR = 'pipeline_editor';
 
 export default {
   components: {
     ActionsButton,
     LocalStorageSync,
+    GlModal,
+    GlSprintf,
+    GlLink,
+    ConfirmForkModal,
+  },
+  i18n: {
+    modal: {
+      title: __('Enable Gitpod?'),
+      content: s__(
+        'Gitpod|To use Gitpod you must first enable the feature in the integrations section of your %{linkStart}user preferences%{linkEnd}.',
+      ),
+      actionCancelText: __('Cancel'),
+      actionPrimaryText: __('Enable Gitpod'),
+    },
   },
   props: {
     isFork: {
@@ -49,7 +65,27 @@ export default {
       required: false,
       default: false,
     },
+    showPipelineEditorButton: {
+      type: Boolean,
+      required: false,
+      default: false,
+    },
+    userPreferencesGitpodPath: {
+      type: String,
+      required: false,
+      default: '',
+    },
+    userProfileEnableGitpodPath: {
+      type: String,
+      required: false,
+      default: '',
+    },
     editUrl: {
+      type: String,
+      required: false,
+      default: '',
+    },
+    pipelineEditorUrl: {
       type: String,
       required: false,
       default: '',
@@ -74,15 +110,37 @@ export default {
       required: false,
       default: '',
     },
+    disableForkModal: {
+      type: Boolean,
+      required: false,
+      default: false,
+    },
+    forkPath: {
+      type: String,
+      required: false,
+      default: '',
+    },
+    forkModalId: {
+      type: String,
+      required: false,
+      default: '',
+    },
   },
   data() {
     return {
-      selection: KEY_WEB_IDE,
+      selection: this.showPipelineEditorButton ? KEY_PIPELINE_EDITOR : KEY_WEB_IDE,
+      showEnableGitpodModal: false,
+      showForkModal: false,
     };
   },
   computed: {
     actions() {
-      return [this.webIdeAction, this.editAction, this.gitpodAction].filter((action) => action);
+      return [
+        this.pipelineEditorAction,
+        this.webIdeAction,
+        this.editAction,
+        this.gitpodAction,
+      ].filter((action) => action);
     },
     editAction() {
       if (!this.showEditButton) {
@@ -92,7 +150,14 @@ export default {
       const handleOptions = this.needsToFork
         ? {
             href: '#modal-confirm-fork-edit',
-            handle: () => this.showModal('#modal-confirm-fork-edit'),
+            handle: () => {
+              if (this.disableForkModal) {
+                this.$emit('edit', 'simple');
+                return;
+              }
+
+              this.showModal('showForkModal');
+            },
           }
         : { href: this.editUrl };
 
@@ -113,7 +178,7 @@ export default {
       if (this.webIdeText) {
         return this.webIdeText;
       } else if (this.isBlob) {
-        return __('Edit in Web IDE');
+        return __('Open in Web IDE');
       } else if (this.isFork) {
         return __('Edit fork in Web IDE');
       }
@@ -128,7 +193,14 @@ export default {
       const handleOptions = this.needsToFork
         ? {
             href: '#modal-confirm-fork-webide',
-            handle: () => this.showModal('#modal-confirm-fork-webide'),
+            handle: () => {
+              if (this.disableForkModal) {
+                this.$emit('edit', 'ide');
+                return;
+              }
+
+              this.showModal('showForkModal');
+            },
           }
         : { href: this.webIdeUrl };
 
@@ -146,16 +218,45 @@ export default {
       };
     },
     gitpodActionText() {
+      if (this.isBlob) {
+        return __('Open in Gitpod');
+      }
       return this.gitpodText || __('Gitpod');
     },
-    gitpodAction() {
-      if (!this.showGitpodButton) {
+    computedShowGitpodButton() {
+      return (
+        this.showGitpodButton && this.userPreferencesGitpodPath && this.userProfileEnableGitpodPath
+      );
+    },
+    pipelineEditorAction() {
+      if (!this.showPipelineEditorButton) {
         return null;
       }
 
+      const secondaryText = __('Edit, lint, and visualize your pipeline.');
+
+      return {
+        key: KEY_PIPELINE_EDITOR,
+        text: __('Edit in pipeline editor'),
+        secondaryText,
+        tooltip: secondaryText,
+        attrs: {
+          'data-qa-selector': 'pipeline_editor_button',
+        },
+        href: this.pipelineEditorUrl,
+      };
+    },
+    gitpodAction() {
+      if (!this.computedShowGitpodButton) {
+        return null;
+      }
       const handleOptions = this.gitpodEnabled
         ? { href: this.gitpodUrl }
-        : { href: '#modal-enable-gitpod', handle: () => this.showModal('#modal-enable-gitpod') };
+        : {
+            handle: () => {
+              this.showModal('showEnableGitpodModal');
+            },
+          };
 
       const secondaryText = __('Launch a ready-to-code development environment for your project.');
 
@@ -170,13 +271,32 @@ export default {
         ...handleOptions,
       };
     },
+    enableGitpodModalProps() {
+      return {
+        'modal-id': 'enable-gitpod-modal',
+        size: 'sm',
+        title: this.$options.i18n.modal.title,
+        'action-cancel': {
+          text: this.$options.i18n.modal.actionCancelText,
+        },
+        'action-primary': {
+          text: this.$options.i18n.modal.actionPrimaryText,
+          attributes: {
+            variant: 'confirm',
+            category: 'primary',
+            href: this.userProfileEnableGitpodPath,
+            'data-method': 'put',
+          },
+        },
+      };
+    },
   },
   methods: {
     select(key) {
       this.selection = key;
     },
-    showModal(id) {
-      $(id).modal('show');
+    showModal(dataKey) {
+      this[dataKey] = true;
     },
   },
 };
@@ -195,6 +315,23 @@ export default {
       storage-key="gl-web-ide-button-selected"
       :value="selection"
       @input="select"
+    />
+    <gl-modal
+      v-if="computedShowGitpodButton && !gitpodEnabled"
+      v-model="showEnableGitpodModal"
+      v-bind="enableGitpodModalProps"
+    >
+      <gl-sprintf :message="$options.i18n.modal.content">
+        <template #link="{ content }">
+          <gl-link :href="userPreferencesGitpodPath">{{ content }}</gl-link>
+        </template>
+      </gl-sprintf>
+    </gl-modal>
+    <confirm-fork-modal
+      v-if="showWebIdeButton || showEditButton"
+      v-model="showForkModal"
+      :modal-id="forkModalId"
+      :fork-path="forkPath"
     />
   </div>
 </template>

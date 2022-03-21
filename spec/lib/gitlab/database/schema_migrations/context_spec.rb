@@ -10,32 +10,20 @@ RSpec.describe Gitlab::Database::SchemaMigrations::Context do
 
   describe '#schema_directory' do
     it 'returns db/schema_migrations' do
-      expect(context.schema_directory).to eq(File.join(Rails.root, 'db/schema_migrations'))
+      expect(context.schema_directory).to eq(File.join(Rails.root, described_class.default_schema_migrations_path))
     end
 
     context 'CI database' do
-      let(:connection_class) { Ci::CiDatabaseRecord }
+      let(:connection_class) { Ci::ApplicationRecord }
 
       it 'returns a directory path that is database specific' do
         skip_if_multiple_databases_not_setup
 
-        expect(context.schema_directory).to eq(File.join(Rails.root, 'db/schema_migrations'))
+        expect(context.schema_directory).to eq(File.join(Rails.root, described_class.default_schema_migrations_path))
       end
     end
 
-    context 'multiple databases' do
-      let(:connection_class) do
-        Class.new(::ApplicationRecord) do
-          self.abstract_class = true
-
-          def self.name
-            'Gitlab::Database::SchemaMigrations::Context::TestConnection'
-          end
-        end
-      end
-
-      let(:configuration_overrides) { {} }
-
+    context 'multiple databases', :reestablished_active_record_base do
       before do
         connection_class.establish_connection(
           ActiveRecord::Base
@@ -44,10 +32,6 @@ RSpec.describe Gitlab::Database::SchemaMigrations::Context do
             .configuration_hash
             .merge(configuration_overrides)
         )
-      end
-
-      after do
-        connection_class.remove_connection
       end
 
       context 'when `schema_migrations_path` is configured as string' do
@@ -123,9 +107,5 @@ RSpec.describe Gitlab::Database::SchemaMigrations::Context do
         expect(context.versions_to_create).to eq([version1, version2, version3, version4])
       end
     end
-  end
-
-  def skip_if_multiple_databases_not_setup
-    skip 'Skipping because multiple databases not set up' unless Gitlab::Database.has_config?(:ci)
   end
 end

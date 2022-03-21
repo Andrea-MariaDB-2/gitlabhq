@@ -1,6 +1,8 @@
-query workInProgressQuery($projectPath: ID!, $iid: String!) {
+query workInProgress($projectPath: ID!, $iid: String!) {
   project(fullPath: $projectPath) {
+    id
     mergeRequest(iid: $iid) {
+      id
       shouldBeRebased
       sourceBranchProtected
     }

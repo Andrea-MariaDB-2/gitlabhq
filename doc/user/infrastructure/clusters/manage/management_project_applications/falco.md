@@ -4,7 +4,7 @@ group: Container Security
 info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
 ---
 
-# Install Falco with a cluster management project
+# Install Falco with a cluster management project **(FREE)**
 
 > [Introduced](https://gitlab.com/gitlab-org/project-templates/cluster-management/-/merge_requests/5) in GitLab 14.0.
 
@@ -93,9 +93,3 @@ You can check these logs with the following command:
 ```shell
 kubectl -n gitlab-managed-apps logs -l app=falco
 ```
-
-Support for installing the Falco managed application is provided by the
-GitLab Container Security group. If you run into unknown issues,
-[open a new issue](https://gitlab.com/gitlab-org/gitlab/-/issues/new), and ping at
-least 2 people from the
-[Container Security group](https://about.gitlab.com/handbook/product/categories/#container-security-group).

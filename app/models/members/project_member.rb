@@ -3,6 +3,7 @@
 class ProjectMember < Member
   extend ::Gitlab::Utils::Override
   SOURCE_TYPE = 'Project'
+  SOURCE_TYPE_FORMAT = /\AProject\z/.freeze
 
   belongs_to :project, foreign_key: 'source_id'
 
@@ -10,8 +11,7 @@ class ProjectMember < Member
 
   # Make sure project member points only to project as it source
   default_value_for :source_type, SOURCE_TYPE
-  validates :source_type, format: { with: /\AProject\z/ }
-  validates :access_level, inclusion: { in: Gitlab::Access.values }
+  validates :source_type, format: { with: SOURCE_TYPE_FORMAT }
   default_scope { where(source_type: SOURCE_TYPE) } # rubocop:disable Cop/DefaultScope
 
   scope :in_project, ->(project) { where(source_id: project.id) }
@@ -90,23 +90,40 @@ class ProjectMember < Member
     { project: project }
   end
 
+  private
+
+  override :access_level_inclusion
+  def access_level_inclusion
+    unless access_level.in?(Gitlab::Access.all_values)
+      errors.add(:access_level, "is not included in the list")
+    end
+  end
+
   override :refresh_member_authorized_projects
-  def refresh_member_authorized_projects
-    return super unless Feature.enabled?(:specialized_service_for_project_member_auth_refresh)
+  def refresh_member_authorized_projects(blocking:)
     return unless user
 
     # rubocop:disable CodeReuse/ServiceClass
-    AuthorizedProjectUpdate::ProjectRecalculatePerUserService.new(project, user).execute
+    if blocking
+      AuthorizedProjectUpdate::ProjectRecalculatePerUserService.new(project, user).execute
+    else
+      AuthorizedProjectUpdate::ProjectRecalculatePerUserWorker.perform_async(project.id, user.id)
+    end
 
     # Until we compare the inconsistency rates of the new, specialized service and
     # the old approach, we still run AuthorizedProjectsWorker
     # but with some delay and lower urgency as a safety net.
     UserProjectAccessChangedService.new(user_id)
-      .execute(blocking: false, priority: UserProjectAccessChangedService::LOW_PRIORITY)
+                                   .execute(blocking: false, priority: UserProjectAccessChangedService::LOW_PRIORITY)
     # rubocop:enable CodeReuse/ServiceClass
   end
 
-  private
+  # TODO: https://gitlab.com/groups/gitlab-org/-/epics/7054
+  # temporary until we can we properly remove the source columns
+  override :set_member_namespace_id
+  def set_member_namespace_id
+    self.member_namespace_id = project&.project_namespace_id
+  end
 
   def send_invite
     run_after_commit_or_now { notification_service.invite_project_member(self, @raw_invite_token) }

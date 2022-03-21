@@ -108,10 +108,13 @@
   .merge-icon {
     color: $orange-400;
     position: absolute;
-    bottom: 0;
-    right: 0;
     filter: drop-shadow(0 0 0.5px $white) drop-shadow(0 0 1px $white) drop-shadow(0 0 2px $white);
   }
+}
+
+.assignee .merge-icon {
+  top: calc(50% + 0.25rem);
+  left: 1.275rem;
 }
 
 .reviewer .merge-icon {
@@ -122,7 +125,9 @@
 .right-sidebar {
   position: fixed;
   top: $header-height;
-  bottom: 0;
+  // Default value for CSS var must contain a unit
+  // stylelint-disable-next-line length-zero-no-unit
+  bottom: var(--review-bar-height, 0px);
   right: 0;
   transition: width $sidebar-transition-duration;
   background: $gray-light;
@@ -146,12 +151,7 @@
   }
 
   .gl-label .gl-label-link:hover {
-    text-decoration: none;
     color: inherit;
-
-    .gl-label-text:last-of-type {
-      text-decoration: underline;
-    }
   }
 
   .btn-link {
@@ -177,6 +177,7 @@
   }
 
   .block,
+  .sidebar-contained-width,
   .issuable-sidebar-header {
     @include clearfix;
     padding: $gl-padding 0;
@@ -218,21 +219,12 @@
   }
 
   .cross-project-reference {
-    color: inherit;
-
     span {
-      white-space: nowrap;
       width: 85%;
-      overflow: hidden;
-      position: relative;
-      display: inline-block;
-      text-overflow: ellipsis;
     }
 
     button {
-      float: right;
       padding: 1px 5px;
-      background-color: $gray-light;
     }
   }
 
@@ -280,14 +272,8 @@
       font-weight: $gl-font-weight-normal;
     }
 
-    .no-value,
-    .btn-default-hover-link,
-    .btn-secondary-hover-link {
+    .no-value {
       color: $gl-text-color-secondary;
-    }
-
-    .btn-secondary-hover-link:hover {
-      color: $blue-600;
     }
 
     .sidebar-collapsed-icon {
@@ -324,6 +310,7 @@
     padding: 0;
 
     .block,
+    .sidebar-contained-width,
     .issuable-sidebar-header {
       width: $gutter-collapsed-width - 2px;
       padding: 0;
@@ -415,7 +402,7 @@
         /*
           This change should be temporary, because the DOM currently gets
           generated from a ruby definition in `app/helpers/button_helper.rb`.
-          As soon as the `copy to clipboard` button will be transfered to
+          As soon as the `copy to clipboard` button will be transferred to
           Vue this should be adjusted as well.
         */
         flex: 1;
@@ -461,12 +448,6 @@
     }
 
     .multiple-users {
-      position: relative;
-      height: 24px;
-      margin-bottom: 17px;
-      margin-top: 4px;
-      padding-bottom: 4px;
-
       .btn-link {
         padding: 0;
         border: 0;
@@ -525,7 +506,7 @@
 }
 
 .with-performance-bar .right-sidebar {
-  top: $header-height + $performance-bar-height;
+  top: calc(#{$header-height} + #{$performance-bar-height});
 }
 
 .sidebar-move-issue-confirmation-button {
@@ -561,26 +542,9 @@
   }
 }
 
-.participants-list {
-  display: flex;
-  flex-wrap: wrap;
-}
-
-.user-list {
-  display: flex;
-  flex-wrap: wrap;
-}
-
 .participants-author {
-  display: inline-block;
-  padding: 0 $gl-padding-8 $gl-padding-8 0;
-
   &:nth-of-type(7n) {
     padding-right: 0;
-  }
-
-  .author-link {
-    display: block;
   }
 
   .avatar.avatar-inline {
@@ -589,7 +553,6 @@
 }
 
 .user-item {
-  display: inline-block;
   padding: 5px;
   flex-basis: 20%;
 
@@ -671,40 +634,40 @@
     .issuable-info-container {
       flex: 1;
       display: flex;
+    }
 
-      .issuable-main-info {
-        flex: 1 auto;
-        margin-right: 10px;
-        min-width: 0;
+    .issuable-main-info {
+      flex: 1 auto;
+      margin-right: 10px;
+      min-width: 0;
 
-        .issue-weight-icon,
-        .issue-estimate-icon {
-          vertical-align: sub;
-        }
+      .issue-weight-icon,
+      .issue-estimate-icon {
+        vertical-align: sub;
+      }
+    }
+
+    .issuable-meta {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      flex: 1 0 auto;
+
+      .controls {
+        margin-bottom: 2px;
+        line-height: 20px;
+        padding: 0;
       }
 
+      .issue-updated-at {
+        line-height: 20px;
+      }
+    }
+
+    @include media-breakpoint-down(xs) {
       .issuable-meta {
-        display: flex;
-        flex-direction: column;
-        align-items: flex-end;
-        flex: 1 0 auto;
-
-        .controls {
-          margin-bottom: 2px;
-          line-height: 20px;
-          padding: 0;
-        }
-
-        .issue-updated-at {
-          line-height: 20px;
-        }
-      }
-
-      @include media-breakpoint-down(xs) {
-        .issuable-meta {
-          .controls li {
-            margin-right: 0;
-          }
+        .controls li {
+          margin-right: 0;
         }
       }
     }
@@ -771,38 +734,35 @@
   }
 }
 
-.add-issuable-form-input-token-list {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  list-style: none;
-  margin-bottom: 0;
-  padding-left: 0;
-}
+.add-issuable-form-input-wrapper {
+  &.focus {
+    border-color: $blue-300;
+    box-shadow: 0 0 4px $dropdown-input-focus-shadow;
+  }
 
-.add-issuable-form-token-list-item {
-  max-width: 100%;
-  margin-bottom: $gl-vert-padding;
-  margin-right: 5px;
-}
-
-.add-issuable-form-input-list-item {
-  flex: 1;
-  min-width: 200px;
-  margin-bottom: $gl-vert-padding;
-}
-
-.add-issuable-form-input {
-  width: 100%;
-  border: 0;
-
-  &:focus {
-    outline: none;
+  .gl-show-field-errors &.form-control:not(textarea) {
+    height: auto;
   }
 }
 
-.add-issuable-form-actions {
-  margin-top: $gl-padding;
+.sidebar-help-wrap {
+  .sidebar-help-state {
+    margin: 16px -20px -20px;
+    padding: 16px 20px;
+  }
+
+  .help-state-toggle-enter-active {
+    transition: all 0.8s ease;
+  }
+
+  .help-state-toggle-leave-active {
+    transition: all 0.5s ease;
+  }
+
+  .help-state-toggle-enter,
+  .help-state-toggle-leave-active {
+    opacity: 0;
+  }
 }
 
 .time-tracker {
@@ -822,11 +782,6 @@
     }
   }
 
-  .help-button,
-  .close-help-button {
-    cursor: pointer;
-  }
-
   .compare-meter {
     &.over_estimate {
       .time-remaining,
@@ -837,43 +792,7 @@
   }
 
   .compare-display-container {
-    display: flex;
-    justify-content: space-between;
-    margin-top: 5px;
-
-    .compare-display {
-      font-size: 13px;
-      color: $compare-display-color;
-
-      .compare-value {
-        color: $gl-text-color;
-      }
-    }
-  }
-
-  .time-tracking-help-state {
-    background: $white;
-    margin: 16px -20px -20px;
-    padding: 16px 20px;
-    border-top: 1px solid $border-gray-light;
-    border-bottom: 1px solid $border-gray-light;
-
-    a:hover {
-      color: $btn-white-active;
-    }
-  }
-
-  .help-state-toggle-enter-active {
-    transition: all 0.8s ease;
-  }
-
-  .help-state-toggle-leave-active {
-    transition: all 0.5s ease;
-  }
-
-  .help-state-toggle-enter,
-  .help-state-toggle-leave-active {
-    opacity: 0;
+    font-size: 13px;
   }
 }
 
@@ -932,26 +851,6 @@
   }
 }
 
-.issuable-suggestions svg {
-  vertical-align: sub;
-}
-
-.suggestion-confidential {
-  color: $orange-500;
-}
-
-.suggestion-state-open {
-  color: $green-500;
-}
-
-.suggestion-state-closed {
-  color: $blue-500;
-}
-
-.suggestion-help-hover {
-  cursor: help;
-}
-
 .suggestion-footer {
   font-size: 12px;
   line-height: 15px;
@@ -972,4 +871,14 @@
       margin: 0 (-$gl-padding);
     }
   }
+}
+
+.icon-overlap-and-shadow {
+  filter:
+    drop-shadow(0 1px 0.5px #fff)
+    drop-shadow(1px 0 0.5px #fff)
+    drop-shadow(0 -1px 0.5px #fff)
+    drop-shadow(-1px 0 0.5px #fff);
+  margin-right: -7px;
+  z-index: 1;
 }

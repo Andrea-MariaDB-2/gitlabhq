@@ -7,6 +7,7 @@
     "iid",
     "tag",
     "last?",
+    "is_last",
     "ref",
     "id"
   ],
@@ -16,6 +17,7 @@
     "id": { "type": "integer" },
     "iid": { "type": "integer" },
     "last?": { "type": "boolean" },
+    "is_last": { "type": "boolean" },
     "ref": {
       "type": "object",
       "required": [
@@ -62,6 +64,5 @@
       "items": { "$ref": "job/job.json" }
     },
     "status": { "type": "string" }
-  },
-  "additionalProperties": false
+  }
 }

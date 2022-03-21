@@ -5,7 +5,6 @@ import { __, s__, sprintf } from '~/locale';
 
 export default {
   i18n: {
-    eraseLogButtonLabel: s__('Job|Erase job log'),
     scrollToBottomButtonLabel: s__('Job|Scroll to bottom'),
     scrollToTopButtonLabel: s__('Job|Scroll to top'),
     showRawButtonLabel: s__('Job|Show complete raw'),
@@ -18,11 +17,6 @@ export default {
     GlTooltip: GlTooltipDirective,
   },
   props: {
-    erasePath: {
-      type: String,
-      required: false,
-      default: null,
-    },
     size: {
       type: Number,
       required: true,
@@ -44,7 +38,7 @@ export default {
       type: Boolean,
       required: true,
     },
-    isTraceSizeVisible: {
+    isJobLogSizeVisible: {
       type: Boolean,
       required: true,
     },
@@ -73,7 +67,7 @@ export default {
       class="truncated-info gl-display-none gl-sm-display-block gl-float-left"
       data-testid="log-truncated-info"
     >
-      <template v-if="isTraceSizeVisible">
+      <template v-if="isJobLogSizeVisible">
         {{ jobLogSize }}
         <gl-link
           v-if="rawPath"
@@ -96,19 +90,6 @@ export default {
         :href="rawPath"
         data-testid="job-raw-link-controller"
         icon="doc-text"
-      />
-
-      <gl-button
-        v-if="erasePath"
-        v-gl-tooltip.body
-        :title="$options.i18n.eraseLogButtonLabel"
-        :aria-label="$options.i18n.eraseLogButtonLabel"
-        :href="erasePath"
-        :data-confirm="__('Are you sure you want to erase this build?')"
-        class="gl-ml-3"
-        data-testid="job-log-erase-link"
-        data-method="post"
-        icon="remove"
       />
       <!-- eo links -->
 

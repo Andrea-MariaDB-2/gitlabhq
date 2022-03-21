@@ -18,41 +18,28 @@ submit them through a merge request to the repository you don't have access to.
 
 ## Creating a fork
 
+> - [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/15013) a new form in GitLab 13.11 [with a flag](../../../user/feature_flags.md) named `fork_project_form`. Disabled by default.
+> - [Enabled on GitLab.com and self-managed](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/77181) in GitLab 14.8. Feature flag `fork_project_form` removed.
+
 To fork an existing project in GitLab:
 
-1. On the project's home page, in the top right, click **{fork}** **Fork**.
+1. On the project's home page, in the top right, select **{fork}** **Fork**:
+   ![Fork this project](img/forking_workflow_fork_button_v13_10.png)
+1. Optional. Edit the **Project name**.
+1. For **Project URL**, select the [namespace](../../group/index.md#namespaces)
+   your fork should belong to.
+1. Add a **Project slug**. This value becomes part of the URL to your fork.
+   It must be unique in the namespace.
+1. Optional. Add a **Project description**.
+1. Select the **Visibility level** for your fork. For more information about
+   visibility levels, read [Project and group visibility](../../public_access.md).
+1. Select **Fork project**.
 
-   ![Fork button](img/forking_workflow_fork_button_v13_10.png)
-
-1. Select the project to fork to:
-
-   - *(Recommended method)* Below **Select a namespace to fork the project**, identify
-     the project you want to fork to, and click **Select**. Only namespaces you have
-     Developer and higher [permissions](../../permissions.md) for are shown.
-
-     ![Choose namespace](img/forking_workflow_choose_namespace_v13_10.png)
-
-   - *(Experimental method)* If your GitLab administrator has
-     [enabled the experimental fork project form](#enable-or-disable-the-fork-project-form), read
-     [Create a fork with the fork project form](#create-a-fork-with-the-fork-project-form).
-     Only namespaces you have Developer and higher
-     [permissions](../../permissions.md) for are shown.
-
-   NOTE:
-   The project path must be unique in the namespace.
-
-GitLab creates your fork, and redirects you to the project page for your new fork.
-The permissions you have in the namespace are your permissions in the fork.
-
-WARNING:
-When a public project with the repository feature set to **Members Only**
-is forked, the repository is public in the fork. The owner
-of the fork must manually change the visibility. Issue
-[#36662](https://gitlab.com/gitlab-org/gitlab/-/issues/36662) exists for this issue.
+GitLab creates your fork, and redirects you to the new fork's page.
 
 ## Repository mirroring
 
-You can use [repository mirroring](repository_mirroring.md) to keep your fork synced with the original repository. You can also use `git remote add upstream` to achieve the same result.
+You can use [repository mirroring](mirror/index.md) to keep your fork synced with the original repository. You can also use `git remote add upstream` to achieve the same result.
 
 The main difference is that with repository mirroring, your remote fork is automatically kept up-to-date.
 
@@ -60,7 +47,7 @@ Without mirroring, to work locally you must use `git pull` to update your local 
 with the upstream project, then push the changes back to your fork to update it.
 
 WARNING:
-With mirroring, before approving a merge request, you are asked to sync. Because of this, automating it is recommended.
+With mirroring, before approving a merge request, you are asked to sync. We recommend you automate it.
 
 Read more about [How to keep your fork up to date with its origin](https://about.gitlab.com/blog/2016/12/01/how-to-keep-your-fork-up-to-date-with-its-origin/).
 
@@ -76,50 +63,9 @@ When creating a merge request, if the forked project's visibility is more restri
 ![Selecting branches](img/forking_workflow_branch_select.png)
 
 Then you can add labels, a milestone, and assign the merge request to someone who can review
-your changes. Then click **Submit merge request** to conclude the process. When successfully merged, your
+your changes. Then select **Submit merge request** to conclude the process. When successfully merged, your
 changes are added to the repository and branch you're merging into.
 
 ## Removing a fork relationship
 
 You can unlink your fork from its upstream project in the [advanced settings](../settings/index.md#removing-a-fork-relationship).
-
-## Create a fork with the fork project form **(FREE SELF)**
-
-> - [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/15013) in GitLab 13.11.
-> - It's [deployed behind a feature flag](../../../user/feature_flags.md), disabled by default.
-> - It's disabled on GitLab.com.
-> - It's not recommended for production use.
-> - To use it in GitLab self-managed instances, ask a GitLab administrator to [enable it](#enable-or-disable-the-fork-project-form). **(FREE SELF)**
-
-This experimental version of the fork project form is available only if your GitLab
-administrator has [enabled it](#enable-or-disable-the-fork-project-form):
-
-![Choose namespace](img/fork_form_v13_10.png)
-
-To use it, follow the instructions at [Creating a fork](#creating-a-fork) and provide:
-
-- The project name.
-- The project URL.
-- The project slug.
-- *(Optional)* The project description.
-- The visibility level for your fork.
-
-### Enable or disable the fork project form **(FREE SELF)**
-
-The new [fork project form](#create-a-fork-with-the-fork-project-form) is under
-development and not ready for production use. It is deployed behind a feature flag
-that is **disabled by default**.
-[GitLab administrators with access to the GitLab Rails console](../../../administration/feature_flags.md)
-can enable it.
-
-To enable it:
-
-```ruby
-Feature.enable(:fork_project_form)
-```
-
-To disable it:
-
-```ruby
-Feature.disable(:fork_project_form)
-```

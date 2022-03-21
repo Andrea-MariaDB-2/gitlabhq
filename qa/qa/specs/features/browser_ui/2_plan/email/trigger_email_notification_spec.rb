@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 module QA
-  RSpec.describe 'Plan', :orchestrated, :smtp, :requires_admin do
+  RSpec.describe 'Plan', :orchestrated, :smtp do
     describe 'Email Notification' do
       include Support::API
 
@@ -16,11 +16,10 @@ module QA
       end
 
       before do
-        Runtime::Feature.enable(:invite_members_group_modal)
         Flow::Login.sign_in
       end
 
-      it 'is received by a user for project invitation', testcase: 'https://gitlab.com/gitlab-org/quality/testcases/-/quality/test_cases/1448' do
+      it 'is received by a user for project invitation', testcase: 'https://gitlab.com/gitlab-org/gitlab/-/quality/test_cases/347961' do
         project.visit!
 
         Page::Project::Menu.perform(&:click_members)

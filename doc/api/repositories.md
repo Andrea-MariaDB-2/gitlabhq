@@ -14,6 +14,12 @@ be accessed without authentication if the repository is publicly accessible.
 
 This command provides essentially the same functionality as the `git ls-tree` command. For more information, see the section _Tree Objects_ in the [Git internals documentation](https://git-scm.com/book/en/v2/Git-Internals-Git-Objects/#_tree_objects).
 
+WARNING:
+This endpoint is changing to keyset-based pagination. Iterating pages of results
+with a number (`?page=2`) [is deprecated](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/67509).
+Support for iterating with a number will become unsupported in GitLab 15.0. Use
+the new [keyset pagination system](index.md#keyset-based-pagination) instead.
+
 ```plaintext
 GET /projects/:id/repository/tree
 ```
@@ -22,11 +28,13 @@ Supported attributes:
 
 | Attribute   | Type           | Required | Description |
 | :---------- | :------------- | :------- | :---------- |
-| `id`        | integer/string | yes      | The ID or [URL-encoded path of the project](index.md#namespaced-path-encoding) owned by the authenticated user. |
+| `id`        | integer or string | yes      | The ID or [URL-encoded path of the project](index.md#namespaced-path-encoding) owned by the authenticated user. |
 | `path`      | string         | no       | The path inside repository. Used to get content of subdirectories. |
 | `ref`       | string         | no       | The name of a repository branch or tag or if not given the default branch. |
 | `recursive` | boolean        | no       | Boolean value used to get a recursive tree (false by default). |
 | `per_page`  | integer        | no       | Number of results to show per page. If not specified, defaults to `20`. [Learn more on pagination](index.md#pagination). |
+| `pagination` | string        | no       | If set to `keyset`, use the new keyset pagination method. |
+| `page_token` | string        | no       | The tree record ID at which to fetch the next page. Used only with keyset pagination. |
 
 ```json
 [
@@ -96,7 +104,7 @@ Supported attributes:
 
 | Attribute | Type           | Required | Description |
 | :-------- | :------------- | :------- | :---------- |
-| `id`      | integer/string | yes      | The ID or [URL-encoded path of the project](index.md#namespaced-path-encoding) owned by the authenticated user. |
+| `id`      | integer or string | yes      | The ID or [URL-encoded path of the project](index.md#namespaced-path-encoding) owned by the authenticated user. |
 | `sha`     | string         | yes      | The blob SHA. |
 
 ## Raw blob content
@@ -118,6 +126,7 @@ Supported attributes:
 ## Get file archive
 
 > Support for [including Git LFS blobs](../topics/git/lfs/index.md#lfs-objects-in-project-archives) was [introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/15079) in GitLab 13.5.
+> Support for downloading a subfolder was [introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/28827) in GitLab 14.4.
 
 Get an archive of the repository. This endpoint can be accessed without
 authentication if the repository is publicly accessible.
@@ -137,13 +146,14 @@ Supported attributes:
 
 | Attribute   | Type           | Required | Description           |
 |:------------|:---------------|:---------|:----------------------|
-| `id`        | integer/string | yes      | The ID or [URL-encoded path of the project](index.md#namespaced-path-encoding) owned by the authenticated user. |
+| `id`        | integer or string | yes      | The ID or [URL-encoded path of the project](index.md#namespaced-path-encoding) owned by the authenticated user. |
 | `sha`       | string         | no       | The commit SHA to download. A tag, branch reference, or SHA can be used. This defaults to the tip of the default branch if not specified. |
+| `path`      | string         | no       | The subpath of the repository to download. This defaults to the whole repository (empty string).  |
 
 Example request:
 
 ```shell
-curl --header "PRIVATE-TOKEN: <your_access_token>" "https://gitlab.com/api/v4/projects/<project_id>/repository/archive?sha=<commit_sha>"
+curl --header "PRIVATE-TOKEN: <your_access_token>" "https://gitlab.com/api/v4/projects/<project_id>/repository/archive?sha=<commit_sha>&path=<path>"
 ```
 
 ## Compare branches, tags or commits
@@ -159,7 +169,7 @@ Supported attributes:
 
 | Attribute         | Type           | Required | Description |
 | :---------        | :------------- | :------- | :---------- |
-| `id`              | integer/string | yes      | The ID or [URL-encoded path of the project](index.md#namespaced-path-encoding) owned by the authenticated user. |
+| `id`              | integer or string | yes      | The ID or [URL-encoded path of the project](index.md#namespaced-path-encoding) owned by the authenticated user. |
 | `from`            | string         | yes      | The commit SHA or branch name. |
 | `to`              | string         | yes      | The commit SHA or branch name. |
 | `from_project_id` | integer        | no       | The ID to compare from |
@@ -215,13 +225,13 @@ GET /projects/:id/repository/contributors
 ```
 
 WARNING:
-The `additions` and `deletions` attributes are deprecated [as of GitLab 13.4](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/39653), because they [always return `0`](https://gitlab.com/gitlab-org/gitlab/-/issues/233119).
+The `additions` and `deletions` attributes are [deprecated](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/39653) as of GitLab 13.4, because they [always return `0`](https://gitlab.com/gitlab-org/gitlab/-/issues/233119).
 
 Supported attributes:
 
 | Attribute  | Type           | Required | Description |
 | :--------- | :------------- | :------- | :---------- |
-| `id`       | integer/string | yes      | The ID or [URL-encoded path of the project](index.md#namespaced-path-encoding) owned by the authenticated user. |
+| `id`       | integer or string | yes      | The ID or [URL-encoded path of the project](index.md#namespaced-path-encoding) owned by the authenticated user. |
 | `order_by` | string         | no       | Return contributors ordered by `name`, `email`, or `commits` (orders by commit date) fields. Default is `commits`. |
 | `sort`     | string         | no       | Return contributors sorted in `asc` or `desc` order. Default is `asc`. |
 
@@ -253,7 +263,7 @@ GET /projects/:id/repository/merge_base
 
 | Attribute | Type           | Required | Description |
 | --------- | -------------- | -------- | ------------------------------------------------------------------------------- |
-| `id`      | integer/string | yes      | The ID or [URL-encoded path of the project](index.md#namespaced-path-encoding) |
+| `id`      | integer or string | yes      | The ID or [URL-encoded path of the project](index.md#namespaced-path-encoding) |
 | `refs`    | array          | yes      | The refs to find the common ancestor of, multiple refs can be passed            |
 
 Example request:
@@ -281,7 +291,7 @@ Example response:
 }
 ```
 
-## Generate changelog data
+## Add changelog data to a changelog file
 
 > [Introduced](https://gitlab.com/groups/gitlab-com/gl-infra/-/epics/351) in GitLab 13.9.
 
@@ -363,26 +373,26 @@ If the last tag is `v0.9.0` and the default branch is `main`, the range of commi
 included in this example is `v0.9.0..main`:
 
 ```shell
-curl --header "PRIVATE-TOKEN: token" --data "version=1.0.0" "https://gitlab.com/api/v4/projects/42/repository/changelog"
+curl --request POST --header "PRIVATE-TOKEN: token" --data "version=1.0.0" "https://gitlab.com/api/v4/projects/42/repository/changelog"
 ```
 
 To generate the data on a different branch, specify the `branch` parameter. This
 command generates data from the `foo` branch:
 
 ```shell
-curl --header "PRIVATE-TOKEN: token" --data "version=1.0.0&branch=foo" "https://gitlab.com/api/v4/projects/42/repository/changelog"
+curl --request POST --header "PRIVATE-TOKEN: token" --data "version=1.0.0&branch=foo" "https://gitlab.com/api/v4/projects/42/repository/changelog"
 ```
 
 To use a different trailer, use the `trailer` parameter:
 
 ```shell
-curl --header "PRIVATE-TOKEN: token" --data "version=1.0.0&trailer=Type" "https://gitlab.com/api/v4/projects/42/repository/changelog"
+curl --request POST --header "PRIVATE-TOKEN: token" --data "version=1.0.0&trailer=Type" "https://gitlab.com/api/v4/projects/42/repository/changelog"
 ```
 
 To store the results in a different file, use the `file` parameter:
 
 ```shell
-curl --header "PRIVATE-TOKEN: token" --data "version=1.0.0&file=NEWS" "https://gitlab.com/api/v4/projects/42/repository/changelog"
+curl --request POST --header "PRIVATE-TOKEN: token" --data "version=1.0.0&file=NEWS" "https://gitlab.com/api/v4/projects/42/repository/changelog"
 ```
 
 ### How it works
@@ -448,6 +458,10 @@ You can set the following variables in this file:
 - `template`: a custom template to use for generating the changelog data.
 - `categories`: a hash that maps raw category names to the names to use in the
   changelog.
+- `include_groups`: a list of group full paths containing users whose
+  contributions should be credited regardless of project membership. The user
+  generating the changelog must have access to each group or the members will
+  not be credited.
 
 Using the default settings, generating a changelog results in a section along
 the lines of the following:
@@ -508,7 +522,7 @@ follows:
 
 {% each entries %}
 - [{{ title }}]({{ commit.reference }})\
-{% if author.contributor %} by {{ author.reference }}{% end %}\
+{% if author.credit %} by {{ author.reference }}{% end %}\
 {% if merge_request %} ([merge request]({{ merge_request.reference }})){% end %}
 
 {% end %}
@@ -598,7 +612,7 @@ template: |
 
   {% each entries %}
   - [{{ title }}]({{ commit.reference }})\
-  {% if author.contributor %} by {{ author.reference }}{% end %}
+  {% if author.credit %} by {{ author.reference }}{% end %}
 
   {% end %}
 
@@ -634,8 +648,11 @@ In an entry, the following variables are available (here `foo.bar` means that
 - `commit.trailers`: an object containing all the Git trailers that were present
   in the commit body.
 - `author.reference`: a reference to the commit author (for example, `@alice`).
-- `author.contributor`: a boolean set to `true` when the author is an external
-  contributor, otherwise this is set to `false`.
+- `author.contributor`: a boolean set to `true` when the author is not a project
+  member, otherwise `false`.
+- `author.credit`: a boolean set to `true` when `author.contributor` is `true` or
+  when `include_groups` is configured, and the author is a member of one of the
+  groups.
 - `merge_request.reference`: a reference to the merge request that first
   introduced the change (for example, `gitlab-org/gitlab!50063`).
 
@@ -672,7 +689,7 @@ The following capture groups are optional:
 - `pre`: If set, the tag is ignored. Ignoring `pre` tags ensures release candidate
   tags and other pre-release tags are not considered when determining the range of
   commits to generate a changelog for.
-- `meta`: (Optional) Specifies build metadata.
+- `meta`: Optional. Specifies build metadata.
 
 Using this information, GitLab builds a map of Git tags and their release
 versions. It then determines what the latest tag is, based on the version
@@ -690,3 +707,39 @@ tag_regex: '^version-(?P<major>\d+)\.(?P<minor>\d+)\.(?P<patch>\d+)$'
 To test if your regular expression is working, you can use websites such as
 [regex101](https://regex101.com/). If the regular expression syntax is invalid,
 an error is produced when generating a changelog.
+
+## Generate changelog data
+
+> [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/345934) in GitLab 14.6.
+
+Generate changelog data based on commits in a repository, without committing
+them to a changelog file.
+
+Works exactly like `POST /projects/:id/repository/changelog`, except the changelog
+data isn't committed to any changelog file.
+
+```plaintext
+GET /projects/:id/repository/changelog
+```
+
+Supported attributes:
+
+| Attribute | Type     | Required   | Description |
+| :-------- | :------- | :--------- | :---------- |
+| `version` | string   | yes | The version to generate the changelog for. The format must follow [semantic versioning](https://semver.org/). |
+| `from`    | string   | no | The start of the range of commits (as a SHA) to use for generating the changelog. This commit itself isn't included in the list. |
+| `to`      | string   | no | The end of the range of commits (as a SHA) to use for the changelog. This commit _is_ included in the list. Defaults to the branch specified in the `branch` attribute. |
+| `date`    | datetime | no | The date and time of the release, ISO 8601 formatted. Example: `2016-03-11T03:45:40Z`. Defaults to the current time. |
+| `trailer` | string   | no | The Git trailer to use for including commits, defaults to `Changelog`. |
+
+```shell
+curl --header "PRIVATE-TOKEN: token" "https://gitlab.com/api/v4/projects/42/repository/changelog?version=1.0.0"
+```
+
+Example Response:
+
+```json
+{
+  "notes": "## 1.0.0 (2021-11-17)\n\n### feature (2 changes)\n\n- [Title 2](namespace13/project13@ad608eb642124f5b3944ac0ac772fecaf570a6bf) ([merge request](namespace13/project13!2))\n- [Title 1](namespace13/project13@3c6b80ff7034fa0d585314e1571cc780596ce3c8) ([merge request](namespace13/project13!1))\n"
+}
+```

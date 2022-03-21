@@ -3,12 +3,13 @@
 module QA
   module Resource
     class Issue < Base
-      attr_writer :description, :milestone, :template, :weight
+      attr_writer :milestone, :template, :weight
 
       attribute :project do
         Project.fabricate! do |resource|
           resource.name = 'project-for-issues'
           resource.description = 'project for adding issues'
+          resource.api_client = api_client
         end
       end
 
@@ -91,6 +92,46 @@ module QA
         auto_paginated_response(
           Runtime::API::Request.new(api_client, api_comments_path, per_page: '100').url,
           attempts: attempts
+        )
+      end
+
+      # Create a new comment
+      #
+      # @param [String] body
+      # @param [Boolean] confidential
+      # @return [Hash]
+      def add_comment(body:, confidential: false)
+        api_post_to(api_comments_path, body: body, confidential: confidential)
+      end
+
+      protected
+
+      # Return subset of fields for comparing issues
+      #
+      # @return [Hash]
+      def comparable
+        reload! if api_response.nil?
+
+        api_resource.slice(
+          :state,
+          :description,
+          :type,
+          :title,
+          :labels,
+          :milestone,
+          :upvotes,
+          :downvotes,
+          :merge_requests_count,
+          :user_notes_count,
+          :due_date,
+          :has_tasks,
+          :task_status,
+          :confidential,
+          :discussion_locked,
+          :issue_type,
+          :task_completion_status,
+          :closed_at,
+          :created_at
         )
       end
     end

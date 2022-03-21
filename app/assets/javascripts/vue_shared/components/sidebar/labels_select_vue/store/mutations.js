@@ -66,10 +66,12 @@ export default {
     }
 
     if (isScopedLabel(candidateLabel)) {
-      const scopedBase = scopedLabelKey(candidateLabel);
-      const currentActiveScopedLabel = state.labels.find(({ title }) => {
-        return title.startsWith(scopedBase) && title !== '' && title !== candidateLabel.title;
-      });
+      const currentActiveScopedLabel = state.labels.find(
+        ({ set, title }) =>
+          set &&
+          title !== candidateLabel.title &&
+          scopedLabelKey({ title }) === scopedLabelKey(candidateLabel),
+      );
 
       if (currentActiveScopedLabel) {
         currentActiveScopedLabel.set = false;

@@ -23,7 +23,7 @@ you do not expect public users to sign up for an account.
 To disable sign ups:
 
 1. On the top bar, select **Menu > Admin**.
-1. In the left sidebar, select **Settings > General**, and expand **Sign-up restrictions**.
+1. On the left sidebar, select **Settings > General**, and expand **Sign-up restrictions**.
 1. Clear the **Sign-up enabled** checkbox, then select **Save changes**.
 
 ## Require administrator approval for new sign ups
@@ -31,7 +31,7 @@ To disable sign ups:
 > - [Introduced](https://gitlab.com/groups/gitlab-org/-/epics/4491) in GitLab 13.5.
 > - [Enabled by default](https://gitlab.com/gitlab-org/gitlab/-/issues/267568) in GitLab 13.6.
 
-When this setting is enabled, any user visiting your GitLab domain and signing up for a new account
+When this setting is enabled, any user visiting your GitLab domain and signing up for a new account using the registration form
 must be explicitly [approved](../moderate_users.md#approve-or-reject-a-user-sign-up) by an
 administrator before they can start using their account. In GitLab 13.6 and later, this setting is
 enabled by default for new GitLab instances. It is only applicable if sign ups are enabled.
@@ -39,11 +39,17 @@ enabled by default for new GitLab instances. It is only applicable if sign ups a
 To require administrator approval for new sign ups:
 
 1. On the top bar, select **Menu > Admin**.
-1. In the left sidebar, select **Settings > General**, and expand **Sign-up restrictions**.
+1. On the left sidebar, select **Settings > General**, and expand **Sign-up restrictions**.
 1. Select the **Require admin approval for new sign-ups** checkbox, then select **Save changes**.
 
 In [GitLab 13.7 and later](https://gitlab.com/gitlab-org/gitlab/-/issues/273258), if an administrator disables this setting, the users in pending approval state are
 automatically approved in a background job.
+
+NOTE:
+This setting doesn't apply to LDAP or OmniAuth users. To enforce approvals for new users
+signing up using OmniAuth or LDAP, set `block_auto_created_users` to `true` in the
+[OmniAuth configuration](../../../integration/omniauth.md#configure-initial-settings) or
+[LDAP configuration](../../../administration/auth/ldap/index.md#basic-configuration-settings).
 
 ## Require email confirmation
 
@@ -53,10 +59,10 @@ their email address before they are allowed to sign in.
 To enforce confirmation of the email address used for new sign ups:
 
 1. On the top bar, select **Menu > Admin**.
-1. In the left sidebar, select **Settings > General**, and expand **Sign-up restrictions**.
+1. On the left sidebar, select **Settings > General**, and expand **Sign-up restrictions**.
 1. Select the **Enable email restrictions for sign ups** checkbox, then select **Save changes**.
 
-## User cap **(FREE SELF)**
+## User cap
 
 > - [Introduced](https://gitlab.com/groups/gitlab-org/-/epics/4315) in GitLab 13.7.
 > - [Feature flag removed](https://gitlab.com/gitlab-org/gitlab/-/issues/292600) in GitLab 13.9.
@@ -71,7 +77,7 @@ user cap, the users in pending approval state are automatically approved in a ba
 ### Set the user cap number
 
 1. On the top bar, select **Menu > Admin**.
-1. In the left sidebar, select **Settings > General**.
+1. On the left sidebar, select **Settings > General**.
 1. Expand **Sign-up restrictions**.
 1. Enter a number in **User cap**.
 1. Select **Save changes**.
@@ -81,7 +87,7 @@ New user sign ups are subject to the user cap restriction.
 ## Remove the user cap
 
 1. On the top bar, select **Menu > Admin**.
-1. In the left sidebar, select **Settings > General**.
+1. On the left sidebar, select **Settings > General**.
 1. Expand **Sign-up restrictions**.
 1. Remove the number from **User cap**.
 1. Select **Save changes**.
@@ -117,19 +123,15 @@ the minimum number of characters a user must have in their password using the Gi
 You can specify an inclusive or exclusive list of email domains which can be used for user sign up.
 
 These restrictions are only applied during sign up from an external user. An administrator can add a
-user through the admin panel with a disallowed domain. Also, note that the users can change their
+user through the administrator panel with a disallowed domain. Also, note that the users can change their
 email addresses to disallowed domains after sign up.
 
 ### Allowlist email domains
-
-> [Introduced](https://gitlab.com/gitlab-org/gitlab-foss/-/merge_requests/598) in GitLab 7.11.0
 
 You can restrict users only to sign up using email addresses matching the given
 domains list.
 
 ### Denylist email domains
-
-> [Introduced](https://gitlab.com/gitlab-org/gitlab-foss/-/merge_requests/5259) in GitLab 8.10.
 
 You can block users from signing up when using an email addresses of specific domains. This can
 reduce the risk of malicious users creating spam accounts with disposable email addresses.
@@ -139,7 +141,7 @@ reduce the risk of malicious users creating spam accounts with disposable email 
 To create an email domain allowlist or denylist:
 
 1. On the top bar, select **Menu > Admin**.
-1. In the left sidebar, select **Settings > General**, and expand **Sign-up restrictions**.
+1. On the left sidebar, select **Settings > General**, and expand **Sign-up restrictions**.
 1. For the allowlist, you must enter the list manually. For the denylist, you can enter the list
    manually or upload a `.txt` file that contains list entries.
 

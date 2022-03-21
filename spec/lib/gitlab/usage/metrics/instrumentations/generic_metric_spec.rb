@@ -7,19 +7,35 @@ RSpec.describe Gitlab::Usage::Metrics::Instrumentations::GenericMetric do
     subject do
       Class.new(described_class) do
         fallback(custom_fallback)
-        value { Gitlab::Database.main.version }
+        value { ApplicationRecord.database.version }
       end.new(time_frame: 'none')
     end
 
     describe '#value' do
       it 'gives the correct value' do
-        expect(subject.value).to eq(Gitlab::Database.main.version)
+        expect(subject.value).to eq(ApplicationRecord.database.version)
       end
 
       context 'when raising an exception' do
-        it 'return the custom fallback' do
-          expect(Gitlab::Database.main).to receive(:version).and_raise('Error')
-          expect(subject.value).to eq(custom_fallback)
+        before do
+          allow(Gitlab::ErrorTracking).to receive(:should_raise_for_dev?).and_return(should_raise_for_dev)
+          expect(ApplicationRecord.database).to receive(:version).and_raise('Error')
+        end
+
+        context 'with should_raise_for_dev? false' do
+          let(:should_raise_for_dev) { false }
+
+          it 'return the custom fallback' do
+            expect(subject.value).to eq(custom_fallback)
+          end
+        end
+
+        context 'with should_raise_for_dev? true' do
+          let(:should_raise_for_dev) { true }
+
+          it 'raises an error' do
+            expect { subject.value }.to raise_error('Error')
+          end
         end
       end
     end
@@ -28,19 +44,35 @@ RSpec.describe Gitlab::Usage::Metrics::Instrumentations::GenericMetric do
   context 'with default fallback' do
     subject do
       Class.new(described_class) do
-        value { Gitlab::Database.main.version }
+        value { ApplicationRecord.database.version }
       end.new(time_frame: 'none')
     end
 
     describe '#value' do
       it 'gives the correct value' do
-        expect(subject.value).to eq(Gitlab::Database.main.version )
+        expect(subject.value).to eq(ApplicationRecord.database.version )
       end
 
       context 'when raising an exception' do
-        it 'return the default fallback' do
-          expect(Gitlab::Database.main).to receive(:version).and_raise('Error')
-          expect(subject.value).to eq(described_class::FALLBACK)
+        before do
+          allow(Gitlab::ErrorTracking).to receive(:should_raise_for_dev?).and_return(should_raise_for_dev)
+          expect(ApplicationRecord.database).to receive(:version).and_raise('Error')
+        end
+
+        context 'with should_raise_for_dev? false' do
+          let(:should_raise_for_dev) { false }
+
+          it 'return the default fallback' do
+            expect(subject.value).to eq(described_class::FALLBACK)
+          end
+        end
+
+        context 'with should_raise_for_dev? true' do
+          let(:should_raise_for_dev) { true }
+
+          it 'raises an error' do
+            expect { subject.value }.to raise_error('Error')
+          end
         end
       end
     end

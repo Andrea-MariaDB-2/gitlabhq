@@ -38,12 +38,23 @@ migration only.
 
 ### Required
 
-The following artifacts are required prior to submitting for a ~database review.
+You must provide the following artifacts when you request a ~database review.
 If your merge request description does not include these items, the review will be reassigned back to the author.
+
+#### Migrations
 
 If new migrations are introduced, in the MR **you are required to provide**:
 
 - The output of both migrating (`db:migrate`) and rolling back (`db:rollback`) for all migrations.
+
+Note that we have automated tooling for
+[GitLab](https://gitlab.com/gitlab-org/gitlab) (provided by the
+[`db:check-migrations`](database/dbcheck-migrations-job.md) pipeline job) that provides this output for migrations on
+~database merge requests. You do not need to provide this information manually
+if the bot can do it for you. The bot also checks that migrations are correctly
+reversible.
+
+#### Queries
 
 If new queries have been introduced or existing queries have been updated, **you are required to provide**:
 
@@ -55,7 +66,7 @@ Refer to [Preparation when adding or modifying queries](#preparation-when-adding
 
 ### Roles and process
 
-A Merge Request **author**'s role is to:
+A merge request **author**'s role is to:
 
 - Decide whether a database review is needed.
 - If database review is needed, add the ~database label.
@@ -108,7 +119,7 @@ the following preparations into account.
   - Ensure the down method reverts the changes in `db/structure.sql`.
   - Update the migration output whenever you modify the migrations during the review process.
 - Add tests for the migration in `spec/migrations` if necessary. See [Testing Rails migrations at GitLab](testing_guide/testing_migrations_guide.md) for more details.
-- When [high-traffic](https://gitlab.com/gitlab-org/gitlab/-/blob/master/rubocop/rubocop-migrations.yml#L3) tables are involved in the migration, use the [`with_lock_retries`](migration_style_guide.md#retry-mechanism-when-acquiring-database-locks) helper method. Review the relevant [examples in our documentation](migration_style_guide.md#examples) for use cases and solutions.
+- When [high-traffic](https://gitlab.com/gitlab-org/gitlab/-/blob/master/rubocop/rubocop-migrations.yml#L3) tables are involved in the migration, use the [`enable_lock_retries`](migration_style_guide.md#retry-mechanism-when-acquiring-database-locks) method to enable lock-retries. Review the relevant [examples in our documentation](migration_style_guide.md#usage-with-transactional-migrations) for use cases and solutions.
 - Ensure RuboCop checks are not disabled unless there's a valid reason to.
 - When adding an index to a [large table](https://gitlab.com/gitlab-org/gitlab/-/blob/master/rubocop/rubocop-migrations.yml#L3),
 test its execution using `CREATE INDEX CONCURRENTLY` in the `#database-lab` Slack channel and add the execution time to the MR description:
@@ -121,6 +132,18 @@ test its execution using `CREATE INDEX CONCURRENTLY` in the `#database-lab` Slac
   - This job runs migrations in a production-like environment (similar to `#database_lab`) and posts to the MR its findings (queries, runtime, size change).
   - Review migration runtimes and any warnings.
 
+#### Preparation when adding data migrations
+
+Data migrations are inherently risky. Additional actions are required to reduce the possibility
+of error that would result in corruption or loss of production data.
+
+Include in the MR description:
+
+- If the migration itself is not reversible, details of how data changes could be reverted in the event of an incident. For example, in the case of a migration that deletes records (an operation that most of the times is not automatically revertable), how _could_ the deleted records be recovered.
+- If the migration deletes data, apply the label `~data-deletion`.
+- Concise descriptions of possible user experience impact of an error; for example, "Issues would unexpectedly go missing from Epics".
+- Relevant data from the [query plans](#query-plans) that indicate the query works as expected; such as the approximate number of records that will be modified/deleted.
+
 #### Preparation when adding or modifying queries
 
 ##### Raw SQL
@@ -128,7 +151,9 @@ test its execution using `CREATE INDEX CONCURRENTLY` in the `#database-lab` Slac
 - Write the raw SQL in the MR description. Preferably formatted
   nicely with [pgFormatter](https://sqlformat.darold.net) or
   [paste.depesz.com](https://paste.depesz.com) and using regular quotes
+  <!-- vale off -->
   (for example, `"projects"."id"`) and avoiding smart quotes (for example, `“projects”.“id”`).
+  <!-- vale  on -->
 - In case of queries generated dynamically by using parameters, there should be one raw SQL query for each variation.
 
   For example, a finder for issues that may take as a parameter an optional filter on projects,
@@ -159,7 +184,9 @@ test its execution using `CREATE INDEX CONCURRENTLY` in the `#database-lab` Slac
   `gitlab-org/gitlab-foss` (`project_id = 13083`) or the `gitlab-org/gitlab` (`project_id = 278964`)
    projects provide enough data to serve as a good example.
   - That means that no query plan should return 0 records or less records than the provided limit (if a limit is included). If a query is used in batching, a proper example batch with adequate included results should be identified and provided.
-  - If your queries belong to a new feature in GitLab.com and thus they don't return data in production, it's suggested to analyze the query and to provide the plan from a local environment.
+  - If your queries belong to a new feature in GitLab.com and thus they don't return data in production:
+    - You may analyze the query and to provide the plan from a local environment.
+    - `#database-lab` and [postgres.ai](https://postgres.ai/) both allow updates to data (`exec UPDATE issues SET ...`) and creation of new tables and columns (`exec ALTER TABLE issues ADD COLUMN ...`).
   - More information on how to find the number of actual returned records in [Understanding EXPLAIN plans](understanding_explain_plans.md)
 - For query changes, it is best to provide both the SQL queries along with the
   plan _before_ and _after_ the change. This helps spot differences quickly.
@@ -176,6 +203,12 @@ test its execution using `CREATE INDEX CONCURRENTLY` in the `#database-lab` Slac
 - Order columns based on the [Ordering Table Columns](ordering_table_columns.md) guidelines.
 - Add foreign keys to any columns pointing to data in other tables, including [an index](migration_style_guide.md#adding-foreign-key-constraints).
 - Add indexes for fields that are used in statements such as `WHERE`, `ORDER BY`, `GROUP BY`, and `JOIN`s.
+- New tables and columns are not necessarily risky, but over time some access patterns are inherently
+  difficult to scale. To identify these risky patterns in advance, we need to document expectations for
+  access and size. Include in the MR description answers to these questions:
+  - What is the anticipated growth for the new table over the next 3 months, 6 months, 1 year? What assumptions are these based on?
+  - How many reads and writes per hour would you expect this table to have in 3 months, 6 months, 1 year? Under what circumstances are rows updated? What assumptions are these based on?
+  - Based on the anticipated data volume and access patterns, does the new table pose an availability risk to GitLab.com or self-managed instances? Will the proposed design scale to support the needs of GitLab.com and self-managed customers?
 
 #### Preparation when removing columns, tables, indexes, or other structures
 
@@ -218,6 +251,10 @@ test its execution using `CREATE INDEX CONCURRENTLY` in the `#database-lab` Slac
     that post migrations are executed post-deployment in production.
 - Check [timing guidelines for migrations](migration_style_guide.md#how-long-a-migration-should-take)
 - Check migrations are reversible and implement a `#down` method
+- Check new table migrations:
+  - Are the stated access patterns and volume reasonable? Do the assumptions they're based on seem sound? Do these patterns pose risks to stability?
+  - Are the columns [ordered to conserve space](ordering_table_columns.md)?
+  - Are there foreign keys for references to other tables?
 - Check data migrations:
   - Establish a time estimate for execution on GitLab.com.
   - Depending on timing, data migrations can be placed on regular, post-deploy, or background migrations.

@@ -14,10 +14,10 @@ module Gitlab
           ALLOWED_KEYS = %i[tags script type image services start_in artifacts
                             cache dependencies before_script after_script
                             environment coverage retry parallel interruptible timeout
-                            release dast_configuration secrets].freeze
+                            release].freeze
 
           validations do
-            validates :config, allowed_keys: ALLOWED_KEYS + PROCESSABLE_ALLOWED_KEYS
+            validates :config, allowed_keys: Gitlab::Ci::Config::Entry::Job.allowed_keys + PROCESSABLE_ALLOWED_KEYS
             validates :script, presence: true
 
             with_options allow_nil: true do
@@ -37,15 +37,17 @@ module Gitlab
               next unless dependencies.present?
               next unless needs_value.present?
 
-              missing_needs = dependencies - needs_value[:job].pluck(:name) # rubocop:disable CodeReuse/ActiveRecord (Array#pluck)
+              if needs_value[:job].nil? && needs_value[:cross_dependency].present?
+                errors.add(:needs, "corresponding to dependencies must be from the same pipeline")
+              else
+                missing_needs = dependencies - needs_value[:job].pluck(:name) # rubocop:disable CodeReuse/ActiveRecord (Array#pluck)
 
-              if missing_needs.any?
-                errors.add(:dependencies, "the #{missing_needs.join(", ")} should be part of needs")
+                errors.add(:dependencies, "the #{missing_needs.join(", ")} should be part of needs") if missing_needs.any?
               end
             end
           end
 
-          entry :before_script, Entry::Script,
+          entry :before_script, Entry::Commands,
             description: 'Global before script overridden in this job.',
             inherit: true
 
@@ -55,9 +57,10 @@ module Gitlab
 
           entry :type, Entry::Stage,
             description: 'Deprecated: stage this job will be executed into.',
-            inherit: false
+            inherit: false,
+            deprecation: { deprecated: '9.0', warning: '14.8', removed: '15.0' }
 
-          entry :after_script, Entry::Script,
+          entry :after_script, Entry::Commands,
             description: 'Commands that will be executed when finishing job.',
             inherit: true
 
@@ -134,8 +137,11 @@ module Gitlab
 
           def compose!(deps = nil)
             super do
+              # The type keyword will be removed in 15.0:
+              # https://gitlab.com/gitlab-org/gitlab/-/issues/346823
               if type_defined? && !stage_defined?
                 @entries[:stage] = @entries[:type]
+                log_and_warn_deprecated_entry(@entries[:type])
               end
 
               @entries.delete(:type)
@@ -176,6 +182,10 @@ module Gitlab
 
           def ignored?
             allow_failure_defined? ? static_allow_failure : manual_action?
+          end
+
+          def self.allowed_keys
+            ALLOWED_KEYS
           end
 
           private

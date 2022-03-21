@@ -12,22 +12,62 @@ description: "The static site editor enables users to edit content on static web
 > - WYSIWYG editor [introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/214559) in GitLab 13.0.
 > - Non-Markdown content blocks not editable on the WYSIWYG mode [introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/216836) in GitLab 13.3.
 > - Formatting Markdown [introduced](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/49052) in GitLab 13.7.
+> - [Deprecated](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/77246) in GitLab 14.7.
+
+WARNING:
+This feature is in its end-of-life process. It is
+[deprecated](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/77246)
+for use in GitLab 14.7, and is planned for
+[removal](https://gitlab.com/groups/gitlab-org/-/epics/7351) in GitLab 14.10.
+Users should instead use the [Web Editor](../repository/web_editor.md) or [Web IDE](../web_ide/index.md). [Removal instructions](#remove-the-static-site-editor) for existing projects are included on this page.
 
 Static Site Editor (SSE) enables users to edit content on static websites without
 prior knowledge of the underlying templating language, site architecture, or
 Git commands. A contributor to your project can quickly edit a Markdown page
-and submit the changes for review.
-
-## Use cases
-
-The Static Site Editor allows collaborators to submit changes to static site
-files seamlessly. For example:
+and submit the changes for review. For example:
 
 - Non-technical collaborators can edit a page directly from the browser.
   They don't need to know Git and the details of your project to contribute.
 - Recently hired team members can quickly edit content.
 - Temporary collaborators can jump from project to project and quickly edit pages instead
   of having to clone or fork every single project they need to submit changes to.
+
+## Remove the Static Site Editor
+
+The Static Site Editor itself isn't part of your project. To remove the Static Site Editor
+from an existing project, remove links that point back to the editor:
+
+1. Remove any links that use `edit_page_url` in your project. If you used the
+   **Middleman - Static Site Editor** project template, the only instance of this
+   helper is located in `/source/layouts/layout.erb`. Remove this line entirely:
+
+   ```ruby
+   <%= link_to('Edit this page', edit_page_url(data.config.repository, current_page.file_descriptor.relative_path), id: 'edit-page-link') %>
+   ```
+
+1. In `/data/config.yml`, delete the `repository` key / value pair:
+
+   ```yaml
+   repository: https://gitlab.com/<username>/<myproject>
+   ```
+
+   - If `repository` is the only value stored in `/data/config.yml`, you can delete the entire file.
+1. In `/helpers/custom_helpers.rb`, delete `edit_page_url()` and `endcode_path()`:
+
+   ```ruby
+   def edit_page_url(base_url, relative_path)
+     "#{base_url}/-/sse/#{encode_path(relative_path)}/"
+   end
+
+   def encode_path(relative_path)
+     ERB::Util.url_encode("master/source/#{relative_path}")
+   end
+   ```
+
+   - If `edit_page_url()` and `encode_path()` are the only helpers, you may delete
+     `/helpers/custom_helpers.rb` entirely.
+1. Clean up any extraneous configuration files.
+1. Commit and push your changes.
 
 ## Requirements
 
@@ -72,11 +112,11 @@ First, set up the project. Once done, you can use the Static Site Editor to
 
 1. To get started, create a new project from the [Static Site Editor - Middleman](https://gitlab.com/gitlab-org/project-templates/static-site-editor-middleman)
    template. You can either [fork it](../repository/forking_workflow.md#creating-a-fork)
-   or [create a new project from a template](../working_with_projects.md#built-in-templates).
+   or [create a new project from a template](../working_with_projects.md#create-a-project-from-a-built-in-template).
 1. Edit the [`data/config.yml`](#static-site-generator-configuration) configuration file
    to replace `<username>` and `<project-name>` with the proper values for
    your project's path.
-1. (Optional) Edit the [`.gitlab/static-site-editor.yml`](#static-site-editor-configuration-file) file
+1. Optional. Edit the [`.gitlab/static-site-editor.yml`](#static-site-editor-configuration-file) file
    to customize the behavior of the Static Site Editor.
 1. When you submit your changes, GitLab triggers a CI/CD pipeline to deploy your project with GitLab Pages.
 1. When the pipeline finishes, from your project's left-side menu, go to **Settings > Pages** to find the URL of your new website.
@@ -96,15 +136,15 @@ After setting up your project, you can start editing content directly from the S
 To edit a file:
 
 1. Visit the page you want to edit.
-1. Click the **Edit this page** button.
+1. Select **Edit this page**.
 1. The file is opened in the Static Site Editor in **WYSIWYG** mode. If you
    wish to edit the raw Markdown instead, you can toggle the **Markdown** mode
    in the bottom-right corner.
 1. When you're done, click **Submit changes...**.
-1. (Optional) Adjust the default title and description of the merge request, to submit
+1. Optional. Adjust the default title and description of the merge request, to submit
    with your changes. Alternatively, select a [merge request template](../../../user/project/description_templates.md#create-a-merge-request-template)
    from the dropdown menu and edit it accordingly.
-1. Click **Submit changes**.
+1. Select **Submit changes**.
 1. A new merge request is automatically created and you can assign a colleague for review.
 
 ### Text
@@ -123,11 +163,11 @@ The Static Site Editors supports Markdown files (`.md`, `.md.erb`) for editing t
 You can upload image files via the WYSIWYG editor directly to the repository to default upload directory
 `source/images`. To do so:
 
-1. Click the image icon (**{doc-image}**).
-1. Choose the **Upload file** tab.
-1. Click **Choose file** to select a file from your computer.
-1. Optional: add a description to the image for SEO and accessibility ([ALT text](https://moz.com/learn/seo/alt-text)).
-1. Click **Insert image**.
+1. Select the image icon (**{doc-image}**).
+1. Select the **Upload file** tab.
+1. To select a file from your computer, select **Choose file**.
+1. Optional. Add a description to the image for SEO and accessibility ([ALT text](https://moz.com/learn/seo/alt-text)).
+1. Select **Insert image**.
 
 The selected file can be any supported image file (`.png`, `.jpg`, `.jpeg`, `.gif`). The editor renders
 thumbnail previews so you can verify the correct image is included and there aren't any references to
@@ -137,11 +177,11 @@ missing images.
 
 You can also link to an image if you'd like:
 
-1. Click the image icon (**{doc-image}**).
-1. Choose the **Link to an image** tab.
+1. Select the image icon (**{doc-image}**).
+1. Select the **Link to an image** tab.
 1. Add the link to the image into the **Image URL** field (use the full path; relative paths are not supported yet).
-1. Optional: add a description to the image for SEO and accessibility ([ALT text](https://moz.com/learn/seo/alt-text)).
-1. Click **Insert image**.
+1. Optional. Add a description to the image for SEO and accessibility ([ALT text](https://moz.com/learn/seo/alt-text)).
+1. Select **Insert image**.
 
 The link can reference images already hosted in your project, an asset hosted
 externally on a content delivery network, or any other external URL. The editor renders thumbnail previews

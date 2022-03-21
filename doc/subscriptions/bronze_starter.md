@@ -17,9 +17,7 @@ the tiers are no longer mentioned in GitLab documentation:
 
 - [Activate GitLab EE with a license](../user/admin_area/license.md)
 - [Add a help message to the sign-in page](../user/admin_area/settings/help_page.md#add-a-help-message-to-the-sign-in-page)
-- [Burndown and burnup charts](../user/project/milestones/burndown_and_burnup_charts.md),
-  including [per-project charts](../user/project/milestones/index.md#project-burndown-charts) and
-  [per-group charts](../user/project/milestones/index.md#group-burndown-charts)
+- [Burndown and burnup charts](../user/project/milestones/burndown_and_burnup_charts.md) in the [Milestone View](../user/project/milestones/index.md#burndown-charts),
 - [Code owners](../user/project/code_owners.md)
 - Description templates:
   - [Setting a default template for merge requests and issues](../user/project/description_templates.md#set-a-default-template-for-merge-requests-and-issues)
@@ -28,7 +26,7 @@ the tiers are no longer mentioned in GitLab documentation:
   - [Creating group memberships via CN](../user/group/index.md#create-group-links-via-cn)
   - [Group push rules](../user/group/index.md#group-push-rules)
   - [Managing group memberships via LDAP](../user/group/index.md#manage-group-memberships-via-ldap)
-  - [Member locking](../user/group/index.md#prevent-members-from-being-added-to-a-group)
+  - [Member locking](../user/group/index.md#prevent-members-from-being-added-to-projects-in-a-group)
   - [Overriding user permissions](../user/group/index.md#override-user-permissions)
   - [User contribution analytics](../user/group/contribution_analytics/index.md)
   - [Kerberos integration](../integration/kerberos.md)
@@ -39,7 +37,7 @@ the tiers are no longer mentioned in GitLab documentation:
 - Issues:
   - [Multiple assignees for issues](../user/project/issues/multiple_assignees_for_issues.md)
   - [Issue weights](../user/project/issues/issue_weight.md)
-  - [Issue histories](../user/project/issues/issue_data_and_actions.md#issue-history) contain changes to issue description
+  - Issue histories contain [changes to issue description](../user/discussions/index.md#view-description-change-history)
   - [Adding an issue to an iteration](../user/project/issues/managing_issues.md#add-an-issue-to-an-iteration)
 - [Iterations](../user/group/iterations/index.md)
 - [Kerberos integration](../integration/kerberos.md)
@@ -50,15 +48,15 @@ the tiers are no longer mentioned in GitLab documentation:
   - [Group management through LDAP](../administration/auth/ldap/ldap-troubleshooting.md#group-memberships)
   - Syncing information through LDAP:
     - Groups: [one group](../administration/auth/ldap/ldap-troubleshooting.md#sync-one-group),
-      [all groups programmatically](../administration/auth/ldap/index.md#group-sync),
-      [group sync schedule](../administration/auth/ldap/index.md#adjusting-ldap-group-sync-schedule), and
+      [all groups programmatically](../administration/auth/ldap/ldap_synchronization.md#group-sync),
+      [group sync schedule](../administration/auth/ldap/ldap_synchronization.md#adjust-ldap-group-sync-schedule), and
       [all groups manually](../administration/auth/ldap/ldap-troubleshooting.md#sync-all-groups)
     - [Configuration settings](../administration/auth/ldap/index.md#ldap-sync-configuration-settings)
-    - Users: [all users](../administration/auth/ldap/index.md#user-sync),
-      [administrators](../administration/auth/ldap/index.md#administrator-sync),
-      [user sync schedule](../administration/auth/ldap/index.md#adjusting-ldap-user-sync-schedule)
-    - [Adding group links](../administration/auth/ldap/index.md#adding-group-links)
-    - [Lock memberships to LDAP synchronization](../administration/auth/ldap/index.md#global-group-memberships-lock)
+    - Users: [all users](../administration/auth/ldap/ldap_synchronization.md#user-sync),
+      [administrators](../administration/auth/ldap/ldap_synchronization.md#administrator-sync),
+      [user sync schedule](../administration/auth/ldap/ldap_synchronization.md#adjust-ldap-user-sync-schedule)
+    - [Adding group links](../administration/auth/ldap/ldap_synchronization.md#add-group-links)
+    - [Lock memberships to LDAP synchronization](../administration/auth/ldap/ldap_synchronization.md#global-group-memberships-lock)
     - Rake tasks for [LDAP tasks](../administration/raketasks/ldap.md), including
       [syncing groups](../administration/raketasks/ldap.md#run-a-group-sync)
 - Logging:
@@ -68,7 +66,7 @@ the tiers are no longer mentioned in GitLab documentation:
   - [Full code quality reports in the code quality tab](../user/project/merge_requests/code_quality.md#code-quality-reports)
   - [Merge request approvals](../user/project/merge_requests/approvals/index.md)
   - [Multiple assignees](../user/project/merge_requests/getting_started.md#multiple-assignees)
-  - [Approval Rule information for Reviewers](../user/project/merge_requests/reviews/index.md#approval-rule-information-for-reviewers) **(PREMIUM)**
+  - [Approval Rule information for Reviewers](../user/project/merge_requests/reviews/index.md#approval-rule-information-for-reviewers)
   - [Required Approvals](../user/project/merge_requests/approvals/index.md#required-approvals)
   - [Code Owners as eligible approvers](../user/project/merge_requests/approvals/rules.md#code-owners-as-eligible-approvers)
   - [Approval rules](../user/project/merge_requests/approvals/rules.md) features
@@ -89,18 +87,18 @@ the tiers are no longer mentioned in GitLab documentation:
 - Repositories:
   - [Repository size limit](../user/admin_area/settings/account_and_limit_settings.md#repository-size-limit)
   - Repository mirroring:
-    - [Pull mirroring](../user/project/repository/repository_mirroring.md#pull-from-a-remote-repository) outside repositories in a GitLab repository
-    - [Overwrite diverged branches](../user/project/repository/repository_mirroring.md#overwrite-diverged-branches)
-    - [Trigger pipelines for mirror updates](../user/project/repository/repository_mirroring.md#trigger-pipelines-for-mirror-updates)
-    - [Hard failures](../user/project/repository/repository_mirroring.md#hard-failure) when mirroring fails
-    - [Trigger pull mirroring from the API](../user/project/repository/repository_mirroring.md#trigger-an-update-using-the-api)
-    - [Mirror only protected branches](../user/project/repository/repository_mirroring.md#mirror-only-protected-branches)
-    - [Bidirectional mirroring](../user/project/repository/repository_mirroring.md#bidirectional-mirroring)
-    - [Mirror with Perforce Helix via Git Fusion](../user/project/repository/repository_mirroring.md#mirror-with-perforce-helix-via-git-fusion)
+    - [Pull mirroring](../user/project/repository/mirror/pull.md) outside repositories in a GitLab repository
+    - [Overwrite diverged branches](../user/project/repository/mirror/pull.md#overwrite-diverged-branches)
+    - [Trigger pipelines for mirror updates](../user/project/repository/mirror/pull.md#trigger-pipelines-for-mirror-updates)
+    - [Fix hard failures when mirroring](../user/project/repository/mirror/pull.md#fix-hard-failures-when-mirroring)
+    - [Trigger pull mirroring from the API](../user/project/repository/mirror/pull.md#trigger-an-update-by-using-the-api)
+    - [Mirror only protected branches](../user/project/repository/mirror/index.md#mirror-only-protected-branches)
+    - [Bidirectional mirroring](../user/project/repository/mirror/bidirectional.md)
+    - [Mirror with Perforce Helix with Git Fusion](../user/project/repository/mirror/bidirectional.md#mirror-with-perforce-helix-with-git-fusion)
 - Runners:
-  - Run pipelines in the parent project [for merge requests from a forked project](../ci/pipelines/merge_request_pipelines.md#run-pipelines-in-the-parent-project-for-merge-requests-from-a-forked-project)
-  - [Shared runners pipeline minutes quota](../user/admin_area/settings/continuous_integration.md#shared-runners-pipeline-minutes-quota)
-- [Push rules](../push_rules/push_rules.md)
+  - Run pipelines in the parent project [for merge requests from a forked project](../ci/pipelines/merge_request_pipelines.md#run-pipelines-in-the-parent-project)
+  - [Shared runners CI/CD minutes](../ci/pipelines/cicd_minutes.md)
+- [Push rules](../user/project/repository/push_rules.md)
 - SAML for self-managed GitLab instance:
   - [Administrator groups](../integration/saml.md#administrator-groups)
   - [Auditor groups](../integration/saml.md#auditor-groups)

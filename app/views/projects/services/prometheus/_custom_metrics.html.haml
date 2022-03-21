@@ -10,9 +10,7 @@
     .card-header
       %strong
         = s_('PrometheusService|Custom metrics')
-      -# haml-lint:disable NoPlainNodes
-      %span.badge.badge-pill.js-custom-monitored-count 0
-      -# haml-lint:enable NoPlainNodes
+      = gl_badge_tag 0, nil, class: 'js-custom-monitored-count'
       = link_to s_('PrometheusService|New metric'), new_project_prometheus_metric_path(project), class: 'btn gl-button btn-confirm gl-ml-auto js-new-metric-button hidden', data: { qa_selector: 'new_metric_button' }
     .card-body
       .flash-container.hidden
@@ -20,7 +18,7 @@
           .flash-text
       .loading-metrics.js-loading-custom-metrics
         %p.m-3
-          = loading_icon(css_class: 'metrics-load-spinner')
+          = gl_loading_icon(inline: true, css_class: 'metrics-load-spinner')
           = s_('PrometheusService|Finding custom metrics...')
       .empty-metrics.hidden.js-empty-custom-metrics
         %p.text-tertiary.m-3.js-no-active-integration-text.hidden

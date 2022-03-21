@@ -36,8 +36,8 @@ RSpec.describe API::Terraform::State do
       let(:current_user) { maintainer }
 
       it_behaves_like 'tracking unique hll events' do
-        let(:target_id) { 'p_terraform_state_api_unique_users' }
-        let(:expected_type) { instance_of(Integer) }
+        let(:target_event) { 'p_terraform_state_api_unique_users' }
+        let(:expected_value) { instance_of(Integer) }
       end
     end
   end
@@ -151,6 +151,16 @@ RSpec.describe API::Terraform::State do
 
           expect(response).to have_gitlab_http_status(:ok)
           expect(Gitlab::Json.parse(response.body)).to be_empty
+        end
+
+        context 'when serial already exists' do
+          let(:params) { { 'instance': 'example-instance', 'serial': state.latest_version.version } }
+
+          it 'returns unprocessable entity' do
+            request
+
+            expect(response).to have_gitlab_http_status(:unprocessable_entity)
+          end
         end
       end
 

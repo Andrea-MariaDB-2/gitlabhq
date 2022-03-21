@@ -39,11 +39,17 @@ export function initDefaultTrackers() {
 
   const opts = { ...DEFAULT_SNOWPLOW_OPTIONS, ...window.snowplowOptions };
 
+  // must be before initializing the trackers
+  Tracking.setAnonymousUrls();
+
   window.snowplow('enableActivityTracking', 30, 30);
   // must be after enableActivityTracking
   const standardContext = getStandardContext();
   const experimentContexts = getAllExperimentContexts();
-  window.snowplow('trackPageView', null, [standardContext, ...experimentContexts]);
+  // To not expose personal identifying information, the page title is hardcoded as `GitLab`
+  // See: https://gitlab.com/gitlab-org/gitlab/-/issues/345243
+  window.snowplow('trackPageView', 'GitLab', [standardContext, ...experimentContexts]);
+  window.snowplow('setDocumentTitle', 'GitLab');
 
   if (window.snowplowOptions.formTracking) {
     Tracking.enableFormTracking(opts.formTrackingConfig);

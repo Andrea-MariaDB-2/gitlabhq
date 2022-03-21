@@ -8,6 +8,7 @@ export default function initRelatedIssues() {
     // eslint-disable-next-line no-new
     new Vue({
       el: relatedIssuesRootElement,
+      name: 'RelatedIssuesRoot',
       components: {
         relatedIssuesRoot: RelatedIssuesRoot,
       },
@@ -20,6 +21,7 @@ export default function initRelatedIssues() {
             showCategorizedIssues: parseBoolean(
               relatedIssuesRootElement.dataset.showCategorizedIssues,
             ),
+            autoCompleteEpics: false,
           },
         }),
     });

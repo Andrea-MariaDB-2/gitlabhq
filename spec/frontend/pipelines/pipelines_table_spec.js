@@ -1,6 +1,7 @@
 import '~/commons';
-import { GlTable } from '@gitlab/ui';
+import { GlTableLite } from '@gitlab/ui';
 import { mount } from '@vue/test-utils';
+import fixture from 'test_fixtures/pipelines/pipelines.json';
 import { extendedWrapper } from 'helpers/vue_test_utils_helper';
 import PipelineMiniGraph from '~/pipelines/components/pipelines_list/pipeline_mini_graph.vue';
 import PipelineOperations from '~/pipelines/components/pipelines_list/pipeline_operations.vue';
@@ -8,19 +9,20 @@ import PipelineTriggerer from '~/pipelines/components/pipelines_list/pipeline_tr
 import PipelineUrl from '~/pipelines/components/pipelines_list/pipeline_url.vue';
 import PipelinesTable from '~/pipelines/components/pipelines_list/pipelines_table.vue';
 import PipelinesTimeago from '~/pipelines/components/pipelines_list/time_ago.vue';
-import { PipelineKeyOptions } from '~/pipelines/constants';
+import {
+  PipelineKeyOptions,
+  BUTTON_TOOLTIP_RETRY,
+  BUTTON_TOOLTIP_CANCEL,
+} from '~/pipelines/constants';
 
 import eventHub from '~/pipelines/event_hub';
 import CiBadge from '~/vue_shared/components/ci_badge_link.vue';
-import CommitComponent from '~/vue_shared/components/commit.vue';
 
 jest.mock('~/pipelines/event_hub');
 
 describe('Pipelines Table', () => {
   let pipeline;
   let wrapper;
-
-  const jsonFixtureName = 'pipelines/pipelines.json';
 
   const defaultProps = {
     pipelines: [],
@@ -29,7 +31,8 @@ describe('Pipelines Table', () => {
   };
 
   const createMockPipeline = () => {
-    const { pipelines } = getJSONFixture(jsonFixtureName);
+    // Clone fixture as it could be modified by tests
+    const { pipelines } = JSON.parse(JSON.stringify(fixture));
     return pipelines.find((p) => p.user !== null && p.commit !== null);
   };
 
@@ -44,11 +47,10 @@ describe('Pipelines Table', () => {
     );
   };
 
-  const findGlTable = () => wrapper.findComponent(GlTable);
+  const findGlTableLite = () => wrapper.findComponent(GlTableLite);
   const findStatusBadge = () => wrapper.findComponent(CiBadge);
   const findPipelineInfo = () => wrapper.findComponent(PipelineUrl);
   const findTriggerer = () => wrapper.findComponent(PipelineTriggerer);
-  const findCommit = () => wrapper.findComponent(CommitComponent);
   const findPipelineMiniGraph = () => wrapper.findComponent(PipelineMiniGraph);
   const findTimeAgo = () => wrapper.findComponent(PipelinesTimeago);
   const findActions = () => wrapper.findComponent(PipelineOperations);
@@ -56,11 +58,10 @@ describe('Pipelines Table', () => {
   const findTableRows = () => wrapper.findAllByTestId('pipeline-table-row');
   const findStatusTh = () => wrapper.findByTestId('status-th');
   const findPipelineTh = () => wrapper.findByTestId('pipeline-th');
-  const findTriggererTh = () => wrapper.findByTestId('triggerer-th');
-  const findCommitTh = () => wrapper.findByTestId('commit-th');
   const findStagesTh = () => wrapper.findByTestId('stages-th');
-  const findTimeAgoTh = () => wrapper.findByTestId('timeago-th');
   const findActionsTh = () => wrapper.findByTestId('actions-th');
+  const findRetryBtn = () => wrapper.findByTestId('pipelines-retry-button');
+  const findCancelBtn = () => wrapper.findByTestId('pipelines-cancel-button');
 
   beforeEach(() => {
     pipeline = createMockPipeline();
@@ -77,16 +78,13 @@ describe('Pipelines Table', () => {
     });
 
     it('displays table', () => {
-      expect(findGlTable().exists()).toBe(true);
+      expect(findGlTableLite().exists()).toBe(true);
     });
 
     it('should render table head with correct columns', () => {
       expect(findStatusTh().text()).toBe('Status');
-      expect(findPipelineTh().text()).toBe('Pipeline ID');
-      expect(findTriggererTh().text()).toBe('Triggerer');
-      expect(findCommitTh().text()).toBe('Commit');
+      expect(findPipelineTh().text()).toBe('Pipeline');
       expect(findStagesTh().text()).toBe('Stages');
-      expect(findTimeAgoTh().text()).toBe('Duration');
       expect(findActionsTh().text()).toBe('Actions');
     });
 
@@ -114,27 +112,6 @@ describe('Pipelines Table', () => {
       });
     });
 
-    describe('triggerer cell', () => {
-      it('should render the pipeline triggerer', () => {
-        expect(findTriggerer().exists()).toBe(true);
-      });
-    });
-
-    describe('commit cell', () => {
-      it('should render commit information', () => {
-        expect(findCommit().exists()).toBe(true);
-      });
-
-      it('should display and link to commit', () => {
-        expect(findCommit().text()).toContain(pipeline.commit.short_id);
-        expect(findCommit().props('commitUrl')).toBe(pipeline.commit.commit_path);
-      });
-
-      it('should display the commit author', () => {
-        expect(findCommit().props('author')).toEqual(pipeline.commit.author);
-      });
-    });
-
     describe('stages cell', () => {
       it('should render a pipeline mini graph', () => {
         expect(findPipelineMiniGraph().exists()).toBe(true);
@@ -152,7 +129,7 @@ describe('Pipelines Table', () => {
           pipeline = createMockPipeline();
           pipeline.details.stages = null;
 
-          createComponent({ pipelines: [pipeline] }, true);
+          createComponent({ pipelines: [pipeline] });
         });
 
         it('stages are not rendered', () => {
@@ -165,7 +142,7 @@ describe('Pipelines Table', () => {
       });
 
       it('when update graph dropdown is set, should update graph dropdown', () => {
-        createComponent({ pipelines: [pipeline], updateGraphDropdown: true }, true);
+        createComponent({ pipelines: [pipeline], updateGraphDropdown: true });
 
         expect(findPipelineMiniGraph().props('updateDropdown')).toBe(true);
       });
@@ -186,6 +163,20 @@ describe('Pipelines Table', () => {
     describe('operations cell', () => {
       it('should render pipeline operations', () => {
         expect(findActions().exists()).toBe(true);
+      });
+
+      it('should render retry action tooltip', () => {
+        expect(findRetryBtn().attributes('title')).toBe(BUTTON_TOOLTIP_RETRY);
+      });
+
+      it('should render cancel action tooltip', () => {
+        expect(findCancelBtn().attributes('title')).toBe(BUTTON_TOOLTIP_CANCEL);
+      });
+    });
+
+    describe('triggerer cell', () => {
+      it('should render the pipeline triggerer', () => {
+        expect(findTriggerer().exists()).toBe(true);
       });
     });
   });

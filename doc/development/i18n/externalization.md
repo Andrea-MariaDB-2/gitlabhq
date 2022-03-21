@@ -133,11 +133,9 @@ You can mark that content for translation with:
 
 The `~/locale` module exports the following key functions for externalization:
 
-- `__()` (double underscore parenthesis)
-- `s__()` (namespaced double underscore parenthesis)
-- `__()` Mark content for translation (note the double underscore).
-- `s__()` Mark namespaced content for translation
-- `n__()` Mark pluralized content for translation 
+- `__()` Mark content for translation (double underscore parenthesis).
+- `s__()` Mark namespaced content for translation (s double underscore parenthesis).
+- `n__()` Mark pluralized content for translation (n double underscore parenthesis).
 
 ```javascript
 import { __, s__, n__ } from '~/locale';
@@ -790,6 +788,28 @@ translate correctly if you extract individual words from the sentence.
 
 When in doubt, try to follow the best practices described in this [Mozilla Developer documentation](https://developer.mozilla.org/en-US/docs/Mozilla/Localization/Localization_content_best_practices#Splitting).
 
+### Always pass string literals to the translation helpers
+
+The `bin/rake gettext:regenerate` script parses the codebase and extracts all the strings from the
+[translation helpers](#preparing-a-page-for-translation) ready to be translated.
+
+The script cannot resolve the strings if they are passed as variables or function calls. Therefore,
+make sure to always pass string literals to the helpers.
+
+```javascript
+// Good
+__('Some label');
+s__('Namespace', 'Label');
+s__('Namespace|Label');
+n__('%d apple', '%d apples', appleCount);
+
+// Bad
+__(LABEL);
+s__(getLabel());
+s__(NAMESPACE, LABEL);
+n__(LABEL_SINGULAR, LABEL_PLURAL, appleCount);
+```
+
 ## Updating the PO files with the new content
 
 Now that the new content is marked for translation, run this command to update the
@@ -800,11 +820,11 @@ bin/rake gettext:regenerate
 ```
 
 This command updates the `locale/gitlab.pot` file with the newly externalized strings and removes
-any unused strings. Once the changes are on the default branch, [CrowdIn](https://translate.gitlab.com)
+any unused strings. Once the changes are on the default branch, [Crowdin](https://translate.gitlab.com)
 picks them up and presents them for translation.
 
 You don't need to check in any changes to the `locale/[language]/gitlab.po` files. They are updated
-automatically when [translations from CrowdIn are merged](merging_translations.md).
+automatically when [translations from Crowdin are merged](merging_translations.md).
 
 If there are merge conflicts in the `gitlab.pot` file, you can delete the file and regenerate it
 using the same command.

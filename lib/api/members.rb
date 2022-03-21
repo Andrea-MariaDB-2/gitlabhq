@@ -41,6 +41,7 @@ module API
           optional :query, type: String, desc: 'A query string to search for members'
           optional :user_ids, type: Array[Integer], coerce_with: ::API::Validations::Types::CommaSeparatedToIntegerArray.coerce, desc: 'Array of user ids to look up for membership'
           optional :show_seat_info, type: Boolean, desc: 'Show seat information for members'
+          use :optional_state_filter_ee
           use :pagination
         end
 
@@ -94,44 +95,25 @@ module API
           requires :user_id, types: [Integer, String], desc: 'The user ID of the new member or multiple IDs separated by commas.'
           optional :expires_at, type: DateTime, desc: 'Date string in the format YEAR-MONTH-DAY'
           optional :invite_source, type: String, desc: 'Source that triggered the member creation process', default: 'members-api'
-          optional :areas_of_focus, type: Array[String], coerce_with: Validations::Types::CommaSeparatedToArray.coerce, desc: 'Areas the inviter wants the member to focus upon'
+          optional :tasks_to_be_done, type: Array[String], coerce_with: Validations::Types::CommaSeparatedToArray.coerce, desc: 'Tasks the inviter wants the member to do'
+          optional :tasks_project_id, type: Integer, desc: 'The project ID in which to create the task issues'
         end
-        # rubocop: disable CodeReuse/ActiveRecord
+
         post ":id/members" do
           ::Gitlab::QueryLimiting.disable!('https://gitlab.com/gitlab-org/gitlab/-/issues/333434')
 
           source = find_source(source_type, params[:id])
           authorize_admin_source!(source_type, source)
 
-          if params[:user_id].to_s.include?(',')
-            create_service_params = params.except(:user_id).merge({ user_ids: params[:user_id], source: source })
+          user_id = params[:user_id].to_s
+          create_service_params = params.except(:user_id).merge({ user_ids: user_id, source: source })
 
+          if add_multiple_members?(user_id)
             ::Members::CreateService.new(current_user, create_service_params).execute
-          elsif params[:user_id].present?
-            member = source.members.find_by(user_id: params[:user_id])
-            conflict!('Member already exists') if member
-
-            user = User.find_by_id(params[:user_id])
-            not_found!('User') unless user
-
-            member = create_member(current_user, user, source, params)
-
-            if !member
-              not_allowed! # This currently can only be reached in EE
-            elsif member.valid? && member.persisted?
-              present_members(member)
-              Gitlab::Tracking.event(::Members::CreateService.name,
-                                     'create_member',
-                                     label: params[:invite_source],
-                                     property: 'existing_user',
-                                     user: current_user)
-              track_areas_of_focus(member, params[:areas_of_focus])
-            else
-              render_validation_error!(member)
-            end
+          elsif add_single_member?(user_id)
+            add_single_member_by_user_id(create_service_params)
           end
         end
-        # rubocop: enable CodeReuse/ActiveRecord
 
         desc 'Updates a member of a group or project.' do
           success Entities::Member

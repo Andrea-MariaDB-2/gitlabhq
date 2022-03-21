@@ -1,7 +1,6 @@
 <script>
 import { GlFormGroup, GlFormCheckbox } from '@gitlab/ui';
-import { mapGetters } from 'vuex';
-import eventHub from '../event_hub';
+import { mapGetters, mapState } from 'vuex';
 
 export default {
   name: 'ActiveCheckbox',
@@ -16,17 +15,18 @@ export default {
   },
   computed: {
     ...mapGetters(['isInheriting', 'propsSource']),
+    ...mapState(['customState']),
+    disabled() {
+      return this.isInheriting || this.customState.activateDisabled;
+    },
   },
   mounted() {
     this.activated = this.propsSource.initialActivated;
-    // Initialize view
-    this.$nextTick(() => {
-      this.onChange(this.activated);
-    });
+    this.onChange(this.activated);
   },
   methods: {
-    onChange(e) {
-      eventHub.$emit('toggle', e);
+    onChange(isChecked) {
+      this.$emit('toggle-integration-active', isChecked);
     },
   },
 };
@@ -38,7 +38,7 @@ export default {
     <gl-form-checkbox
       v-model="activated"
       class="gl-display-block"
-      :disabled="isInheriting"
+      :disabled="disabled"
       @change="onChange"
     >
       {{ __('Active') }}

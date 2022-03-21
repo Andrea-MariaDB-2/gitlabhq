@@ -1,5 +1,6 @@
 <script>
 import { mapState } from 'vuex';
+import { GlBadge } from '@gitlab/ui';
 import { helpPagePath } from '~/helpers/help_page_helper';
 import { timeIntervalInWords } from '~/lib/utils/datetime_utility';
 import { __, sprintf } from '~/locale';
@@ -10,6 +11,7 @@ export default {
   name: 'JobSidebarDetailsContainer',
   components: {
     DetailRow,
+    GlBadge,
   },
   mixins: [timeagoMixin],
   computed: {
@@ -19,6 +21,9 @@ export default {
     },
     duration() {
       return timeIntervalInWords(this.job.duration);
+    },
+    durationTitle() {
+      return this.job.finished_at ? __('Duration') : __('Elapsed time');
     },
     erasedAt() {
       return this.timeFormatted(this.job.erased_at);
@@ -76,7 +81,7 @@ export default {
 
 <template>
   <div v-if="shouldRenderBlock">
-    <detail-row v-if="job.duration" :value="duration" title="Duration" />
+    <detail-row v-if="job.duration" :value="duration" :title="durationTitle" />
     <detail-row
       v-if="job.finished_at"
       :value="finishedAt"
@@ -97,12 +102,7 @@ export default {
 
     <p v-if="hasTags" class="build-detail-row" data-testid="job-tags">
       <span class="font-weight-bold">{{ __('Tags:') }}</span>
-      <span
-        v-for="(tag, i) in job.tags"
-        :key="i"
-        class="badge badge-pill badge-primary gl-badge sm"
-        >{{ tag }}</span
-      >
+      <gl-badge v-for="(tag, i) in job.tags" :key="i" variant="info">{{ tag }}</gl-badge>
     </p>
   </div>
 </template>

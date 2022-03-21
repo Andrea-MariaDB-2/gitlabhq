@@ -8,6 +8,7 @@ module QA
     class Base
       include ApiFabricator
       extend Capybara::DSL
+      using Rainbow
 
       NoValueError = Class.new(RuntimeError)
 
@@ -31,7 +32,7 @@ module QA
           parents = options.fetch(:parents) { [] }
 
           do_fabricate!(resource: resource, prepare_block: prepare_block, parents: parents) do
-            log_fabrication(:browser_ui, resource, parents, args) { resource.fabricate!(*args) }
+            log_and_record_fabrication(:browser_ui, resource, parents, args) { resource.fabricate!(*args) }
 
             current_url
           end
@@ -47,7 +48,7 @@ module QA
           resource.eager_load_api_client!
 
           do_fabricate!(resource: resource, prepare_block: prepare_block, parents: parents) do
-            log_fabrication(:api, resource, parents, args) { resource.fabricate_via_api! }
+            log_and_record_fabrication(:api, resource, parents, args) { resource.fabricate_via_api! }
           end
         end
 
@@ -59,7 +60,7 @@ module QA
           resource.eager_load_api_client!
 
           do_fabricate!(resource: resource, prepare_block: prepare_block, parents: parents) do
-            log_fabrication(:api, resource, parents, args) { resource.remove_via_api! }
+            log_and_record_fabrication(:api, resource, parents, args) { resource.remove_via_api! }
           end
         end
 
@@ -74,20 +75,44 @@ module QA
           resource
         end
 
-        def log_fabrication(method, resource, parents, args)
+        def log_and_record_fabrication(fabrication_method, resource, parents, args)
           start = Time.now
 
-          yield.tap do
+          Support::FabricationTracker.start_fabrication
+          result = yield.tap do
+            fabrication_time = Time.now - start
+            fabrication_http_method = if resource.api_fabrication_http_method == :get
+                                        if include?(Reusable)
+                                          "Retrieved for reuse"
+                                        else
+                                          "Retrieved"
+                                        end
+                                      else
+                                        "Built"
+                                      end
+
+            Support::FabricationTracker.save_fabrication(:"#{fabrication_method}_fabrication", fabrication_time)
+            Tools::TestResourceDataProcessor.collect(
+              resource: resource,
+              info: resource.identifier,
+              fabrication_method: fabrication_method,
+              fabrication_time: fabrication_time
+            )
+
             Runtime::Logger.debug do
               msg = ["==#{'=' * parents.size}>"]
-              msg << "Built a #{name}"
+              msg << "#{fabrication_http_method} a #{Rainbow(name).black.bg(:white)}"
+              msg << resource.identifier
               msg << "as a dependency of #{parents.last}" if parents.any?
-              msg << "via #{method}"
-              msg << "in #{Time.now - start} seconds"
+              msg << "via #{fabrication_method}"
+              msg << "in #{fabrication_time} seconds"
 
-              msg.join(' ')
+              msg.compact.join(' ')
             end
           end
+          Support::FabricationTracker.finish_fabrication
+
+          result
         end
 
         # Define custom attribute
@@ -100,7 +125,9 @@ module QA
           attr_writer(name)
 
           define_method(name) do
-            instance_variable_get("@#{name}") || instance_variable_set("@#{name}", populate_attribute(name, block))
+            return instance_variable_get("@#{name}") if instance_variable_defined?("@#{name}")
+
+            instance_variable_set("@#{name}", attribute_value(name, block))
           end
         end
 
@@ -121,9 +148,7 @@ module QA
         return self unless api_resource
 
         all_attributes.each do |attribute_name|
-          api_value = api_resource[attribute_name]
-
-          instance_variable_set("@#{attribute_name}", api_value) if api_value
+          instance_variable_set("@#{attribute_name}", api_resource[attribute_name]) if api_resource.key?(attribute_name)
         end
 
         self
@@ -135,11 +160,11 @@ module QA
         raise NotImplementedError
       end
 
-      def visit!
-        Runtime::Logger.debug(%(Visiting #{self.class.name} at "#{web_url}"))
+      def visit!(skip_resp_code_check: false)
+        Runtime::Logger.debug("Visiting #{Rainbow(self.class.name).black.bg(:white)} at #{web_url}")
 
         # Just in case an async action is not yet complete
-        Support::WaitForRequests.wait_for_requests
+        Support::WaitForRequests.wait_for_requests(skip_resp_code_check: skip_resp_code_check)
 
         Support::Retrier.retry_until do
           visit(web_url)
@@ -147,7 +172,7 @@ module QA
         end
 
         # Wait until the new page is ready for us to interact with it
-        Support::WaitForRequests.wait_for_requests
+        Support::WaitForRequests.wait_for_requests(skip_resp_code_check: skip_resp_code_check)
       end
 
       def populate(*attribute_names)
@@ -158,22 +183,72 @@ module QA
         QA::Support::Waiter.wait_until(max_duration: max_duration, sleep_interval: sleep_interval, &block)
       end
 
-      private
-
-      def populate_attribute(name, block)
-        value = attribute_value(name, block)
-
-        raise NoValueError, "No value was computed for #{name} of #{self.class.name}." unless value
-
-        value
+      # Object comparison
+      #
+      # @param [QA::Resource::Base] other
+      # @return [Boolean]
+      def ==(other)
+        other.is_a?(self.class) && comparable == other.comparable
       end
 
+      # Override inspect for a better rspec failure diff output
+      #
+      # @return [String]
+      def inspect
+        JSON.pretty_generate(comparable)
+      end
+
+      def diff(other)
+        return if self == other
+
+        diff_values = self.comparable.to_a - other.comparable.to_a
+        diff_values.to_h
+      end
+
+      def identifier
+        if respond_to?(:username) && username
+          "with username '#{username}'"
+        elsif respond_to?(:full_path) && full_path
+          "with full_path '#{full_path}'"
+        elsif respond_to?(:name) && name
+          "with name '#{name}'"
+        elsif respond_to?(:id) && id
+          "with id '#{id}'"
+        elsif respond_to?(:iid) && iid
+          "with iid '#{iid}'"
+        end
+      rescue QA::Resource::Base::NoValueError
+        nil
+      end
+
+      def remove_via_api!
+        super
+
+        Runtime::Logger.debug(["Removed a #{self.class.name}", identifier].compact.join(' '))
+      end
+
+      protected
+
+      # Custom resource comparison logic using resource attributes from api_resource
+      #
+      # @return [Hash]
+      def comparable
+        raise("comparable method needs to be implemented in order to compare resources via '=='")
+      end
+
+      private
+
       def attribute_value(name, block)
-        api_value = api_resource&.dig(name)
+        no_api_value = !api_resource&.key?(name)
+        raise NoValueError, "No value was computed for #{name} of #{self.class.name}." if no_api_value && !block
 
-        log_having_both_api_result_and_block(name, api_value) if api_value && block
+        unless no_api_value
+          api_value = api_resource[name]
+          log_having_both_api_result_and_block(name, api_value) if block
+          return api_value
+        end
 
-        api_value || (block && instance_exec(&block))
+        instance_exec(&block)
       end
 
       # Get all defined attributes across all parents

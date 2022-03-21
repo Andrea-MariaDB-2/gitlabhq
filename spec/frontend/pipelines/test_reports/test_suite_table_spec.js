@@ -1,15 +1,15 @@
 import { GlButton, GlFriendlyWrap, GlLink, GlPagination } from '@gitlab/ui';
-import { shallowMount, createLocalVue } from '@vue/test-utils';
+import { shallowMount } from '@vue/test-utils';
+import Vue from 'vue';
 import Vuex from 'vuex';
-import { getJSONFixture } from 'helpers/fixtures';
+import testReports from 'test_fixtures/pipelines/test_report.json';
 import SuiteTable from '~/pipelines/components/test_reports/test_suite_table.vue';
 import { TestStatus } from '~/pipelines/constants';
 import * as getters from '~/pipelines/stores/test_reports/getters';
 import { formatFilePath } from '~/pipelines/stores/test_reports/utils';
 import skippedTestCases from './mock_data';
 
-const localVue = createLocalVue();
-localVue.use(Vuex);
+Vue.use(Vuex);
 
 describe('Test reports suite table', () => {
   let wrapper;
@@ -17,7 +17,7 @@ describe('Test reports suite table', () => {
 
   const {
     test_suites: [testSuite],
-  } = getJSONFixture('pipelines/test_report.json');
+  } = testReports;
 
   testSuite.test_cases = [...testSuite.test_cases, ...skippedTestCases];
   const testCases = testSuite.test_cases;
@@ -47,7 +47,6 @@ describe('Test reports suite table', () => {
 
     wrapper = shallowMount(SuiteTable, {
       store,
-      localVue,
       stubs: { GlFriendlyWrap },
     });
   };

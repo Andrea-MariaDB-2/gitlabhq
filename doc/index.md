@@ -6,11 +6,17 @@ comments: false
 description: 'Learn how to use and administer GitLab, the most scalable Git-based fully integrated platform for software development.'
 ---
 
+<!-- markdownlint-disable MD044 -->
+<!-- MD044/proper-names test disabled after this line to make page compatible with markdownlint-cli 0.29.0. -->
+<!-- See https://docs.gitlab.com/ee/development/documentation/testing.html#disable-markdownlint-tests -->
+
 <div class="d-none">
   <h3>Visit <a href="https://docs.gitlab.com/ee/">docs.gitlab.com</a> for the latest version
   of this help information with enhanced navigation, discoverability, and readability.</h3>
 </div>
 <!-- the div above will not display on the docs site but will display on /help -->
+
+<!-- markdownlint-enable MD044 -->
 
 # GitLab Docs
 
@@ -40,7 +46,7 @@ Have a look at some of our most popular topics:
 |:-------------------------------------------------------------------------------------------|:------------|
 | [Two-factor authentication](user/profile/account/two_factor_authentication.md)             | Improve the security of your GitLab account. |
 | [GitLab groups](user/group/index.md)                                                       | Manage projects together. |
-| [GitLab CI/CD pipeline configuration reference](ci/yaml/index.md)                         | Available configuration options for `.gitlab-ci.yml` files. |
+| [Keyword reference for the `.gitlab-ci.yml` file](ci/yaml/index.md)                        | Available configuration options for `.gitlab-ci.yml` files. |
 | [Activate GitLab EE with a license](user/admin_area/license.md)                            | Activate GitLab Enterprise Edition functionality with a license. |
 | [Back up and restore GitLab](raketasks/backup_restore.md)                                  | Rake tasks for backing up and restoring GitLab self-managed instances. |
 | [GitLab release and maintenance policy](policy/maintenance.md)                             | Policies for version naming and cadence, and also upgrade recommendations. |
@@ -108,7 +114,7 @@ There are many ways to integrate with GitLab, including:
 
 | Topic                                      | Description |
 |:-------------------------------------------|:------------|
-| [GitLab REST API](api/README.md)           | Integrate with GitLab using our REST API. |
+| [GitLab REST API](api/index.md)           | Integrate with GitLab using our REST API. |
 | [GitLab GraphQL API](api/graphql/index.md) | Integrate with GitLab using our GraphQL API. |
 | [Integrations](integration/index.md)      | Integrations with third-party products. |
 

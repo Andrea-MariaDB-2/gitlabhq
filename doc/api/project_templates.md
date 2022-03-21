@@ -1,8 +1,7 @@
 ---
 stage: Create
 group: Source Code
-info: "To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments"
-type: reference, api
+info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
 ---
 
 # Project templates API **(FREE)**
@@ -21,9 +20,7 @@ It deprecates these endpoints, which are scheduled for removal in API version 5.
 In addition to templates common to the entire instance, project-specific
 templates are also available from this API endpoint.
 
-Support for [Group-level file templates](../user/group/index.md#group-file-templates) **(PREMIUM)**
-was [added](https://gitlab.com/gitlab-org/gitlab/-/issues/5987)
-in GitLab 11.5
+Support is also available for [group-level file templates](../user/group/index.md#group-file-templates). **(PREMIUM)**
 
 ## Get all templates of a particular type
 
@@ -33,7 +30,7 @@ GET /projects/:id/templates/:type
 
 | Attribute  | Type   | Required | Description |
 | ---------- | ------ | -------- | ----------- |
-| `id`      | integer / string | yes      | The ID or [URL-encoded path of the project](index.md#namespaced-path-encoding) |
+| `id`      | integer or string | yes      | The ID or [URL-encoded path of the project](index.md#namespaced-path-encoding) |
 | `type`     | string | yes | The type of the template. Accepted values are: `dockerfiles`, `gitignores`, `gitlab_ci_ymls`, `licenses`, `issues`, `merge_requests` |
 
 Example response (licenses):
@@ -99,7 +96,7 @@ GET /projects/:id/templates/:type/:name
 
 | Attribute  | Type   | Required | Description |
 | ---------- | ------ | -------- | ----------- |
-| `id`      | integer / string | yes      | The ID or [URL-encoded path of the project](index.md#namespaced-path-encoding) |
+| `id`      | integer or string | yes      | The ID or [URL-encoded path of the project](index.md#namespaced-path-encoding) |
 | `type`     | string | yes| The type of the template. One of: `dockerfiles`, `gitignores`, `gitlab_ci_ymls`, `licenses`, `issues`, or `merge_requests`. |
 | `name`     | string | yes      | The key of the template, as obtained from the collection endpoint |
 | `source_template_project_id`   | integer | no      | The project ID where a given template is being stored. This is useful when multiple templates from different projects have the same name. If multiple templates have the same name, the match from `closest ancestor` is returned if `source_template_project_id` is not specified |

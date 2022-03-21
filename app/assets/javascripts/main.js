@@ -1,5 +1,4 @@
 /* global $ */
-/* eslint-disable import/order */
 
 import jQuery from 'jquery';
 import Cookies from 'js-cookie';
@@ -15,8 +14,10 @@ import { GlBreakpointInstance as bp } from '@gitlab/ui/dist/utils';
 import { initRails } from '~/lib/utils/rails_ujs';
 import * as popovers from '~/popovers';
 import * as tooltips from '~/tooltips';
+import { initPrefetchLinks } from '~/lib/utils/navigation_utility';
+import { logHelloDeferred } from 'jh_else_ce/lib/logger/hello_deferred';
 import initAlertHandler from './alert_handler';
-import { removeFlashClickListener } from './flash';
+import { addDismissFlashClickListener } from './flash';
 import initTodoToggle from './header';
 import initLayoutNav from './layout_nav';
 import { handleLocationHash, addSelectOnFocusBehaviour } from './lib/utils/common_utils';
@@ -35,9 +36,12 @@ import GlFieldErrors from './gl_field_errors';
 import initUserPopovers from './user_popovers';
 import initBroadcastNotifications from './broadcast_notification';
 import { initTopNav } from './nav';
+import { initCopyCodeButton } from './behaviors/copy_code';
 
 import 'ee_else_ce/main_ee';
 import 'jh_else_ce/main_jh';
+
+logHelloDeferred();
 
 applyGitLabUIConfig();
 
@@ -87,6 +91,7 @@ function deferredInitialisation() {
   initTopNav();
   initBreadcrumbs();
   initTodoToggle();
+  initPrefetchLinks('.js-prefetch-document');
   initLogoAnimation();
   initServicePingConsent();
   initUserPopovers();
@@ -94,18 +99,45 @@ function deferredInitialisation() {
   initPersistentUserCallouts();
   initDefaultTrackers();
   initFeatureHighlight();
+  initCopyCodeButton();
 
-  const search = document.querySelector('#search');
-  if (search) {
-    search.addEventListener(
-      'focus',
+  const helpToggle = document.querySelector('.header-help-dropdown-toggle');
+  if (helpToggle) {
+    helpToggle.addEventListener(
+      'click',
       () => {
-        import(/* webpackChunkName: 'globalSearch' */ './search_autocomplete')
-          .then(({ default: initSearchAutocomplete }) => {
-            const searchDropdown = initSearchAutocomplete();
-            searchDropdown.onSearchInputFocus();
+        import(/* webpackChunkName: 'versionCheck' */ './gitlab_version_check')
+          .then(({ default: initGitlabVersionCheck }) => {
+            initGitlabVersionCheck();
           })
           .catch(() => {});
+      },
+      { once: true },
+    );
+  }
+
+  const searchInputBox = document.querySelector('#search');
+  if (searchInputBox) {
+    searchInputBox.addEventListener(
+      'focus',
+      () => {
+        if (gon.features?.newHeaderSearch) {
+          import(/* webpackChunkName: 'globalSearch' */ '~/header_search')
+            .then(async ({ initHeaderSearchApp }) => {
+              // In case the user started searching before we bootstrapped, let's pass the search along.
+              const initialSearchValue = searchInputBox.value;
+              await initHeaderSearchApp(initialSearchValue);
+              searchInputBox.focus();
+            })
+            .catch(() => {});
+        } else {
+          import(/* webpackChunkName: 'globalSearch' */ './search_autocomplete')
+            .then(({ default: initSearchAutocomplete }) => {
+              const searchDropdown = initSearchAutocomplete();
+              searchDropdown.onSearchInputFocus();
+            })
+            .catch(() => {});
+        }
       },
       { once: true },
     );
@@ -129,6 +161,12 @@ function deferredInitialisation() {
 
   // Adding a helper class to activate animations only after all is rendered
   setTimeout(() => $body.addClass('page-initialised'), 1000);
+
+  if (window.gon?.features?.mrAttentionRequests) {
+    import('~/attention_requests')
+      .then((module) => module.default())
+      .catch(() => {});
+  }
 }
 
 const $body = $('body');
@@ -252,7 +290,7 @@ if (flashContainer && flashContainer.children.length) {
   flashContainer
     .querySelectorAll('.flash-alert, .flash-notice, .flash-success')
     .forEach((flashEl) => {
-      removeFlashClickListener(flashEl);
+      addDismissFlashClickListener(flashEl);
     });
 }
 

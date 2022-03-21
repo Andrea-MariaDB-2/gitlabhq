@@ -4,12 +4,13 @@ group: Configure
 info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
 ---
 
-# Serverless **(FREE)**
+# Serverless (DEPRECATED) **(FREE)**
 
-> Introduced in GitLab 11.5.
+> - Introduced in GitLab 11.5.
+> - [Deprecated](https://gitlab.com/groups/gitlab-org/configure/-/epics/6) in GitLab 14.3.
 
 WARNING:
-Serverless is currently in [alpha](https://about.gitlab.com/handbook/product/gitlab-the-product/#alpha).
+Serverless is currently in [alpha](../../../../policy/alpha-beta-support.md#alpha-features).
 
 ## Overview
 
@@ -281,7 +282,7 @@ Explanation of the fields used above:
 |-----------|-------------|
 | `name` | Indicates which provider is used to execute the `serverless.yml` file. In this case, the TriggerMesh middleware. |
 | `envs` | Includes the environment variables to be passed as part of function execution for **all** functions in the file, where `FOO` is the variable name and `BAR` are the variable contents. You may replace this with your own variables. |
-| `secrets` | Includes the contents of the Kubernetes secret as environment variables accessible to be passed as part of function execution for **all** functions in the file. The secrets are expected in INI format. |
+| `secrets` | Includes the contents of the Kubernetes secret as environment variables accessible to be passed as part of function execution for **all** functions in the file. The secrets are expected in `INI` format. |
 
 ### `functions`
 
@@ -295,7 +296,7 @@ subsequent lines contain the function attributes.
 | `runtime` (optional)| The runtime to be used to execute the function. This can be a runtime alias (see [Runtime aliases](#runtime-aliases)), or it can be a full URL to a custom runtime repository. When the runtime is not specified, we assume that `Dockerfile` is present in the function directory specified by `source`. |
 | `description` | A short description of the function. |
 | `envs` | Sets an environment variable for the specific function only. |
-| `secrets` | Includes the contents of the Kubernetes secret as environment variables accessible to be passed as part of function execution for the specific function only. The secrets are expected in INI format. |
+| `secrets` | Includes the contents of the Kubernetes secret as environment variables accessible to be passed as part of function execution for the specific function only. The secrets are expected in `INI` format. |
 
 ### Deployment
 
@@ -538,7 +539,7 @@ server that has Python 3 installed, and may not work on other operating systems
 or with other versions of Python.
 
 1. Install Certbot by running the
-   [`certbot-auto` wrapper script](https://certbot.eff.org/docs/install.html#certbot-auto).
+   [`certbot-auto` wrapper script](https://eff-certbot.readthedocs.io/install.html#certbot-auto).
    On the command line of your server, run the following commands:
 
    ```shell

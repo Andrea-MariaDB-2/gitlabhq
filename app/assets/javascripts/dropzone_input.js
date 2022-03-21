@@ -4,6 +4,7 @@ import { escape } from 'lodash';
 import './behaviors/preview_markdown';
 import { spriteIcon } from '~/lib/utils/common_utils';
 import { getFilename } from '~/lib/utils/file_upload';
+import { truncate } from '~/lib/utils/text_utility';
 import { n__, __ } from '~/locale';
 import PasteMarkdownTable from './behaviors/markdown/paste_markdown_table';
 import axios from './lib/utils/axios_utils';
@@ -42,15 +43,14 @@ export default function dropzoneInput(form, config = { parallelUploads: 2 }) {
   let pasteText;
   let addFileToForm;
   let updateAttachingMessage;
-  let isImage;
   let uploadFile;
+  let hasPlainText;
 
   formTextarea.wrap('<div class="div-dropzone"></div>');
   formTextarea.on('paste', (event) => handlePaste(event));
 
   // Add dropzone area to the form.
   const $mdArea = formTextarea.closest('.md-area');
-  form.setupMarkdownPreview();
   const $formDropzone = form.find('.div-dropzone');
   $formDropzone.parent().addClass('div-dropzone-wrapper');
   $formDropzone.append(divHover);
@@ -172,7 +172,7 @@ export default function dropzoneInput(form, config = { parallelUploads: 2 }) {
       return dropzoneInstance.addFile(file);
     });
   });
-  // eslint-disable-next-line consistent-return
+
   handlePaste = (event) => {
     const pasteEvent = event.originalEvent;
     const { clipboardData } = pasteEvent;
@@ -184,30 +184,28 @@ export default function dropzoneInput(form, config = { parallelUploads: 2 }) {
         event.preventDefault();
         const text = converter.convertToTableMarkdown();
         pasteText(text);
-      } else {
-        const image = isImage(pasteEvent);
+      } else if (!hasPlainText(pasteEvent)) {
+        const fileList = [...clipboardData.files];
+        fileList.forEach((file) => {
+          if (file.type.indexOf('image') !== -1) {
+            event.preventDefault();
+            const MAX_FILE_NAME_LENGTH = 246;
 
-        if (image) {
-          event.preventDefault();
-          const filename = getFilename(pasteEvent) || 'image.png';
-          const text = `{{${filename}}}`;
-          pasteText(text);
-          return uploadFile(image.getAsFile(), filename);
-        }
+            const filename = getFilename(file) || 'image.png';
+            const truncateFilename = truncate(filename, MAX_FILE_NAME_LENGTH);
+            const text = `{{${truncateFilename}}}`;
+            pasteText(text);
+
+            uploadFile(file, truncateFilename);
+          }
+        });
       }
     }
   };
 
-  isImage = (data) => {
-    let i = 0;
-    while (i < data.clipboardData.items.length) {
-      const item = data.clipboardData.items[i];
-      if (item.type.indexOf('image') !== -1) {
-        return item;
-      }
-      i += 1;
-    }
-    return false;
+  hasPlainText = (data) => {
+    const clipboardDataList = [...data.clipboardData.items];
+    return clipboardDataList.some((item) => item.type === 'text/plain');
   };
 
   pasteText = (text, shouldPad) => {

@@ -1,5 +1,6 @@
 import { GlLink, GlSprintf } from '@gitlab/ui';
 import { shallowMount } from '@vue/test-utils';
+import { nextTick } from 'vue';
 import NewCluster from '~/clusters/components/new_cluster.vue';
 import createClusterStore from '~/clusters/stores/new_cluster';
 
@@ -7,10 +8,10 @@ describe('NewCluster', () => {
   let store;
   let wrapper;
 
-  const createWrapper = () => {
+  const createWrapper = async () => {
     store = createClusterStore({ clusterConnectHelpPath: '/some/help/path' });
     wrapper = shallowMount(NewCluster, { store, stubs: { GlLink, GlSprintf } });
-    return wrapper.vm.$nextTick();
+    await nextTick();
   };
 
   const findDescription = () => wrapper.find(GlSprintf);
@@ -30,9 +31,7 @@ describe('NewCluster', () => {
   });
 
   it('renders the correct information text', () => {
-    expect(findDescription().text()).toContain(
-      'Please enter access information for your Kubernetes cluster.',
-    );
+    expect(findDescription().text()).toContain('Enter details about your cluster.');
   });
 
   it('renders a valid help link set by the backend', () => {

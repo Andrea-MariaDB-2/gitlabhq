@@ -49,7 +49,7 @@ module Projects
     private
 
     def validate!
-      unless valid_visibility_level_change?(project, params[:visibility_level])
+      unless valid_visibility_level_change?(project, project.visibility_attribute_value(params))
         raise ValidationError, s_('UpdateProject|New visibility level not allowed!')
       end
 
@@ -104,15 +104,11 @@ module Projects
         system_hook_service.execute_hooks_for(project, :update)
       end
 
-      update_pages_config if changing_pages_related_config?
+      update_pending_builds if runners_settings_toggled?
     end
 
     def after_rename_service(project)
       AfterRenameService.new(project, path_before: project.path_before_last_save, full_path_before: project.full_path_before_last_save)
-    end
-
-    def changing_pages_related_config?
-      changing_pages_https_only? || changing_pages_access_level?
     end
 
     def update_failed!
@@ -142,25 +138,11 @@ module Projects
       params.dig(:project_feature_attributes, :wiki_access_level).to_i > ProjectFeature::DISABLED
     end
 
-    def changing_pages_access_level?
-      params.dig(:project_feature_attributes, :pages_access_level)
-    end
-
     def ensure_wiki_exists
       return if project.create_wiki
 
       log_error("Could not create wiki for #{project.full_name}")
       Gitlab::Metrics.counter(:wiki_can_not_be_created_total, 'Counts the times we failed to create a wiki').increment
-    end
-
-    def update_pages_config
-      return unless project.pages_deployed?
-
-      PagesUpdateConfigurationWorker.perform_async(project.id)
-    end
-
-    def changing_pages_https_only?
-      project.previous_changes.include?(:pages_https_only)
     end
 
     def changing_repository_storage?
@@ -177,6 +159,39 @@ module Projects
       topic_list = topics || tag_list
 
       params[:topic_list] ||= topic_list if topic_list
+    end
+
+    def update_pending_builds
+      update_params = {
+        instance_runners_enabled: project.shared_runners_enabled?,
+        namespace_traversal_ids: group_runner_traversal_ids
+      }
+
+      ::Ci::UpdatePendingBuildService
+        .new(project, update_params)
+        .execute
+    end
+
+    def shared_runners_settings_toggled?
+      project.previous_changes.include?(:shared_runners_enabled)
+    end
+
+    def group_runners_settings_toggled?
+      return false unless project.ci_cd_settings.present?
+
+      project.ci_cd_settings.previous_changes.include?(:group_runners_enabled)
+    end
+
+    def runners_settings_toggled?
+      shared_runners_settings_toggled? || group_runners_settings_toggled?
+    end
+
+    def group_runner_traversal_ids
+      if project.group_runners_enabled?
+        project.namespace.traversal_ids
+      else
+        []
+      end
     end
   end
 end

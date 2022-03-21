@@ -1,7 +1,7 @@
 ---
 type: reference
 stage: Manage
-group: Access
+group: Authentication and Authorization
 info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
 ---
 
@@ -15,7 +15,7 @@ LDAP service that can be configured with GitLab for authentication and group syn
 Secure LDAP requires a slightly different configuration than standard LDAP servers.
 The steps below cover:
 
-- Configuring the Secure LDAP Client in the Google Admin console.
+- Configuring the Secure LDAP Client in the Google administrator console.
 - Required GitLab configuration.
 
 ## Configuring Google LDAP client
@@ -35,7 +35,7 @@ The steps below cover:
    credentials' and 'Read user information'. Select 'Add LDAP Client'
 
    NOTE:
-   If you plan to use GitLab [LDAP Group Sync](index.md#group-sync)
+   If you plan to use GitLab [LDAP Group Sync](ldap_synchronization.md#group-sync)
    , turn on 'Read group information'.
 
    ![Add LDAP Client Step 2](img/google_secure_ldap_add_step_2.png)
@@ -215,7 +215,7 @@ values obtained during the LDAP client configuration earlier:
 ## Using encrypted credentials
 
 You can optionally store the `bind_dn` and `password` in a separate encrypted configuration file using the
-[same steps as the regular LDAP integration](index.md#using-encrypted-credentials).
+[same steps as the regular LDAP integration](index.md#use-encrypted-credentials).
 
 <!-- ## Troubleshooting
 

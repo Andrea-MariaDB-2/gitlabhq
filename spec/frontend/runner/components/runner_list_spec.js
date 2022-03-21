@@ -1,7 +1,9 @@
-import { GlLink, GlTable, GlSkeletonLoader } from '@gitlab/ui';
-import { mount, shallowMount } from '@vue/test-utils';
-import { cloneDeep } from 'lodash';
-import { extendedWrapper } from 'helpers/vue_test_utils_helper';
+import { GlTableLite, GlSkeletonLoader } from '@gitlab/ui';
+import {
+  extendedWrapper,
+  shallowMountExtended,
+  mountExtended,
+} from 'helpers/vue_test_utils_helper';
 import { getIdFromGraphQLId } from '~/graphql_shared/utils';
 import RunnerList from '~/runner/components/runner_list.vue';
 import { runnersData } from '../mock_data';
@@ -13,26 +15,25 @@ describe('RunnerList', () => {
   let wrapper;
 
   const findSkeletonLoader = () => wrapper.findComponent(GlSkeletonLoader);
-  const findTable = () => wrapper.findComponent(GlTable);
+  const findTable = () => wrapper.findComponent(GlTableLite);
   const findHeaders = () => wrapper.findAll('th');
   const findRows = () => wrapper.findAll('[data-testid^="runner-row-"]');
   const findCell = ({ row = 0, fieldKey }) =>
     extendedWrapper(findRows().at(row).find(`[data-testid="td-${fieldKey}"]`));
 
-  const createComponent = ({ props = {} } = {}, mountFn = shallowMount) => {
-    wrapper = extendedWrapper(
-      mountFn(RunnerList, {
-        propsData: {
-          runners: mockRunners,
-          activeRunnersCount: mockActiveRunnersCount,
-          ...props,
-        },
-      }),
-    );
+  const createComponent = ({ props = {}, ...options } = {}, mountFn = shallowMountExtended) => {
+    wrapper = mountFn(RunnerList, {
+      propsData: {
+        runners: mockRunners,
+        activeRunnersCount: mockActiveRunnersCount,
+        ...props,
+      },
+      ...options,
+    });
   };
 
   beforeEach(() => {
-    createComponent({}, mount);
+    createComponent({}, mountExtended);
   });
 
   afterEach(() => {
@@ -43,16 +44,21 @@ describe('RunnerList', () => {
     const headerLabels = findHeaders().wrappers.map((w) => w.text());
 
     expect(headerLabels).toEqual([
-      'Type/State',
+      'Status',
       'Runner',
       'Version',
-      'IP Address',
-      'Projects',
+      'IP',
       'Jobs',
       'Tags',
       'Last contact',
       '', // actions has no label
     ]);
+  });
+
+  it('Sets runner id as a row key', () => {
+    createComponent({});
+
+    expect(findTable().attributes('primary-key')).toBe('id');
   });
 
   it('Displays a list of runners', () => {
@@ -65,99 +71,109 @@ describe('RunnerList', () => {
     const { id, description, version, ipAddress, shortSha } = mockRunners[0];
 
     // Badges
-    expect(findCell({ fieldKey: 'type' }).text()).toMatchInterpolatedText('specific paused');
+    expect(findCell({ fieldKey: 'status' }).text()).toMatchInterpolatedText(
+      'never contacted paused',
+    );
 
-    // Runner identifier
-    expect(findCell({ fieldKey: 'name' }).text()).toContain(
+    // Runner summary
+    expect(findCell({ fieldKey: 'summary' }).text()).toContain(
       `#${getIdFromGraphQLId(id)} (${shortSha})`,
     );
-    expect(findCell({ fieldKey: 'name' }).text()).toContain(description);
+    expect(findCell({ fieldKey: 'summary' }).text()).toContain(description);
 
     // Other fields
     expect(findCell({ fieldKey: 'version' }).text()).toBe(version);
     expect(findCell({ fieldKey: 'ipAddress' }).text()).toBe(ipAddress);
-    expect(findCell({ fieldKey: 'projectCount' }).text()).toBe('1');
     expect(findCell({ fieldKey: 'jobCount' }).text()).toBe('0');
     expect(findCell({ fieldKey: 'tagList' }).text()).toBe('');
     expect(findCell({ fieldKey: 'contactedAt' }).text()).toEqual(expect.any(String));
 
     // Actions
-    const actions = findCell({ fieldKey: 'actions' });
+    expect(findCell({ fieldKey: 'actions' }).exists()).toBe(true);
+  });
 
-    expect(actions.findByTestId('edit-runner').exists()).toBe(true);
-    expect(actions.findByTestId('toggle-active-runner').exists()).toBe(true);
+  describe('Scoped cell slots', () => {
+    it('Render #runner-name slot in "summary" cell', () => {
+      createComponent(
+        {
+          scopedSlots: { 'runner-name': ({ runner }) => `Summary: ${runner.id}` },
+        },
+        mountExtended,
+      );
+
+      expect(findCell({ fieldKey: 'summary' }).text()).toContain(`Summary: ${mockRunners[0].id}`);
+    });
+
+    it('Render #runner-actions-cell slot in "actions" cell', () => {
+      createComponent(
+        {
+          scopedSlots: { 'runner-actions-cell': ({ runner }) => `Actions: ${runner.id}` },
+        },
+        mountExtended,
+      );
+
+      expect(findCell({ fieldKey: 'actions' }).text()).toBe(`Actions: ${mockRunners[0].id}`);
+    });
   });
 
   describe('Table data formatting', () => {
     let mockRunnersCopy;
 
     beforeEach(() => {
-      mockRunnersCopy = cloneDeep(mockRunners);
-    });
-
-    it('Formats null project counts', () => {
-      mockRunnersCopy[0].projectCount = null;
-
-      createComponent({ props: { runners: mockRunnersCopy } }, mount);
-
-      expect(findCell({ fieldKey: 'projectCount' }).text()).toBe('n/a');
-    });
-
-    it('Formats 0 project counts', () => {
-      mockRunnersCopy[0].projectCount = 0;
-
-      createComponent({ props: { runners: mockRunnersCopy } }, mount);
-
-      expect(findCell({ fieldKey: 'projectCount' }).text()).toBe('0');
-    });
-
-    it('Formats big project counts', () => {
-      mockRunnersCopy[0].projectCount = 1000;
-
-      createComponent({ props: { runners: mockRunnersCopy } }, mount);
-
-      expect(findCell({ fieldKey: 'projectCount' }).text()).toBe('1,000');
+      mockRunnersCopy = [
+        {
+          ...mockRunners[0],
+        },
+      ];
     });
 
     it('Formats job counts', () => {
+      mockRunnersCopy[0].jobCount = 1;
+
+      createComponent({ props: { runners: mockRunnersCopy } }, mountExtended);
+
+      expect(findCell({ fieldKey: 'jobCount' }).text()).toBe('1');
+    });
+
+    it('Formats large job counts', () => {
       mockRunnersCopy[0].jobCount = 1000;
 
-      createComponent({ props: { runners: mockRunnersCopy } }, mount);
+      createComponent({ props: { runners: mockRunnersCopy } }, mountExtended);
 
       expect(findCell({ fieldKey: 'jobCount' }).text()).toBe('1,000');
     });
 
-    it('Formats big job counts with a plus symbol', () => {
+    it('Formats large job counts with a plus symbol', () => {
       mockRunnersCopy[0].jobCount = 1001;
 
-      createComponent({ props: { runners: mockRunnersCopy } }, mount);
+      createComponent({ props: { runners: mockRunnersCopy } }, mountExtended);
 
       expect(findCell({ fieldKey: 'jobCount' }).text()).toBe('1,000+');
     });
   });
 
-  it('Links to the runner page', () => {
-    const { id } = mockRunners[0];
+  it('Shows runner identifier', () => {
+    const { id, shortSha } = mockRunners[0];
+    const numericId = getIdFromGraphQLId(id);
 
-    expect(findCell({ fieldKey: 'name' }).find(GlLink).attributes('href')).toBe(
-      `/admin/runners/${getIdFromGraphQLId(id)}`,
-    );
+    expect(findCell({ fieldKey: 'summary' }).text()).toContain(`#${numericId} (${shortSha})`);
   });
 
   describe('When data is loading', () => {
     it('shows a busy state', () => {
       createComponent({ props: { runners: [], loading: true } });
-      expect(findTable().attributes('busy')).toBeTruthy();
+
+      expect(findTable().classes('gl-opacity-6')).toBe(true);
     });
 
     it('when there are no runners, shows an skeleton loader', () => {
-      createComponent({ props: { runners: [], loading: true } }, mount);
+      createComponent({ props: { runners: [], loading: true } }, mountExtended);
 
       expect(findSkeletonLoader().exists()).toBe(true);
     });
 
     it('when there are runners, shows a busy indicator skeleton loader', () => {
-      createComponent({ props: { loading: true } }, mount);
+      createComponent({ props: { loading: true } }, mountExtended);
 
       expect(findSkeletonLoader().exists()).toBe(false);
     });

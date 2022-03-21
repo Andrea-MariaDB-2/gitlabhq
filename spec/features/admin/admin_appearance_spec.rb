@@ -17,7 +17,7 @@ RSpec.describe 'Admin Appearance' do
     fill_in 'appearance_profile_image_guidelines', with: 'Custom profile image guidelines'
     click_button 'Update appearance settings'
 
-    expect(current_path).to eq admin_application_settings_appearances_path
+    expect(page).to have_current_path admin_application_settings_appearances_path, ignore_query: true
     expect(page).to have_content 'Appearance'
 
     expect(page).to have_field('appearance_title', with: 'MyCompany')
@@ -33,6 +33,10 @@ RSpec.describe 'Admin Appearance' do
 
     visit admin_application_settings_appearances_path
     click_link "Sign-in page"
+
+    expect(find('#login')).to be_disabled
+    expect(find('#password')).to be_disabled
+    expect(find('button')).to be_disabled
 
     expect_custom_sign_in_appearance(appearance)
   end
@@ -90,7 +94,7 @@ RSpec.describe 'Admin Appearance' do
     sign_in(admin)
     gitlab_enable_admin_mode_sign_in(admin)
     visit new_project_path
-    find('[data-qa-panel-name="blank_project"]').click # rubocop:disable QA/SelectorUsage
+    click_link 'Create blank project'
 
     expect_custom_new_project_appearance(appearance)
   end

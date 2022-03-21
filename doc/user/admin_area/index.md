@@ -8,7 +8,7 @@ type: reference
 # GitLab Admin Area **(FREE SELF)**
 
 The Admin Area provides a web UI to manage and configure some features of GitLab
-self-managed instances. If you are an Admin user, you can access the Admin Area
+self-managed instances. If you are an administrator, you can access the Admin Area
 by visiting `/admin` on your self-managed instance. You can also access it through
 the UI:
 
@@ -16,7 +16,7 @@ the UI:
 - GitLab versions 13.12 and earlier: on the top bar, select the Admin Area icon (**{admin}**).
 
 NOTE:
-Only admin users can access the Admin Area.
+Only administrators can access the Admin Area.
 
 ## Admin Area sections
 
@@ -24,15 +24,15 @@ The Admin Area is made up of the following sections:
 
 | Section                                        | Description |
 |:-----------------------------------------------|:------------|
-| **{overview}** [Overview](#overview-section)   | View your GitLab [Dashboard](#admin-dashboard), and administer [projects](#administering-projects), [users](#administering-users), [groups](#administering-groups), [jobs](#administering-jobs), [runners](#administering-runners), and [Gitaly servers](#administering-gitaly-servers). |
+| **{overview}** [Overview](#overview-section)   | View your GitLab [Dashboard](#admin-area-dashboard), and administer [projects](#administering-projects), [users](#administering-users), [groups](#administering-groups), [topics](#administering-topics), [jobs](#administering-jobs), [runners](#administering-runners), and [Gitaly servers](#administering-gitaly-servers). |
 | **{monitor}** Monitoring                       | View GitLab [system information](#system-information), and information on [background jobs](#background-jobs), [logs](#logs), [health checks](monitoring/health_check.md), [requests profiles](#requests-profiles), and [audit events](#audit-events). |
 | **{messages}** Messages                        | Send and manage [broadcast messages](broadcast_messages.md) for your users. |
-| **{hook}** System Hooks                        | Configure [system hooks](../../system_hooks/system_hooks.md) for many events. |
+| **{hook}** System Hooks                        | Configure [system hooks](../../administration/system_hooks.md) for many events. |
 | **{applications}** Applications                | Create system [OAuth applications](../../integration/oauth_provider.md) for integrations with other services. |
 | **{slight-frown}** Abuse Reports               | Manage [abuse reports](review_abuse_reports.md) submitted by your users. |
-| **{license}** License                          | Upload, display, and remove [licenses](license.md). |
+| **{license}** License                          | Add, display, and remove [licenses](license.md). |
 | **{cloud-gear}** Kubernetes                    | Create and manage instance-level [Kubernetes clusters](../instance/clusters/index.md). |
-| **{push-rules}** Push rules | Configure pre-defined Git [push rules](../../push_rules/push_rules.md) for projects. Also, configure [merge requests approvers rules](merge_requests_approvals.md). |
+| **{push-rules}** Push rules | Configure pre-defined Git [push rules](../project/repository/push_rules.md) for projects. Also, configure [merge requests approvers rules](merge_requests_approvals.md). |
 | **{location-dot}** Geo                         | Configure and maintain [Geo nodes](geo_nodes.md). |
 | **{key}** Deploy keys                          | Create instance-wide [SSH deploy keys](../project/deploy_keys/index.md). |
 | **{lock}** Credentials                         | View [credentials](credentials_inventory.md) that can be used to access your instance. |
@@ -41,7 +41,7 @@ The Admin Area is made up of the following sections:
 | **{appearance}** Appearance                    | Customize [GitLab appearance](appearance.md). |
 | **{settings}** Settings                        | Modify the [settings](settings/index.md) for your GitLab instance. |
 
-## Admin Dashboard
+## Admin Area dashboard
 
 The Dashboard provides statistics and system information about the GitLab instance.
 
@@ -72,7 +72,7 @@ You can administer all projects in the GitLab instance from the Admin Area's Pro
 To access the Projects page:
 
 1. On the top bar, select **Menu > Admin**.
-1. In the left sidebar, select **Overview > Projects**.
+1. On the left sidebar, select **Overview > Projects**.
 1. Select the **All**, **Private**, **Internal**, or **Public** tab to list only
    projects of that criteria.
 
@@ -112,7 +112,7 @@ You can combine the filter options. For example, to list only public projects wi
 You can administer all users in the GitLab instance from the Admin Area's Users page:
 
 1. On the top bar, select **Menu > Admin**.
-1. In the left sidebar, select **Overview > Users**.
+1. On the left sidebar, select **Overview > Users**.
 
 To list users matching a specific criteria, click on one of the following tabs on the **Users** page:
 
@@ -151,13 +151,13 @@ you must provide the complete email address.
 
 #### User impersonation
 
-An administrator can "impersonate" any other user, including other administrator users.
+An administrator can "impersonate" any other user, including other administrators.
 This allows the administrator to "see what the user sees," and take actions on behalf of the user.
 You can impersonate a user in the following ways:
 
 - Through the UI:
   1. On the top bar, select **Menu > Admin**.
-  1. In the left sidebar, select **Overview > Users**.
+  1. On the left sidebar, select **Overview > Users**.
   1. From the list of users, select a user.
   1. Select **Impersonate**.
 - With the API, using [impersonation tokens](../../api/index.md#impersonation-tokens).
@@ -183,6 +183,9 @@ The following data is included in the export:
 - Type
 - Path
 - Access level ([Project](../permissions.md#project-members-permissions) and [Group](../permissions.md#group-members-permissions))
+- Date of last activity ([introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/345388) in GitLab 14.6). For a list of activities that populate this column, see the [Users API documentation](../../api/users.md#get-user-activities-admin-only).
+
+Only the first 100,000 user accounts are exported.
 
 ![user permission export button](img/export_permissions_v13_11.png)
 
@@ -199,9 +202,32 @@ The following totals are also included:
 
 GitLab billing is based on the number of [**Billable users**](../../subscriptions/self_managed/index.md#billable-users).
 
+#### Add email to user
+
+You must be an administrator to manually add emails to users:
+
+1. On the top bar, select **Menu > Admin**.
+1. On the left sidebar, select **Overview > Users** (`/admin/users`).
+1. Locate the user and select them.
+1. Select **Edit**.
+1. In **Email**, enter the new email address. This adds the new email address to the
+   user and sets the previous email address to be a secondary.
+1. Select **Save changes**.
+
 ### User cohorts
 
 The [Cohorts](user_cohorts.md) tab displays the monthly cohorts of new users and their activities over time.
+
+### Prevent a user from creating groups
+
+By default, users can create groups. To prevent a user from creating groups:
+
+1. On the top bar, select **Menu > Admin**.
+1. On the left sidebar, select **Overview > Users** (`/admin/users`).
+1. Locate the user and select them.
+1. Select **Edit**.
+1. Clear the **Can create group** checkbox.
+1. Select **Save changes**.
 
 ### Administering Groups
 
@@ -210,7 +236,7 @@ You can administer all groups in the GitLab instance from the Admin Area's Group
 To access the Groups page:
 
 1. On the top bar, select **Menu > Admin**.
-1. In the left sidebar, select **Overview > Groups**.
+1. On the left sidebar, select **Overview > Groups**.
 
 For each group, the page displays their name, description, size, number of projects in the group,
 number of members, and whether the group is private, internal, or public. To edit a group, click
@@ -225,6 +251,32 @@ insensitive, and applies partial matching.
 
 To [Create a new group](../group/index.md#create-a-group) click **New group**.
 
+### Administering Topics
+
+> [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/340920) in GitLab 14.4.
+
+You can administer all [topics](../project/working_with_projects.md#explore-topics) in the
+GitLab instance from the Admin Area's Topics page.
+
+To access the Topics page:
+
+1. On the top bar, select **Menu > Admin**.
+1. On the left sidebar, select **Overview > Topics**.
+
+For each topic, the page displays its name and the number of projects labeled with the topic.
+
+To create a new topic, select **New topic**.
+
+To edit a topic, select **Edit** in that topic's row.
+
+To search for topics by name, enter your criteria in the search box. The topic search is case
+insensitive and applies partial matching.
+
+NOTE:
+The assigned topics are visible only to everyone with access to the project,
+but everyone can see which topics exist at all on the GitLab instance.
+Do not include sensitive information in the name of a topic.
+
 ### Administering Jobs
 
 You can administer all jobs in the GitLab instance from the Admin Area's Jobs page.
@@ -232,7 +284,7 @@ You can administer all jobs in the GitLab instance from the Admin Area's Jobs pa
 To access the Jobs page:
 
 1. On the top bar, select **Menu > Admin**.
-1. In the left sidebar, select **Overview > Jobs**. All jobs are listed, in descending order of job ID.
+1. On the left sidebar, select **Overview > Jobs**. All jobs are listed, in descending order of job ID.
 1. Click the **All** tab to list all jobs. Click the **Pending**, **Running**, or **Finished**
    tab to list only jobs of that status.
 
@@ -258,7 +310,7 @@ You can administer all runners in the GitLab instance from the Admin Area's **Ru
 To access the **Runners** page:
 
 1. On the top bar, select **Menu > Admin**.
-1. In the left sidebar, select **Overview > Runners**.
+1. On the left sidebar, select **Overview > Runners**.
 
 The **Runners** page features:
 
@@ -277,11 +329,11 @@ To search runners' descriptions:
 
 You can also filter runners by status, type, and tag. To filter:
 
-1. Click in the **Search or filter results...** field.
-1. Select **Status**, **Type**, or **Tags**.
+1. Select a tab or the **Search or filter results...** field.
+1. Select any **Type**, or filter by **Status** or **Tags**.
 1. Select or enter your search criteria.
 
-![Attributes of a runner, with the **Search or filter results...** field active](img/index_runners_search_or_filter_v14_1.png)
+![Attributes of a runner, with the **Search or filter results...** field active](img/index_runners_search_or_filter_v14_5.png)
 
 For each runner, the following attributes are listed:
 
@@ -308,7 +360,7 @@ page. For more details, see [Gitaly](../../administration/gitaly/index.md).
 To access the **Gitaly Servers** page:
 
 1. On the top bar, select **Menu > Admin**.
-1. In the left sidebar, select **Overview > Gitaly Servers**.
+1. On the left sidebar, select **Overview > Gitaly Servers**.
 
 For each Gitaly server, the following details are listed:
 
@@ -357,7 +409,7 @@ The Sidekiq dashboard consists of the following elements:
 
 ### Logs
 
-Since GitLab 13.0, **Log** view has been removed from the admin dashboard since the logging does not work in multi-node setups and could cause confusion for administrators by displaying partial information.
+Since GitLab 13.0, **Log** view has been removed from the Admin Area dashboard since the logging does not work in multi-node setups and could cause confusion for administrators by displaying partial information.
 
 For multi-node systems we recommend ingesting the logs into services like Elasticsearch and Splunk.
 

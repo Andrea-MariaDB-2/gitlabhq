@@ -17,12 +17,12 @@ module BoardsHelper
       can_update: can_update?.to_s,
       can_admin_list: can_admin_list?.to_s,
       time_tracking_limit_to_hours: Gitlab::CurrentSettings.time_tracking_limit_to_hours.to_s,
-      recent_boards_endpoint: recent_boards_path,
       parent: current_board_parent.model_name.param_key,
       group_id: group_id,
       labels_filter_base_path: build_issue_link_base,
       labels_fetch_path: labels_fetch_path,
       labels_manage_path: labels_manage_path,
+      releases_fetch_path: releases_fetch_path,
       board_type: board.to_type
     }
   end
@@ -43,7 +43,7 @@ module BoardsHelper
 
   def build_issue_link_base
     if board.group_board?
-      "#{group_path(@board.group)}/:project_path/issues"
+      "/:project_path/-/issues"
     else
       project_issues_path(@project)
     end
@@ -62,6 +62,14 @@ module BoardsHelper
       group_labels_path(@group)
     else
       project_labels_path(@project)
+    end
+  end
+
+  def releases_fetch_path
+    if board.group_board?
+      group_releases_path(@group)
+    else
+      project_releases_path(@project)
     end
   end
 
@@ -117,10 +125,6 @@ module BoardsHelper
       project_path: @project&.path,
       group_path: @group&.path
     }
-  end
-
-  def recent_boards_path
-    recent_project_boards_path(@project) if current_board_parent.is_a?(Project)
   end
 
   def serializer

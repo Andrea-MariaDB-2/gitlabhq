@@ -5,6 +5,9 @@ import {
   issuableQaClassMap,
   linkedIssueTypesMap,
   linkedIssueTypesTextMap,
+  issuablesBlockHeaderTextMap,
+  issuablesBlockHelpTextMap,
+  issuablesBlockAddButtonTextMap,
 } from '../constants';
 import AddIssuableForm from './add_issuable_form.vue';
 import RelatedIssuesList from './related_issues_list.vue';
@@ -82,6 +85,16 @@ export default {
       required: false,
       default: true,
     },
+    autoCompleteEpics: {
+      type: Boolean,
+      required: false,
+      default: true,
+    },
+    autoCompleteIssues: {
+      type: Boolean,
+      required: false,
+      default: true,
+    },
   },
   computed: {
     hasRelatedIssues() {
@@ -105,6 +118,15 @@ export default {
     hasBody() {
       return this.isFormVisible || this.shouldShowTokenBody;
     },
+    headerText() {
+      return issuablesBlockHeaderTextMap[this.issuableType];
+    },
+    helpLinkText() {
+      return issuablesBlockHelpTextMap[this.issuableType];
+    },
+    addIssuableButtonText() {
+      return issuablesBlockAddButtonTextMap[this.issuableType];
+    },
     badgeLabel() {
       return this.isFetching && this.relatedIssues.length === 0 ? '...' : this.relatedIssues.length;
     },
@@ -123,7 +145,7 @@ export default {
 </script>
 
 <template>
-  <div id="related-issues" class="related-issues-block">
+  <div id="related-issues" class="related-issues-block gl-mt-5">
     <div class="card card-slim gl-overflow-hidden">
       <div
         :class="{ 'panel-empty-heading border-bottom-0': !hasBody }"
@@ -138,13 +160,14 @@ export default {
             href="#related-issues"
             aria-hidden="true"
           />
-          <slot name="header-text">{{ __('Linked issues') }}</slot>
+          <slot name="header-text">{{ headerText }}</slot>
           <gl-link
             v-if="hasHelpPath"
             :href="helpPath"
             target="_blank"
             class="gl-display-flex gl-align-items-center gl-ml-2 gl-text-gray-500"
-            :aria-label="__('Read more about related issues')"
+            data-testid="help-link"
+            :aria-label="helpLinkText"
           >
             <gl-icon name="question" :size="12" />
           </gl-link>
@@ -160,9 +183,8 @@ export default {
               v-if="canAdmin"
               data-qa-selector="related_issues_plus_button"
               icon="plus"
-              :aria-label="__('Add a related issue')"
+              :aria-label="addIssuableButtonText"
               :class="qaClass"
-              class="js-issue-count-badge-add-button"
               @click="$emit('toggleAddRelatedIssuesForm', $event)"
             />
           </div>
@@ -186,6 +208,8 @@ export default {
             :input-value="inputValue"
             :pending-references="pendingReferences"
             :auto-complete-sources="autoCompleteSources"
+            :auto-complete-epics="autoCompleteEpics"
+            :auto-complete-issues="autoCompleteIssues"
             :path-id-separator="pathIdSeparator"
             @pendingIssuableRemoveRequest="$emit('pendingIssuableRemoveRequest', $event)"
             @addIssuableFormInput="$emit('addIssuableFormInput', $event)"
@@ -198,6 +222,7 @@ export default {
           <related-issues-list
             v-for="category in categorisedIssues"
             :key="category.linkType"
+            :list-link-type="category.linkType"
             :heading="$options.linkedIssueTypesTextMap[category.linkType]"
             :can-admin="canAdmin"
             :can-reorder="canReorder"

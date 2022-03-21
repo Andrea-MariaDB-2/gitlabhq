@@ -232,4 +232,11 @@ RSpec.describe ExternalPullRequest do
                                     'with space/README.md']
     end
   end
+
+  context 'loose foreign key on external_pull_requests.project_id' do
+    it_behaves_like 'cleanup by a loose foreign key' do
+      let!(:parent) { create(:project) }
+      let!(:model) { create(:external_pull_request, project: parent) }
+    end
+  end
 end

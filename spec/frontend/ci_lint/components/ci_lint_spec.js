@@ -1,9 +1,10 @@
 import { GlAlert } from '@gitlab/ui';
 import { shallowMount } from '@vue/test-utils';
+import { nextTick } from 'vue';
 import waitForPromises from 'helpers/wait_for_promises';
 import CiLint from '~/ci_lint/components/ci_lint.vue';
 import CiLintResults from '~/pipeline_editor/components/lint/ci_lint_results.vue';
-import lintCIMutation from '~/pipeline_editor/graphql/mutations/lint_ci.mutation.graphql';
+import lintCIMutation from '~/pipeline_editor/graphql/mutations/client/lint_ci.mutation.graphql';
 import SourceEditor from '~/vue_shared/components/source_editor.vue';
 import { mockLintDataValid } from '../mock_data';
 
@@ -66,6 +67,8 @@ describe('CI Lint', () => {
   it('validate action calls mutation with dry run', async () => {
     const dryRunEnabled = true;
 
+    // setData usage is discouraged. See https://gitlab.com/groups/gitlab-org/-/epics/7330 for details
+    // eslint-disable-next-line no-restricted-syntax
     await wrapper.setData({ dryRun: dryRunEnabled });
 
     findValidateBtn().vm.$emit('click');
@@ -79,7 +82,7 @@ describe('CI Lint', () => {
   it('validation displays results', async () => {
     findValidateBtn().vm.$emit('click');
 
-    await wrapper.vm.$nextTick();
+    await nextTick();
 
     expect(findValidateBtn().props('loading')).toBe(true);
 
@@ -94,7 +97,7 @@ describe('CI Lint', () => {
 
     findValidateBtn().vm.$emit('click');
 
-    await wrapper.vm.$nextTick();
+    await nextTick();
 
     expect(findValidateBtn().props('loading')).toBe(true);
 

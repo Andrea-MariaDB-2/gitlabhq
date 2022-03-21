@@ -50,10 +50,13 @@ export const toggleFormEventPrefix = {
   issue: 'toggle-issue-form-',
 };
 
+export const active = 'active';
+
 export const inactiveId = 0;
 
 export const ISSUABLE = 'issuable';
 export const LIST = 'list';
+export const INCIDENT = 'INCIDENT';
 
 export const flashAnimationDuration = 2000;
 
@@ -104,8 +107,10 @@ export const FilterFields = {
     'assigneeUsername',
     'assigneeWildcardId',
     'authorUsername',
+    'confidential',
     'labelName',
     'milestoneTitle',
+    'milestoneWildcardId',
     'myReactionEmoji',
     'releaseTag',
     'search',
@@ -114,9 +119,27 @@ export const FilterFields = {
   ],
 };
 
+/* eslint-disable @gitlab/require-i18n-strings */
+export const AssigneeFilterType = {
+  any: 'Any',
+  none: 'None',
+};
+
+export const MilestoneFilterType = {
+  any: 'Any',
+  none: 'None',
+  started: 'Started',
+  upcoming: 'Upcoming',
+};
+
 export const DraggableItemTypes = {
   card: 'card',
   list: 'list',
+};
+
+export const MilestoneIDs = {
+  NONE: 0,
+  ANY: -1,
 };
 
 export default {

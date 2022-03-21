@@ -9,7 +9,7 @@ RSpec.describe Admin::IntegrationsController do
     sign_in(admin)
   end
 
-  it_behaves_like IntegrationsActions do
+  it_behaves_like Integrations::Actions do
     let(:integration_attributes) { { instance: true, project: nil } }
 
     let(:routing_params) do
@@ -103,42 +103,6 @@ RSpec.describe Admin::IntegrationsController do
     it 'deletes the integration and all inheriting integrations' do
       expect { subject }.to change { Integrations::Jira.for_instance.count }.by(-1)
         .and change { Integrations::Jira.inherit_from_id(integration.id).count }.by(-1)
-    end
-  end
-
-  describe '#overrides' do
-    let_it_be(:instance_integration) { create(:bugzilla_integration, :instance) }
-    let_it_be(:non_overridden_integration) { create(:bugzilla_integration, inherit_from_id: instance_integration.id) }
-    let_it_be(:overridden_integration) { create(:bugzilla_integration) }
-    let_it_be(:overridden_other_integration) { create(:confluence_integration) }
-
-    subject do
-      get :overrides, params: { id: instance_integration.class.to_param }, format: format
-    end
-
-    context 'when format is JSON' do
-      let(:format) { :json }
-
-      include_context 'JSON response'
-
-      it 'returns projects with overrides', :aggregate_failures do
-        subject
-
-        expect(response).to have_gitlab_http_status(:ok)
-        expect(response).to include_pagination_headers
-        expect(json_response).to contain_exactly(a_hash_including('full_name' => overridden_integration.project.full_name))
-      end
-    end
-
-    context 'when format is HTML' do
-      let(:format) { :html }
-
-      it 'renders template' do
-        subject
-
-        expect(response).to render_template 'shared/integrations/overrides'
-        expect(assigns(:integration)).to eq(instance_integration)
-      end
     end
   end
 end

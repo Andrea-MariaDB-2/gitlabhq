@@ -1,7 +1,7 @@
 ---
 type: reference, howto
 stage: Manage
-group: Access
+group: Authentication and Authorization
 info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
 ---
 
@@ -65,7 +65,7 @@ This restriction also applies to projects forked from or to those groups.
 
 > [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/34648) in GitLab 12.9.
 
-Groups with group-managed accounts can disallow forking of projects to destinations outside the group.
+Groups with group-managed accounts can prevent forking of projects to destinations outside the group.
 To do so, enable the "Prohibit outer forks" option in **Settings > SAML SSO**.
 When enabled **at the parent group level**, projects within the group can be forked
 only to other destinations within the group (including its subgroups).
@@ -113,7 +113,7 @@ on the lifetime of personal access tokens apply.
 To set a limit on how long personal access tokens are valid for users in a group managed account:
 
 1. Navigate to the **Settings > General** page in your group's sidebar.
-1. Expand the **Permissions, LFS, 2FA** section.
+1. Expand the **Permissions and group features** section.
 1. Fill in the **Maximum allowable lifetime for personal access tokens (days)** field.
 1. Click **Save changes**.
 

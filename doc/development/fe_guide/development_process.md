@@ -56,13 +56,37 @@ Please use your best judgment when to use it and please contribute new points th
 - [ ] **Performance** Have you checked performance? For example do the same thing with 500 comments instead of 1. Document the tests and possible findings in the MR so a reviewer can directly see it.
 - [ ] Have you tested with a variety of our [supported browsers](../../install/requirements.md#supported-web-browsers)? You can use [browserstack](https://www.browserstack.com/) to be able to access a wide variety of browsers and operating systems.
 - [ ] Did you check the mobile view?
-- [ ] Check the built webpack bundle (For the report run `WEBPACK_REPORT=true gdk run`, then open `webpack-report/index.html`) if we have unnecessary bloat due to wrong references, including libraries multiple times, etc.. If you need help contact the webpack [domain expert](https://about.gitlab.com/handbook/engineering/frontend/#frontend-domain-experts)
+- [ ] Check the built webpack bundle (For the report run `WEBPACK_REPORT=true gdk start`, then open `webpack-report/index.html`) if we have unnecessary bloat due to wrong references, including libraries multiple times, etc.. If you need help contact the webpack [domain expert](https://about.gitlab.com/handbook/engineering/frontend/#frontend-domain-experts)
 - [ ] **Tests** Not only greenfield tests - Test also all bad cases that come to your mind.
 - [ ] If you have multiple MR's then also smoke test against the final merge.
 - [ ] Are there any big changes on how and especially how frequently we use the API then let production know about it
 - [ ] Smoke test of the RC on dev., staging., canary deployments and .com
 - [ ] Follow up on issues that came out of the review. Create issues for discovered edge cases that should be covered in future iterations.
 ```
+
+### Code deletion checklist
+
+When your merge request deletes code, it's important to also delete all
+related code that is no longer used.
+When deleting Haml and Vue code, check whether it contains the following types of
+code that is unused:
+
+- CSS.
+
+  For example, we've deleted a Vue component that contained the `.mr-card` class, which is now unused.
+  The `.mr-card` CSS rule set should then be deleted from `merge_requests.scss`.
+
+- Ruby variables.
+
+  Deleting unused Ruby variables is important so we don't continue instantiating them with
+  potentially expensive code.
+
+  For example, we've deleted a Haml template that used the `@total_count` Ruby variable.
+  The `@total_count` variable was no longer used in the remaining templates for the page.
+  The instantiation of `@total_count` in `issues_controller.rb` should then be deleted so that we
+  don't make unnecessary database calls to calculate the count of issues.
+
+- Ruby methods.
 
 ### Merge Request Review
 

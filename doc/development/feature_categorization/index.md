@@ -72,6 +72,11 @@ class SomeCrossCuttingConcernWorker
 end
 ```
 
+When possible, workers marked as "not owned" use their caller's
+category (worker or HTTP endpoint) in metrics and logs.
+For instance, `ReactiveCachingWorker` can have multiple feature
+categories in metrics and logs.
+
 ## Rails controllers
 
 Specifying feature categories on controller actions can be done using
@@ -91,7 +96,7 @@ second argument:
 
 ```ruby
 class DashboardController < ApplicationController
-  feature_category :issue_tracking, [:issues, :issues_calendar]
+  feature_category :team_planning, [:issues, :issues_calendar]
   feature_category :code_review, [:merge_requests]
 end
 ```
@@ -132,7 +137,7 @@ Grape API endpoints can use the `feature_category` class method, like
 ```ruby
 module API
   class Issues < ::API::Base
-    feature_category :issue_tracking
+    feature_category :team_planning
   end
 end
 ```

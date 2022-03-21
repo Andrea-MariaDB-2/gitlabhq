@@ -10,6 +10,7 @@ RSpec.describe 'Groups > Members > Leave group' do
   let(:group) { create(:group) }
 
   before do
+    stub_feature_flags(bootstrap_confirmation_modals: false)
     sign_in(user)
   end
 
@@ -20,7 +21,7 @@ RSpec.describe 'Groups > Members > Leave group' do
     visit group_path(group)
     click_link 'Leave group'
 
-    expect(current_path).to eq(dashboard_groups_path)
+    expect(page).to have_current_path(dashboard_groups_path, ignore_query: true)
     expect(page).to have_content left_group_message(group)
     expect(group.users).not_to include(user)
   end
@@ -34,7 +35,7 @@ RSpec.describe 'Groups > Members > Leave group' do
     page.accept_confirm
 
     wait_for_all_requests
-    expect(current_path).to eq(dashboard_groups_path)
+    expect(page).to have_current_path(dashboard_groups_path, ignore_query: true)
     expect(group.users).not_to include(user)
   end
 
@@ -44,7 +45,7 @@ RSpec.describe 'Groups > Members > Leave group' do
     visit group_path(group)
     click_link 'Leave group'
 
-    expect(current_path).to eq(dashboard_groups_path)
+    expect(page).to have_current_path(dashboard_groups_path, ignore_query: true)
     expect(page).to have_content left_group_message(group)
     expect(group.users).not_to include(user)
   end
@@ -56,7 +57,7 @@ RSpec.describe 'Groups > Members > Leave group' do
     visit group_path(group)
     click_link 'Leave group'
 
-    expect(current_path).to eq(dashboard_groups_path)
+    expect(page).to have_current_path(dashboard_groups_path, ignore_query: true)
     expect(page).to have_content left_group_message(group)
     expect(group.users).not_to include(user)
   end
@@ -78,7 +79,7 @@ RSpec.describe 'Groups > Members > Leave group' do
 
     visit group_path(group, leave: 1)
 
-    expect(find('.flash-alert')).to have_content 'You do not have permission to leave this group'
+    expect(find('[data-testid="alert-danger"]')).to have_content 'You do not have permission to leave this group'
   end
 
   def left_group_message(group)

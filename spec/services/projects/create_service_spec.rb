@@ -7,9 +7,10 @@ RSpec.describe Projects::CreateService, '#execute' do
   include GitHelpers
 
   let(:user) { create :user }
+  let(:project_name) { 'GitLab' }
   let(:opts) do
     {
-      name: 'GitLab',
+      name: project_name,
       namespace_id: user.namespace.id
     }
   end
@@ -22,11 +23,11 @@ RSpec.describe Projects::CreateService, '#execute' do
     end
 
     it 'creates labels on project creation' do
-      created_label = project.labels.last
-
-      expect(created_label.type).to eq('ProjectLabel')
-      expect(created_label.project_id).to eq(project.id)
-      expect(created_label.title).to eq('bug')
+      expect(project.labels).to include have_attributes(
+        type: eq('ProjectLabel'),
+        project_id: eq(project.id),
+        title: eq('bug')
+      )
     end
 
     context 'using gitlab project import' do
@@ -49,6 +50,7 @@ RSpec.describe Projects::CreateService, '#execute' do
       it 'keeps them as specified' do
         expect(project.name).to eq('one')
         expect(project.path).to eq('two')
+        expect(project.project_namespace).to be_in_sync_with_project(project)
       end
     end
 
@@ -58,6 +60,7 @@ RSpec.describe Projects::CreateService, '#execute' do
       it 'sets name == path' do
         expect(project.path).to eq('one.two_three-four')
         expect(project.name).to eq(project.path)
+        expect(project.project_namespace).to be_in_sync_with_project(project)
       end
     end
 
@@ -67,6 +70,7 @@ RSpec.describe Projects::CreateService, '#execute' do
       it 'sets path == name' do
         expect(project.name).to eq('one.two_three-four')
         expect(project.path).to eq(project.name)
+        expect(project.project_namespace).to be_in_sync_with_project(project)
       end
     end
 
@@ -78,6 +82,7 @@ RSpec.describe Projects::CreateService, '#execute' do
       it 'parameterizes the name' do
         expect(project.name).to eq('one.two_three-four and five')
         expect(project.path).to eq('one-two_three-four-and-five')
+        expect(project.project_namespace).to be_in_sync_with_project(project)
       end
     end
   end
@@ -111,13 +116,15 @@ RSpec.describe Projects::CreateService, '#execute' do
   end
 
   context 'user namespace' do
-    it do
+    it 'creates a project in user namespace' do
       project = create_project(user, opts)
 
       expect(project).to be_valid
-      expect(project.owner).to eq(user)
-      expect(project.team.maintainers).to include(user)
+      expect(project.first_owner).to eq(user)
+      expect(project.team.maintainers).not_to include(user)
+      expect(project.team.owners).to contain_exactly(user)
       expect(project.namespace).to eq(user.namespace)
+      expect(project.project_namespace).to be_in_sync_with_project(project)
     end
   end
 
@@ -139,6 +146,12 @@ RSpec.describe Projects::CreateService, '#execute' do
 
       subject { create_project(user, opts) }
     end
+
+    it 'logs creation' do
+      expect(Gitlab::AppLogger).to receive(:info).with(/#{user.name} created a new project/)
+
+      create_project(user, opts)
+    end
   end
 
   context "admin creates project with other user's namespace_id" do
@@ -149,8 +162,10 @@ RSpec.describe Projects::CreateService, '#execute' do
 
         expect(project).to be_persisted
         expect(project.owner).to eq(user)
-        expect(project.team.maintainers).to contain_exactly(user)
+        expect(project.first_owner).to eq(user)
+        expect(project.team.owners).to contain_exactly(user)
         expect(project.namespace).to eq(user.namespace)
+        expect(project.project_namespace).to be_in_sync_with_project(project)
       end
     end
 
@@ -160,6 +175,7 @@ RSpec.describe Projects::CreateService, '#execute' do
         project = create_project(admin, opts)
 
         expect(project).not_to be_persisted
+        expect(project.project_namespace).to be_in_sync_with_project(project)
       end
     end
   end
@@ -175,15 +191,22 @@ RSpec.describe Projects::CreateService, '#execute' do
       user.refresh_authorized_projects # Ensure cache is warm
     end
 
-    it do
-      project = create_project(user, opts.merge!(namespace_id: group.id))
+    subject(:project) { create_project(user, opts.merge!(namespace_id: group.id)) }
 
+    shared_examples 'has sync-ed traversal_ids' do
+      specify { expect(project.reload.project_namespace.traversal_ids).to eq([project.namespace.traversal_ids, project.project_namespace.id].flatten.compact) }
+    end
+
+    it 'creates the project' do
       expect(project).to be_valid
       expect(project.owner).to eq(group)
       expect(project.namespace).to eq(group)
       expect(project.team.owners).to include(user)
       expect(user.authorized_projects).to include(project)
+      expect(project.project_namespace).to be_in_sync_with_project(project)
     end
+
+    it_behaves_like 'has sync-ed traversal_ids'
   end
 
   context 'group sharing', :sidekiq_inline do
@@ -193,7 +216,7 @@ RSpec.describe Projects::CreateService, '#execute' do
 
     let(:opts) do
       {
-        name: 'GitLab',
+        name: project_name,
         namespace_id: shared_group.id
       }
     end
@@ -228,7 +251,7 @@ RSpec.describe Projects::CreateService, '#execute' do
     let(:share_max_access_level) { Gitlab::Access::MAINTAINER }
     let(:opts) do
       {
-        name: 'GitLab',
+        name: project_name,
         namespace_id: subgroup_for_projects.id
       }
     end
@@ -339,12 +362,19 @@ RSpec.describe Projects::CreateService, '#execute' do
       end
 
       imported_project
+      expect(imported_project.project_namespace).to be_in_sync_with_project(imported_project)
     end
 
     it 'stores import data and URL' do
       expect(imported_project.import_data).to be_persisted
       expect(imported_project.import_data.data).to eq(import_data[:data])
       expect(imported_project.import_url).to eq('http://import-url')
+    end
+
+    it 'tracks for the combined_registration experiment', :experiment do
+      expect(experiment(:combined_registration)).to track(:import_project).on_next_instance
+
+      imported_project
     end
   end
 
@@ -400,6 +430,7 @@ RSpec.describe Projects::CreateService, '#execute' do
         expect(project.visibility_level).to eq(project_level)
         expect(project).to be_saved
         expect(project).to be_valid
+        expect(project.project_namespace).to be_in_sync_with_project(project)
       end
     end
   end
@@ -418,6 +449,7 @@ RSpec.describe Projects::CreateService, '#execute' do
         expect(project.errors.messages[:visibility_level].first).to(
           match('restricted by your GitLab administrator')
         )
+        expect(project.project_namespace).to be_in_sync_with_project(project)
       end
 
       it 'does not allow a restricted visibility level for admins when admin mode is disabled' do
@@ -487,6 +519,7 @@ RSpec.describe Projects::CreateService, '#execute' do
       expect(project).to be_valid
       expect(project.owner).to eq(user)
       expect(project.namespace).to eq(user.namespace)
+      expect(project.project_namespace).to be_in_sync_with_project(project)
     end
 
     context 'when another repository already exists on disk' do
@@ -516,6 +549,7 @@ RSpec.describe Projects::CreateService, '#execute' do
           expect(project).to respond_to(:errors)
           expect(project.errors.messages).to have_key(:base)
           expect(project.errors.messages[:base].first).to match('There is already a repository with that name on disk')
+          expect(project.project_namespace).to be_in_sync_with_project(project)
         end
 
         it 'does not allow to import project when path matches existing repository on disk' do
@@ -525,6 +559,7 @@ RSpec.describe Projects::CreateService, '#execute' do
           expect(project).to respond_to(:errors)
           expect(project.errors.messages).to have_key(:base)
           expect(project.errors.messages[:base].first).to match('There is already a repository with that name on disk')
+          expect(project.project_namespace).to be_in_sync_with_project(project)
         end
       end
 
@@ -549,6 +584,7 @@ RSpec.describe Projects::CreateService, '#execute' do
           expect(project).to respond_to(:errors)
           expect(project.errors.messages).to have_key(:base)
           expect(project.errors.messages[:base].first).to match('There is already a repository with that name on disk')
+          expect(project.project_namespace).to be_in_sync_with_project(project)
         end
       end
     end
@@ -561,58 +597,71 @@ RSpec.describe Projects::CreateService, '#execute' do
       opts[:initialize_with_readme] = '1'
     end
 
-    shared_examples 'creates README.md' do
+    shared_examples 'a repo with a README.md' do
       it { expect(project.repository.commit_count).to be(1) }
       it { expect(project.repository.readme.name).to eql('README.md') }
-      it { expect(project.repository.readme.data).to include('# GitLab') }
+      it { expect(project.repository.readme.data).to include(expected_content) }
     end
 
-    it_behaves_like 'creates README.md'
+    it_behaves_like 'a repo with a README.md' do
+      let(:expected_content) do
+        <<~MARKDOWN
+          cd existing_repo
+          git remote add origin #{project.http_url_to_repo}
+          git branch -M master
+          git push -uf origin master
+        MARKDOWN
+      end
+    end
+
+    context 'and a readme_template is specified' do
+      before do
+        opts[:readme_template] = "# GitLab\nThis is customized readme."
+      end
+
+      it_behaves_like 'a repo with a README.md' do
+        let(:expected_content) { "# GitLab\nThis is customized readme." }
+      end
+    end
 
     context 'and a default_branch_name is specified' do
       before do
-        allow(Gitlab::CurrentSettings)
-          .to receive(:default_branch_name)
-          .and_return('example_branch')
+        allow(Gitlab::CurrentSettings).to receive(:default_branch_name).and_return('example_branch')
       end
 
-      it_behaves_like 'creates README.md'
-
-      it 'creates README.md within the specified branch rather than master' do
+      it 'creates the correct branch' do
         branches = project.repository.branches
 
         expect(branches.size).to eq(1)
         expect(branches.collect(&:name)).to contain_exactly('example_branch')
       end
 
-      describe 'advanced readme content', experiment: :new_project_readme_content do
-        before do
-          stub_experiments(new_project_readme_content: :advanced)
-        end
-
-        it_behaves_like 'creates README.md'
-
-        it 'includes advanced content in the README.md' do
-          content = project.repository.readme.data
-          expect(content).to include <<~MARKDOWN
+      it_behaves_like 'a repo with a README.md' do
+        let(:expected_content) do
+          <<~MARKDOWN
+            cd existing_repo
             git remote add origin #{project.http_url_to_repo}
             git branch -M example_branch
             git push -uf origin example_branch
           MARKDOWN
         end
       end
+    end
+  end
 
-      context 'and readme_template is specified' do
-        before do
-          opts[:readme_template] = "# GitLab\nThis is customized template."
-        end
+  context 'when SAST initialization is requested' do
+    let(:project) { create_project(user, opts) }
 
-        it_behaves_like 'creates README.md'
+    before do
+      opts[:initialize_with_sast] = '1'
+      allow(Gitlab::CurrentSettings).to receive(:default_branch_name).and_return('main')
+    end
 
-        it 'creates README.md with specified template' do
-          expect(project.repository.readme.data).to include('This is customized template.')
-        end
-      end
+    it 'creates a commit for SAST', :aggregate_failures do
+      expect(project.repository.commit_count).to be(1)
+      expect(project.repository.commit.message).to eq(
+        'Configure SAST in `.gitlab-ci.yml`, creating this file if it does not already exist'
+      )
     end
   end
 
@@ -629,7 +678,7 @@ RSpec.describe Projects::CreateService, '#execute' do
       end
 
       context 'with an active group-level integration' do
-        let!(:group_integration) { create(:prometheus_integration, group: group, project: nil, api_url: 'https://prometheus.group.com/') }
+        let!(:group_integration) { create(:prometheus_integration, :group, group: group, api_url: 'https://prometheus.group.com/') }
         let!(:group) do
           create(:group).tap do |group|
             group.add_owner(user)
@@ -638,7 +687,7 @@ RSpec.describe Projects::CreateService, '#execute' do
 
         let(:opts) do
           {
-            name: 'GitLab',
+            name: project_name,
             namespace_id: group.id
           }
         end
@@ -650,7 +699,7 @@ RSpec.describe Projects::CreateService, '#execute' do
         end
 
         context 'with an active subgroup' do
-          let!(:subgroup_integration) { create(:prometheus_integration, group: subgroup, project: nil, api_url: 'https://prometheus.subgroup.com/') }
+          let!(:subgroup_integration) { create(:prometheus_integration, :group, group: subgroup, api_url: 'https://prometheus.subgroup.com/') }
           let!(:subgroup) do
             create(:group, parent: group).tap do |subgroup|
               subgroup.add_owner(user)
@@ -659,7 +708,7 @@ RSpec.describe Projects::CreateService, '#execute' do
 
           let(:opts) do
             {
-              name: 'GitLab',
+              name: project_name,
               namespace_id: subgroup.id
             }
           end
@@ -770,7 +819,7 @@ RSpec.describe Projects::CreateService, '#execute' do
 
     let(:opts) do
       {
-        name: 'GitLab',
+        name: project_name,
         namespace_id: group.id
       }
     end
@@ -788,11 +837,11 @@ RSpec.describe Projects::CreateService, '#execute' do
       ).to be_truthy
     end
 
-    it 'schedules authorization update for users with access to group' do
+    it 'schedules authorization update for users with access to group', :sidekiq_inline do
       expect(AuthorizedProjectsWorker).not_to(
         receive(:bulk_perform_async)
       )
-      expect(AuthorizedProjectUpdate::ProjectCreateWorker).to(
+      expect(AuthorizedProjectUpdate::ProjectRecalculateWorker).to(
         receive(:perform_async).and_call_original
       )
       expect(AuthorizedProjectUpdate::UserRefreshFromReplicaWorker).to(
@@ -803,7 +852,11 @@ RSpec.describe Projects::CreateService, '#execute' do
           .and_call_original
       )
 
-      create_project(user, opts)
+      project = create_project(user, opts)
+
+      expect(
+        Ability.allowed?(other_user, :developer_access, project)
+      ).to be_truthy
     end
   end
 
@@ -817,25 +870,23 @@ RSpec.describe Projects::CreateService, '#execute' do
     let_it_be(:user) { create :user }
 
     context 'when parent group is present' do
-      let_it_be(:group) do
+      let_it_be(:group, reload: true) do
         create(:group) do |group|
           group.add_owner(user)
         end
       end
 
       before do
-        allow_next_found_instance_of(Group) do |group|
-          allow(group).to receive(:shared_runners_setting).and_return(shared_runners_setting)
-        end
+        group.update_shared_runners_setting!(shared_runners_setting)
 
         user.refresh_authorized_projects # Ensure cache is warm
       end
 
       context 'default value based on parent group setting' do
         where(:shared_runners_setting, :desired_config_for_new_project, :expected_result_for_project) do
-          'enabled'                    | nil | true
-          'disabled_with_override'     | nil | false
-          'disabled_and_unoverridable' | nil | false
+          Namespace::SR_ENABLED                    | nil | true
+          Namespace::SR_DISABLED_WITH_OVERRIDE     | nil | false
+          Namespace::SR_DISABLED_AND_UNOVERRIDABLE | nil | false
         end
 
         with_them do
@@ -846,17 +897,18 @@ RSpec.describe Projects::CreateService, '#execute' do
 
             expect(project).to be_valid
             expect(project.shared_runners_enabled).to eq(expected_result_for_project)
+            expect(project.project_namespace).to be_in_sync_with_project(project)
           end
         end
       end
 
       context 'parent group is present and allows desired config' do
         where(:shared_runners_setting, :desired_config_for_new_project, :expected_result_for_project) do
-          'enabled'                    | true  | true
-          'enabled'                    | false | false
-          'disabled_with_override'     | false | false
-          'disabled_with_override'     | true  | true
-          'disabled_and_unoverridable' | false | false
+          Namespace::SR_ENABLED                    | true  | true
+          Namespace::SR_ENABLED                    | false | false
+          Namespace::SR_DISABLED_WITH_OVERRIDE     | false | false
+          Namespace::SR_DISABLED_WITH_OVERRIDE     | true  | true
+          Namespace::SR_DISABLED_AND_UNOVERRIDABLE | false | false
         end
 
         with_them do
@@ -866,13 +918,14 @@ RSpec.describe Projects::CreateService, '#execute' do
 
             expect(project).to be_valid
             expect(project.shared_runners_enabled).to eq(expected_result_for_project)
+            expect(project.project_namespace).to be_in_sync_with_project(project)
           end
         end
       end
 
       context 'parent group is present and disallows desired config' do
         where(:shared_runners_setting, :desired_config_for_new_project) do
-          'disabled_and_unoverridable' | true
+          Namespace::SR_DISABLED_AND_UNOVERRIDABLE | true
         end
 
         with_them do
@@ -883,6 +936,7 @@ RSpec.describe Projects::CreateService, '#execute' do
             expect(project.persisted?).to eq(false)
             expect(project).to be_invalid
             expect(project.errors[:shared_runners_enabled]).to include('cannot be enabled because parent group does not allow it')
+            expect(project.project_namespace).to be_in_sync_with_project(project)
           end
         end
       end
@@ -902,6 +956,7 @@ RSpec.describe Projects::CreateService, '#execute' do
 
           expect(project).to be_valid
           expect(project.shared_runners_enabled).to eq(expected_result)
+          expect(project.project_namespace).to be_in_sync_with_project(project)
         end
       end
     end

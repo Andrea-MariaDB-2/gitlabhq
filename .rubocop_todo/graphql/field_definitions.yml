@@ -1,0 +1,4 @@
+---
+GraphQL/FieldDefinitions:
+  Exclude:
+  - ee/app/graphql/types/vulnerability_type.rb

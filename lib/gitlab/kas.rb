@@ -11,7 +11,7 @@ module Gitlab
 
     class << self
       def verify_api_request(request_headers)
-        decode_jwt_for_issuer(JWT_ISSUER, request_headers[INTERNAL_API_REQUEST_HEADER])
+        decode_jwt(request_headers[INTERNAL_API_REQUEST_HEADER], issuer: JWT_ISSUER)
       rescue JWT::DecodeError
         nil
       end
@@ -41,6 +41,10 @@ module Gitlab
       end
 
       def tunnel_url
+        configured = Gitlab.config.gitlab_kas['external_k8s_proxy_url']
+        return configured if configured.present?
+
+        # Legacy code path. Will be removed when all distributions provide a sane default here
         uri = URI.join(external_url, K8S_PROXY_PATH)
         uri.scheme = uri.scheme.in?(%w(grpcs wss)) ? 'https' : 'http'
         uri.to_s

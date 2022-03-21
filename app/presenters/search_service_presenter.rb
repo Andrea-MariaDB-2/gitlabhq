@@ -3,7 +3,7 @@
 class SearchServicePresenter < Gitlab::View::Presenter::Delegated
   include RendersCommits
 
-  presents :search_service
+  presents ::SearchService, as: :search_service
 
   SCOPE_PRELOAD_METHOD = {
     projects: :with_web_entity_associations,
@@ -18,13 +18,14 @@ class SearchServicePresenter < Gitlab::View::Presenter::Delegated
 
   SORT_ENABLED_SCOPES = %w(issues merge_requests epics).freeze
 
+  delegator_override :search_objects
   def search_objects
     @search_objects ||= begin
       objects = search_service.search_objects(SCOPE_PRELOAD_METHOD[scope.to_sym])
 
       case scope
       when 'users'
-        objects.eager_load(:status) # rubocop:disable CodeReuse/ActiveRecord
+        objects.eager_load(:status) if objects.respond_to?(:eager_load) # rubocop:disable CodeReuse/ActiveRecord
       when 'commits'
         prepare_commits_for_rendering(objects)
       else

@@ -1,6 +1,7 @@
-- breadcrumb_title _('Kubernetes')
-- page_title _('Kubernetes Cluster')
-- active_tab = local_assigns.fetch(:active_tab, 'create')
+- @content_class = 'limit-container-width' unless fluid_layout
+- add_to_breadcrumbs _('Kubernetes Clusters'), clusterable.index_path
+- breadcrumb_title _('Create a cluster')
+- page_title _('Create a Kubernetes cluster')
 - provider = params[:provider]
 
 = render_gcp_signup_offer
@@ -8,24 +9,9 @@
 .row.gl-mt-3
   .col-md-3
     = render 'sidebar'
-  .col-md-9.js-toggle-container
-    %ul.nav-links.nav-tabs.gitlab-tabs.nav{ role: 'tablist' }
-      %li.nav-item{ role: 'presentation' }
-        %a.nav-link{ href: '#create-cluster-pane', id: 'create-cluster-tab', class: active_when(active_tab == 'create'), data: { toggle: 'tab' }, role: 'tab' }
-          %span
-            = create_new_cluster_label(provider: params[:provider])
-      %li.nav-item{ role: 'presentation' }
-        %a.nav-link{ href: '#add-cluster-pane', id: 'add-cluster-tab', class: active_when(active_tab == 'add'), data: { toggle: 'tab', qa_selector: 'add_existing_cluster_tab' }, role: 'tab' }
-          %span= s_('ClusterIntegration|Connect existing cluster')
+  .col-md-9
+    = render 'clusters/clusters/cloud_providers/cloud_provider_selector'
 
-    .tab-content.gitlab-tab-content
-      .tab-pane.p-0{ id: 'create-cluster-pane', class: active_when(active_tab == 'create'), role: 'tabpanel' }
-        = render 'clusters/clusters/cloud_providers/cloud_provider_selector'
-
-        - if ['aws', 'gcp'].include?(provider)
-          .p-3.border-top
-            = render "clusters/clusters/#{provider}/new"
-
-      .tab-pane{ id: 'add-cluster-pane', class: active_when(active_tab == 'add'), role: 'tabpanel' }
-        #js-cluster-new{ data: js_cluster_new }
-        = render 'clusters/clusters/user/form'
+    - if ['aws', 'gcp'].include?(provider)
+      .gl-p-5.gl-border-1.gl-border-t-solid.gl-border-gray-100
+        = render "clusters/clusters/#{provider}/new"

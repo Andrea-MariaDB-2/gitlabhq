@@ -1,5 +1,6 @@
 query errorDetails($fullPath: ID!, $errorId: ID!) {
   project(fullPath: $fullPath) {
+    id
     sentryErrors {
       detailedError(id: $errorId) {
         id
@@ -23,6 +24,7 @@ query errorDetails($fullPath: ID!, $errorId: ID!) {
         gitlabCommit
         gitlabCommitPath
         gitlabIssuePath
+        integrated
       }
     }
   }

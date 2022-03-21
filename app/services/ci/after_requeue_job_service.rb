@@ -3,39 +3,70 @@
 module Ci
   class AfterRequeueJobService < ::BaseService
     def execute(processable)
-      process_subsequent_jobs(processable)
-      reset_source_bridge(processable)
+      @processable = processable
+
+      process_subsequent_jobs
+      reset_source_bridge
     end
 
     private
 
-    def process_subsequent_jobs(processable)
-      (stage_dependent_jobs(processable) | needs_dependent_jobs(processable))
-      .each do |processable|
-        process(processable)
+    def process_subsequent_jobs
+      dependent_jobs.each do |job|
+        process(job)
       end
     end
 
-    def reset_source_bridge(processable)
-      processable.pipeline.reset_source_bridge!(current_user)
+    def reset_source_bridge
+      @processable.pipeline.reset_source_bridge!(current_user)
     end
 
-    def process(processable)
-      Gitlab::OptimisticLocking.retry_lock(processable, name: 'ci_requeue_job') do |processable|
-        processable.process(current_user)
+    def dependent_jobs
+      dependent_jobs = stage_dependent_jobs
+        .or(needs_dependent_jobs)
+        .ordered_by_stage
+
+      if ::Feature.enabled?(:ci_fix_order_of_subsequent_jobs, @processable.pipeline.project, default_enabled: :yaml)
+        dependent_jobs = ordered_by_dag(dependent_jobs)
+      end
+
+      dependent_jobs
+    end
+
+    def process(job)
+      Gitlab::OptimisticLocking.retry_lock(job, name: 'ci_requeue_job') do |job|
+        job.process(current_user)
       end
     end
 
-    def skipped_jobs(processable)
-      processable.pipeline.processables.skipped
+    def stage_dependent_jobs
+      skipped_jobs.after_stage(@processable.stage_idx)
     end
 
-    def stage_dependent_jobs(processable)
-      skipped_jobs(processable).after_stage(processable.stage_idx)
+    def needs_dependent_jobs
+      skipped_jobs.scheduling_type_dag.with_needs([@processable.name])
     end
 
-    def needs_dependent_jobs(processable)
-      skipped_jobs(processable).scheduling_type_dag.with_needs([processable.name])
+    def skipped_jobs
+      @skipped_jobs ||= @processable.pipeline.processables.skipped
     end
+
+    # rubocop: disable CodeReuse/ActiveRecord
+    def ordered_by_dag(jobs)
+      sorted_job_names = sort_jobs(jobs).each_with_index.to_h
+
+      jobs.preload(:needs).group_by(&:stage_idx).flat_map do |_, stage_jobs|
+        stage_jobs.sort_by { |job| sorted_job_names.fetch(job.name) }
+      end
+    end
+
+    def sort_jobs(jobs)
+      Gitlab::Ci::YamlProcessor::Dag.order(
+        jobs.to_h do |job|
+          [job.name, job.needs.map(&:name)]
+        end
+      )
+    end
+    # rubocop: enable CodeReuse/ActiveRecord
   end
 end

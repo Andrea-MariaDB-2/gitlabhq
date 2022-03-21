@@ -29,11 +29,10 @@ module QA
       end
 
       before do
-        Runtime::Feature.enable(:invite_members_group_modal, group: group)
         group.add_member(developer_user, Resource::Members::AccessLevel::DEVELOPER)
       end
 
-      it 'allows using 2FA recovery code once only', testcase: 'https://gitlab.com/gitlab-org/quality/testcases/-/quality/test_cases/1271' do
+      it 'allows using 2FA recovery code once only', testcase: 'https://gitlab.com/gitlab-org/gitlab/-/quality/test_cases/347937' do
         recovery_code = enable_2fa_for_user_and_fetch_recovery_code(developer_user)
 
         Flow::Login.sign_in(as: developer_user, skip_page_validation: true)
@@ -78,6 +77,7 @@ module QA
             @otp = QA::Support::OTP.new(two_fa_auth.otp_secret_content)
 
             two_fa_auth.set_pin_code(@otp.fresh_otp)
+            two_fa_auth.set_current_password(user.password)
             two_fa_auth.click_register_2fa_app_button
 
             recovery_code = two_fa_auth.recovery_codes.sample

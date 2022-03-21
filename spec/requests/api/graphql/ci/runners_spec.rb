@@ -62,6 +62,15 @@ RSpec.describe 'Query.runners' do
 
       it_behaves_like 'a working graphql query returning expected runner'
     end
+
+    context 'runner_type is PROJECT_TYPE and status is NEVER_CONTACTED' do
+      let(:runner_type) { 'PROJECT_TYPE' }
+      let(:status) { 'NEVER_CONTACTED' }
+
+      let!(:expected_runner) { project_runner }
+
+      it_behaves_like 'a working graphql query returning expected runner'
+    end
   end
 
   describe 'pagination' do
@@ -95,9 +104,9 @@ RSpec.describe 'Query.runners' do
       let(:ordered_runners) { runners.sort_by(&:contacted_at) }
 
       it_behaves_like 'sorted paginated query' do
-        let(:sort_param)       { :CONTACTED_ASC }
-        let(:first_param)      { 2 }
-        let(:expected_results) { ordered_runners.map(&:id) }
+        let(:sort_param) { :CONTACTED_ASC }
+        let(:first_param) { 2 }
+        let(:all_records) { ordered_runners.map(&:id) }
       end
     end
 
@@ -105,9 +114,9 @@ RSpec.describe 'Query.runners' do
       let(:ordered_runners) { runners.sort_by(&:created_at).reverse }
 
       it_behaves_like 'sorted paginated query' do
-        let(:sort_param)       { :CREATED_DESC }
-        let(:first_param)      { 2 }
-        let(:expected_results) { ordered_runners.map(&:id) }
+        let(:sort_param) { :CREATED_DESC }
+        let(:first_param) { 2 }
+        let(:all_records) { ordered_runners.map(&:id) }
       end
     end
   end

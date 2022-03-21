@@ -7,7 +7,7 @@ description: Learn how to contribute to GitLab Documentation.
 
 # GitLab Documentation guidelines
 
-The GitLab documentation is [intended as the single source of truth (SSOT)](https://about.gitlab.com/handbook/documentation/) for information about how to configure, use, and troubleshoot GitLab. The documentation contains use cases and usage instructions for every GitLab feature, organized by product area and subject. This includes topics and workflows that span multiple GitLab features, and the use of GitLab with other applications.
+The GitLab documentation is [intended as the single source of truth (SSOT)](https://about.gitlab.com/handbook/documentation/) for information about how to configure, use, and troubleshoot GitLab. The documentation contains use cases and usage instructions for every GitLab feature, organized by product area and subject. This includes topics and workflows that span multiple GitLab features and the use of GitLab with other applications.
 
 In addition to this page, the following resources can help you craft and contribute to documentation:
 
@@ -55,9 +55,9 @@ docs-only merge requests using the following guide:
 
 [Contributions to GitLab docs](workflow.md) are welcome from the entire GitLab community.
 
-To ensure that GitLab docs are current, there are special processes and responsibilities for all [feature changes](workflow.md), that is development work that impacts the appearance, usage, or administration of a feature.
+To ensure that the GitLab docs are current, there are special processes and responsibilities for all [feature changes](workflow.md), that is development work that impacts the appearance, usage, or administration of a feature.
 
-However, anyone can contribute [documentation improvements](workflow.md) that are not associated with a feature change. For example, adding a new doc on how to accomplish a use case that's already possible with GitLab or with third-party tools and GitLab.
+However, anyone can contribute [documentation improvements](workflow.md) that are not associated with a feature change. For example, adding a new document on how to accomplish a use case that's already possible with GitLab or with third-party tools and GitLab.
 
 ## Markdown and styles
 
@@ -68,7 +68,7 @@ Adhere to the [Documentation Style Guide](styleguide/index.md). If a style stand
 
 ## Folder structure and files
 
-See the [Structure](styleguide/index.md#structure) section of the [Documentation Style Guide](styleguide/index.md).
+See the [Folder structure](site_architecture/folder_structure.md) page.
 
 ## Metadata
 
@@ -87,8 +87,8 @@ belongs to, as well as an information block as described below:
 - `group`: The [Group](https://about.gitlab.com/company/team/structure/#product-groups)
   to which the majority of the page's content belongs.
 - `info`: The following line, which provides direction to contributors regarding
-  how to contact the Technical Writer associated with the page's Stage and
-  Group:
+  how to contact the Technical Writer associated with the page's stage and
+  group:
 
   ```plaintext
   To determine the technical writer assigned to the Stage/Group
@@ -108,23 +108,6 @@ info: To determine the technical writer assigned to the Stage/Group associated w
 
 If you need help determining the correct stage, read [Ask for help](workflow.md#ask-for-help).
 
-### Document type metadata
-
-Originally discussed in [this epic](https://gitlab.com/groups/gitlab-org/-/epics/1280),
-each page should have a metadata tag called `type`. It can be one or more of the
-following:
-
-- `index`: It consists mostly of a list of links to other pages.
-  [Example page](../../index.md).
-- `concepts`: The background or context of a subject.
-  [Example page](../../topics/autodevops/index.md).
-- `howto`: Specific use case instructions.
-  [Example page](../../ssh/index.md).
-- `tutorial`: Learn a process/concept by doing.
-  [Example page](../../gitlab-basics/start-using-git.md).
-- `reference`: A collection of information used as a reference to use a feature
-  or a functionality. [Example page](../../ci/yaml/index.md).
-
 ### Redirection metadata
 
 The following metadata should be added when a page is moved to another location:
@@ -133,7 +116,7 @@ The following metadata should be added when a page is moved to another location:
   location to which visitors should be redirected for a moved page.
   [Learn more](redirects.md).
 - `disqus_identifier`: Identifier for Disqus commenting system. Used to keep
-  comments with a page that's been moved to a new URL.
+  comments with a page that has been moved to a new URL.
   [Learn more](redirects.md#redirections-for-pages-with-disqus-comments).
 
 ### Comments metadata
@@ -154,7 +137,12 @@ Each page can have additional, optional metadata (set in the
 [default.html](https://gitlab.com/gitlab-org/gitlab-docs/-/blob/fc3577921343173d589dfa43d837b4307e4e620f/layouts/default.html#L30-52)
 Nanoc layout), which is displayed at the top of the page if defined.
 
-## Move or rename a page
+### Deprecated metadata
+
+The `type` metadata parameter is deprecated but still exists in documentation
+pages. You can safely remove the `type` metadata parameter and its values.
+
+## Move, rename, or delete a page
 
 See [redirects](redirects.md).
 
@@ -182,22 +170,33 @@ it increases the work of the release managers.
 
 ## GitLab `/help`
 
-Every GitLab instance includes the documentation, which is available at `/help`
-(`https://gitlab.example.com/help`). For example, <https://gitlab.com/help>.
+Every GitLab instance includes documentation at `/help` (`https://gitlab.example.com/help`)
+that matches the version of the instance. For example, <https://gitlab.com/help>.
 
-The documentation available online on <https://docs.gitlab.com> is deployed every
-four hours from the `main` branch of GitLab, Omnibus, and Runner. Therefore,
-after a merge request gets merged, it is available online on the same day.
-However, it's shipped (and available on `/help`) within the milestone assigned
-to the MR.
+The documentation available online at <https://docs.gitlab.com> is deployed every
+four hours from the default branch of [GitLab, Omnibus, Runner, and Charts](#source-files-and-rendered-web-locations).
+After a merge request that updates documentation is merged, it is available online
+in 4 hours or less.
 
-For example, let's say your merge request has a milestone set to 11.3, which
-a release date of 2018-09-22. If it gets merged on 2018-09-15, it is
-available online on 2018-09-15, but, as the feature freeze date has passed, if
-the MR does not have a `~"Pick into 11.3"` label, the milestone has to be changed
-to 11.4 and it ships with all GitLab packages only on 2018-10-22,
-with GitLab 11.4. Meaning, it's available only with `/help` from GitLab
-11.4 onward, but available on <https://docs.gitlab.com/> on the same day it was merged.
+However, it's only available at `/help` on self-managed instances in the next released
+version. The date an update is merged can impact which self-managed release the update
+is present in.
+
+For example:
+
+1. A merge request in `gitlab` updates documentation. It has a milestone of 14.4,
+   with an expected release date of 2021-10-22.
+1. It is merged on 2021-10-19 and available online the same day at <https://docs.gitlab.com>.
+1. GitLab 14.4 is released on 2021-10-22, based on the `gitlab` codebase from 2021-10-18
+   (one day *before* the update was merged).
+1. The change shows up in the 14.5 self-managed release, due to missing the release cutoff
+   for 14.4.
+
+The exact cutoff date for each release is flexible, and can be sooner or later
+than expected due to holidays, weekends or other events. In general, MRs merged
+by the 17th should be present in the release on the 22nd, though it is not guaranteed.
+If it is important that a documentation update is present in that month's release,
+merge it as early as possible.
 
 ### Linking to `/help`
 
@@ -210,12 +209,14 @@ with the following conventions:
 
 - It's relative to the `doc/` directory in the GitLab repository.
 - It omits the `.md` extension.
-- It doesn't end with a slash (`/`).
+- It doesn't end with a forward slash (`/`).
 
 The help text follows the [Pajamas guidelines](https://design.gitlab.com/usability/helping-users/#formatting-help-content).
 
-Use the following special cases depending on the context, ensuring all links
-are inside `_()` so they can be translated:
+#### Linking to `/help` in HAML
+
+Use the following special cases depending on the context, ensuring all link text
+is inside `_()` so it can be translated:
 
 - Linking to a doc page. In its most basic form, the HAML code to generate a
   link to the `/help` page is:
@@ -260,6 +261,27 @@ helpPagePath('user/permissions', { anchor: 'anchor-link' })
 
 This is preferred over static paths, as the helper also works on instances installed under a [relative URL](../../install/relative_url.md).
 
+#### Linking to `/help` in Ruby
+
+To link to the documentation from within Ruby code, use the following code block as a guide, ensuring all link text is inside `_()` so it can
+be translated:
+
+```ruby
+docs_link = link_to _('Learn more.'), help_page_url('user/permissions', anchor: 'anchor-link'), target: '_blank', rel: 'noopener noreferrer'
+_('This is a text describing the option/feature in a sentence. %{docs_link}').html_safe % { docs_link: docs_link.html_safe }
+```
+
+In cases where you need to generate a link from outside of views/helpers, where the `link_to` and `help_page_url` methods are not available, use the following code block
+as a guide where the methods are fully qualified:
+
+```ruby
+docs_link = ActionController::Base.helpers.link_to _('Learn more.'), Rails.application.routes.url_helpers.help_page_url('user/permissions', anchor: 'anchor-link'), target: '_blank', rel: 'noopener noreferrer'
+_('This is a text describing the option/feature in a sentence. %{docs_link}').html_safe % { docs_link: docs_link.html_safe }
+```
+
+Do not use `include ActionView::Helpers::UrlHelper` just to make the `link_to` method available as you might see in some existing code. Read more in
+[issue 340567](https://gitlab.com/gitlab-org/gitlab/-/issues/340567).
+
 ### GitLab `/help` tests
 
 Several [RSpec tests](https://gitlab.com/gitlab-org/gitlab/-/blob/master/spec/features/help_pages_spec.rb)
@@ -268,9 +290,7 @@ For example, [GitLab.com's `/help`](https://gitlab.com/help).
 
 ## Docs site architecture
 
-See the [Docs site architecture](site_architecture/index.md) page to learn
-how we build and deploy the site at <https://docs.gitlab.com> and
-to review all the assets and libraries in use.
+For information on how we build and deploy <https://docs.gitlab.com>, see [Docs site architecture](site_architecture/index.md).
 
 ### Global navigation
 
@@ -296,7 +316,7 @@ process. This is configured in the `Dangerfile` in the GitLab repository under
 
 ## Automatic screenshot generator
 
-You can now set up an automatic screenshot generator to take and compress screenshots, with the
+You can now set up an automatic screenshot generator to take and compress screenshots with the
 help of a configuration file known as **screenshot generator**.
 
 ### Use the tool

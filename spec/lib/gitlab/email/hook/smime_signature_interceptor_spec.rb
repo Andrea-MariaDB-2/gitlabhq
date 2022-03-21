@@ -14,15 +14,15 @@ RSpec.describe Gitlab::Email::Hook::SmimeSignatureInterceptor do
   end
 
   let(:root_certificate) do
-    Gitlab::Email::Smime::Certificate.new(@root_ca[:key], @root_ca[:cert])
+    Gitlab::X509::Certificate.new(@root_ca[:key], @root_ca[:cert])
   end
 
   let(:intermediate_certificate) do
-    Gitlab::Email::Smime::Certificate.new(@intermediate_ca[:key], @intermediate_ca[:cert])
+    Gitlab::X509::Certificate.new(@intermediate_ca[:key], @intermediate_ca[:cert])
   end
 
   let(:certificate) do
-    Gitlab::Email::Smime::Certificate.new(@cert[:key], @cert[:cert], [intermediate_certificate.cert])
+    Gitlab::X509::Certificate.new(@cert[:key], @cert[:cert], [intermediate_certificate.cert])
   end
 
   let(:mail_body) { "signed hello with Unicode €áø and\r\n newlines\r\n" }
@@ -36,7 +36,7 @@ RSpec.describe Gitlab::Email::Hook::SmimeSignatureInterceptor do
   end
 
   before do
-    allow(Gitlab::Email::Smime::Certificate).to receive_messages(from_files: certificate)
+    allow(Gitlab::Email::Hook::SmimeSignatureInterceptor).to receive(:certificate).and_return(certificate)
 
     Mail.register_interceptor(described_class)
     mail.deliver_now
@@ -50,6 +50,7 @@ RSpec.describe Gitlab::Email::Hook::SmimeSignatureInterceptor do
     expect(mail.header['To'].value).to eq('test@example.com')
     expect(mail.header['From'].value).to eq('info@example.com')
     expect(mail.header['Content-Type'].value).to match('multipart/signed').and match('protocol="application/x-pkcs7-signature"')
+    expect(mail.header.include?('Content-Disposition')).to eq(false)
 
     # verify signature and obtain pkcs7 encoded content
     p7enc = Gitlab::Email::Smime::Signer.verify_signature(

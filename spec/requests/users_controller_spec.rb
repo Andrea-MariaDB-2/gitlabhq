@@ -305,7 +305,7 @@ RSpec.describe UsersController do
 
     context 'user with keys' do
       let!(:gpg_key) { create(:gpg_key, user: user) }
-      let!(:another_gpg_key) { create(:another_gpg_key, user: user) }
+      let!(:another_gpg_key) { create(:another_gpg_key, user: user.reload) }
 
       shared_examples_for 'renders all verified GPG keys' do
         it 'renders all verified keys separated with a new line with text/plain content type' do
@@ -506,6 +506,7 @@ RSpec.describe UsersController do
 
   describe 'GET #contributed' do
     let(:project) { create(:project, :public) }
+    let(:aimed_for_deletion_project) { create(:project, :public, :archived, marked_for_deletion_at: 3.days.ago) }
 
     subject do
       get user_contributed_projects_url author.username, format: format
@@ -516,7 +517,10 @@ RSpec.describe UsersController do
 
       project.add_developer(public_user)
       project.add_developer(private_user)
+      aimed_for_deletion_project.add_developer(public_user)
+      aimed_for_deletion_project.add_developer(private_user)
       create(:push_event, project: project, author: author)
+      create(:push_event, project: aimed_for_deletion_project, author: author)
 
       subject
     end
@@ -525,6 +529,11 @@ RSpec.describe UsersController do
       it 'renders contributed projects' do
         expect(response).to have_gitlab_http_status(:ok)
         expect(response.body).not_to be_empty
+      end
+
+      it 'does not list projects aimed for deletion' do
+        expect(response).to have_gitlab_http_status(:ok)
+        expect(assigns(:contributed_projects)).to eq([project])
       end
     end
 
@@ -557,6 +566,7 @@ RSpec.describe UsersController do
 
   describe 'GET #starred' do
     let(:project) { create(:project, :public) }
+    let(:aimed_for_deletion_project) { create(:project, :public, :archived, marked_for_deletion_at: 3.days.ago) }
 
     subject do
       get user_starred_projects_url author.username, format: format
@@ -573,6 +583,11 @@ RSpec.describe UsersController do
       it 'renders starred projects' do
         expect(response).to have_gitlab_http_status(:ok)
         expect(response.body).not_to be_empty
+      end
+
+      it 'does not list projects aimed for deletion' do
+        expect(response).to have_gitlab_http_status(:ok)
+        expect(assigns(:starred_projects)).to eq([project])
       end
     end
 
@@ -634,11 +649,13 @@ RSpec.describe UsersController do
   end
 
   describe 'GET #exists' do
-    before do
-      sign_in(user)
-    end
-
     context 'when user exists' do
+      before do
+        sign_in(user)
+
+        allow(::Gitlab::ApplicationRateLimiter).to receive(:throttled?).and_return(false)
+      end
+
       it 'returns JSON indicating the user exists' do
         get user_exists_url user.username
 
@@ -659,6 +676,15 @@ RSpec.describe UsersController do
     end
 
     context 'when the user does not exist' do
+      it 'will not show a signup page if registration is disabled' do
+        stub_application_setting(signup_enabled: false)
+        get user_exists_url 'foo'
+
+        expected_json = { error: "You must be authenticated to access this path." }.to_json
+        expect(response).to have_gitlab_http_status(:unauthorized)
+        expect(response.body).to eq(expected_json)
+      end
+
       it 'returns JSON indicating the user does not exist' do
         get user_exists_url 'foo'
 
@@ -675,6 +701,17 @@ RSpec.describe UsersController do
           expected_json = { exists: false }.to_json
           expect(response.body).to eq(expected_json)
         end
+      end
+    end
+
+    context 'when the rate limit has been reached' do
+      it 'returns status 429 Too Many Requests', :aggregate_failures do
+        ip = '1.2.3.4'
+        expect(::Gitlab::ApplicationRateLimiter).to receive(:throttled?).with(:username_exists, scope: ip).and_return(true)
+
+        get user_exists_url(user.username), env: { 'REMOTE_ADDR': ip }
+
+        expect(response).to have_gitlab_http_status(:too_many_requests)
       end
     end
   end
@@ -792,9 +829,9 @@ RSpec.describe UsersController do
   end
 
   context 'token authentication' do
-    let(:url) { user_url(user.username, format: :atom) }
-
-    it_behaves_like 'authenticates sessionless user for the request spec', public: true
+    it_behaves_like 'authenticates sessionless user for the request spec', 'show atom', public_resource: true do
+      let(:url) { user_url(user, format: :atom) }
+    end
   end
 
   def user_moved_message(redirect_route, user)

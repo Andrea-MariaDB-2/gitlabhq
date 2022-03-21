@@ -1,23 +1,31 @@
 import { GlButton, GlModal, GlDropdown } from '@gitlab/ui';
 import { mount } from '@vue/test-utils';
 import { ApolloMutation } from 'vue-apollo';
+import MockAdapter from 'axios-mock-adapter';
+import { nextTick } from 'vue';
 import { useMockLocationHelper } from 'helpers/mock_window_location_helper';
 import waitForPromises from 'helpers/wait_for_promises';
 import { Blob, BinaryBlob } from 'jest/blob/components/mock_data';
 import { differenceInMilliseconds } from '~/lib/utils/datetime_utility';
-import SnippetHeader from '~/snippets/components/snippet_header.vue';
+import SnippetHeader, { i18n } from '~/snippets/components/snippet_header.vue';
 import DeleteSnippetMutation from '~/snippets/mutations/deleteSnippet.mutation.graphql';
+import axios from '~/lib/utils/axios_utils';
+import createFlash, { FLASH_TYPES } from '~/flash';
+
+jest.mock('~/flash');
 
 describe('Snippet header component', () => {
   let wrapper;
   let snippet;
   let mutationTypes;
   let mutationVariables;
+  let mock;
 
   let errorMsg;
   let err;
   const originalRelativeUrlRoot = gon.relative_url_root;
   const reportAbusePath = '/-/snippets/42/mark_as_spam';
+  const canReportSpam = true;
 
   const GlEmoji = { template: '<img/>' };
 
@@ -47,6 +55,7 @@ describe('Snippet header component', () => {
       mocks: { $apollo },
       provide: {
         reportAbusePath,
+        canReportSpam,
         ...provide,
       },
       propsData: {
@@ -118,10 +127,13 @@ describe('Snippet header component', () => {
       RESOLVE: jest.fn(() => Promise.resolve({ data: { destroySnippet: { errors: [] } } })),
       REJECT: jest.fn(() => Promise.reject(err)),
     };
+
+    mock = new MockAdapter(axios);
   });
 
   afterEach(() => {
     wrapper.destroy();
+    mock.restore();
     gon.relative_url_root = originalRelativeUrlRoot;
   });
 
@@ -186,7 +198,6 @@ describe('Snippet header component', () => {
       {
         category: 'primary',
         disabled: false,
-        href: reportAbusePath,
         text: 'Submit as spam',
         variant: 'default',
       },
@@ -205,7 +216,6 @@ describe('Snippet header component', () => {
         text: 'Delete',
       },
       {
-        href: reportAbusePath,
         text: 'Submit as spam',
         title: 'Submit as spam',
       },
@@ -233,8 +243,10 @@ describe('Snippet header component', () => {
     // TODO: we should avoid `wrapper.setData` since they
     // are component internals. Let's use the apollo mock helpers
     // in a follow-up.
+    // setData usage is discouraged. See https://gitlab.com/groups/gitlab-org/-/epics/7330 for details
+    // eslint-disable-next-line no-restricted-syntax
     wrapper.setData({ canCreateSnippet: true });
-    await wrapper.vm.$nextTick();
+    await nextTick();
 
     expect(findButtonsAsModel()).toEqual(
       expect.arrayContaining([
@@ -243,9 +255,34 @@ describe('Snippet header component', () => {
           disabled: false,
           href: `/foo/-/snippets/new`,
           text: 'New snippet',
-          variant: 'success',
+          variant: 'confirm',
         },
       ]),
+    );
+  });
+
+  describe('submit snippet as spam', () => {
+    beforeEach(async () => {
+      createComponent();
+    });
+
+    it.each`
+      request | variant      | text
+      ${200}  | ${'SUCCESS'} | ${i18n.snippetSpamSuccess}
+      ${500}  | ${'DANGER'}  | ${i18n.snippetSpamFailure}
+    `(
+      'renders a "$variant" flash message with "$text" message for a request with a "$request" response',
+      async ({ request, variant, text }) => {
+        const submitAsSpamBtn = findButtons().at(2);
+        mock.onPost(reportAbusePath).reply(request);
+        submitAsSpamBtn.trigger('click');
+        await waitForPromises();
+
+        expect(createFlash).toHaveBeenLastCalledWith({
+          message: expect.stringContaining(text),
+          type: FLASH_TYPES[variant],
+        });
+      },
     );
   });
 
@@ -258,6 +295,7 @@ describe('Snippet header component', () => {
         },
         provide: {
           reportAbusePath: null,
+          canReportSpam: false,
         },
       });
     });
@@ -311,33 +349,31 @@ describe('Snippet header component', () => {
     describe('in case of successful mutation, closes modal and redirects to correct listing', () => {
       useMockLocationHelper();
 
-      const createDeleteSnippet = (snippetProps = {}) => {
+      const createDeleteSnippet = async (snippetProps = {}) => {
         createComponent({
           snippetProps,
         });
         wrapper.vm.closeDeleteModal = jest.fn();
 
         wrapper.vm.deleteSnippet();
-        return wrapper.vm.$nextTick();
+        await nextTick();
       };
 
-      it('redirects to dashboard/snippets for personal snippet', () => {
-        return createDeleteSnippet().then(() => {
-          expect(wrapper.vm.closeDeleteModal).toHaveBeenCalled();
-          expect(window.location.pathname).toBe(`${gon.relative_url_root}dashboard/snippets`);
-        });
+      it('redirects to dashboard/snippets for personal snippet', async () => {
+        await createDeleteSnippet();
+        expect(wrapper.vm.closeDeleteModal).toHaveBeenCalled();
+        expect(window.location.pathname).toBe(`${gon.relative_url_root}dashboard/snippets`);
       });
 
-      it('redirects to project snippets for project snippet', () => {
+      it('redirects to project snippets for project snippet', async () => {
         const fullPath = 'foo/bar';
-        return createDeleteSnippet({
+        await createDeleteSnippet({
           project: {
             fullPath,
           },
-        }).then(() => {
-          expect(wrapper.vm.closeDeleteModal).toHaveBeenCalled();
-          expect(window.location.pathname).toBe(`${fullPath}/-/snippets`);
         });
+        expect(wrapper.vm.closeDeleteModal).toHaveBeenCalled();
+        expect(window.location.pathname).toBe(`${fullPath}/-/snippets`);
       });
     });
   });

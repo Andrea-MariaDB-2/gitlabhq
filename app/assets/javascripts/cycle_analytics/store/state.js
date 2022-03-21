@@ -1,10 +1,12 @@
-import { DEFAULT_DAYS_TO_DISPLAY } from '../constants';
+import {
+  PAGINATION_SORT_FIELD_END_EVENT,
+  PAGINATION_SORT_DIRECTION_DESC,
+} from '~/cycle_analytics/constants';
 
 export default () => ({
   id: null,
   features: {},
   endpoints: {},
-  daysInPast: DEFAULT_DAYS_TO_DISPLAY,
   createdAfter: null,
   createdBefore: null,
   stages: [],
@@ -23,4 +25,10 @@ export default () => ({
   isLoadingStage: false,
   isEmptyStage: false,
   permissions: {},
+  pagination: {
+    page: null,
+    hasNextPage: false,
+    sort: PAGINATION_SORT_FIELD_END_EVENT,
+    direction: PAGINATION_SORT_DIRECTION_DESC,
+  },
 });

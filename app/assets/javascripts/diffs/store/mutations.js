@@ -60,8 +60,8 @@ export default {
     Object.assign(state, { isLoading });
   },
 
-  [types.SET_BATCH_LOADING](state, isBatchLoading) {
-    Object.assign(state, { isBatchLoading });
+  [types.SET_BATCH_LOADING_STATE](state, batchLoadingState) {
+    Object.assign(state, { batchLoadingState });
   },
 
   [types.SET_RETRIEVING_BATCHES](state, retrievingBatches) {
@@ -86,7 +86,7 @@ export default {
   },
 
   [types.SET_COVERAGE_DATA](state, coverageFiles) {
-    Object.assign(state, { coverageFiles });
+    Object.assign(state, { coverageFiles, coverageLoaded: true });
   },
 
   [types.RENDER_FILE](state, file) {
@@ -254,9 +254,11 @@ export default {
   [types.SET_SHOW_TREE_LIST](state, showTreeList) {
     state.showTreeList = showTreeList;
   },
-  [types.VIEW_DIFF_FILE](state, fileId) {
+  [types.SET_CURRENT_DIFF_FILE](state, fileId) {
     state.currentDiffFileId = fileId;
-    Vue.set(state.viewedDiffFileIds, fileId, true);
+  },
+  [types.SET_DIFF_FILE_VIEWED](state, { id, seen }) {
+    Vue.set(state.viewedDiffFileIds, id, seen);
   },
   [types.OPEN_DIFF_FILE_COMMENT_FORM](state, formData) {
     state.commentForms.push({

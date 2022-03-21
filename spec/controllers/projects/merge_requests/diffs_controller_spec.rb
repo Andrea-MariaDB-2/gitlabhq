@@ -86,10 +86,11 @@ RSpec.describe Projects::MergeRequests::DiffsController do
 
   let(:project) { create(:project, :repository) }
   let(:user) { create(:user) }
+  let(:maintainer) { true }
   let(:merge_request) { create(:merge_request_with_diffs, target_project: project, source_project: project) }
 
   before do
-    project.add_maintainer(user)
+    project.add_maintainer(user) if maintainer
     sign_in(user)
   end
 
@@ -204,7 +205,6 @@ RSpec.describe Projects::MergeRequests::DiffsController do
         let(:collection) { Gitlab::Diff::FileCollection::MergeRequestDiff }
         let(:expected_options) do
           {
-            environment: nil,
             merge_request: merge_request,
             merge_request_diff: merge_request.merge_request_diff,
             merge_request_diffs: merge_request.merge_request_diffs,
@@ -217,29 +217,6 @@ RSpec.describe Projects::MergeRequests::DiffsController do
             merge_ref_head_diff: false
           }
         end
-      end
-    end
-
-    context "with the :default_merge_ref_for_diffs flag on" do
-      let(:diffable_merge_ref) { true }
-
-      subject do
-        go(diff_head: true,
-           diff_id: merge_request.merge_request_diff.id,
-           start_sha: merge_request.merge_request_diff.start_commit_sha)
-      end
-
-      it "correctly generates the right diff between versions" do
-        MergeRequests::MergeToRefService.new(project: project, current_user: merge_request.author).execute(merge_request)
-
-        expect_next_instance_of(CompareService) do |service|
-          expect(service).to receive(:execute).with(
-            project,
-            merge_request.merge_request_diff.head_commit_sha,
-            straight: true)
-        end
-
-        subject
       end
     end
 
@@ -258,6 +235,23 @@ RSpec.describe Projects::MergeRequests::DiffsController do
           go(diff_head: true)
 
           expect(response).to have_gitlab_http_status(:ok)
+        end
+
+        context 'when diff_id and start_sha are set' do
+          it 'correctly generates the right diff between versions' do
+            MergeRequests::MergeToRefService.new(project: project, current_user: merge_request.author).execute(merge_request)
+
+            expect_next_instance_of(CompareService) do |service|
+              expect(service).to receive(:execute).with(
+                project,
+                merge_request.merge_request_diff.head_commit_sha,
+                straight: true)
+            end
+
+            go(diff_head: true,
+               diff_id: merge_request.merge_request_diff.id,
+               start_sha: merge_request.merge_request_diff.start_commit_sha)
+          end
         end
       end
 
@@ -279,7 +273,6 @@ RSpec.describe Projects::MergeRequests::DiffsController do
         let(:collection) { Gitlab::Diff::FileCollection::MergeRequestDiff }
         let(:expected_options) do
           {
-            environment: nil,
             merge_request: merge_request,
             merge_request_diff: merge_request.merge_request_diff,
             merge_request_diffs: merge_request.merge_request_diffs,
@@ -302,7 +295,6 @@ RSpec.describe Projects::MergeRequests::DiffsController do
         let(:collection) { Gitlab::Diff::FileCollection::Commit }
         let(:expected_options) do
           {
-            environment: nil,
             merge_request: merge_request,
             merge_request_diff: nil,
             merge_request_diffs: merge_request.merge_request_diffs,
@@ -329,7 +321,6 @@ RSpec.describe Projects::MergeRequests::DiffsController do
         let(:collection) { Gitlab::Diff::FileCollection::MergeRequestDiff }
         let(:expected_options) do
           {
-            environment: nil,
             merge_request: merge_request,
             merge_request_diff: merge_request.merge_request_diff,
             merge_request_diffs: merge_request.merge_request_diffs,
@@ -383,8 +374,9 @@ RSpec.describe Projects::MergeRequests::DiffsController do
       end
 
       context 'when the user cannot view the merge request' do
+        let(:maintainer) { false }
+
         before do
-          project.team.truncate
           diff_for_path(old_path: existing_path, new_path: existing_path)
         end
 
@@ -492,8 +484,8 @@ RSpec.describe Projects::MergeRequests::DiffsController do
 
     def collection_arguments(pagination_data = {})
       {
-        environment: nil,
         merge_request: merge_request,
+        commit: nil,
         diff_view: :inline,
         merge_ref_head_diff: nil,
         allow_tree_conflicts: true,
@@ -550,7 +542,7 @@ RSpec.describe Projects::MergeRequests::DiffsController do
 
       it_behaves_like 'serializes diffs with expected arguments' do
         let(:collection) { Gitlab::Diff::FileCollection::Commit }
-        let(:expected_options) { collection_arguments }
+        let(:expected_options) { collection_arguments.merge(commit: merge_request.commits(limit: 1).first) }
       end
     end
 

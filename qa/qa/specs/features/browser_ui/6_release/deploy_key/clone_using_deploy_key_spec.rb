@@ -4,7 +4,7 @@ require 'digest/sha1'
 
 module QA
   RSpec.describe 'Release', :runner do
-    describe 'Git clone using a deploy key' do
+    describe 'Git clone using a deploy key', :skip_fips_env do
       let(:runner_name) { "qa-runner-#{SecureRandom.hex(4)}" }
       let(:repository_location) { project.repository_ssh_location }
 
@@ -33,13 +33,13 @@ module QA
       end
 
       keys = [
-        [Runtime::Key::RSA, 8192],
-        [Runtime::Key::ECDSA, 521],
-        [Runtime::Key::ED25519]
+        ['https://gitlab.com/gitlab-org/gitlab/-/quality/test_cases/348022', Runtime::Key::RSA, 8192],
+        ['https://gitlab.com/gitlab-org/gitlab/-/quality/test_cases/348021', Runtime::Key::ECDSA, 521],
+        ['https://gitlab.com/gitlab-org/gitlab/-/quality/test_cases/348020', Runtime::Key::ED25519]
       ]
 
-      keys.each do |(key_class, bits)|
-        it "user sets up a deploy key with #{key_class}(#{bits}) to clone code using pipelines" do
+      keys.each do |(testcase, key_class, bits)|
+        it "user sets up a deploy key with #{key_class}(#{bits}) to clone code using pipelines", testcase: testcase do
           key = key_class.new(*bits)
 
           Resource::DeployKey.fabricate_via_browser_ui! do |resource|

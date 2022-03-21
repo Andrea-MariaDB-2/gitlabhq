@@ -1,9 +1,5 @@
 @import 'mixins_and_variables_and_functions';
 
-.user-can-drag {
-  cursor: grab;
-}
-
 .is-ghost {
   opacity: 0.3;
   pointer-events: none;
@@ -248,7 +244,8 @@
     margin-right: 4px;
   }
 
-  .confidential-icon {
+  .confidential-icon,
+  .hidden-icon {
     color: var(--orange-500, $orange-500);
     cursor: help;
   }
@@ -429,6 +426,10 @@
   height: $input-height;
 }
 
+.issue-boards-content:not(.breadcrumbs) {
+  isolation: isolate;
+}
+
 .issue-boards-content.is-focused {
   position: fixed;
   width: 100%;
@@ -464,6 +465,10 @@
 
   .labels-select-wrapper.is-embedded .labels-select-wrapper.is-embedded {
     width: auto;
+  }
+
+  .show.dropdown .dropdown-menu {
+    @include gl-w-full;
   }
 }
 

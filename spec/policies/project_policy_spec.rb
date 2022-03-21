@@ -61,7 +61,7 @@ RSpec.describe ProjectPolicy do
       end
 
       it 'does not include the issues permissions' do
-        expect_disallowed :read_issue, :read_issue_iid, :create_issue, :update_issue, :admin_issue, :create_incident
+        expect_disallowed :read_issue, :read_issue_iid, :create_issue, :update_issue, :admin_issue, :create_incident, :create_work_item, :create_task
       end
 
       it 'disables boards and lists permissions' do
@@ -73,7 +73,7 @@ RSpec.describe ProjectPolicy do
         it 'does not include the issues permissions' do
           create(:jira_integration, project: project)
 
-          expect_disallowed :read_issue, :read_issue_iid, :create_issue, :update_issue, :admin_issue, :create_incident
+          expect_disallowed :read_issue, :read_issue_iid, :create_issue, :update_issue, :admin_issue, :create_incident, :create_work_item, :create_task
         end
       end
     end
@@ -104,29 +104,71 @@ RSpec.describe ProjectPolicy do
   end
 
   context 'pipeline feature' do
-    let(:project) { private_project }
-
-    before do
-      private_project.add_developer(current_user)
-    end
-
-    describe 'for unconfirmed user' do
-      let(:current_user) { create(:user, confirmed_at: nil) }
-
-      it 'disallows to modify pipelines' do
-        expect_disallowed(:create_pipeline)
-        expect_disallowed(:update_pipeline)
-        expect_disallowed(:create_pipeline_schedule)
-      end
-    end
+    let(:project)      { private_project }
+    let(:current_user) { developer }
+    let(:pipeline)     { create(:ci_pipeline, project: project) }
 
     describe 'for confirmed user' do
-      let(:current_user) { developer }
-
       it 'allows modify pipelines' do
         expect_allowed(:create_pipeline)
         expect_allowed(:update_pipeline)
         expect_allowed(:create_pipeline_schedule)
+      end
+    end
+
+    describe 'for unconfirmed user' do
+      let(:current_user) { project.first_owner.tap { |u| u.update!(confirmed_at: nil) } }
+
+      it 'disallows to modify pipelines' do
+        expect_disallowed(:create_pipeline)
+        expect_disallowed(:update_pipeline)
+        expect_disallowed(:destroy_pipeline)
+        expect_disallowed(:create_pipeline_schedule)
+      end
+    end
+
+    describe 'destroy permission' do
+      describe 'for developers' do
+        it 'prevents :destroy_pipeline' do
+          expect(current_user.can?(:destroy_pipeline, pipeline)).to be_falsey
+        end
+      end
+
+      describe 'for maintainers' do
+        let(:current_user) { maintainer }
+
+        it 'prevents :destroy_pipeline' do
+          project.add_maintainer(maintainer)
+          expect(current_user.can?(:destroy_pipeline, pipeline)).to be_falsey
+        end
+      end
+
+      describe 'for project owner' do
+        let(:current_user) { project.first_owner }
+
+        it 'allows :destroy_pipeline' do
+          expect(current_user.can?(:destroy_pipeline, pipeline)).to be_truthy
+        end
+
+        context 'on archived projects' do
+          before do
+            project.update!(archived: true)
+          end
+
+          it 'prevents :destroy_pipeline' do
+            expect(current_user.can?(:destroy_pipeline, pipeline)).to be_falsey
+          end
+        end
+
+        context 'on archived pending_delete projects' do
+          before do
+            project.update!(archived: true, pending_delete: true)
+          end
+
+          it 'allows :destroy_pipeline' do
+            expect(current_user.can?(:destroy_pipeline, pipeline)).to be_truthy
+          end
+        end
       end
     end
   end
@@ -955,6 +997,28 @@ RSpec.describe ProjectPolicy do
     end
   end
 
+  context 'infrastructure google cloud feature' do
+    %w(guest reporter developer).each do |role|
+      context role do
+        let(:current_user) { send(role) }
+
+        it 'disallows managing google cloud' do
+          expect_disallowed(:admin_project_google_cloud)
+        end
+      end
+    end
+
+    %w(maintainer owner).each do |role|
+      context role do
+        let(:current_user) { send(role) }
+
+        it 'allows managing google cloud' do
+          expect_allowed(:admin_project_google_cloud)
+        end
+      end
+    end
+  end
+
   describe 'design permissions' do
     include DesignManagementTestHelpers
 
@@ -1689,6 +1753,102 @@ RSpec.describe ProjectPolicy do
 
         it { is_expected.to be_allowed(:update_runners_registration_token) }
       end
+    end
+  end
+
+  describe 'register_project_runners' do
+    context 'admin' do
+      let(:current_user) { admin }
+
+      context 'when admin mode is enabled', :enable_admin_mode do
+        context 'with runner_registration_control FF disabled' do
+          before do
+            stub_feature_flags(runner_registration_control: false)
+          end
+
+          it { is_expected.to be_allowed(:register_project_runners) }
+        end
+
+        context 'with runner_registration_control FF enabled' do
+          before do
+            stub_feature_flags(runner_registration_control: true)
+          end
+
+          it { is_expected.to be_allowed(:register_project_runners) }
+
+          context 'with project runner registration disabled' do
+            before do
+              stub_application_setting(valid_runner_registrars: ['group'])
+            end
+
+            it { is_expected.to be_allowed(:register_project_runners) }
+          end
+        end
+      end
+
+      context 'when admin mode is disabled' do
+        it { is_expected.to be_disallowed(:register_project_runners) }
+      end
+    end
+
+    context 'with owner' do
+      let(:current_user) { owner }
+
+      it { is_expected.to be_allowed(:register_project_runners) }
+
+      context 'with runner_registration_control FF disabled' do
+        before do
+          stub_feature_flags(runner_registration_control: false)
+        end
+
+        it { is_expected.to be_allowed(:register_project_runners) }
+      end
+
+      context 'with runner_registration_control FF enabled' do
+        before do
+          stub_feature_flags(runner_registration_control: true)
+        end
+
+        it { is_expected.to be_allowed(:register_project_runners) }
+
+        context 'with project runner registration disabled' do
+          before do
+            stub_application_setting(valid_runner_registrars: ['group'])
+          end
+
+          it { is_expected.to be_disallowed(:register_project_runners) }
+        end
+      end
+    end
+
+    context 'with maintainer' do
+      let(:current_user) { maintainer }
+
+      it { is_expected.to be_allowed(:register_project_runners) }
+    end
+
+    context 'with reporter' do
+      let(:current_user) { reporter }
+
+      it { is_expected.to be_disallowed(:register_project_runners) }
+    end
+
+    context 'with guest' do
+      let(:current_user) { guest }
+
+      it { is_expected.to be_disallowed(:register_project_runners) }
+    end
+
+    context 'with non member' do
+      let(:current_user) { create(:user) }
+
+      it { is_expected.to be_disallowed(:register_project_runners) }
+    end
+
+    context 'with anonymous' do
+      let(:current_user) { nil }
+
+      it { is_expected.to be_disallowed(:register_project_runners) }
     end
   end
 end

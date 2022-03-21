@@ -13,15 +13,12 @@ RSpec.describe Admin::ApplicationSettingsController, '(JavaScript fixtures)', ty
 
   before do
     stub_env('IN_MEMORY_APPLICATION_SETTINGS', 'false')
+    allow(Gitlab::Metrics).to receive(:metrics_folder_present?).and_return(true)
     sign_in(admin)
     enable_admin_mode!(admin)
   end
 
   render_views
-
-  before(:all) do
-    clean_frontend_fixtures('application_settings/')
-  end
 
   after do
     remove_repository(project)

@@ -35,15 +35,15 @@ class Projects::BlobController < Projects::ApplicationController
   before_action :editor_variables, except: [:show, :preview, :diff]
   before_action :validate_diff_params, only: :diff
   before_action :set_last_commit_sha, only: [:edit, :update]
-  before_action :track_experiment, only: :create
 
   track_redis_hll_event :create, :update, name: 'g_edit_by_sfe'
 
   feature_category :source_code_management
+  urgency :low, [:create, :show, :edit, :update, :diff]
 
   before_action do
     push_frontend_feature_flag(:refactor_blob_viewer, @project, default_enabled: :yaml)
-    push_frontend_feature_flag(:consolidated_edit_button, @project, default_enabled: :yaml)
+    push_frontend_feature_flag(:highlight_js, @project, default_enabled: :yaml)
     push_licensed_feature(:file_locks) if @project.licensed_feature_available?(:file_locks)
   end
 
@@ -53,7 +53,7 @@ class Projects::BlobController < Projects::ApplicationController
 
   def create
     create_commit(Files::CreateService, success_notice: _("The file has been successfully created."),
-                                        success_path: -> { create_success_path },
+                                        success_path: -> { project_blob_path(@project, File.join(@branch_name, @file_path)) },
                                         failure_view: :new,
                                         failure_path: project_new_blob_path(@project, @ref))
   end
@@ -97,7 +97,7 @@ class Projects::BlobController < Projects::ApplicationController
     @content = params[:content]
     @blob.load_all_data!
     diffy = Diffy::Diff.new(@blob.data, @content, diff: '-U 3', include_diff_info: true)
-    diff_lines = diffy.diff.scan(/.*\n/)[2..-1]
+    diff_lines = diffy.diff.scan(/.*\n/)[2..]
     diff_lines = Gitlab::Diff::Parser.new.parse(diff_lines).to_a
     @diff_lines = Gitlab::Diff::Highlight.new(diff_lines, repository: @repository).highlight
 
@@ -281,18 +281,6 @@ class Projects::BlobController < Projects::ApplicationController
   def visitor_id
     current_user&.id
   end
-
-  def create_success_path
-    if params[:code_quality_walkthrough]
-      project_pipelines_path(@project, code_quality_walkthrough: true)
-    else
-      project_blob_path(@project, File.join(@branch_name, @file_path))
-    end
-  end
-
-  def track_experiment
-    return unless params[:code_quality_walkthrough]
-
-    experiment(:code_quality_walkthrough, namespace: @project.root_ancestor).track(:commit_created)
-  end
 end
+
+Projects::BlobController.prepend_mod

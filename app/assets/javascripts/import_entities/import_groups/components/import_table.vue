@@ -1,29 +1,38 @@
 <script>
 import {
+  GlAlert,
   GlButton,
   GlEmptyState,
-  GlDropdown,
-  GlDropdownItem,
   GlIcon,
   GlLink,
   GlLoadingIcon,
   GlSearchBoxByClick,
   GlSprintf,
-  GlSafeHtmlDirective as SafeHtml,
   GlTable,
   GlFormCheckbox,
 } from '@gitlab/ui';
-import { s__, __, n__ } from '~/locale';
-import PaginationLinks from '~/vue_shared/components/pagination_links.vue';
-import ImportStatus from '../../components/import_status.vue';
+import { debounce } from 'lodash';
+import createFlash from '~/flash';
+import { s__, __, n__, sprintf } from '~/locale';
+import PaginationBar from '~/vue_shared/components/pagination_bar/pagination_bar.vue';
+import { getGroupPathAvailability } from '~/rest_api';
+import axios from '~/lib/utils/axios_utils';
+import { DEFAULT_DEBOUNCE_AND_THROTTLE_MS } from '~/lib/utils/constants';
+
 import { STATUSES } from '../../constants';
+import ImportStatusCell from '../../components/import_status.vue';
 import importGroupsMutation from '../graphql/mutations/import_groups.mutation.graphql';
-import setImportTargetMutation from '../graphql/mutations/set_import_target.mutation.graphql';
+import updateImportStatusMutation from '../graphql/mutations/update_import_status.mutation.graphql';
 import availableNamespacesQuery from '../graphql/queries/available_namespaces.query.graphql';
 import bulkImportSourceGroupsQuery from '../graphql/queries/bulk_import_source_groups.query.graphql';
-import { isInvalid } from '../utils';
+import { NEW_NAME_FIELD, i18n } from '../constants';
+import { StatusPoller } from '../services/status_poller';
+import { isFinished, isAvailableForImport, isNameValid, isSameTarget } from '../utils';
+import ImportActionsCell from './import_actions_cell.vue';
+import ImportSourceCell from './import_source_cell.vue';
 import ImportTargetCell from './import_target_cell.vue';
 
+const VALIDATION_DEBOUNCE_TIME = DEFAULT_DEBOUNCE_AND_THROTTLE_MS;
 const PAGE_SIZES = [20, 50, 100];
 const DEFAULT_PAGE_SIZE = PAGE_SIZES[0];
 const DEFAULT_TH_CLASSES =
@@ -32,10 +41,9 @@ const DEFAULT_TD_CLASSES = 'gl-vertical-align-top!';
 
 export default {
   components: {
+    GlAlert,
     GlButton,
     GlEmptyState,
-    GlDropdown,
-    GlDropdownItem,
     GlIcon,
     GlLink,
     GlLoadingIcon,
@@ -43,12 +51,11 @@ export default {
     GlFormCheckbox,
     GlSprintf,
     GlTable,
-    ImportStatus,
+    ImportSourceCell,
     ImportTargetCell,
-    PaginationLinks,
-  },
-  directives: {
-    SafeHtml,
+    ImportStatusCell,
+    ImportActionsCell,
+    PaginationBar,
   },
 
   props: {
@@ -60,7 +67,7 @@ export default {
       type: RegExp,
       required: true,
     },
-    groupUrlErrorMessage: {
+    jobsPath: {
       type: String,
       required: true,
     },
@@ -71,7 +78,10 @@ export default {
       filter: '',
       page: 1,
       perPage: DEFAULT_PAGE_SIZE,
-      selectedGroups: [],
+      selectedGroupsIds: [],
+      pendingGroupsIds: [],
+      importTargets: {},
+      unavailableFeaturesAlertVisible: true,
     };
   },
 
@@ -95,14 +105,14 @@ export default {
       tdClass: `${DEFAULT_TD_CLASSES} gl-pr-3!`,
     },
     {
-      key: 'web_url',
+      key: 'webUrl',
       label: s__('BulkImport|From source group'),
       thClass: `${DEFAULT_TH_CLASSES} gl-pl-0! import-jobs-from-col`,
       // eslint-disable-next-line @gitlab/require-i18n-strings
       tdClass: `${DEFAULT_TD_CLASSES} gl-pl-0!`,
     },
     {
-      key: 'import_target',
+      key: 'importTarget',
       label: s__('BulkImport|To new group'),
       thClass: `${DEFAULT_TH_CLASSES} import-jobs-to-col`,
       tdClass: DEFAULT_TD_CLASSES,
@@ -127,16 +137,39 @@ export default {
       return this.bulkImportSourceGroups?.nodes ?? [];
     },
 
+    groupsTableData() {
+      return this.groups.map((group) => {
+        const importTarget = this.getImportTarget(group);
+        const status = this.getStatus(group);
+
+        const flags = {
+          isInvalid: importTarget.validationErrors?.length > 0,
+          isAvailableForImport: isAvailableForImport(group) && status !== STATUSES.SCHEDULING,
+          isFinished: isFinished(group),
+        };
+
+        return {
+          ...group,
+          visibleStatus: status,
+          importTarget,
+          flags: {
+            ...flags,
+            isUnselectable: !flags.isAvailableForImport || flags.isInvalid,
+          },
+        };
+      });
+    },
+
     hasSelectedGroups() {
-      return this.selectedGroups.length > 0;
+      return this.selectedGroupsIds.length > 0;
     },
 
     hasAllAvailableGroupsSelected() {
-      return this.selectedGroups.length === this.availableGroupsForImport.length;
+      return this.selectedGroupsIds.length === this.availableGroupsForImport.length;
     },
 
     availableGroupsForImport() {
-      return this.groups.filter((g) => g.progress.status === STATUSES.NONE && !this.isInvalid(g));
+      return this.groupsTableData.filter((g) => g.flags.isAvailableForImport && !g.flags.isInvalid);
     },
 
     humanizedTotal() {
@@ -170,43 +203,88 @@ export default {
 
       return { start, end, total };
     },
+
+    unavailableFeatures() {
+      if (!this.hasGroups) {
+        return [];
+      }
+
+      return Object.entries(this.bulkImportSourceGroups.versionValidation.features)
+        .filter(([, { available }]) => available === false)
+        .map(([k, v]) => ({ title: i18n.features[k] || k, version: v.minVersion }));
+    },
+
+    unavailableFeaturesAlertTitle() {
+      return sprintf(s__('BulkImport| %{host} is running outdated GitLab version (v%{version})'), {
+        host: this.sourceUrl,
+        version: this.bulkImportSourceGroups.versionValidation.features.sourceInstanceVersion,
+      });
+    },
   },
 
   watch: {
     filter() {
       this.page = 1;
     },
-    groups() {
+
+    groupsTableData() {
       const table = this.getTableRef();
-      this.groups.forEach((g, idx) => {
-        if (this.selectedGroups.includes(g)) {
+      const matches = new Set();
+      this.groupsTableData.forEach((g, idx) => {
+        if (this.selectedGroupsIds.includes(g.id)) {
+          matches.add(g.id);
           this.$nextTick(() => {
             table.selectRow(idx);
           });
         }
       });
-      this.selectedGroups = [];
+
+      this.selectedGroupsIds = this.selectedGroupsIds.filter((id) => matches.has(id));
     },
   },
 
+  mounted() {
+    this.statusPoller = new StatusPoller({
+      pollPath: this.jobsPath,
+      updateImportStatus: (update) => {
+        this.$apollo.mutate({
+          mutation: updateImportStatusMutation,
+          variables: { id: update.id, status: update.status_name },
+        });
+      },
+    });
+
+    this.statusPoller.startPolling();
+  },
+
+  beforeDestroy() {
+    this.statusPoller.stopPolling();
+  },
+
   methods: {
+    rowClasses(groupTableItem) {
+      const DEFAULT_CLASSES = [
+        'gl-border-gray-200',
+        'gl-border-0',
+        'gl-border-b-1',
+        'gl-border-solid',
+      ];
+      const result = [...DEFAULT_CLASSES];
+      if (groupTableItem.flags.isUnselectable) {
+        result.push('gl-cursor-default!');
+      }
+      return result;
+    },
+
     qaRowAttributes(group, type) {
       if (type === 'row') {
         return {
           'data-qa-selector': 'import_item',
-          'data-qa-source-group': group.full_path,
+          'data-qa-source-group': group.fullPath,
         };
       }
 
       return {};
-    },
-
-    isAlreadyImported(group) {
-      return group.progress.status !== STATUSES.NONE;
-    },
-
-    isInvalid(group) {
-      return isInvalid(group, this.groupPathRegex);
     },
 
     groupsCount(count) {
@@ -217,22 +295,63 @@ export default {
       this.page = page;
     },
 
-    updateImportTarget(sourceGroupId, targetNamespace, newName) {
-      this.$apollo.mutate({
-        mutation: setImportTargetMutation,
-        variables: { sourceGroupId, targetNamespace, newName },
-      });
+    getStatus(group) {
+      if (this.pendingGroupsIds.includes(group.id)) {
+        return STATUSES.SCHEDULING;
+      }
+
+      return group.progress?.status || STATUSES.NONE;
     },
 
-    importGroups(sourceGroupIds) {
-      this.$apollo.mutate({
-        mutation: importGroupsMutation,
-        variables: { sourceGroupIds },
+    updateImportTarget(group, changes) {
+      const newImportTarget = {
+        ...group.importTarget,
+        ...changes,
+      };
+      this.$set(this.importTargets, group.id, newImportTarget);
+      this.validateImportTarget(newImportTarget);
+    },
+
+    async importGroups(importRequests) {
+      const newPendingGroupsIds = importRequests.map((request) => request.sourceGroupId);
+      newPendingGroupsIds.forEach((id) => {
+        this.importTargets[id].validationErrors = [
+          { field: NEW_NAME_FIELD, message: i18n.ERROR_IMPORT_COMPLETED },
+        ];
+
+        if (!this.pendingGroupsIds.includes(id)) {
+          this.pendingGroupsIds.push(id);
+        }
       });
+
+      try {
+        await this.$apollo.mutate({
+          mutation: importGroupsMutation,
+          variables: { importRequests },
+        });
+      } catch (error) {
+        createFlash({
+          message: i18n.ERROR_IMPORT,
+          captureError: true,
+          error,
+        });
+      } finally {
+        this.pendingGroupsIds = this.pendingGroupsIds.filter(
+          (id) => !newPendingGroupsIds.includes(id),
+        );
+      }
     },
 
     importSelectedGroups() {
-      this.importGroups(this.selectedGroups.map((g) => g.id));
+      const importRequests = this.groupsTableData
+        .filter((group) => this.selectedGroupsIds.includes(group.id))
+        .map((group) => ({
+          sourceGroupId: group.id,
+          targetNamespace: group.importTarget.targetNamespace.fullPath,
+          newName: group.importTarget.newName,
+        }));
+
+      this.importGroups(importRequests);
     },
 
     setPageSize(size) {
@@ -248,15 +367,114 @@ export default {
 
     preventSelectingAlreadyImportedGroups(updatedSelection) {
       if (updatedSelection) {
-        this.selectedGroups = updatedSelection;
+        this.selectedGroupsIds = updatedSelection.map((g) => g.id);
       }
 
       const table = this.getTableRef();
-      this.groups.forEach((group, idx) => {
-        if (table.isRowSelected(idx) && (this.isAlreadyImported(group) || this.isInvalid(group))) {
+      this.groupsTableData.forEach((group, idx) => {
+        if (table.isRowSelected(idx) && group.flags.isUnselectable) {
           table.unselectRow(idx);
         }
       });
+    },
+
+    validateImportTarget: debounce(async function validate(importTarget) {
+      const newValidationErrors = [];
+      importTarget.cancellationToken?.cancel();
+      if (importTarget.newName === '') {
+        newValidationErrors.push({ field: NEW_NAME_FIELD, message: i18n.ERROR_REQUIRED });
+      } else if (!isNameValid(importTarget, this.groupPathRegex)) {
+        newValidationErrors.push({ field: NEW_NAME_FIELD, message: i18n.ERROR_INVALID_FORMAT });
+      } else if (Object.values(this.importTargets).find(isSameTarget(importTarget))) {
+        newValidationErrors.push({
+          field: NEW_NAME_FIELD,
+          message: i18n.ERROR_NAME_ALREADY_USED_IN_SUGGESTION,
+        });
+      } else {
+        try {
+          // eslint-disable-next-line no-param-reassign
+          importTarget.cancellationToken = axios.CancelToken.source();
+          const {
+            data: { exists },
+          } = await getGroupPathAvailability(
+            importTarget.newName,
+            importTarget.targetNamespace.id,
+            {
+              cancelToken: importTarget.cancellationToken?.token,
+            },
+          );
+
+          if (exists) {
+            newValidationErrors.push({
+              field: NEW_NAME_FIELD,
+              message: i18n.ERROR_NAME_ALREADY_EXISTS,
+            });
+          }
+        } catch (e) {
+          if (!axios.isCancel(e)) {
+            throw e;
+          }
+        }
+      }
+
+      // eslint-disable-next-line no-param-reassign
+      importTarget.validationErrors = newValidationErrors;
+    }, VALIDATION_DEBOUNCE_TIME),
+
+    getImportTarget(group) {
+      if (this.importTargets[group.id]) {
+        return this.importTargets[group.id];
+      }
+
+      const defaultTargetNamespace = this.availableNamespaces[0] ?? { fullPath: '', id: null };
+      let importTarget;
+      if (group.lastImportTarget) {
+        const targetNamespace = this.availableNamespaces.find(
+          (ns) => ns.fullPath === group.lastImportTarget.targetNamespace,
+        );
+
+        importTarget = {
+          targetNamespace: targetNamespace ?? defaultTargetNamespace,
+          newName: group.lastImportTarget.newName,
+        };
+      } else {
+        importTarget = {
+          targetNamespace: defaultTargetNamespace,
+          newName: group.fullPath,
+        };
+      }
+
+      const cancellationToken = axios.CancelToken.source();
+      this.$set(this.importTargets, group.id, {
+        ...importTarget,
+        cancellationToken,
+        validationErrors: [],
+      });
+
+      getGroupPathAvailability(importTarget.newName, importTarget.targetNamespace.id, {
+        cancelToken: cancellationToken.token,
+      })
+        .then(({ data: { exists, suggests: suggestions } }) => {
+          if (!exists) return;
+
+          let currentSuggestion = suggestions[0] ?? importTarget.newName;
+          const existingTargets = Object.values(this.importTargets)
+            .filter((t) => t.targetNamespace.id === importTarget.targetNamespace.id)
+            .map((t) => t.newName.toLowerCase());
+
+          while (existingTargets.includes(currentSuggestion.toLowerCase())) {
+            currentSuggestion = `${currentSuggestion}-1`;
+          }
+
+          Object.assign(this.importTargets[group.id], {
+            targetNamespace: importTarget.targetNamespace,
+            newName: currentSuggestion,
+          });
+        })
+        .catch(() => {
+          // empty catch intended
+        });
+      return this.importTargets[group.id];
     },
   },
 
@@ -273,6 +491,38 @@ export default {
       <img :src="$options.gitlabLogo" class="gl-w-6 gl-h-6 gl-mb-2 gl-display-inline gl-mr-2" />
       {{ s__('BulkImport|Import groups from GitLab') }}
     </h1>
+    <gl-alert
+      v-if="unavailableFeatures.length > 0 && unavailableFeaturesAlertVisible"
+      variant="warning"
+      :title="unavailableFeaturesAlertTitle"
+      @dismiss="unavailableFeaturesAlertVisible = false"
+    >
+      <gl-sprintf
+        :message="
+          s__(
+            'BulkImport|Following data will not be migrated: %{bullets} Contact system administrator of %{host} to upgrade GitLab if you need this data in your migration',
+          )
+        "
+      >
+        <template #host>
+          <gl-link :href="sourceUrl" target="_blank">
+            {{ sourceUrl }}<gl-icon name="external-link" class="vertical-align-middle" />
+          </gl-link>
+        </template>
+        <template #bullets>
+          <ul>
+            <li v-for="feature in unavailableFeatures" :key="feature.title">
+              <gl-sprintf :message="s__('BulkImport|%{feature} (require v%{version})')">
+                <template #feature>{{ feature.title }}</template>
+                <template #version>
+                  <strong>{{ feature.version }}</strong>
+                </template>
+              </gl-sprintf>
+            </li>
+          </ul>
+        </template>
+      </gl-sprintf>
+    </gl-alert>
     <div
       class="gl-py-5 gl-border-solid gl-border-gray-200 gl-border-0 gl-border-b-1 gl-display-flex"
     >
@@ -291,8 +541,8 @@ export default {
             <strong>{{ filter }}</strong>
           </template>
           <template #link>
-            <gl-link class="gl-display-inline-block" :href="sourceUrl" target="_blank">
-              {{ sourceUrl }} <gl-icon name="external-link" class="vertical-align-middle" />
+            <gl-link :href="sourceUrl" target="_blank">
+              {{ sourceUrl }}<gl-icon name="external-link" class="vertical-align-middle" />
             </gl-link>
           </template>
         </gl-sprintf>
@@ -314,17 +564,19 @@ export default {
       <gl-empty-state
         v-else-if="!hasGroups"
         :title="s__('BulkImport|You have no groups to import')"
-        :description="s__('Check your source instance permissions.')"
+        :description="__('Check your source instance permissions.')"
       />
       <template v-else>
         <div
-          class="gl-bg-gray-10 gl-border-solid gl-border-gray-200 gl-border-0 gl-border-b-1 gl-p-4 gl-display-flex gl-align-items-center"
+          class="gl-bg-gray-10 gl-border-solid gl-border-gray-200 gl-border-0 gl-border-b-1 gl-px-4 gl-display-flex gl-align-items-center import-table-bar"
         >
-          <gl-sprintf :message="__('%{count} selected')">
-            <template #count>
-              {{ selectedGroups.length }}
-            </template>
-          </gl-sprintf>
+          <span data-test-id="selection-count">
+            <gl-sprintf :message="__('%{count} selected')">
+              <template #count>
+                {{ selectedGroupsIds.length }}
+              </template>
+            </gl-sprintf>
+          </span>
           <gl-button
             category="primary"
             variant="confirm"
@@ -336,11 +588,11 @@ export default {
         </div>
         <gl-table
           ref="table"
-          class="gl-w-full"
+          class="gl-w-full import-table"
           data-qa-selector="import_table"
-          tbody-tr-class="gl-border-gray-200 gl-border-0 gl-border-b-1 gl-border-solid"
+          :tbody-tr-class="rowClasses"
           :tbody-tr-attr="qaRowAttributes"
-          :items="groups"
+          :items="groupsTableData"
           :fields="$options.fields"
           selectable
           select-mode="multi"
@@ -349,7 +601,7 @@ export default {
         >
           <template #head(selected)="{ selectAllRows, clearSelected }">
             <gl-form-checkbox
-              :key="`checkbox-${selectedGroups.length}`"
+              :key="`checkbox-${selectedGroupsIds.length}`"
               class="gl-h-7 gl-pt-3"
               :checked="hasSelectedGroups"
               :indeterminate="hasSelectedGroups && !hasAllAvailableGroupsSelected"
@@ -360,92 +612,49 @@ export default {
             <gl-form-checkbox
               class="gl-h-7 gl-pt-3"
               :checked="rowSelected"
-              :disabled="isAlreadyImported(group) || isInvalid(group)"
+              :disabled="group.flags.isUnselectable"
               @change="rowSelected ? unselectRow() : selectRow()"
             />
           </template>
-          <template #cell(web_url)="{ value: web_url, item: { full_path } }">
-            <gl-link
-              :href="web_url"
-              target="_blank"
-              class="gl-display-inline-flex gl-align-items-center gl-h-7"
-            >
-              {{ full_path }} <gl-icon name="external-link" />
-            </gl-link>
+          <template #cell(webUrl)="{ item: group }">
+            <import-source-cell :group="group" />
           </template>
-          <template #cell(import_target)="{ item: group }">
+          <template #cell(importTarget)="{ item: group }">
             <import-target-cell
               :group="group"
               :available-namespaces="availableNamespaces"
               :group-path-regex="groupPathRegex"
-              :group-url-error-message="groupUrlErrorMessage"
-              @update-target-namespace="
-                updateImportTarget(group.id, $event, group.import_target.new_name)
-              "
-              @update-new-name="
-                updateImportTarget(group.id, group.import_target.target_namespace, $event)
+              @update-target-namespace="updateImportTarget(group, { targetNamespace: $event })"
+              @update-new-name="updateImportTarget(group, { newName: $event })"
+            />
+          </template>
+          <template #cell(progress)="{ item: group }">
+            <import-status-cell :status="group.visibleStatus" class="gl-line-height-32" />
+          </template>
+          <template #cell(actions)="{ item: group }">
+            <import-actions-cell
+              :is-finished="group.flags.isFinished"
+              :is-available-for-import="group.flags.isAvailableForImport"
+              :is-invalid="group.flags.isInvalid"
+              @import-group="
+                importGroups([
+                  {
+                    sourceGroupId: group.id,
+                    targetNamespace: group.importTarget.targetNamespace.fullPath,
+                    newName: group.importTarget.newName,
+                  },
+                ])
               "
             />
           </template>
-          <template #cell(progress)="{ value: { status } }">
-            <import-status :status="status" class="gl-line-height-32" />
-          </template>
-          <template #cell(actions)="{ item: group }">
-            <gl-button
-              v-if="!isAlreadyImported(group)"
-              :disabled="isInvalid(group)"
-              variant="confirm"
-              category="secondary"
-              data-qa-selector="import_group_button"
-              @click="importGroups([group.id])"
-            >
-              {{ __('Import') }}
-            </gl-button>
-          </template>
         </gl-table>
-        <div v-if="hasGroups" class="gl-display-flex gl-mt-3 gl-align-items-center">
-          <pagination-links
-            :change="setPage"
-            :page-info="bulkImportSourceGroups.pageInfo"
-            class="gl-m-0"
-          />
-          <gl-dropdown category="tertiary" class="gl-ml-auto">
-            <template #button-content>
-              <span class="font-weight-bold">
-                <gl-sprintf :message="__('%{count} items per page')">
-                  <template #count>
-                    {{ perPage }}
-                  </template>
-                </gl-sprintf>
-              </span>
-              <gl-icon class="gl-button-icon dropdown-chevron" name="chevron-down" />
-            </template>
-            <gl-dropdown-item
-              v-for="size in $options.PAGE_SIZES"
-              :key="size"
-              @click="setPageSize(size)"
-            >
-              <gl-sprintf :message="__('%{count} items per page')">
-                <template #count>
-                  {{ size }}
-                </template>
-              </gl-sprintf>
-            </gl-dropdown-item>
-          </gl-dropdown>
-          <div class="gl-ml-2">
-            <gl-sprintf :message="s__('BulkImport|Showing %{start}-%{end} of %{total}')">
-              <template #start>
-                {{ paginationInfo.start }}
-              </template>
-              <template #end>
-                {{ paginationInfo.end }}
-              </template>
-              <template #total>
-                {{ humanizedTotal }}
-              </template>
-            </gl-sprintf>
-          </div>
-        </div>
+        <pagination-bar
+          v-if="hasGroups"
+          :page-info="bulkImportSourceGroups.pageInfo"
+          class="gl-mt-3"
+          @set-page="setPage"
+          @set-page-size="setPageSize"
+        />
       </template>
     </template>
   </div>

@@ -87,9 +87,6 @@ In GitLab 14.0 and later, API fuzzing configuration files must be in your reposi
 
 > [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/299234) in GitLab 13.10.
 
-WARNING:
-This feature might not be available to you. Check the **version history** note above for details.
-
 The API fuzzing configuration form helps you create or modify your project's API fuzzing
 configuration. The form lets you choose values for the most common API fuzzing options and builds
 a YAML snippet that you can paste in your GitLab CI/CD configuration.
@@ -98,26 +95,23 @@ a YAML snippet that you can paste in your GitLab CI/CD configuration.
 
 To generate an API Fuzzing configuration snippet:
 
-1. From your project's home page, go to **Security & Compliance > Configuration** in the left
-   sidebar.
-1. Select **Configure** in the **API Fuzzing** row.
+1. On the top bar, select **Menu > Projects** and find your project.
+1. On the left sidebar, select **Security & Compliance > Configuration**.
+1. In the **API Fuzzing** row, select **Configure**.
 1. Complete the form as needed. Read below for more information on available configuration options.
 1. Select **Generate code snippet**.
    A modal opens with the YAML snippet corresponding to the options you've selected in the form.
 1. Choose one of the following actions:
-   1. Select **Copy code and open `.gitlab-ci.yml` file** to copy the snippet to your clipboard and
-      be redirected to your project's `.gitlab-ci.yml` file where you can paste the YAML
-      configuration.
-   1. Select **Copy code only** to copy the snippet to your clipboard and close the modal.
+   1. To copy the snippet to your clipboard and be redirected to your project's `.gitlab-ci.yml` file,
+      where you can paste the YAML configuration, select **Copy code and open `.gitlab-ci.yml` file**.
+   1. To copy the snippet to your clipboard and close the modal, select **Copy code only**.
 
 ### OpenAPI Specification
 
-> Support for OpenAPI Specification v3.1 was
-> [introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/327268) in GitLab 14.2.
-> Support for OpenAPI Specification using YAML format was
-> [introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/330583) in GitLab 14.0.
-> Support for OpenAPI Specification v3.0 was
-> [introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/228652) in GitLab 13.9.
+> - Support for OpenAPI Specification v3.0 was [introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/228652) in GitLab 13.9.
+> - Support for OpenAPI Specification using YAML format was [introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/330583) in GitLab 14.0.
+> - Support for OpenAPI Specification v3.1 was [introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/327268) in GitLab 14.2.
+> - Support to generate media type `application/xml` was [introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/327268) in GitLab 14.8.
 
 The [OpenAPI Specification](https://www.openapis.org/) (formerly the Swagger Specification) is an API description format for REST APIs.
 This section shows you how to configure API fuzzing using an OpenAPI Specification to provide information about the target API to test.
@@ -129,6 +123,7 @@ the body generation is limited to these body types:
 - `application/x-www-form-urlencoded`
 - `multipart/form-data`
 - `application/json`
+- `application/xml`
 
 #### Configure Web API fuzzing with an OpenAPI Specification
 
@@ -215,7 +210,7 @@ To configure API fuzzing to use a HAR file:
    ```
 
 1. Provide the location of the HAR specification. You can provide the specification as a file
-   or URL. [URL support was introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/285020)
+   or URL. URL support was [introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/285020)
    in GitLab 13.10 and later. Specify the location by adding the `FUZZAPI_HAR` variable.
 
 1. The target API instance's base URL is also required. Provide it by using the `FUZZAPI_TARGET_URL`
@@ -286,7 +281,7 @@ To configure API fuzzing to use a Postman Collection file:
    ```
 
 1. Provide the location of the Postman Collection specification. You can provide the specification
-   as a file or URL. [URL support was introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/285020)
+   as a file or URL. URL support was [introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/285020)
    in GitLab 13.10 and later. Specify the location by adding the `FUZZAPI_POSTMAN_COLLECTION`
    variable.
 
@@ -463,7 +458,7 @@ Follow these steps to provide the bearer token with `FUZZAPI_OVERRIDES_ENV`:
    ```
 
 1. To validate that authentication is working, run an API fuzzing test and review the fuzzing logs
-   and the test API's application logs.
+   and the test API's application logs. See the [overrides section](#overrides) for more information about override commands.
 
 ##### Token generated at test runtime
 
@@ -497,7 +492,7 @@ variables:
   FUZZAPI_PROFILE: Quick
   FUZZAPI_OPENAPI: test-api-specification.json
   FUZZAPI_TARGET_URL: http://test-deployment/
-  FUZZAPI_OVERRIDES_FILE: output/api-fuzzing-overrides.json
+  FUZZAPI_OVERRIDES_FILE: api-fuzzing-overrides.json
 ```
 
 To validate that authentication is working, run an API fuzzing test and review the fuzzing logs and
@@ -539,7 +534,7 @@ variables:
   FUZZAPI_PROFILE: Quick-10
   FUZZAPI_OPENAPI: test-api-specification.json
   FUZZAPI_TARGET_URL: http://test-deployment/
-  FUZZAPI_OVERRIDES_FILE: output/api-fuzzing-overrides.json
+  FUZZAPI_OVERRIDES_FILE: api-fuzzing-overrides.json
   FUZZAPI_OVERRIDES_CMD: renew_token.py
   FUZZAPI_OVERRIDES_INTERVAL: 300
 ```
@@ -572,12 +567,16 @@ profile increases as the number of tests increases.
 |[`FUZZAPI_PROFILE`](#api-fuzzing-profiles)                   | Configuration profile to use during testing. Defaults to `Quick-10`. |
 |[`FUZZAPI_EXCLUDE_PATHS`](#exclude-paths)                    | Exclude API URL paths from testing. |
 |[`FUZZAPI_OPENAPI`](#openapi-specification)                  | OpenAPI Specification file or URL. |
+|[`FUZZAPI_OPENAPI_RELAXED_VALIDATION`](#openapi-specification) | Relax document validation. Default is disabled. [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/345950) in GitLab 14.7. |
 |[`FUZZAPI_HAR`](#http-archive-har)                           | HTTP Archive (HAR) file. |
 |[`FUZZAPI_POSTMAN_COLLECTION`](#postman-collection)          | Postman Collection file. |
 |[`FUZZAPI_POSTMAN_COLLECTION_VARIABLES`](#postman-variables) | Path to a JSON file to extract Postman variable values. |
 |[`FUZZAPI_OVERRIDES_FILE`](#overrides)                       | Path to a JSON file containing overrides. |
 |[`FUZZAPI_OVERRIDES_ENV`](#overrides)                        | JSON string containing headers to override. |
 |[`FUZZAPI_OVERRIDES_CMD`](#overrides)                        | Overrides command. |
+|[`FUZZAPI_OVERRIDES_CMD_VERBOSE`](#overrides)                | When set to any value. It shows overrides command output as part of the job output. [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/334578) in GitLab 14.8. |
+|`FUZZAPI_PRE_SCRIPT`                                         | Run user command or script before scan session starts. |
+|`FUZZAPI_POST_SCRIPT`                                        | Run user command or script after scan session has finished. |
 |[`FUZZAPI_OVERRIDES_INTERVAL`](#overrides)                   | How often to run overrides command in seconds. Defaults to `0` (once). |
 |[`FUZZAPI_HTTP_USERNAME`](#http-basic-authentication)        | Username for HTTP authentication. |
 |[`FUZZAPI_HTTP_PASSWORD`](#http-basic-authentication)        | Password for HTTP authentication. |
@@ -614,15 +613,15 @@ Overrides use a JSON document, where each type of override is represented by a J
   },
   "body-form":  {
     "form-param1": "value",
-    "form-param1": "value",
+    "form-param2": "value"
   },
   "body-json":  {
     "json-path1": "value",
-    "json-path2": "value",
+    "json-path2": "value"
   },
   "body-xml" :  {
     "xpath1":    "value",
-    "xpath2":    "value",
+    "xpath2":    "value"
   }
 }
 ```
@@ -757,7 +756,7 @@ variables:
   FUZZAPI_PROFILE: Quick
   FUZZAPI_OPENAPI: test-api-specification.json
   FUZZAPI_TARGET_URL: http://test-deployment/
-  FUZZAPI_OVERRIDES_FILE: output/api-fuzzing-overrides.json
+  FUZZAPI_OVERRIDES_FILE: api-fuzzing-overrides.json
 ```
 
 #### Using a CI/CD variable
@@ -802,15 +801,27 @@ variables:
 
 If the value must be generated or regenerated on expiration, you can provide a program or script for
 the API fuzzer to execute on a specified interval. The provided script runs in an Alpine Linux
-container that has Python 3 and Bash installed. If the Python script requires additional packages,
-it must detect this and install the packages at runtime. The script creates the overrides JSON file
-as defined above.
+container that has Python 3 and Bash installed.
+
+You have to set the environment variable `FUZZAPI_OVERRIDES_CMD` to the program or script you would like
+to execute. The provided command creates the overrides JSON file as defined previously.
+
+You might want to install other scripting runtimes like NodeJS or Ruby, or maybe you need to install a dependency for
+your overrides command. In this case, we recommend setting the `FUZZAPI_PRE_SCRIPT` to the file path of a script which
+provides those prerequisites. The script provided by `FUZZAPI_PRE_SCRIPT` is executed once, before the analyzer starts.
+
+See the [Alpine Linux package management](https://wiki.alpinelinux.org/wiki/Alpine_Linux_package_management)
+page for information about installing Alpine Linux packages.
 
 You must provide three CI/CD variables, each set for correct operation:
 
 - `FUZZAPI_OVERRIDES_FILE`: File generated by the provided command.
-- `FUZZAPI_OVERRIDES_CMD`: Command to generate JSON file.
+- `FUZZAPI_OVERRIDES_CMD`: Overrides command in charge of generating the overrides JSON file periodically.
 - `FUZZAPI_OVERRIDES_INTERVAL`: Interval in seconds to run command.
+
+Optionally:
+
+- `FUZZAPI_PRE_SCRIPT`: Script to install runtimes or dependencies before the analyzer starts.
 
 ```yaml
 stages:
@@ -823,10 +834,166 @@ variables:
   FUZZAPI_PROFILE: Quick
   FUZZAPI_OPENAPI: test-api-specification.json
   FUZZAPI_TARGET_URL: http://test-deployment/
-  FUZZAPI_OVERRIDES_FILE: output/api-fuzzing-overrides.json
+  FUZZAPI_OVERRIDES_FILE: api-fuzzing-overrides.json
   FUZZAPI_OVERRIDES_CMD: renew_token.py
   FUZZAPI_OVERRIDES_INTERVAL: 300
 ```
+
+#### Debugging overrides
+
+> [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/334578) in GitLab 14.8.
+
+By default the output of the overrides command is hidden. If the overrides command returns a non zero exit code, the command is displayed as part of your job output. Optionally, you can set the variable `FUZZAPI_OVERRIDES_CMD_VERBOSE` to any value in order to display overrides command output as it is generated. This is useful when testing your overrides script, but should be disabled afterwards as it slows down testing.
+
+It is also possible to write messages from your script to a log file that is collected when the job completes or fails. The log file must be created in a specific location and follow a naming convention.
+
+Adding some basic logging to your overrides script is useful in case the script fails unexpectedly during normal running of the job. The log file is automatically included as an artifact of the job, allowing you to download it after the job has finished.
+
+Following our example, we provided `renew_token.py` in the environmental variable `FUZZAPI_OVERRIDES_CMD`. Please notice two things in the script:
+
+- Log file is saved in the location indicated by the environment variable `CI_PROJECT_DIR`.
+- Log file name should match `gl-*.log`.
+
+```python
+#!/usr/bin/env python
+
+# Example of an overrides command
+
+# Override commands can update the overrides json file
+# with new values to be used.  This is a great way to
+# update an authentication token that will expire
+# during testing.
+
+import logging
+import json
+import os
+import requests
+import backoff
+
+# [1] Store log file in directory indicated by env var CI_PROJECT_DIR
+working_directory = os.environ['CI_PROJECT_DIR']
+
+# [2] File name should match the pattern: gl-*.log
+log_file_path = os.path.join(working_directory, 'gl-user-overrides.log')
+
+# Set up logger
+logging.basicConfig(filename=log_file_path, level=logging.DEBUG)
+
+# Use `backoff` decorator to retry in case of transient errors.
+@backoff.on_exception(backoff.expo,
+                      (requests.exceptions.Timeout,
+                       requests.exceptions.ConnectionError),
+                       max_time=30)
+def get_auth_response():
+    return requests.get('https://authorization.service/api/get_api_token', auth=(os.environ['AUTH_USER'], os.environ['AUTH_PWD']))
+
+
+# In our example, access token is retrieved from a given endpoint
+try:
+
+    # Performs a http request, response sample: 
+    # { "Token" : "b5638ae7-6e77-4585-b035-7d9de2e3f6b3" }
+    response = get_auth_response()
+
+    # Check that the request is successful. may raise `requests.exceptions.HTTPError`
+    response.raise_for_status()
+
+    # Gets JSON data
+    response_body = response.json()
+
+# If needed specific exceptions can be caught
+# requests.ConnectionError                  : A network connection error problem occurred
+# requests.HTTPError                        : HTTP request returned an unsuccessful status code. [Response.raise_for_status()]
+# requests.ConnectTimeout                   : The request timed out while trying to connect to the remote server
+# requests.ReadTimeout                      : The server did not send any data in the allotted amount of time.
+# requests.TooManyRedirects                 : The request exceeds the configured number of maximum redirections
+# requests.exceptions.RequestException      : All exceptions that related to Requests
+except requests.exceptions.RequestException as requests_error:
+    # logs  exceptions  related to `Requests`
+    logging.error(f'Error, failed while performing HTTP request. Error message: {requests_error}')
+    raise
+except requests.exceptions.JSONDecodeError as json_decode_error:
+    # logs errors related decoding JSON response
+    logging.error(f'Error, failed while decoding JSON response. Error message: {json_decode_error}')
+    raise
+except Exception as e:
+    # logs any other error
+    logging.error(f'Error, unknown error while retrieving access token. Error message: {e}')
+    raise
+
+# computes object that holds overrides file content. 
+# It uses data fetched from request
+overrides_data = {
+    "headers": {
+        "Authorization": f"Token {response_body['Token']}"
+    }
+}
+
+# log entry informing about the file override computation
+overrides_file_path = os.path.join(
+    working_directory, "api-fuzzing-overrides.json")
+logging.info("Creating overrides file: %s" % overrides_file_path)
+
+# attempts to overwrite the file
+try:
+    if os.path.exists(overrides_file_path):
+        os.unlink(overrides_file_path)
+
+    # overwrites the file with our updated dictionary
+    with open(overrides_file_path, "wb+") as fd:
+        fd.write(json.dumps(overrides_data).encode('utf-8'))
+except Exception as e:
+    # logs any other error
+    logging.error(f'Error, unkown error when overwritng file {overrides_file_path}. Error message: {e}')
+    raise
+
+# logs informing override has finished successfully
+logging.info("Override file has been updated")
+
+# end
+```
+
+In the overrides command example, the Python script depends on the `backoff` library. To make sure the library is installed before executing the Python script, the `FUZZAPI_PRE_SCRIPT` is set to a script that will install the dependencies of your overrides command.
+As for example, the following script `user-pre-scan-set-up.sh`:
+
+```shell
+#!/bin/bash
+
+# user-pre-scan-set-up.sh
+# Ensures python dependencies are installed
+
+echo "**** install python dependencies ****"
+
+python3 -m ensurepip
+pip3 install --no-cache --upgrade \
+    pip \
+    backoff
+
+echo "**** python dependencies installed ****"
+
+# end
+```
+
+You have to update your configuration to set the `FUZZAPI_PRE_SCRIPT` to our new `user-pre-scan-set-up.sh` script. For example:
+
+```yaml
+stages:
+     - fuzz
+
+include:
+  - template: API-Fuzzing.gitlab-ci.yml
+
+variables:
+  FUZZAPI_PROFILE: Quick
+  FUZZAPI_OPENAPI: test-api-specification.json
+  FUZZAPI_TARGET_URL: http://test-deployment/
+  FUZZAPI_PRE_SCRIPT: user-pre-scan-set-up.sh
+  FUZZAPI_OVERRIDES_FILE: api-fuzzing-overrides.json
+  FUZZAPI_OVERRIDES_CMD: renew_token.py
+  FUZZAPI_OVERRIDES_INTERVAL: 300
+```
+
+In the previous sample, you could use the script `user-pre-scan-set-up.sh` to also install new runtimes or applications that later on you could use in your overrides command.
 
 ### Exclude Paths
 
@@ -976,7 +1143,7 @@ reported.
 
 ### View details of an API Fuzzing vulnerability
 
-> Introduced in [GitLab Ultimate](https://about.gitlab.com/pricing/) 13.7.
+> Introduced in GitLab 13.7.
 
 Faults detected by API Fuzzing occur in the live web application, and require manual investigation
 to determine if they are vulnerabilities. Fuzzing faults are included as vulnerabilities with a
@@ -995,7 +1162,7 @@ Follow these steps to view details of a fuzzing fault:
      **API Fuzzing detected N potential vulnerabilities**. Click the title to display the fault
      details.
 
-1. Click the fault's title to display the fault's details. The table below describes these details.
+1. Select the fault's title to display the fault's details. The table below describes these details.
 
    | Field               | Description                                                                             |
    |:--------------------|:----------------------------------------------------------------------------------------|
@@ -1157,11 +1324,40 @@ Profiles:
 
 ## Running API fuzzing in an offline environment
 
-For self-managed GitLab instances in an environment with limited, restricted, or intermittent access
-to external resources through the internet, some adjustments are required for the Web API Fuzz testing job to
-successfully run. For more information, see [Offline environments](../offline_deployments/index.md).
+For self-managed GitLab instances in an environment with limited, restricted, or intermittent access to external resources through the internet, some adjustments are required for the Web API Fuzz testing job to successfully run.
+
+Steps:
+
+1. Host the Docker image in a local container registry.
+1. Set the `SECURE_ANALYZERS_PREFIX` to the local container registry.
+
+The Docker image for API Fuzzing must be pulled (downloaded) from the public registry and then pushed (imported) into a local registry. The GitLab container registry can be used to locally host the Docker image. This process can be performed using a special template. See [loading Docker images onto your offline host](../offline_deployments/index.md#loading-docker-images-onto-your-offline-host) for instructions.
+
+Once the Docker image is hosted locally, the `SECURE_ANALYZERS_PREFIX` variable is set with the location of the local registry. The variable must be set such that concatenating `/api-fuzzing:1` results in a valid image location.
+
+For example, the below line sets a registry for the image `registry.gitlab.com/gitlab-org/security-products/analyzers/api-fuzzing:1`:
+
+`SECURE_ANALYZERS_PREFIX: "registry.gitlab.com/gitlab-org/security-products/analyzers"`
+
+NOTE:
+Setting `SECURE_ANALYZERS_PREFIX` changes the Docker image registry location for all GitLab Secure templates.
+
+For more information, see [Offline environments](../offline_deployments/index.md).
 
 ## Troubleshooting
+
+### Error waiting for API Security 'http://127.0.0.1:5000' to become available
+
+A bug exists in versions of the API Fuzzing analyzer prior to v1.6.196 that can cause a background process to fail under certain conditions. The solution is to update to a newer version of the DAST API analyzer.
+
+The version information can be found in the job details for the `apifuzzer_fuzz` job.
+
+If the issue is occurring with versions v1.6.196 or greater, please contact Support and provide the following information:
+
+1. Reference this troubleshooting section and ask for the issue to be escalated to the Dynamic Analysis Team.
+1. The full console output of the job.
+1. The `gl-api-security-scanner.log` file available as a job artifact. In the right-hand panel of the job details page, select the **Browse** button.
+1. The `apifuzzer_fuzz` job definition from your `.gitlab-ci.yml` file.
 
 ### Error, the OpenAPI document is not valid. Errors were found during validation of the document using the published OpenAPI schema
 
@@ -1263,6 +1459,60 @@ The API Fuzzing template supports launching a docker container containing an API
 
 TODO
 -->
+
+### Use OpenAPI with an invalid schema
+
+There are cases where the document is autogenerated with an invalid schema or cannot be edited manually in a timely manner. In those scenarios, the API Security is able to perform a relaxed validation by setting the variable `FUZZAPI_OPENAPI_RELAXED_VALIDATION`. We recommend providing a fully compliant OpenAPI document to prevent unexpected behaviors.
+
+#### Edit a non-compliant OpenAPI file
+
+To detect and correct elements that don't comply with the OpenAPI specifications, we recommend using an editor. An editor commonly provides document validation, and suggestions to create a schema-compliant OpenAPI document. Suggested editors include:
+
+| Editor | OpenAPI 2.0 | OpenAPI 3.0.x | OpenAPI 3.1.x |
+| -- | -- | -- | -- |
+| [Swagger Editor](https://editor.swagger.io/) | **{check-circle}** YAML, JSON | **{check-circle}** YAML, JSON | **{dotted-circle}** YAML, JSON |
+| [Stoplight Studio](https://stoplight.io/studio/) | **{check-circle}** YAML, JSON | **{check-circle}** YAML, JSON | **{check-circle}** YAML, JSON |
+
+If your OpenAPI document is generated manually, load your document in the editor and fix anything that is non-compliant. If your document is generated automatically, load it in your editor to identify the issues in the schema, then go to the application and perform the corrections based on the framework you are using.
+
+#### Enable OpenAPI relaxed validation
+
+Relaxed validation is meant for cases when the OpenAPI document cannot meet OpenAPI specifications, but it still has enough content to be consumed by different tools. A validation is performed but less strictly in regards to document schema.
+
+API Security can still try to consume an OpenAPI document that does not fully comply with OpenAPI specifications. To instruct API Security to perform a relaxed validation, set the variable `FUZZAPI_OPENAPI_RELAXED_VALIDATION` to any value, for example:
+
+```yaml
+   stages:
+     - fuzz
+
+   include:
+     - template: API-Fuzzing.gitlab-ci.yml
+
+   variables:
+     FUZZAPI_PROFILE: Quick-10
+     FUZZAPI_TARGET_URL: http://test-deployment/
+     FUZZAPI_OPENAPI: test-api-specification.json
+     FUZZAPI_OPENAPI_RELAXED_VALIDATION: On
+```
+
+## Get support or request an improvement
+
+To get support for your particular problem please use the [getting help channels](https://about.gitlab.com/get-help/).
+
+The [GitLab issue tracker on GitLab.com](https://gitlab.com/gitlab-org/gitlab/-/issues) is the right place for bugs and feature proposals about API Security and API Fuzzing.
+Please use `~"Category:API Security"` [label](../../../development/contributing/issue_workflow.md#labels) when opening a new issue regarding API fuzzing to ensure it is quickly reviewed by the right people. Please refer to our [review response SLO](../../../development/code_review.md#review-response-slo) to understand when you should receive a response.
+
+[Search the issue tracker](https://gitlab.com/gitlab-org/gitlab/-/issues) for similar entries before submitting your own, there's a good chance somebody else had the same issue or feature proposal. Show your support with an award emoji and or join the discussion.
+
+When experiencing a behavior not working as expected, consider providing contextual information:
+
+- GitLab version if using a self-managed instance.
+- `.gitlab-ci.yml` job definition.
+- Full job console output.
+- Scanner log file available as a job artifact named `gl-api-security-scanner.log`.
+
+WARNING:
+**Sanitize data attached to a support issue**. Please remove sensitive information, including: credentials, passwords, tokens, keys, and secrets.
 
 ## Glossary
 

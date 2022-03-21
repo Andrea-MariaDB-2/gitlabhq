@@ -1,12 +1,9 @@
 <script>
 import { GlModal, GlAlert } from '@gitlab/ui';
 import { mapGetters, mapActions, mapState } from 'vuex';
-import ListLabel from '~/boards/models/label';
-import { TYPE_ITERATION, TYPE_MILESTONE } from '~/graphql_shared/constants';
-import { convertToGraphQLId } from '~/graphql_shared/utils';
 import { getParameterByName, visitUrl } from '~/lib/utils/url_utility';
 import { __, s__ } from '~/locale';
-import { fullLabelId, fullBoardId } from '../boards_util';
+import glFeatureFlagMixin from '~/vue_shared/mixins/gl_feature_flags_mixin';
 import { formType } from '../constants';
 
 import createBoardMutation from '../graphql/board_create.mutation.graphql';
@@ -19,11 +16,12 @@ const boardDefaults = {
   name: '',
   labels: [],
   milestone: {},
-  iteration_id: undefined,
+  iterationCadence: {},
+  iteration: {},
   assignee: {},
   weight: null,
-  hide_backlog_list: false,
-  hide_closed_list: false,
+  hideBacklogList: false,
+  hideClosedList: false,
 };
 
 export default {
@@ -45,6 +43,7 @@ export default {
     BoardConfigurationOptions,
     GlAlert,
   },
+  mixins: [glFeatureFlagMixin()],
   inject: {
     fullPath: {
       default: '',
@@ -58,38 +57,15 @@ export default {
       type: Boolean,
       required: true,
     },
-    labelsPath: {
-      type: String,
-      required: true,
-    },
-    labelsWebUrl: {
-      type: String,
-      required: true,
-    },
     scopedIssueBoardFeatureEnabled: {
       type: Boolean,
       required: false,
       default: false,
     },
-    projectId: {
-      type: Number,
-      required: false,
-      default: 0,
-    },
-    groupId: {
-      type: Number,
-      required: false,
-      default: 0,
-    },
     weights: {
       type: Array,
       required: false,
       default: () => [],
-    },
-    enableScopedLabels: {
-      type: Boolean,
-      required: false,
-      default: false,
     },
     currentBoard: {
       type: Object,
@@ -122,9 +98,6 @@ export default {
       return this.$options.i18n[this.currentPage].btnText;
     },
     buttonKind() {
-      if (this.isNewForm) {
-        return 'success';
-      }
       if (this.isDeleteForm) {
         return 'danger';
       }
@@ -168,17 +141,16 @@ export default {
       return destroyBoardMutation;
     },
     baseMutationVariables() {
-      const { board } = this;
-      const variables = {
-        name: board.name,
-        hideBacklogList: board.hide_backlog_list,
-        hideClosedList: board.hide_closed_list,
-      };
+      const {
+        board: { name, hideBacklogList, hideClosedList, id },
+      } = this;
 
-      return board.id
+      const variables = { name, hideBacklogList, hideClosedList };
+
+      return id
         ? {
             ...variables,
-            id: fullBoardId(board.id),
+            id,
           }
         : {
             ...variables,
@@ -186,29 +158,8 @@ export default {
             groupPath: this.isGroupBoard ? this.fullPath : undefined,
           };
     },
-    issueBoardScopeMutationVariables() {
-      return {
-        weight: this.board.weight,
-        assigneeId: this.board.assignee?.id || null,
-        milestoneId: this.board.milestone?.id
-          ? convertToGraphQLId(TYPE_MILESTONE, this.board.milestone.id)
-          : null,
-        iterationId: this.board.iteration_id
-          ? convertToGraphQLId(TYPE_ITERATION, this.board.iteration_id)
-          : null,
-      };
-    },
-    boardScopeMutationVariables() {
-      return {
-        labelIds: this.board.labels.map(fullLabelId),
-        ...(this.isIssueBoard && this.issueBoardScopeMutationVariables),
-      };
-    },
     mutationVariables() {
-      return {
-        ...this.baseMutationVariables,
-        ...(this.scopedIssueBoardFeatureEnabled ? this.boardScopeMutationVariables : {}),
-      };
+      return this.baseMutationVariables;
     },
   },
   mounted() {
@@ -248,7 +199,7 @@ export default {
       await this.$apollo.mutate({
         mutation: this.deleteMutation,
         variables: {
-          id: fullBoardId(this.board.id),
+          id: this.board.id,
         },
       });
     },
@@ -283,24 +234,16 @@ export default {
         this.board = { ...boardDefaults, ...this.currentBoard };
       }
     },
-    setIteration(iterationId) {
-      this.board.iteration_id = iterationId;
+    setIteration(iteration) {
+      if (this.glFeatures.iterationCadences) {
+        this.board.iterationCadenceId = iteration.iterationCadenceId;
+      }
+      this.$set(this.board, 'iteration', {
+        id: iteration.id,
+      });
     },
     setBoardLabels(labels) {
-      labels.forEach((label) => {
-        if (label.set && !this.board.labels.find((l) => l.id === label.id)) {
-          this.board.labels.push(
-            new ListLabel({
-              id: label.id,
-              title: label.title,
-              color: label.color,
-              textColor: label.text_color,
-            }),
-          );
-        } else if (!label.set) {
-          this.board.labels = this.board.labels.filter((selected) => selected.id !== label.id);
-        }
-      });
+      this.board.labels = labels;
     },
     setAssignee(assigneeId) {
       this.$set(this.board, 'assignee', {
@@ -364,8 +307,8 @@ export default {
       </div>
 
       <board-configuration-options
-        :hide-backlog-list.sync="board.hide_backlog_list"
-        :hide-closed-list.sync="board.hide_closed_list"
+        :hide-backlog-list.sync="board.hideBacklogList"
+        :hide-closed-list.sync="board.hideClosedList"
         :readonly="readonly"
       />
 
@@ -374,11 +317,6 @@ export default {
         :collapse-scope="isNewForm"
         :board="board"
         :can-admin-board="canAdminBoard"
-        :labels-path="labelsPath"
-        :labels-web-url="labelsWebUrl"
-        :enable-scoped-labels="enableScopedLabels"
-        :project-id="projectId"
-        :group-id="groupId"
         :weights="weights"
         @set-iteration="setIteration"
         @set-board-labels="setBoardLabels"

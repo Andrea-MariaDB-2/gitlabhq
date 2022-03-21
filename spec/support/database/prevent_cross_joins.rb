@@ -22,32 +22,30 @@ module Database
     CrossJoinAcrossUnsupportedTablesError = Class.new(StandardError)
 
     ALLOW_THREAD_KEY = :allow_cross_joins_across_databases
+    ALLOW_ANNOTATE_KEY = ALLOW_THREAD_KEY.to_s.freeze
 
     def self.validate_cross_joins!(sql)
-      return if Thread.current[ALLOW_THREAD_KEY]
+      return if Thread.current[ALLOW_THREAD_KEY] || sql.include?(ALLOW_ANNOTATE_KEY)
 
       # Allow spec/support/database_cleaner.rb queries to disable/enable triggers for many tables
       # See https://gitlab.com/gitlab-org/gitlab/-/issues/339396
       return if sql.include?("DISABLE TRIGGER") || sql.include?("ENABLE TRIGGER")
 
-      # PgQuery might fail in some cases due to limited nesting:
-      # https://github.com/pganalyze/pg_query/issues/209
-      #
-      # Also, we disable GC while parsing because of https://github.com/pganalyze/pg_query/issues/226
-      begin
-        GC.disable
-        tables = PgQuery.parse(sql).tables
-      ensure
-        GC.enable
+      tables = begin
+        PgQuery.parse(sql).tables
+      rescue PgQuery::ParseError
+        # PgQuery might fail in some cases due to limited nesting:
+        # https://github.com/pganalyze/pg_query/issues/209
+        return
       end
 
-      schemas = Database::GitlabSchema.table_schemas(tables)
+      schemas = ::Gitlab::Database::GitlabSchema.table_schemas(tables)
 
       if schemas.include?(:gitlab_ci) && schemas.include?(:gitlab_main)
         Thread.current[:has_cross_join_exception] = true
         raise CrossJoinAcrossUnsupportedTablesError,
-          "Unsupported cross-join across '#{tables.join(", ")}' modifying '#{schemas.to_a.join(", ")}' discovered " \
-          "when executing query '#{sql}'"
+          "Unsupported cross-join across '#{tables.join(", ")}' querying '#{schemas.to_a.join(", ")}' discovered " \
+          "when executing query '#{sql}'. Please refer to https://docs.gitlab.com/ee/development/database/multiple_databases.html#removing-joins-between-ci_-and-non-ci_-tables for details on how to resolve this exception."
       end
     end
 
@@ -63,6 +61,10 @@ module Database
       ensure
         ActiveSupport::Notifications.unsubscribe(subscriber) if subscriber
       end
+
+      def allow_cross_joins_across_databases(url:, &block)
+        ::Gitlab::Database.allow_cross_joins_across_databases(url: url, &block)
+      end
     end
 
     module GitlabDatabaseMixin
@@ -75,11 +77,20 @@ module Database
         Thread.current[ALLOW_THREAD_KEY] = old_value
       end
     end
+
+    module ActiveRecordRelationMixin
+      def allow_cross_joins_across_databases(url:)
+        super.annotate(ALLOW_ANNOTATE_KEY)
+      end
+    end
   end
 end
 
 Gitlab::Database.singleton_class.prepend(
   Database::PreventCrossJoins::GitlabDatabaseMixin)
+
+ActiveRecord::Relation.prepend(
+  Database::PreventCrossJoins::ActiveRecordRelationMixin)
 
 ALLOW_LIST = Set.new(YAML.load_file(File.join(__dir__, 'cross-join-allowlist.yml'))).freeze
 
@@ -89,7 +100,7 @@ RSpec.configure do |config|
   config.around do |example|
     Thread.current[:has_cross_join_exception] = false
 
-    if ALLOW_LIST.include?(example.file_path)
+    if ALLOW_LIST.include?(example.file_path_rerun_argument)
       example.run
     else
       with_cross_joins_prevented { example.run }

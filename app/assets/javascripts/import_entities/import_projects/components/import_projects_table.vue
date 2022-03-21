@@ -46,10 +46,6 @@ export default {
       return `${this.filter}-${this.repositories.length}-${this.pageInfo.page}`;
     },
 
-    availableNamespaces() {
-      return this.namespaces.map(({ fullPath }) => fullPath);
-    },
-
     importAllButtonText() {
       if (this.isImportingAnyRepo) {
         return n__('Importing %d repository', 'Importing %d repositories', this.importingRepoCount);
@@ -141,7 +137,7 @@ export default {
         <gl-form-input
           data-qa-selector="githubish_import_filter_field"
           name="filter"
-          :placeholder="__('Filter your repositories by name')"
+          :placeholder="__('Filter by name')"
           autofocus
           size="lg"
           @keyup.enter="setFilter($event.target.value)"
@@ -167,7 +163,7 @@ export default {
             <provider-repo-table-row
               :key="repo.importSource.providerLink"
               :repo="repo"
-              :available-namespaces="availableNamespaces"
+              :available-namespaces="namespaces"
               :user-namespace="defaultTargetNamespace"
             />
           </template>

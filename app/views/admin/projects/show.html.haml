@@ -39,15 +39,15 @@
             = _('Namespace:')
           %strong
             - if @project.namespace
-              = link_to @project.namespace.human_name, [:admin, @project.group || @project.owner]
+              = link_to @project.namespace.human_name, [:admin, @project.personal? ? @project.namespace.owner : @project.group]
             - else
               = s_('ProjectSettings|Global')
         %li
           %span.light
             = _('Owned by:')
           %strong
-            - if @project.owner
-              = link_to @project.owner_name, [:admin, @project.owner]
+            - if @project.owners.any?
+              = safe_join(@project.owners.map { |owner| link_to(owner.name, [:admin, owner]) }, ", ".html_safe)
             - else
               = _('(deleted)')
 
@@ -143,13 +143,10 @@
             .col-sm-3.col-form-label
               = f.label :new_namespace_id, _("Namespace")
             .col-sm-9
-              .dropdown
-                = dropdown_toggle(_('Search for Namespace'), { toggle: 'dropdown', field_name: 'new_namespace_id' }, { toggle_class: 'js-namespace-select large' })
-                .dropdown-menu.dropdown-select
-                  = dropdown_title(_('Namespaces'))
-                  = dropdown_filter(_('Search for Namespace'))
-                  = dropdown_content
-                  = dropdown_loading
+              - placeholder = _('Search for Namespace')
+              %button.dropdown-menu-toggle.btn.btn-default.btn-md.gl-button.js-namespace-select{ data: { field_name: 'new_namespace_id', placeholder: placeholder }, type: 'button' }
+                %span.gl-new-dropdown-button-text
+                  = placeholder
 
           .form-group.row
             .offset-sm-3.col-sm-9
@@ -181,7 +178,7 @@
         .card-header
           %strong= @group.name
           = _('group members')
-          %span.badge.badge-pill= @group_members.size
+          = gl_badge_tag @group_members.size
           = render 'shared/members/manage_access_button', path: group_group_members_path(@group)
         %ul.content-list.members-list
           = render partial: 'shared/members/member',
@@ -198,7 +195,7 @@
       .card-header
         %strong= @project.name
         = _('project members')
-        %span.badge.badge-pill= @project.users.size
+        = gl_badge_tag @project.users.size
         = render 'shared/members/manage_access_button', path: project_project_members_path(@project)
       %ul.content-list.project_members.members-list
         = render partial: 'shared/members/member',

@@ -9,9 +9,7 @@ module IconsHelper
 
   def custom_icon(icon_name, size: DEFAULT_ICON_SIZE)
     memoized_icon("#{icon_name}_#{size}") do
-      # We can't simply do the below, because there are some .erb SVGs.
-      #  File.read(Rails.root.join("app/views/shared/icons/_#{icon_name}.svg")).html_safe
-      render "shared/icons/#{icon_name}.svg", size: size
+      render partial: "shared/icons/#{icon_name}", formats: :svg, locals: { size: size }
     end
   end
 
@@ -44,20 +42,46 @@ module IconsHelper
 
       content_tag(
         :svg,
-        content_tag(:use, '', { 'xlink:href' => "#{sprite_icon_path}##{icon_name}" } ),
+        content_tag(:use, '', { 'href' => "#{sprite_icon_path}##{icon_name}" } ),
         class: css_classes.empty? ? nil : css_classes.join(' '),
         data: { testid: "#{icon_name}-icon" }
       )
     end
   end
 
-  def loading_icon(container: false, color: 'orange', size: 'sm', css_class: nil)
-    css_classes = ['gl-spinner', "gl-spinner-#{color}", "gl-spinner-#{size}"]
-    css_classes << "#{css_class}" unless css_class.blank?
+  # Creates a GitLab UI loading icon/spinner.
+  #
+  # Examples:
+  #   # Default
+  #   gl_loading_icon
+  #
+  #   # Sizes
+  #   gl_loading_icon(size: 'md')
+  #   gl_loading_icon(size: 'lg')
+  #   gl_loading_icon(size: 'xl')
+  #
+  #   # Colors
+  #   gl_loading_icon(color: 'light')
+  #
+  #   # Block/Inline
+  #   gl_loading_icon(inline: true)
+  #
+  #   # Custom classes
+  #   gl_loading_icon(css_class: "foo-bar")
+  #
+  # See also https://gitlab-org.gitlab.io/gitlab-ui/?path=/story/base-loading-icon--default
+  def gl_loading_icon(inline: false, color: 'dark', size: 'sm', css_class: nil)
+    spinner = content_tag(:span, "", {
+      class: %[gl-spinner gl-spinner-#{color} gl-spinner-#{size} gl-vertical-align-text-bottom!],
+      aria: { label: _('Loading') }
+    })
 
-    spinner = content_tag(:span, "", { class: css_classes.join(' '), aria: { label: _('Loading') } })
-
-    container == true ? content_tag(:div, spinner, { class: 'gl-spinner-container' }) : spinner
+    container_classes = ['gl-spinner-container']
+    container_classes << css_class unless css_class.blank?
+    content_tag(inline ? :span : :div, spinner, {
+      class: container_classes,
+      role: 'status'
+    })
   end
 
   def external_snippet_icon(name)

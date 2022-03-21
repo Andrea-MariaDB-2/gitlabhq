@@ -21,6 +21,7 @@ module ContainerExpirationPolicies
       cleanup_tags_service_original_size
       cleanup_tags_service_before_truncate_size
       cleanup_tags_service_after_truncate_size
+      cleanup_tags_service_cached_tags_count
       cleanup_tags_service_before_delete_size
       cleanup_tags_service_deleted_size
     ].freeze
@@ -122,7 +123,7 @@ module ContainerExpirationPolicies
     end
 
     def throttling_enabled?
-      Feature.enabled?(:container_registry_expiration_policies_throttling)
+      Feature.enabled?(:container_registry_expiration_policies_throttling, default_enabled: :yaml)
     end
 
     def max_cleanup_execution_time
@@ -147,13 +148,30 @@ module ContainerExpirationPolicies
         log_extra_metadata_on_done(field, value)
       end
 
+      log_truncate(result)
+      log_cache_ratio(result)
+      log_extra_metadata_on_done(:running_jobs_count, running_jobs_count)
+    end
+
+    def log_cache_ratio(result)
+      tags_count = result.payload[:cleanup_tags_service_after_truncate_size]
+      cached_tags_count = result.payload[:cleanup_tags_service_cached_tags_count]
+
+      return unless tags_count && cached_tags_count && tags_count != 0
+
+      ratio = cached_tags_count / tags_count.to_f
+      ratio_as_percentage = (ratio * 100).round(2)
+
+      log_extra_metadata_on_done(:cleanup_tags_service_cache_hit_ratio, ratio_as_percentage)
+    end
+
+    def log_truncate(result)
       before_truncate_size = result.payload[:cleanup_tags_service_before_truncate_size]
       after_truncate_size = result.payload[:cleanup_tags_service_after_truncate_size]
       truncated = before_truncate_size &&
                     after_truncate_size &&
                     before_truncate_size != after_truncate_size
       log_extra_metadata_on_done(:cleanup_tags_service_truncated, !!truncated)
-      log_extra_metadata_on_done(:running_jobs_count, running_jobs_count)
     end
 
     def policy

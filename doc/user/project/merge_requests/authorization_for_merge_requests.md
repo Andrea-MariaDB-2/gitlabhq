@@ -16,7 +16,7 @@ There are two main ways to have a merge request flow with GitLab:
 
 With the protected branch flow everybody works within the same GitLab project.
 
-The project maintainers get the [Maintainer role](../../permissions.md) and the regular developers
+The project maintainers get the Maintainer role and the regular developers
 get the Developer role.
 
 Maintainers mark the authoritative branches as 'Protected'.
@@ -25,7 +25,7 @@ Developers push feature branches to the project and create merge requests
 to have their feature branches reviewed and merged into one of the protected
 branches.
 
-By default, only users with the [Maintainer role](../../permissions.md) can merge changes into a
+By default, only users with the Maintainer role can merge changes into a
 protected branch.
 
 **Advantages**
@@ -39,8 +39,8 @@ protected branch.
 
 ## Forking workflow
 
-With the forking workflow, maintainers get the [Maintainer role](../../permissions.md) and regular
-developers get Reporter access to the authoritative repository, which prohibits
+With the forking workflow, maintainers get the Maintainer role and regular
+developers get the Reporter role on the authoritative repository, which prohibits
 them from pushing any changes to it.
 
 Developers create forks of the authoritative project and push their feature

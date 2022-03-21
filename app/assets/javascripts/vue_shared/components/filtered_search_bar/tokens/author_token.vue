@@ -1,10 +1,10 @@
 <script>
 import { GlAvatar, GlFilteredSearchSuggestion } from '@gitlab/ui';
-
+import { compact } from 'lodash';
 import createFlash from '~/flash';
 import { __ } from '~/locale';
 
-import { DEFAULT_LABEL_ANY } from '../constants';
+import { DEFAULT_NONE_ANY } from '../constants';
 
 import BaseToken from './base_token.vue';
 
@@ -36,7 +36,7 @@ export default {
   },
   computed: {
     defaultAuthors() {
-      return this.config.defaultAuthors || [DEFAULT_LABEL_ANY];
+      return this.config.defaultAuthors || DEFAULT_NONE_ANY;
     },
     preloadedAuthors() {
       return this.config.preloadedAuthors || [];
@@ -59,8 +59,10 @@ export default {
         .then((res) => {
           // We'd want to avoid doing this check but
           // users.json and /groups/:id/members & /projects/:id/users
-          // return response differently.
-          this.authors = Array.isArray(res) ? res : res.data;
+          // return response differently
+
+          // TODO: rm when completed https://gitlab.com/gitlab-org/gitlab/-/issues/345756
+          this.authors = Array.isArray(res) ? compact(res) : compact(res.data);
         })
         .catch(() =>
           createFlash({
@@ -85,7 +87,6 @@ export default {
     :get-active-token-value="getActiveAuthor"
     :default-suggestions="defaultAuthors"
     :preloaded-suggestions="preloadedAuthors"
-    :recent-suggestions-storage-key="config.recentSuggestionsStorageKey"
     @fetch-suggestions="fetchAuthors"
     v-on="$listeners"
   >

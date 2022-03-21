@@ -5,7 +5,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"net"
 	"net/http"
 	"os"
 	"os/exec"
@@ -18,11 +17,11 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 
-	"gitlab.com/gitlab-org/labkit/correlation"
 	"gitlab.com/gitlab-org/labkit/tracing"
 
 	"gitlab.com/gitlab-org/gitlab/workhorse/internal/config"
 	"gitlab.com/gitlab-org/gitlab/workhorse/internal/helper"
+	"gitlab.com/gitlab-org/gitlab/workhorse/internal/helper/httptransport"
 	"gitlab.com/gitlab-org/gitlab/workhorse/internal/log"
 	"gitlab.com/gitlab-org/gitlab/workhorse/internal/senddata"
 )
@@ -69,23 +68,8 @@ const (
 
 var envInjector = tracing.NewEnvInjector()
 
-// Images might be located remotely in object storage, in which case we need to stream
-// it via http(s)
-var httpTransport = tracing.NewRoundTripper(correlation.NewInstrumentedRoundTripper(&http.Transport{
-	Proxy: http.ProxyFromEnvironment,
-	DialContext: (&net.Dialer{
-		Timeout:   30 * time.Second,
-		KeepAlive: 10 * time.Second,
-	}).DialContext,
-	MaxIdleConns:          2,
-	IdleConnTimeout:       30 * time.Second,
-	TLSHandshakeTimeout:   10 * time.Second,
-	ExpectContinueTimeout: 10 * time.Second,
-	ResponseHeaderTimeout: 30 * time.Second,
-}))
-
 var httpClient = &http.Client{
-	Transport: httpTransport,
+	Transport: httptransport.New(),
 }
 
 const (
@@ -186,12 +170,15 @@ func (r *Resizer) Inject(w http.ResponseWriter, req *http.Request, paramsData st
 	}
 	defer imageFile.reader.Close()
 
+	widthLabelVal := strconv.Itoa(int(params.Width))
+
 	outcome.originalFileSize = imageFile.contentLength
 
 	setLastModified(w, imageFile.lastModified)
 	// If the original file has not changed, then any cached resized versions have not changed either.
 	if checkNotModified(req, imageFile.lastModified) {
 		writeNotModified(w)
+		imageResizeDurations.WithLabelValues(params.ContentType, widthLabelVal).Observe(time.Since(start).Seconds())
 		outcome.ok(statusClientCache)
 		return
 	}
@@ -221,7 +208,6 @@ func (r *Resizer) Inject(w http.ResponseWriter, req *http.Request, paramsData st
 		return
 	}
 
-	widthLabelVal := strconv.Itoa(int(params.Width))
 	imageResizeDurations.WithLabelValues(params.ContentType, widthLabelVal).Observe(time.Since(start).Seconds())
 
 	outcome.ok(statusSuccess)

@@ -44,7 +44,8 @@ class MergeRequestsFinder < IssuableFinder
       :reviewer_id,
       :reviewer_username,
       :target_branch,
-      :wip
+      :wip,
+      :attention
     ]
   end
 
@@ -69,6 +70,7 @@ class MergeRequestsFinder < IssuableFinder
     items = by_approvals(items)
     items = by_deployments(items)
     items = by_reviewer(items)
+    items = by_attention(items)
 
     by_source_project_id(items)
   end
@@ -140,14 +142,13 @@ class MergeRequestsFinder < IssuableFinder
 
   # rubocop: disable CodeReuse/ActiveRecord
   def by_draft(items)
-    draft_param = params[:draft] || params[:wip]
+    draft_param = Gitlab::Utils.to_boolean(params.fetch(:draft) { params.fetch(:wip, nil) })
+    return items if draft_param.nil?
 
-    if draft_param == 'yes'
+    if draft_param
       items.where(wip_match(items.arel_table))
-    elsif draft_param == 'no'
-      items.where.not(wip_match(items.arel_table))
     else
-      items
+      items.where.not(wip_match(items.arel_table))
     end
   end
   # rubocop: enable CodeReuse/ActiveRecord
@@ -174,8 +175,8 @@ class MergeRequestsFinder < IssuableFinder
 
   def by_deployments(items)
     env = params[:environment]
-    before = params[:deployed_before]
-    after = params[:deployed_after]
+    before = parse_datetime(params[:deployed_before])
+    after = parse_datetime(params[:deployed_after])
     id = params[:deployment_id]
 
     return items if !env && !before && !after && !id
@@ -217,6 +218,19 @@ class MergeRequestsFinder < IssuableFinder
     else # reviewer not found
       items.none
     end
+  end
+
+  def by_attention(items)
+    return items unless params.attention?
+
+    items.attention(params.attention)
+  end
+
+  def parse_datetime(input)
+    # To work around http://www.ruby-lang.org/en/news/2021/11/15/date-parsing-method-regexp-dos-cve-2021-41817/
+    DateTime.parse(input.byteslice(0, 128)) if input
+  rescue Date::Error
+    nil
   end
 end
 

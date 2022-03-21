@@ -31,7 +31,20 @@ export default {
       required: false,
       default: '',
     },
+    hasUnsavedChanges: {
+      type: Boolean,
+      required: true,
+    },
+    isNewCiConfigFile: {
+      type: Boolean,
+      required: true,
+    },
     isSaving: {
+      type: Boolean,
+      required: false,
+      default: false,
+    },
+    scrollToCommitForm: {
       type: Boolean,
       required: false,
       default: false,
@@ -45,11 +58,21 @@ export default {
     };
   },
   computed: {
+    isCommitFormFilledOut() {
+      return this.message && this.targetBranch;
+    },
     isCurrentBranchTarget() {
       return this.targetBranch === this.currentBranch;
     },
-    submitDisabled() {
-      return !(this.message && this.targetBranch);
+    isSubmitDisabled() {
+      return !this.isCommitFormFilledOut || (!this.hasUnsavedChanges && !this.isNewCiConfigFile);
+    },
+  },
+  watch: {
+    scrollToCommitForm(flag) {
+      if (flag) {
+        this.scrollIntoView();
+      }
     },
   },
   methods: {
@@ -61,7 +84,11 @@ export default {
       });
     },
     onReset() {
-      this.$emit('cancel');
+      this.$emit('resetContent');
+    },
+    scrollIntoView() {
+      this.$el.scrollIntoView({ behavior: 'smooth' });
+      this.$emit('scrolled-to-commit-form');
     },
   },
   i18n: {
@@ -70,7 +97,7 @@ export default {
     startMergeRequest: __('Start a %{new_merge_request} with these changes'),
     newMergeRequest: __('new merge request'),
     commitChanges: __('Commit changes'),
-    cancel: __('Cancel'),
+    resetContent: __('Reset'),
   },
 };
 </script>
@@ -109,6 +136,7 @@ export default {
           v-if="!isCurrentBranchTarget"
           v-model="openMergeRequest"
           data-testid="new-mr-checkbox"
+          data-qa-selector="new_mr_checkbox"
           class="gl-mt-3"
         >
           <gl-sprintf :message="$options.i18n.startMergeRequest">
@@ -126,13 +154,14 @@ export default {
           class="js-no-auto-disable"
           category="primary"
           variant="confirm"
-          :disabled="submitDisabled"
+          data-qa-selector="commit_changes_button"
+          :disabled="isSubmitDisabled"
           :loading="isSaving"
         >
           {{ $options.i18n.commitChanges }}
         </gl-button>
         <gl-button type="reset" category="secondary" class="gl-mr-3">
-          {{ $options.i18n.cancel }}
+          {{ $options.i18n.resetContent }}
         </gl-button>
       </div>
     </gl-form>

@@ -151,7 +151,7 @@ RSpec.describe MergeRequests::MergeService do
 
       it 'closes GitLab issue tracker issues' do
         issue  = create :issue, project: project
-        commit = instance_double('commit', safe_message: "Fixes #{issue.to_reference}", date: Time.current, authored_date: Time.current)
+        commit = double('commit', safe_message: "Fixes #{issue.to_reference}", date: Time.current, authored_date: Time.current)
         allow(merge_request).to receive(:commits).and_return([commit])
         merge_request.cache_merge_request_closes_issues!
 
@@ -388,7 +388,7 @@ RSpec.describe MergeRequests::MergeService do
         end
 
         it 'logs and saves error if there is an error when squashing' do
-          error_message = 'Failed to squash. Should be done manually'
+          error_message = 'Squashing failed: Squash the commits locally, resolve any conflicts, then push the branch.'
 
           allow_any_instance_of(MergeRequests::SquashService).to receive(:squash!).and_return(nil)
           merge_request.update!(squash: true)

@@ -239,7 +239,7 @@ RSpec.describe Projects::BranchesController do
         end
       end
 
-      context 'without issue feature access' do
+      context 'without issue feature access', :sidekiq_inline do
         before do
           project.update!(visibility_level: Gitlab::VisibilityLevel::PUBLIC)
           project.project_feature.update!(issues_access_level: ProjectFeature::PRIVATE)
@@ -356,7 +356,7 @@ RSpec.describe Projects::BranchesController do
       context "valid branch name with encoded slashes" do
         let(:branch) { "improve%2Fawesome" }
 
-        it { expect(response).to have_gitlab_http_status(:ok) }
+        it { expect(response).to have_gitlab_http_status(:not_found) }
         it { expect(response.body).to be_blank }
       end
 
@@ -396,10 +396,10 @@ RSpec.describe Projects::BranchesController do
         let(:branch) { 'improve%2Fawesome' }
 
         it 'returns JSON response with message' do
-          expect(json_response).to eql('message' => 'Branch was deleted')
+          expect(json_response).to eql('message' => 'No such branch')
         end
 
-        it { expect(response).to have_gitlab_http_status(:ok) }
+        it { expect(response).to have_gitlab_http_status(:not_found) }
       end
 
       context 'invalid branch name, valid ref' do
@@ -654,6 +654,58 @@ RSpec.describe Projects::BranchesController do
         expect(assigns[:stale_branches].map(&:name)).to eq(
           ["feature", "improve/awesome", "merge-test", "markdown", "feature_conflict", "'test'"]
         )
+      end
+    end
+
+    context 'sorting', :aggregate_failures do
+      let(:sort) { 'name_asc' }
+
+      before do
+        get :index, format: :html, params: {
+          namespace_id: project.namespace, project_id: project, state: 'all', sort: sort
+        }
+      end
+
+      it { expect(assigns[:sort]).to eq('name_asc') }
+
+      context 'when sort is not provided' do
+        let(:sort) { nil }
+
+        it 'uses a default sort without an error message' do
+          expect(assigns[:sort]).to eq('updated_desc')
+          expect(controller).not_to set_flash.now[:alert]
+        end
+      end
+
+      context 'when sort is not supported' do
+        let(:sort) { 'unknown' }
+
+        it 'uses a default sort and shows an error message' do
+          expect(assigns[:sort]).to eq('updated_desc')
+          expect(controller).to set_flash.now[:alert].to(/Unsupported sort/)
+        end
+      end
+    end
+
+    context 'when gitaly is not available' do
+      let(:request) { get :index, format: :html, params: { namespace_id: project.namespace, project_id: project } }
+
+      before do
+        allow_next_instance_of(Gitlab::GitalyClient::RefService) do |ref_service|
+          allow(ref_service).to receive(:local_branches).and_raise(GRPC::DeadlineExceeded)
+        end
+      end
+
+      it 'returns with a status 503' do
+        request
+
+        expect(response).to have_gitlab_http_status(:service_unavailable)
+      end
+
+      it 'sets gitaly_unavailable variable' do
+        request
+
+        expect(assigns[:gitaly_unavailable]).to be_truthy
       end
     end
   end

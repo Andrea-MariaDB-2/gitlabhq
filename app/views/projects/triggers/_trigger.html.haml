@@ -8,7 +8,7 @@
 
     .label-container
       - unless trigger.can_access_project?
-        %span.badge.badge-danger.has-tooltip{ title: "Trigger user has insufficient permissions to project" } invalid
+        = gl_badge_tag s_('Trigger|invalid'), { variant: :danger }, { title: s_('Trigger|Trigger user has insufficient permissions to project'), data: { toggle: 'tooltip', container: 'body' } }
 
   %td
     - if trigger.description? && trigger.description.length > 15
@@ -33,5 +33,5 @@
       = link_to edit_project_trigger_path(@project, trigger), method: :get, title: "Edit", class: "gl-button btn btn-default btn-icon" do
         = sprite_icon('pencil')
     - if can?(current_user, :manage_trigger, trigger)
-      = link_to project_trigger_path(@project, trigger), data: { confirm: revoke_trigger_confirmation, testid: 'trigger_revoke_button' }, method: :delete, title: "Revoke", class: "gl-button btn btn-default btn-icon btn-trigger-revoke gl-ml-3" do
+      = link_to project_trigger_path(@project, trigger), aria: { label: _('Revoke') }, data: { confirm: revoke_trigger_confirmation, testid: 'trigger_revoke_button', confirm_btn_variant: "danger" }, method: :delete, title: "Revoke", class: "gl-button btn btn-default btn-icon btn-trigger-revoke gl-ml-3" do
         = sprite_icon('remove')

@@ -3,9 +3,10 @@
 require 'spec_helper'
 
 RSpec.describe MergeRequestAssignee do
+  let(:assignee) { create(:user) }
   let(:merge_request) { create(:merge_request) }
 
-  subject { merge_request.merge_request_assignees.build(assignee: create(:user)) }
+  subject { merge_request.merge_request_assignees.build(assignee: assignee) }
 
   describe 'associations' do
     it { is_expected.to belong_to(:merge_request).class_name('MergeRequest') }
@@ -35,6 +36,39 @@ RSpec.describe MergeRequestAssignee do
         expect(assignees.first.user_id).to eq project_merge_request.merge_request_assignees.first.user_id
         expect(assignees.first.merge_request_id).to eq project_merge_request.merge_request_assignees.first.merge_request_id
       end
+    end
+  end
+
+  it_behaves_like 'having unique enum values'
+
+  it_behaves_like 'having reviewer state'
+
+  describe 'syncs to reviewer state' do
+    before do
+      reviewer = merge_request.merge_request_reviewers.build(reviewer: assignee)
+      reviewer.update!(state: :reviewed)
+    end
+
+    it { is_expected.to have_attributes(state: 'reviewed') }
+  end
+
+  describe '#attention_requested_by' do
+    let(:current_user) { create(:user) }
+
+    before do
+      subject.update!(updated_state_by: current_user)
+    end
+
+    context 'attention requested' do
+      it { expect(subject.attention_requested_by).to eq(current_user) }
+    end
+
+    context 'attention requested' do
+      before do
+        subject.update!(state: :reviewed)
+      end
+
+      it { expect(subject.attention_requested_by).to eq(nil) }
     end
   end
 end

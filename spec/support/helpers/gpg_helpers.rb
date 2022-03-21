@@ -4,6 +4,7 @@ module GpgHelpers
   SIGNED_COMMIT_SHA       = '8a852d50dda17cc8fd1408d2fd0c5b0f24c76ca4'
   SIGNED_AND_AUTHORED_SHA = '3c1d9a0266cb0c62d926f4a6c649beed561846f5'
   DIFFERING_EMAIL_SHA     = 'a17a9f66543673edf0a3d1c6b93bdda3fe600f32'
+  MULTIPLE_SIGNATURES_SHA = 'c7794c14268d67ad8a2d5f066d706539afc75a96'
 
   module User1
     extend self
@@ -137,7 +138,7 @@ module GpgHelpers
     end
 
     def primary_keyid
-      fingerprint[-16..-1]
+      fingerprint[-16..]
     end
 
     def fingerprint
@@ -280,7 +281,7 @@ module GpgHelpers
     end
 
     def primary_keyid2
-      fingerprint2[-16..-1]
+      fingerprint2[-16..]
     end
 
     def fingerprint2
@@ -373,7 +374,7 @@ module GpgHelpers
     end
 
     def primary_keyid
-      fingerprint[-16..-1]
+      fingerprint[-16..]
     end
 
     def fingerprint
@@ -775,7 +776,7 @@ module GpgHelpers
     end
 
     def primary_keyid
-      fingerprint[-16..-1]
+      fingerprint[-16..]
     end
 
     def fingerprint

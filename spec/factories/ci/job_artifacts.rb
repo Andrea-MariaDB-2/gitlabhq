@@ -10,6 +10,10 @@ FactoryBot.define do
       expire_at { Date.yesterday }
     end
 
+    trait :locked do
+      locked { Ci::JobArtifact.lockeds[:artifacts_locked] }
+    end
+
     trait :remote_store do
       file_store { JobArtifactUploader::Store::REMOTE}
     end
@@ -84,6 +88,17 @@ FactoryBot.define do
       after(:build) do |artifact, evaluator|
         artifact.file = fixture_file_upload(
           Rails.root.join('spec/fixtures/trace/sample_trace'), 'text/plain')
+      end
+    end
+
+    trait :unarchived_trace_artifact do
+      file_type { :trace }
+      file_format { :raw }
+
+      after(:build) do |artifact, evaluator|
+        file = double('file', path: '/path/to/job.log')
+        artifact.file = file
+        allow(artifact.file).to receive(:file).and_return(CarrierWave::SanitizedFile.new(file))
       end
     end
 

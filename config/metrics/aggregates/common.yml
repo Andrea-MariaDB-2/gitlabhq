@@ -1,6 +1,6 @@
 # Aggregated metrics that include EE only event names within `events:` attribute have to be defined at ee/config/metrics/aggregates/common.yml
 # instead of this file.
-#- name: unique name of aggregated metric
+# - name: unique name of aggregated metric
 #  operator: aggregation operator. Valid values are:
 #             - "OR": counts unique elements that were observed triggering any of following events
 #             - "AND": counts unique elements that were observed triggering all of following events
@@ -62,3 +62,27 @@
     - 'i_testing_group_code_coverage_visit_total'
     - 'i_testing_load_performance_widget_total'
     - 'i_testing_metrics_report_widget_total'
+- name: xmau_plan
+  operator: OR
+  source: redis
+  time_frame: [7d, 28d]
+  events:
+    - users_creating_work_items
+    - users_updating_work_item_title
+  feature_flag: track_work_items_activity
+- name: xmau_project_management
+  operator: OR
+  source: redis
+  time_frame: [7d, 28d]
+  events:
+    - users_creating_work_items
+    - users_updating_work_item_title
+  feature_flag: track_work_items_activity
+- name: users_work_items
+  operator: OR
+  source: redis
+  time_frame: [7d, 28d]
+  events:
+    - users_creating_work_items
+    - users_updating_work_item_title
+  feature_flag: track_work_items_activity

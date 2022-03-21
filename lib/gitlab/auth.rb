@@ -6,25 +6,35 @@ module Gitlab
     IpBlacklisted = Class.new(StandardError)
 
     # Scopes used for GitLab API access
-    API_SCOPES = [:api, :read_user, :read_api].freeze
+    API_SCOPE = :api
+    READ_API_SCOPE = :read_api
+    READ_USER_SCOPE = :read_user
+    API_SCOPES = [API_SCOPE, READ_API_SCOPE, READ_USER_SCOPE].freeze
+
+    PROFILE_SCOPE = :profile
+    EMAIL_SCOPE = :email
+    OPENID_SCOPE = :openid
+    # Scopes used for OpenID Connect
+    OPENID_SCOPES = [OPENID_SCOPE].freeze
+    # OpenID Connect profile scopes
+    PROFILE_SCOPES = [PROFILE_SCOPE, EMAIL_SCOPE].freeze
 
     # Scopes used for GitLab Repository access
-    REPOSITORY_SCOPES = [:read_repository, :write_repository].freeze
+    READ_REPOSITORY_SCOPE = :read_repository
+    WRITE_REPOSITORY_SCOPE = :write_repository
+    REPOSITORY_SCOPES = [READ_REPOSITORY_SCOPE, WRITE_REPOSITORY_SCOPE].freeze
 
     # Scopes used for GitLab Docker Registry access
-    REGISTRY_SCOPES = [:read_registry, :write_registry].freeze
+    READ_REGISTRY_SCOPE = :read_registry
+    WRITE_REGISTRY_SCOPE = :write_registry
+    REGISTRY_SCOPES = [READ_REGISTRY_SCOPE, WRITE_REGISTRY_SCOPE].freeze
 
     # Scopes used for GitLab as admin
-    ADMIN_SCOPES = [:sudo].freeze
-
-    # Scopes used for OpenID Connect
-    OPENID_SCOPES = [:openid].freeze
-
-    # OpenID Connect profile scopes
-    PROFILE_SCOPES = [:profile, :email].freeze
+    SUDO_SCOPE = :sudo
+    ADMIN_SCOPES = [SUDO_SCOPE].freeze
 
     # Default scopes for OAuth applications that don't define their own
-    DEFAULT_SCOPES = [:api].freeze
+    DEFAULT_SCOPES = [API_SCOPE].freeze
 
     CI_JOB_USER = 'gitlab-ci-token'
 
@@ -84,7 +94,7 @@ module Gitlab
         Gitlab::Auth::UniqueIpsLimiter.limit_user! do
           user = User.by_login(login)
 
-          break if user && !can_user_login_with_non_expired_password?(user)
+          break if user && !user.can_log_in_with_non_expired_password?
 
           authenticators = []
 
@@ -172,7 +182,11 @@ module Gitlab
         user = find_with_user_password(login, password)
         return unless user
 
-        raise Gitlab::Auth::MissingPersonalAccessTokenError if user.two_factor_enabled?
+        verifier = TwoFactorAuthVerifier.new(user)
+
+        if user.two_factor_enabled? || verifier.two_factor_authentication_enforced?
+          raise Gitlab::Auth::MissingPersonalAccessTokenError
+        end
 
         Gitlab::Auth::Result.new(user, nil, :gitlab_or_ldap, full_authentication_abilities)
       end
@@ -183,9 +197,9 @@ module Gitlab
 
           if valid_oauth_token?(token)
             user = User.id_in(token.resource_owner_id).first
-            return unless user && can_user_login_with_non_expired_password?(user)
+            return unless user && user.can_log_in_with_non_expired_password?
 
-            Gitlab::Auth::Result.new(user, nil, :oauth, full_authentication_abilities)
+            Gitlab::Auth::Result.new(user, nil, :oauth, abilities_for_scopes(token.scopes))
           end
         end
       end
@@ -203,10 +217,10 @@ module Gitlab
         return unless valid_scoped_token?(token, all_available_scopes)
 
         if project && token.user.project_bot?
-          return unless token_bot_in_project?(token.user, project) || token_bot_in_group?(token.user, project)
+          return unless token_bot_in_resource?(token.user, project)
         end
 
-        if can_user_login_with_non_expired_password?(token.user) || token.user.project_bot?
+        if token.user.can_log_in_with_non_expired_password? || token.user.project_bot?
           Gitlab::Auth::Result.new(token.user, nil, :personal_access_token, abilities_for_scopes(token.scopes))
         end
       end
@@ -225,8 +239,12 @@ module Gitlab
       end
       # rubocop: enable CodeReuse/ActiveRecord
 
+      def token_bot_in_resource?(user, project)
+        token_bot_in_project?(user, project) || token_bot_in_group?(user, project)
+      end
+
       def valid_oauth_token?(token)
-        token && token.accessible? && valid_scoped_token?(token, [:api])
+        token && token.accessible? && valid_scoped_token?(token, Doorkeeper.configuration.scopes)
       end
 
       def valid_scoped_token?(token, scopes)
@@ -305,7 +323,7 @@ module Gitlab
         return unless build.project.builds_enabled?
 
         if build.user
-          return unless can_user_login_with_non_expired_password?(build.user) || (build.user.project_bot? && build.project.bots&.include?(build.user))
+          return unless build.user.can_log_in_with_non_expired_password? || (build.user.project_bot? && token_bot_in_resource?(build.user, build.project))
 
           # If user is assigned to build, use restricted credentials of user
           Gitlab::Auth::Result.new(build.user, build.project, :build, build_authentication_abilities)
@@ -401,10 +419,6 @@ module Gitlab
         return user.unlock_access! if success
 
         user.increment_failed_attempts!
-      end
-
-      def can_user_login_with_non_expired_password?(user)
-        user.can?(:log_in) && !user.password_expired_if_applicable?
       end
     end
   end

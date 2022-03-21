@@ -88,7 +88,7 @@ The keywords available for use in trigger jobs are:
 - [`only` and `except`](../yaml/index.md#only--except)
 - [`when`](../yaml/index.md#when) (only with a value of `on_success`, `on_failure`, or `always`)
 - [`extends`](../yaml/index.md#extends)
-- [`needs`](../yaml/index.md#needs)
+- [`needs`](../yaml/index.md#needs), but not [`needs:project`](../yaml/index.md#needsproject)
 
 #### Specify a downstream pipeline branch
 
@@ -112,7 +112,7 @@ Use:
 
 - The `project` keyword to specify the full path to a downstream project.
 - The `branch` keyword to specify the name of a branch in the project specified by `project`.
-  [In GitLab 12.4](https://gitlab.com/gitlab-org/gitlab/-/issues/10126) and later, variable expansion is
+  In [GitLab 12.4 and later](https://gitlab.com/gitlab-org/gitlab/-/issues/10126), variable expansion is
   supported.
 
 Pipelines triggered on a protected branch in a downstream project use the [role](../../user/permissions.md)
@@ -154,7 +154,7 @@ trigger-downstream:
   trigger: my/project
 ```
 
-You can stop global variables from reaching the downstream pipeline by using the [`inherit` keyword](../yaml/index.md#inherit).
+You can stop global variables from reaching the downstream pipeline by using the [`inherit:variables` keyword](../yaml/index.md#inheritvariables).
 In this example, the `MY_GLOBAL_VAR` variable is not available in the triggered pipeline:
 
 ```yaml
@@ -190,7 +190,7 @@ the ones defined in the upstream project take precedence.
 
 #### Pass CI/CD variables to a downstream pipeline by using variable inheritance
 
-You can pass variables to a downstream pipeline with [`dotenv` variable inheritance](../variables/index.md#pass-an-environment-variable-to-another-job) and [cross project artifact downloads](../yaml/index.md#cross-project-artifact-downloads-with-needs).
+You can pass variables to a downstream pipeline with [`dotenv` variable inheritance](../variables/index.md#pass-an-environment-variable-to-another-job) and [`needs:project`](../yaml/index.md#needsproject).
 
 In the upstream pipeline:
 
@@ -213,7 +213,7 @@ In the upstream pipeline:
    ```
 
 1. Set the `test` job in the downstream pipeline to inherit the variables from the `build_vars`
-   job in the upstream project with `needs:`. The `test` job inherits the variables in the
+   job in the upstream project with `needs`. The `test` job inherits the variables in the
    `dotenv` report and it can access `BUILD_VERSION` in the script:
 
    ```yaml
@@ -254,26 +254,11 @@ trigger_job:
     strategy: depend
 ```
 
-#### Mirror status from upstream pipeline
-
-You can mirror the pipeline status from an upstream pipeline to a bridge job by
-using the `needs:pipeline` keyword. The latest pipeline status from the default branch is
-replicated to the bridge job.
-
-For example:
-
-```yaml
-upstream_bridge:
-  stage: test
-  needs:
-    pipeline: other/project
-```
-
 ### Create multi-project pipelines by using the API
 
 > [Moved](https://gitlab.com/gitlab-org/gitlab/-/issues/31573) to GitLab Free in 12.4.
 
-When you use the [`CI_JOB_TOKEN` to trigger pipelines](../triggers/index.md#ci-job-token),
+When you use the [`CI_JOB_TOKEN` to trigger pipelines](../jobs/ci_job_token.md),
 GitLab recognizes the source of the job token. The pipelines become related,
 so you can visualize their relationships on pipeline graphs.
 
@@ -290,15 +275,15 @@ When using:
 
 ## Trigger a pipeline when an upstream project is rebuilt **(PREMIUM)**
 
-> [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/9045) in GitLab Premium 12.8.
+> [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/9045) in GitLab 12.8.
 
 You can trigger a pipeline in your project whenever a pipeline finishes for a new
 tag in a different project.
 
 Prerequisites:
 
-- The upstream project must be [public](../../public_access/public_access.md).
-- The user must have the [Developer role](../../user/permissions.md#project-members-permissions)
+- The upstream project must be [public](../../user/public_access.md).
+- The user must have the Developer role
   in the upstream project.
 
 To trigger the pipeline when the upstream project is rebuilt:
@@ -321,7 +306,7 @@ downstream projects. On self-managed instances, an administrator can change this
 When you configure GitLab CI/CD for your project, you can visualize the stages of your
 [jobs](index.md#configure-a-pipeline) on a [pipeline graph](index.md#visualize-pipelines).
 
-![Multi-project pipeline graph](img/multi_project_pipeline_graph.png)
+![Multi-project pipeline graph](img/multi_project_pipeline_graph_v14_3.png)
 
 In the merge request, on the **Pipelines** tab, multi-project pipeline mini-graphs are displayed.
 They expand and are shown adjacent to each other when hovering (or tapping on touchscreen devices).

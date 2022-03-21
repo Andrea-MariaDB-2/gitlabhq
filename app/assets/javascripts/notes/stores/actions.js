@@ -1,4 +1,3 @@
-/* eslint-disable @gitlab/require-string-literal-i18n-helpers */
 import $ from 'jquery';
 import Visibility from 'visibilityjs';
 import Vue from 'vue';
@@ -71,7 +70,7 @@ export const setUserData = ({ commit }, data) => commit(types.SET_USER_DATA, dat
 export const setLastFetchedAt = ({ commit }, data) => commit(types.SET_LAST_FETCHED_AT, data);
 
 export const setInitialNotes = ({ commit }, discussions) =>
-  commit(types.SET_INITIAL_DISCUSSIONS, discussions);
+  commit(types.ADD_OR_UPDATE_DISCUSSIONS, discussions);
 
 export const setTargetNoteHash = ({ commit }, data) => commit(types.SET_TARGET_NOTE_HASH, data);
 
@@ -90,11 +89,48 @@ export const fetchDiscussions = ({ commit, dispatch }, { path, filter, persistFi
       ? { params: { notes_filter: filter, persist_filter: persistFilter } }
       : null;
 
+  if (window.gon?.features?.paginatedIssueDiscussions) {
+    return dispatch('fetchDiscussionsBatch', { path, config, perPage: 20 });
+  }
+
   return axios.get(path, config).then(({ data }) => {
-    commit(types.SET_INITIAL_DISCUSSIONS, data);
+    commit(types.ADD_OR_UPDATE_DISCUSSIONS, data);
     commit(types.SET_FETCHING_DISCUSSIONS, false);
 
     dispatch('updateResolvableDiscussionsCounts');
+  });
+};
+
+export const fetchDiscussionsBatch = ({ commit, dispatch }, { path, config, cursor, perPage }) => {
+  const params = { ...config?.params, per_page: perPage };
+
+  if (cursor) {
+    params.cursor = cursor;
+  }
+
+  return axios.get(path, { params }).then(({ data, headers }) => {
+    commit(types.ADD_OR_UPDATE_DISCUSSIONS, data);
+
+    if (headers['x-next-page-cursor']) {
+      const nextConfig = { ...config };
+
+      if (config?.params?.persist_filter) {
+        delete nextConfig.params.notes_filter;
+        delete nextConfig.params.persist_filter;
+      }
+
+      return dispatch('fetchDiscussionsBatch', {
+        path,
+        config: nextConfig,
+        cursor: headers['x-next-page-cursor'],
+        perPage: Math.min(Math.round(perPage * 1.5), 100),
+      });
+    }
+
+    commit(types.SET_FETCHING_DISCUSSIONS, false);
+    dispatch('updateResolvableDiscussionsCounts');
+
+    return undefined;
   });
 };
 
@@ -565,7 +601,8 @@ export const setLoadingState = ({ commit }, data) => {
   commit(types.SET_NOTES_LOADING_STATE, data);
 };
 
-export const filterDiscussion = ({ dispatch }, { path, filter, persistFilter }) => {
+export const filterDiscussion = ({ commit, dispatch }, { path, filter, persistFilter }) => {
+  commit(types.CLEAR_DISCUSSIONS);
   dispatch('setLoadingState', true);
   dispatch('fetchDiscussions', { path, filter, persistFilter })
     .then(() => {
@@ -621,7 +658,7 @@ export const submitSuggestion = (
       const flashMessage = errorMessage || defaultMessage;
 
       createFlash({
-        message: __(flashMessage),
+        message: flashMessage,
         parent: flashContainer,
       });
     })
@@ -631,7 +668,7 @@ export const submitSuggestion = (
     });
 };
 
-export const submitSuggestionBatch = ({ commit, dispatch, state }, { flashContainer }) => {
+export const submitSuggestionBatch = ({ commit, dispatch, state }, { message, flashContainer }) => {
   const suggestionIds = state.batchSuggestionsInfo.map(({ suggestionId }) => suggestionId);
 
   const resolveAllDiscussions = () =>
@@ -644,7 +681,7 @@ export const submitSuggestionBatch = ({ commit, dispatch, state }, { flashContai
   commit(types.SET_RESOLVING_DISCUSSION, true);
   dispatch('stopPolling');
 
-  return Api.applySuggestionBatch(suggestionIds)
+  return Api.applySuggestionBatch(suggestionIds, message)
     .then(() => Promise.all(resolveAllDiscussions()))
     .then(() => commit(types.CLEAR_SUGGESTION_BATCH))
     .catch((err) => {
@@ -657,7 +694,7 @@ export const submitSuggestionBatch = ({ commit, dispatch, state }, { flashContai
       const flashMessage = errorMessage || defaultMessage;
 
       createFlash({
-        message: __(flashMessage),
+        message: flashMessage,
         parent: flashContainer,
       });
     })

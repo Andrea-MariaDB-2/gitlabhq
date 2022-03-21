@@ -1,8 +1,9 @@
 import { GlTable, GlSkeletonLoader } from '@gitlab/ui';
-import { createLocalVue } from '@vue/test-utils';
+import Vue from 'vue';
 import VueApollo from 'vue-apollo';
 
 import createMockApollo from 'helpers/mock_apollo_helper';
+import waitForPromises from 'helpers/wait_for_promises';
 import { mountExtended } from 'helpers/vue_test_utils_helper';
 
 import AdminUserActions from '~/admin/users/components/user_actions.vue';
@@ -16,8 +17,7 @@ import { users, paths, createGroupCountResponse } from '../mock_data';
 
 jest.mock('~/flash');
 
-const localVue = createLocalVue();
-localVue.use(VueApollo);
+Vue.use(VueApollo);
 
 describe('AdminUsersTable component', () => {
   let wrapper;
@@ -48,7 +48,6 @@ describe('AdminUsersTable component', () => {
 
   const initComponent = (props = {}, resolverMock = fetchGroupCountsResponse) => {
     wrapper = mountExtended(AdminUsersTable, {
-      localVue,
       apolloProvider: createMockApolloProvider(resolverMock),
       propsData: {
         users,
@@ -108,8 +107,9 @@ describe('AdminUsersTable component', () => {
     });
 
     describe('when the data has been fetched', () => {
-      beforeEach(() => {
+      beforeEach(async () => {
         initComponent();
+        await waitForPromises();
       });
 
       it("renders the user's group count", () => {
@@ -117,8 +117,9 @@ describe('AdminUsersTable component', () => {
       });
 
       describe("and a user's group count is null", () => {
-        beforeEach(() => {
+        beforeEach(async () => {
           initComponent({}, createFetchGroupCount([{ id: user.id, groupCount: null }]));
+          await waitForPromises();
         });
 
         it("renders the user's group count as 0", () => {
@@ -128,12 +129,12 @@ describe('AdminUsersTable component', () => {
     });
 
     describe('when there is an error while fetching the data', () => {
-      beforeEach(() => {
+      beforeEach(async () => {
         initComponent({}, fetchGroupCountsError);
+        await waitForPromises();
       });
 
       it('creates a flash message and captures the error', () => {
-        expect(createFlash).toHaveBeenCalledTimes(1);
         expect(createFlash).toHaveBeenCalledWith({
           message: 'Could not load user group counts. Please refresh the page to try again.',
           captureError: true,

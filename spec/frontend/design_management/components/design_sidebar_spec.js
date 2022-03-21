@@ -1,7 +1,9 @@
 import { GlCollapse, GlPopover } from '@gitlab/ui';
 import { shallowMount } from '@vue/test-utils';
 import Cookies from 'js-cookie';
+import { nextTick } from 'vue';
 import DesignDiscussion from '~/design_management/components/design_notes/design_discussion.vue';
+import DesignNoteSignedOut from '~/design_management/components/design_notes/design_note_signed_out.vue';
 import DesignSidebar from '~/design_management/components/design_sidebar.vue';
 import DesignTodoButton from '~/design_management/components/design_todo_button.vue';
 import updateActiveDiscussionMutation from '~/design_management/graphql/mutations/update_active_discussion.mutation.graphql';
@@ -30,6 +32,7 @@ const cookieKey = 'hide_design_resolved_comments_popover';
 const mutate = jest.fn().mockResolvedValue();
 
 describe('Design management design sidebar component', () => {
+  const originalGon = window.gon;
   let wrapper;
 
   const findDiscussions = () => wrapper.findAll(DesignDiscussion);
@@ -58,11 +61,20 @@ describe('Design management design sidebar component', () => {
         },
       },
       stubs: { GlPopover },
+      provide: {
+        registerPath: '/users/sign_up?redirect_to_referer=yes',
+        signInPath: '/users/sign_in?redirect_to_referer=yes',
+      },
     });
   }
 
+  beforeEach(() => {
+    window.gon = { current_user_id: 1 };
+  });
+
   afterEach(() => {
     wrapper.destroy();
+    window.gon = originalGon;
   });
 
   it('renders participants', () => {
@@ -127,14 +139,13 @@ describe('Design management design sidebar component', () => {
       expect(wrapper.emitted('toggleResolvedComments')).toHaveLength(1);
     });
 
-    it('opens a collapsible when resolvedDiscussionsExpanded prop changes to true', () => {
+    it('opens a collapsible when resolvedDiscussionsExpanded prop changes to true', async () => {
       expect(findCollapsible().attributes('visible')).toBeUndefined();
       wrapper.setProps({
         resolvedDiscussionsExpanded: true,
       });
-      return wrapper.vm.$nextTick().then(() => {
-        expect(findCollapsible().attributes('visible')).toBe('true');
-      });
+      await nextTick();
+      expect(findCollapsible().attributes('visible')).toBe('true');
     });
 
     it('does not popover about resolved comments', () => {
@@ -171,12 +182,11 @@ describe('Design management design sidebar component', () => {
       expect(wrapper.emitted('resolveDiscussionError')).toEqual([['payload']]);
     });
 
-    it('changes prop correctly on opening discussion form', () => {
+    it('changes prop correctly on opening discussion form', async () => {
       findFirstDiscussion().vm.$emit('open-form', 'some-id');
 
-      return wrapper.vm.$nextTick().then(() => {
-        expect(findFirstDiscussion().props('discussionWithOpenForm')).toBe('some-id');
-      });
+      await nextTick();
+      expect(findFirstDiscussion().props('discussionWithOpenForm')).toBe('some-id');
     });
   });
 
@@ -235,17 +245,59 @@ describe('Design management design sidebar component', () => {
       expect(scrollIntoViewMock).toHaveBeenCalled();
     });
 
-    it('dismisses a popover on the outside click', () => {
+    it('dismisses a popover on the outside click', async () => {
       wrapper.trigger('click');
-      return wrapper.vm.$nextTick(() => {
-        expect(findPopover().exists()).toBe(false);
-      });
+      await nextTick();
+      expect(findPopover().exists()).toBe(false);
     });
 
     it(`sets a ${cookieKey} cookie on clicking outside the popover`, () => {
       jest.spyOn(Cookies, 'set');
       wrapper.trigger('click');
-      expect(Cookies.set).toHaveBeenCalledWith(cookieKey, 'true', { expires: 365 * 10 });
+      expect(Cookies.set).toHaveBeenCalledWith(cookieKey, 'true', {
+        expires: 365 * 10,
+        secure: false,
+      });
+    });
+  });
+
+  describe('when user is not logged in', () => {
+    const findDesignNoteSignedOut = () => wrapper.findComponent(DesignNoteSignedOut);
+
+    beforeEach(() => {
+      window.gon = { current_user_id: null };
+    });
+
+    describe('design has no discussions', () => {
+      beforeEach(() => {
+        createComponent({
+          design: {
+            ...design,
+            discussions: {
+              nodes: [],
+            },
+          },
+        });
+      });
+
+      it('does not render a message about possibility to create a new discussion', () => {
+        expect(findNewDiscussionDisclaimer().exists()).toBe(false);
+      });
+
+      it('renders design-note-signed-out component', () => {
+        expect(findDesignNoteSignedOut().exists()).toBe(true);
+      });
+    });
+
+    describe('design has discussions', () => {
+      beforeEach(() => {
+        Cookies.set(cookieKey, true);
+        createComponent();
+      });
+
+      it('renders design-note-signed-out component', () => {
+        expect(findDesignNoteSignedOut().exists()).toBe(true);
+      });
     });
   });
 });

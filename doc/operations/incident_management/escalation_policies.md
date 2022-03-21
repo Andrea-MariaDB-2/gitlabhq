@@ -1,12 +1,12 @@
 ---
 stage: Monitor
-group: Monitor
+group: Respond
 info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
 ---
 
 # Escalation Policies **(PREMIUM)**
 
-> [Introduced](https://gitlab.com/groups/gitlab-org/-/epics/4638) in [GitLab Premium](https://about.gitlab.com/pricing/) 14.1.
+> [Introduced](https://gitlab.com/groups/gitlab-org/-/epics/4638) in GitLab 14.1.
 
 Escalation Policies protect your company from missed critical alerts. Escalation Policies contain
 time-boxed steps that automatically page the next responder in the escalation step if the responder
@@ -17,7 +17,7 @@ where you manage [On-call schedules](oncall_schedules.md).
 
 Prerequisite:
 
-- You must have at least the Maintainer [role](../../user/permissions.md).
+- You must have at least the Maintainer role.
 - You must have an [on-call schedule](oncall_schedules.md).
 
 To create an escalation policy:

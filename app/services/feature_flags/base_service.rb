@@ -7,6 +7,8 @@ module FeatureFlags
     AUDITABLE_ATTRIBUTES = %w(name description active).freeze
 
     def success(**args)
+      audit_event = args.fetch(:audit_event) { audit_event(args[:feature_flag]) }
+      save_audit_event(audit_event)
       sync_to_jira(args[:feature_flag])
       super
     end
@@ -41,6 +43,7 @@ module FeatureFlags
 
     def sync_to_jira(feature_flag)
       return unless feature_flag.present?
+      return unless project.jira_subscription_exists?
 
       seq_id = ::Atlassian::JiraConnect::Client.generate_update_sequence_id
       feature_flag.run_after_commit do
@@ -48,10 +51,11 @@ module FeatureFlags
       end
     end
 
-    def created_scope_message(scope)
-      "Created rule #{scope.environment_scope} "\
-      "and set it as #{scope.active ? "active" : "inactive"} "\
-      "with strategies #{scope.strategies}."
+    def created_strategy_message(strategy)
+      scopes = strategy.scopes
+                 .map { |scope| %Q("#{scope.environment_scope}") }
+                 .join(', ')
+      %Q(Created strategy "#{strategy.name}" with scopes #{scopes}.)
     end
 
     def feature_flag_by_name
@@ -64,6 +68,12 @@ module FeatureFlags
       strong_memoize(:feature_flag_scope_by_environment_scope) do
         feature_flag_by_name.scopes.find_by_environment_scope(params[:environment_scope])
       end
+    end
+
+    private
+
+    def audit_message(feature_flag)
+      raise NotImplementedError, "This method should be overriden by subclasses"
     end
   end
 end

@@ -25,7 +25,7 @@ GitLab does not allow requests to localhost or the local network by default. Whe
 
 1. Log into your GitLab instance as an administrator.
 1. On the top bar, select **Menu > Admin**.
-1. In the left sidebar, select **Settings > Network**.
+1. On the left sidebar, select **Settings > Network**.
 1. Expand **Outbound requests** and check the following checkboxes:
 
    - **Allow requests to the local network from web hooks and services**
@@ -54,8 +54,8 @@ To set up the Jenkins project you intend to run your build on, read
 
 You can configure your integration between Jenkins and GitLab:
 
-- With the [recommended approach for Jenkins integration](../../integration/jenkins.md#recommended-jenkins-integration).
-- [Using a webhook](../../integration/jenkins.md#webhook-integration).
+- With the [recommended approach for Jenkins integration](../../integration/jenkins.md#configure-a-jenkins-integration-recommended).
+- [Using a webhook](../../integration/jenkins.md#configure-a-webhook).
 
 ## Test your setup
 

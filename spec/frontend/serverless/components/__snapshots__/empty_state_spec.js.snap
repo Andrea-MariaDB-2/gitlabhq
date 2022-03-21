@@ -1,14 +1,16 @@
 // Jest Snapshot v1, https://goo.gl/fbAQLP
 
 exports[`EmptyStateComponent should render content 1`] = `
-"<section class=\\"row empty-state text-center\\">
-  <div class=\\"col-12\\">
+"<section class=\\"gl-display-flex empty-state gl-text-center gl-flex-direction-column\\">
+  <div class=\\"gl-max-w-full\\">
     <div class=\\"svg-250 svg-content\\"><img src=\\"/image.svg\\" alt=\\"\\" role=\\"img\\" class=\\"gl-max-w-full\\"></div>
   </div>
-  <div class=\\"col-12\\">
-    <div class=\\"text-content gl-mx-auto gl-my-0 gl-p-5\\">
-      <h1 class=\\"h4\\">Getting started with serverless</h1>
-      <p>In order to start using functions as a service, you must first install Knative on your Kubernetes cluster. <gl-link-stub href=\\"/help\\">More information</gl-link-stub>
+  <div class=\\"gl-max-w-full gl-m-auto\\">
+    <div class=\\"gl-mx-auto gl-my-0 gl-p-5\\">
+      <h1 class=\\"gl-font-size-h-display gl-line-height-36 h4\\">
+        Getting started with serverless
+      </h1>
+      <p class=\\"gl-mt-3\\">Serverless was <gl-link-stub target=\\"_blank\\" href=\\"https://about.gitlab.com/releases/2021/09/22/gitlab-14-3-released/#gitlab-serverless\\">deprecated</gl-link-stub>. But if you opt to use it, you must install Knative in your Kubernetes cluster first. <gl-link-stub href=\\"/help\\">Learn more.</gl-link-stub>
       </p>
       <div class=\\"gl-display-flex gl-flex-wrap gl-justify-content-center\\">
         <!---->

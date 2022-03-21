@@ -1,90 +1,77 @@
 <script>
-import { GlLoadingIcon, GlSearchBoxByType, GlLink } from '@gitlab/ui';
+import { GlDropdownForm, GlDropdownItem, GlLoadingIcon, GlIntersectionObserver } from '@gitlab/ui';
 import fuzzaldrinPlus from 'fuzzaldrin-plus';
-import { debounce } from 'lodash';
 import createFlash from '~/flash';
 import { getIdFromGraphQLId } from '~/graphql_shared/utils';
-import { DEFAULT_DEBOUNCE_AND_THROTTLE_MS } from '~/lib/utils/constants';
-import { UP_KEY_CODE, DOWN_KEY_CODE, ENTER_KEY_CODE, ESC_KEY_CODE } from '~/lib/utils/keycodes';
 import { __ } from '~/locale';
-import { DropdownVariant } from './constants';
-import projectLabelsQuery from './graphql/project_labels.query.graphql';
+import { workspaceLabelsQueries } from '~/sidebar/constants';
 import LabelItem from './label_item.vue';
 
 export default {
   components: {
+    GlDropdownForm,
+    GlDropdownItem,
     GlLoadingIcon,
-    GlSearchBoxByType,
-    GlLink,
+    GlIntersectionObserver,
     LabelItem,
   },
-  inject: ['projectPath', 'allowLabelCreate', 'labelsManagePath', 'variant'],
+  model: {
+    prop: 'localSelectedLabels',
+  },
   props: {
-    selectedLabels: {
-      type: Array,
-      required: true,
-    },
     allowMultiselect: {
       type: Boolean,
       required: true,
     },
-    labelsListTitle: {
+    localSelectedLabels: {
+      type: Array,
+      required: true,
+    },
+    fullPath: {
       type: String,
       required: true,
     },
-    footerCreateLabelTitle: {
+    searchKey: {
       type: String,
       required: true,
     },
-    footerManageLabelTitle: {
+    workspaceType: {
       type: String,
       required: true,
     },
   },
   data() {
     return {
-      searchKey: '',
       labels: [],
-      currentHighlightItem: -1,
-      localSelectedLabels: [...this.selectedLabels],
+      isVisible: false,
     };
   },
   apollo: {
     labels: {
-      query: projectLabelsQuery,
+      query() {
+        return workspaceLabelsQueries[this.workspaceType].query;
+      },
       variables() {
         return {
-          fullPath: this.projectPath,
+          fullPath: this.fullPath,
           searchTerm: this.searchKey,
         };
       },
       skip() {
-        return this.searchKey.length === 1;
+        return this.searchKey.length === 1 || !this.isVisible;
       },
       update: (data) => data.workspace?.labels?.nodes || [],
-      async result() {
-        if (this.$refs.searchInput) {
-          await this.$nextTick();
-          this.$refs.searchInput.focusInput();
-        }
-      },
       error() {
         createFlash({ message: __('Error fetching labels.') });
       },
     },
   },
   computed: {
-    isDropdownVariantSidebar() {
-      return this.variant === DropdownVariant.Sidebar;
-    },
-    isDropdownVariantEmbedded() {
-      return this.variant === DropdownVariant.Embedded;
-    },
     labelsFetchInProgress() {
       return this.$apollo.queries.labels.loading;
     },
     localSelectedLabelsIds() {
-      return this.localSelectedLabels.map((label) => label.id);
+      return this.localSelectedLabels.map((label) => getIdFromGraphQLId(label.id));
     },
     visibleLabels() {
       if (this.searchKey) {
@@ -97,23 +84,9 @@ export default {
     showNoMatchingResultsMessage() {
       return Boolean(this.searchKey) && this.visibleLabels.length === 0;
     },
-  },
-  watch: {
-    searchKey(value) {
-      // When there is search string present
-      // and there are matching results,
-      // highlight first item by default.
-      if (value && this.visibleLabels.length) {
-        this.currentHighlightItem = 0;
-      }
+    shouldHighlightFirstItem() {
+      return this.searchKey !== '' && this.visibleLabels.length > 0;
     },
-  },
-  created() {
-    this.debouncedSearchKeyUpdate = debounce(this.setSearchKey, DEFAULT_DEBOUNCE_AND_THROTTLE_MS);
-  },
-  beforeDestroy() {
-    this.$emit('setLabels', this.localSelectedLabels);
-    this.debouncedSearchKeyUpdate.cancel();
   },
   methods: {
     isLabelSelected(label) {
@@ -139,121 +112,66 @@ export default {
       }
     },
     updateSelectedLabels(label) {
+      let labels;
       if (this.isLabelSelected(label)) {
-        this.localSelectedLabels = this.localSelectedLabels.filter(
-          ({ id }) => id !== getIdFromGraphQLId(label.id),
+        labels = this.localSelectedLabels.filter(
+          ({ id }) => id !== getIdFromGraphQLId(label.id) && id !== label.id,
         );
       } else {
-        this.localSelectedLabels.push({
-          ...label,
-          id: getIdFromGraphQLId(label.id),
-        });
+        labels = [...this.localSelectedLabels, label];
       }
-    },
-    /**
-     * This method enables keyboard navigation support for
-     * the dropdown.
-     */
-    handleKeyDown(e) {
-      if (e.keyCode === UP_KEY_CODE && this.currentHighlightItem > 0) {
-        this.currentHighlightItem -= 1;
-      } else if (
-        e.keyCode === DOWN_KEY_CODE &&
-        this.currentHighlightItem < this.visibleLabels.length - 1
-      ) {
-        this.currentHighlightItem += 1;
-      } else if (e.keyCode === ENTER_KEY_CODE && this.currentHighlightItem > -1) {
-        this.updateSelectedLabels(this.visibleLabels[this.currentHighlightItem]);
-        this.searchKey = '';
-      } else if (e.keyCode === ESC_KEY_CODE) {
-        this.$emit('setLabels', this.localSelectedLabels);
-      }
-
-      if (e.keyCode !== ESC_KEY_CODE) {
-        // Scroll the list only after highlighting
-        // styles are rendered completely.
-        this.$nextTick(() => {
-          this.scrollIntoViewIfNeeded();
-        });
-      }
+      this.$emit('input', labels);
     },
     handleLabelClick(label) {
       this.updateSelectedLabels(label);
       if (!this.allowMultiselect) {
-        this.$emit('setLabels', this.localSelectedLabels);
+        this.$emit('closeDropdown', this.localSelectedLabels);
       }
     },
-    setSearchKey(value) {
-      this.searchKey = value;
+    onDropdownAppear() {
+      this.isVisible = true;
+    },
+    selectFirstItem() {
+      if (this.shouldHighlightFirstItem) {
+        this.handleLabelClick(this.visibleLabels[0]);
+      }
     },
   },
 };
 </script>
 
 <template>
-  <div
-    class="labels-select-contents-list js-labels-list"
-    data-testid="dropdown-wrapper"
-    @keydown="handleKeyDown"
-  >
-    <div class="dropdown-input" @click.stop="() => {}">
-      <gl-search-box-by-type
-        ref="searchInput"
-        :value="searchKey"
-        :disabled="labelsFetchInProgress"
-        data-qa-selector="dropdown_input_field"
-        data-testid="dropdown-input-field"
-        @input="debouncedSearchKeyUpdate"
-      />
-    </div>
-    <div ref="labelsListContainer" class="dropdown-content" data-testid="dropdown-content">
-      <gl-loading-icon
-        v-if="labelsFetchInProgress"
-        class="labels-fetch-loading gl-align-items-center gl-w-full gl-h-full"
-        size="md"
-      />
-      <ul v-else class="list-unstyled gl-mb-0 gl-word-break-word" data-testid="labels-list">
-        <label-item
-          v-for="(label, index) in visibleLabels"
-          :key="label.id"
-          :label="label"
-          :is-label-set="isLabelSelected(label)"
-          :highlight="index === currentHighlightItem"
-          @clickLabel="handleLabelClick(label)"
+  <gl-intersection-observer @appear="onDropdownAppear">
+    <gl-dropdown-form class="labels-select-contents-list js-labels-list">
+      <div ref="labelsListContainer" data-testid="dropdown-content">
+        <gl-loading-icon
+          v-if="labelsFetchInProgress"
+          class="labels-fetch-loading gl-align-items-center gl-w-full gl-h-full gl-mb-3"
+          size="md"
         />
-        <li
-          v-show="showNoMatchingResultsMessage"
-          class="gl-p-3 gl-text-center"
-          data-testid="no-results"
-        >
-          {{ __('No matching results') }}
-        </li>
-      </ul>
-    </div>
-    <div
-      v-if="isDropdownVariantSidebar || isDropdownVariantEmbedded"
-      class="dropdown-footer"
-      data-testid="dropdown-footer"
-    >
-      <ul class="list-unstyled">
-        <li v-if="allowLabelCreate">
-          <gl-link
-            class="gl-display-flex gl-flex-direction-row gl-w-full gl-overflow-break-word label-item"
-            data-testid="create-label-button"
-            @click.stop="$emit('toggleDropdownContentsCreateView')"
+        <template v-else>
+          <gl-dropdown-item
+            v-for="(label, index) in visibleLabels"
+            :key="label.id"
+            :is-checked="isLabelSelected(label)"
+            :is-check-centered="true"
+            :is-check-item="true"
+            :active="shouldHighlightFirstItem && index === 0"
+            active-class="is-focused"
+            data-testid="labels-list"
+            @click.native.capture.stop="handleLabelClick(label)"
           >
-            {{ footerCreateLabelTitle }}
-          </gl-link>
-        </li>
-        <li>
-          <gl-link
-            :href="labelsManagePath"
-            class="gl-display-flex gl-flex-direction-row gl-w-full gl-overflow-break-word label-item"
+            <label-item :label="label" />
+          </gl-dropdown-item>
+          <gl-dropdown-item
+            v-show="showNoMatchingResultsMessage"
+            class="gl-p-3 gl-text-center"
+            data-testid="no-results"
           >
-            {{ footerManageLabelTitle }}
-          </gl-link>
-        </li>
-      </ul>
-    </div>
-  </div>
+            {{ __('No matching results') }}
+          </gl-dropdown-item>
+        </template>
+      </div>
+    </gl-dropdown-form>
+  </gl-intersection-observer>
 </template>

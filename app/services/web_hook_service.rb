@@ -26,7 +26,6 @@ class WebHookService
   end
 
   REQUEST_BODY_SIZE_LIMIT = 25.megabytes
-  GITLAB_EVENT_HEADER = 'X-Gitlab-Event'
 
   attr_accessor :hook, :data, :hook_name, :request_options
   attr_reader :uniqueness_token
@@ -35,11 +34,12 @@ class WebHookService
     hook_name.to_s.singularize.titleize
   end
 
-  def initialize(hook, data, hook_name, uniqueness_token = nil)
+  def initialize(hook, data, hook_name, uniqueness_token = nil, force: false)
     @hook = hook
     @data = data
     @hook_name = hook_name.to_s
     @uniqueness_token = uniqueness_token
+    @force = force
     @request_options = {
       timeout: Gitlab.config.gitlab.webhook_timeout,
       use_read_total_timeout: true,
@@ -47,8 +47,19 @@ class WebHookService
     }
   end
 
+  def disabled?
+    !@force && !hook.executable?
+  end
+
   def execute
-    return { status: :error, message: 'Hook disabled' } unless hook.executable?
+    return { status: :error, message: 'Hook disabled' } if disabled?
+
+    if recursion_blocked?
+      log_recursion_blocked
+      return { status: :error, message: 'Recursive webhook blocked' }
+    end
+
+    Gitlab::WebHooks::RecursionDetection.register!(hook)
 
     start_time = Gitlab::Metrics::System.monotonic_time
 
@@ -93,9 +104,14 @@ class WebHookService
 
   def async_execute
     Gitlab::ApplicationContext.with_context(hook.application_context) do
-      break log_rate_limit if rate_limited?
+      break log_rate_limited if rate_limited?
+      break log_recursion_blocked if recursion_blocked?
 
-      WebHookWorker.perform_async(hook.id, data, hook_name)
+      params = {
+        recursion_detection_request_uuid: Gitlab::WebHooks::RecursionDetection::UUID.instance.request_uuid
+      }.compact
+
+      WebHookWorker.perform_async(hook.id, data, hook_name, params)
     end
   end
 
@@ -108,7 +124,7 @@ class WebHookService
   def make_request(url, basic_auth = false)
     Gitlab::HTTP.post(url,
       body: Gitlab::Json::LimitedEncoder.encode(data, limit: REQUEST_BODY_SIZE_LIMIT),
-      headers: build_headers(hook_name),
+      headers: build_headers,
       verify: hook.enable_ssl_verification,
       basic_auth: basic_auth,
       **request_options)
@@ -129,7 +145,7 @@ class WebHookService
       trigger: trigger,
       url: url,
       execution_duration: execution_duration,
-      request_headers: build_headers(hook_name),
+      request_headers: build_headers,
       request_data: request_data,
       response_headers: format_response_headers(response),
       response_body: safe_response_body(response),
@@ -137,8 +153,12 @@ class WebHookService
       internal_error_message: error_message
     }
 
-    ::WebHooks::LogExecutionWorker
-      .perform_async(hook.id, log_data, category, uniqueness_token)
+    if @force # executed as part of test - run log-execution inline.
+      ::WebHooks::LogExecutionService.new(hook: hook, log_data: log_data, response_category: category).execute
+    else
+      ::WebHooks::LogExecutionWorker
+        .perform_async(hook.id, log_data, category, uniqueness_token)
+    end
   end
 
   def response_category(response)
@@ -151,15 +171,16 @@ class WebHookService
     end
   end
 
-  def build_headers(hook_name)
+  def build_headers
     @headers ||= begin
-      {
+      headers = {
         'Content-Type' => 'application/json',
         'User-Agent' => "GitLab/#{Gitlab::VERSION}",
-        GITLAB_EVENT_HEADER => self.class.hook_to_event(hook_name)
-      }.tap do |hash|
-        hash['X-Gitlab-Token'] = Gitlab::Utils.remove_line_breaks(hook.token) if hook.token.present?
-      end
+        Gitlab::WebHooks::GITLAB_EVENT_HEADER => self.class.hook_to_event(hook_name)
+      }
+
+      headers['X-Gitlab-Token'] = Gitlab::Utils.remove_line_breaks(hook.token) if hook.token.present?
+      headers.merge!(Gitlab::WebHooks::RecursionDetection.header(hook))
     end
   end
 
@@ -186,16 +207,31 @@ class WebHookService
     )
   end
 
+  def recursion_blocked?
+    Gitlab::WebHooks::RecursionDetection.block?(hook)
+  end
+
   def rate_limit
     @rate_limit ||= hook.rate_limit
   end
 
-  def log_rate_limit
+  def log_rate_limited
     Gitlab::AuthLogger.error(
       message: 'Webhook rate limit exceeded',
       hook_id: hook.id,
       hook_type: hook.type,
       hook_name: hook_name,
+      **Gitlab::ApplicationContext.current
+    )
+  end
+
+  def log_recursion_blocked
+    Gitlab::AuthLogger.error(
+      message: 'Recursive webhook blocked from executing',
+      hook_id: hook.id,
+      hook_type: hook.type,
+      hook_name: hook_name,
+      recursion_detection: ::Gitlab::WebHooks::RecursionDetection.to_log(hook),
       **Gitlab::ApplicationContext.current
     )
   end

@@ -6,6 +6,7 @@
 # Rails.
 require 'active_support/core_ext/hash/keys'
 require 'active_support/core_ext/module/delegation'
+require 'active_support/core_ext/object/blank'
 require 'active_support/core_ext/string/inflections'
 
 # Explicitly load Redis::Store::Factory so we can read Redis configuration in
@@ -16,7 +17,7 @@ module Gitlab
   module Redis
     class Wrapper
       class << self
-        delegate :params, :url, to: :new
+        delegate :params, :url, :store, to: :new
 
         def with
           pool.with { |redis| yield redis }
@@ -27,7 +28,7 @@ module Gitlab
         end
 
         def pool
-          @pool ||= ConnectionPool.new(size: pool_size) { ::Redis.new(params) }
+          @pool ||= ConnectionPool.new(size: pool_size) { redis }
         end
 
         def pool_size
@@ -66,6 +67,10 @@ module Gitlab
           File.expand_path('../../..', __dir__)
         end
 
+        def config_fallback?
+          config_file_name == config_fallback&.config_file_name
+        end
+
         def config_file_name
           [
             # Instance specific config sources:
@@ -95,7 +100,15 @@ module Gitlab
         end
 
         def instrumentation_class
+          return unless defined?(::Gitlab::Instrumentation::Redis)
+
           "::Gitlab::Instrumentation::Redis::#{store_name}".constantize
+        end
+
+        private
+
+        def redis
+          ::Redis.new(params)
         end
       end
 
@@ -111,12 +124,20 @@ module Gitlab
         raw_config_hash[:url]
       end
 
+      def db
+        redis_store_options[:db]
+      end
+
       def sentinels
         raw_config_hash[:sentinels]
       end
 
       def sentinels?
         sentinels && !sentinels.empty?
+      end
+
+      def store(extras = {})
+        ::Redis::Store::Factory.create(redis_store_options.merge(extras))
       end
 
       private
@@ -150,11 +171,35 @@ module Gitlab
       def raw_config_hash
         config_data = fetch_config
 
-        if config_data
-          config_data.is_a?(String) ? { url: config_data } : config_data.deep_symbolize_keys
-        else
-          { url: '' }
+        config_hash =
+          if config_data
+            config_data.is_a?(String) ? { url: config_data } : config_data.deep_symbolize_keys
+          else
+            { url: '' }
+          end
+
+        if config_hash[:url].blank?
+          config_hash[:url] = legacy_fallback_urls[self.class.store_name] || legacy_fallback_urls[self.class.config_fallback.store_name]
         end
+
+        config_hash
+      end
+
+      # These URLs were defined for cache, queues, and shared_state in
+      # code. They are used only when no config file exists at all for a
+      # given instance. The configuration does not seem particularly
+      # useful - it uses different ports on localhost - but we cannot
+      # confidently delete it as we don't know if any instances rely on
+      # this.
+      #
+      # DO NOT ADD new instances here. All new instances should define a
+      # `.config_fallback`, which will then be used to look up this URL.
+      def legacy_fallback_urls
+        {
+          'Cache' => 'redis://localhost:6380',
+          'Queues' => 'redis://localhost:6381',
+          'SharedState' => 'redis://localhost:6382'
+        }
       end
 
       def fetch_config

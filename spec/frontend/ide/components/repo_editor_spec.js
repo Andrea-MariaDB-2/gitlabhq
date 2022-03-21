@@ -1,14 +1,14 @@
 import { shallowMount } from '@vue/test-utils';
 import MockAdapter from 'axios-mock-adapter';
 import { editor as monacoEditor, Range } from 'monaco-editor';
-import Vue from 'vue';
+import Vue, { nextTick } from 'vue';
 import Vuex from 'vuex';
 import '~/behaviors/markdown/render_gfm';
 import waitForPromises from 'helpers/wait_for_promises';
-import waitUsingRealTimer from 'helpers/wait_using_real_timer';
 import { exampleConfigs, exampleFiles } from 'jest/ide/lib/editorconfig/mock_data';
 import { EDITOR_CODE_INSTANCE_FN, EDITOR_DIFF_INSTANCE_FN } from '~/editor/constants';
-import { EditorWebIdeExtension } from '~/editor/extensions/source_editor_webide_ext';
+import { EditorMarkdownExtension } from '~/editor/extensions/source_editor_markdown_ext';
+import { EditorMarkdownPreviewExtension } from '~/editor/extensions/source_editor_markdown_livepreview_ext';
 import SourceEditor from '~/editor/source_editor';
 import RepoEditor from '~/ide/components/repo_editor.vue';
 import {
@@ -22,9 +22,12 @@ import service from '~/ide/services';
 import { createStoreOptions } from '~/ide/stores';
 import axios from '~/lib/utils/axios_utils';
 import ContentViewer from '~/vue_shared/components/content_viewer/content_viewer.vue';
+import SourceEditorInstance from '~/editor/source_editor_instance';
+import { spyOnApi } from 'jest/editor/helpers';
 import { file } from '../helpers';
 
 const PREVIEW_MARKDOWN_PATH = '/foo/bar/preview_markdown';
+const CURRENT_PROJECT_ID = 'gitlab-org/gitlab';
 
 const defaultFileProps = {
   ...file('file.txt'),
@@ -63,7 +66,7 @@ const prepareStore = (state, activeFile) => {
   const localState = {
     openFiles: [activeFile],
     projects: {
-      'gitlab-org/gitlab': {
+      [CURRENT_PROJECT_ID]: {
         branches: {
           main: {
             name: 'main',
@@ -74,7 +77,7 @@ const prepareStore = (state, activeFile) => {
         },
       },
     },
-    currentProjectId: 'gitlab-org/gitlab',
+    currentProjectId: CURRENT_PROJECT_ID,
     currentBranchId: 'main',
     entries: {
       [activeFile.path]: activeFile,
@@ -98,6 +101,8 @@ describe('RepoEditor', () => {
   let createInstanceSpy;
   let createDiffInstanceSpy;
   let createModelSpy;
+  let applyExtensionSpy;
+  let extensionsStore;
 
   const waitForEditorSetup = () =>
     new Promise((resolve) => {
@@ -117,6 +122,7 @@ describe('RepoEditor', () => {
     });
     await waitForPromises();
     vm = wrapper.vm;
+    extensionsStore = wrapper.vm.globalEditor.extensionsStore;
     jest.spyOn(vm, 'getFileData').mockResolvedValue();
     jest.spyOn(vm, 'getRawFileData').mockResolvedValue();
   };
@@ -129,6 +135,7 @@ describe('RepoEditor', () => {
     createInstanceSpy = jest.spyOn(SourceEditor.prototype, EDITOR_CODE_INSTANCE_FN);
     createDiffInstanceSpy = jest.spyOn(SourceEditor.prototype, EDITOR_DIFF_INSTANCE_FN);
     createModelSpy = jest.spyOn(monacoEditor, 'createModel');
+    applyExtensionSpy = jest.spyOn(SourceEditorInstance.prototype, 'use');
     jest.spyOn(service, 'getFileData').mockResolvedValue();
     jest.spyOn(service, 'getRawFileData').mockResolvedValue();
   });
@@ -162,12 +169,11 @@ describe('RepoEditor', () => {
       expect(findEditor().isVisible()).toBe(true);
     });
 
-    it('renders only an edit tab', async () => {
+    it('renders no tabs', async () => {
       await createComponent();
       const tabs = findTabs();
 
-      expect(tabs).toHaveLength(1);
-      expect(tabs.at(0).text()).toBe('Edit');
+      expect(tabs).toHaveLength(0);
     });
   });
 
@@ -189,25 +195,48 @@ describe('RepoEditor', () => {
       mock.restore();
     });
 
-    it('renders an Edit and a Preview Tab', async () => {
-      await createComponent({ activeFile });
-      const tabs = findTabs();
+    describe('when files is markdown', () => {
+      let layoutSpy;
 
-      expect(tabs).toHaveLength(2);
-      expect(tabs.at(0).text()).toBe('Edit');
-      expect(tabs.at(1).text()).toBe('Preview Markdown');
+      beforeEach(async () => {
+        await createComponent({ activeFile });
+        layoutSpy = jest.spyOn(wrapper.vm.editor, 'layout');
+      });
+
+      it('renders an Edit and a Preview Tab', () => {
+        const tabs = findTabs();
+
+        expect(tabs).toHaveLength(2);
+        expect(tabs.at(0).text()).toBe('Edit');
+        expect(tabs.at(1).text()).toBe('Preview Markdown');
+      });
+
+      it('renders markdown for tempFile', async () => {
+        findPreviewTab().trigger('click');
+        await waitForPromises();
+        expect(wrapper.find(ContentViewer).html()).toContain(defaultFileProps.content);
+      });
+
+      it('should not trigger layout', async () => {
+        expect(layoutSpy).not.toHaveBeenCalled();
+      });
+
+      describe('when file changes to non-markdown file', () => {
+        beforeEach(async () => {
+          wrapper.setProps({ file: dummyFile.empty });
+        });
+
+        it('should hide tabs', () => {
+          expect(findTabs()).toHaveLength(0);
+        });
+
+        it('should trigger refresh dimensions', async () => {
+          expect(layoutSpy).toHaveBeenCalledTimes(1);
+        });
+      });
     });
 
-    it('renders markdown for tempFile', async () => {
-      // by default files created in the spec are temp: no need for explicitly sending the param
-      await createComponent({ activeFile });
-
-      findPreviewTab().trigger('click');
-      await waitForPromises();
-      expect(wrapper.find(ContentViewer).html()).toContain(defaultFileProps.content);
-    });
-
-    it('shows no tabs when not in Edit mode', async () => {
+    it('when not in edit mode, shows no tabs', async () => {
       await createComponent({
         state: {
           currentActivityView: leftSidebarViews.review.name,
@@ -255,14 +284,13 @@ describe('RepoEditor', () => {
     );
 
     it('installs the WebIDE extension', async () => {
-      const extensionSpy = jest.spyOn(SourceEditor, 'instanceApplyExtension');
       await createComponent();
-      expect(extensionSpy).toHaveBeenCalled();
-      Reflect.ownKeys(EditorWebIdeExtension.prototype)
-        .filter((fn) => fn !== 'constructor')
-        .forEach((fn) => {
-          expect(vm.editor[fn]).toBe(EditorWebIdeExtension.prototype[fn]);
-        });
+      expect(applyExtensionSpy).toHaveBeenCalled();
+      const ideExtensionApi = extensionsStore.get('EditorWebIde').api;
+      Reflect.ownKeys(ideExtensionApi).forEach((fn) => {
+        expect(vm.editor[fn]).toBeDefined();
+        expect(vm.editor.methods[fn]).toBe('EditorWebIde');
+      });
     });
 
     it.each`
@@ -280,12 +308,20 @@ describe('RepoEditor', () => {
       '$prefix install markdown extension for $activeFile.name in $viewer viewer',
       async ({ activeFile, viewer, shouldHaveMarkdownExtension } = {}) => {
         await createComponent({ state: { viewer }, activeFile });
+
         if (shouldHaveMarkdownExtension) {
-          expect(vm.editor.previewMarkdownPath).toBe(PREVIEW_MARKDOWN_PATH);
-          expect(vm.editor.togglePreview).toBeDefined();
+          expect(applyExtensionSpy).toHaveBeenCalledWith({
+            definition: EditorMarkdownPreviewExtension,
+            setupOptions: { previewMarkdownPath: PREVIEW_MARKDOWN_PATH },
+          });
+          // TODO: spying on extensions causes Jest to blow up, so we have to assert on
+          // the public property the extension adds, as opposed to the args passed to the ctor
+          expect(wrapper.vm.editor.markdownPreview.path).toBe(PREVIEW_MARKDOWN_PATH);
         } else {
-          expect(vm.editor.previewMarkdownPath).toBeUndefined();
-          expect(vm.editor.togglePreview).toBeUndefined();
+          expect(applyExtensionSpy).not.toHaveBeenCalledWith(
+            wrapper.vm.editor,
+            expect.any(EditorMarkdownExtension),
+          );
         }
       },
     );
@@ -314,18 +350,6 @@ describe('RepoEditor', () => {
       expect(vm.model).toBe(existingModel);
     });
 
-    it('adds callback methods', () => {
-      jest.spyOn(vm.editor, 'onPositionChange');
-      jest.spyOn(vm.model, 'onChange');
-      jest.spyOn(vm.model, 'updateOptions');
-
-      vm.setupEditor();
-
-      expect(vm.editor.onPositionChange).toHaveBeenCalledTimes(1);
-      expect(vm.model.onChange).toHaveBeenCalledTimes(1);
-      expect(vm.model.updateOptions).toHaveBeenCalledWith(vm.rules);
-    });
-
     it('updates state with the value of the model', () => {
       const newContent = 'As Gregor Samsa\n awoke one morning\n';
       vm.model.setValue(newContent);
@@ -351,53 +375,48 @@ describe('RepoEditor', () => {
 
   describe('editor updateDimensions', () => {
     let updateDimensionsSpy;
-    let updateDiffViewSpy;
     beforeEach(async () => {
       await createComponent();
-      updateDimensionsSpy = jest.spyOn(vm.editor, 'updateDimensions');
-      updateDiffViewSpy = jest.spyOn(vm.editor, 'updateDiffView').mockImplementation();
+      const ext = extensionsStore.get('EditorWebIde');
+      updateDimensionsSpy = jest.fn();
+      spyOnApi(ext, {
+        updateDimensions: updateDimensionsSpy,
+      });
     });
 
     it('calls updateDimensions only when panelResizing is false', async () => {
       expect(updateDimensionsSpy).not.toHaveBeenCalled();
-      expect(updateDiffViewSpy).not.toHaveBeenCalled();
       expect(vm.$store.state.panelResizing).toBe(false); // default value
 
       vm.$store.state.panelResizing = true;
-      await vm.$nextTick();
+      await nextTick();
 
       expect(updateDimensionsSpy).not.toHaveBeenCalled();
-      expect(updateDiffViewSpy).not.toHaveBeenCalled();
 
       vm.$store.state.panelResizing = false;
-      await vm.$nextTick();
+      await nextTick();
 
       expect(updateDimensionsSpy).toHaveBeenCalledTimes(1);
-      expect(updateDiffViewSpy).toHaveBeenCalledTimes(1);
 
       vm.$store.state.panelResizing = true;
-      await vm.$nextTick();
+      await nextTick();
 
       expect(updateDimensionsSpy).toHaveBeenCalledTimes(1);
-      expect(updateDiffViewSpy).toHaveBeenCalledTimes(1);
     });
 
     it('calls updateDimensions when rightPane is toggled', async () => {
       expect(updateDimensionsSpy).not.toHaveBeenCalled();
-      expect(updateDiffViewSpy).not.toHaveBeenCalled();
       expect(vm.$store.state.rightPane.isOpen).toBe(false); // default value
 
       vm.$store.state.rightPane.isOpen = true;
-      await vm.$nextTick();
+      await nextTick();
 
       expect(updateDimensionsSpy).toHaveBeenCalledTimes(1);
-      expect(updateDiffViewSpy).toHaveBeenCalledTimes(1);
 
       vm.$store.state.rightPane.isOpen = false;
-      await vm.$nextTick();
+      await nextTick();
 
       expect(updateDimensionsSpy).toHaveBeenCalledTimes(2);
-      expect(updateDiffViewSpy).toHaveBeenCalledTimes(2);
     });
   });
 
@@ -408,13 +427,13 @@ describe('RepoEditor', () => {
 
     it.each`
       mode        | isVisible
-      ${'edit'}   | ${true}
+      ${'edit'}   | ${false}
       ${'review'} | ${false}
       ${'commit'} | ${false}
     `('tabs in $mode are $isVisible', async ({ mode, isVisible } = {}) => {
       vm.$store.state.currentActivityView = leftSidebarViews[mode].name;
 
-      await vm.$nextTick();
+      await nextTick();
       expect(wrapper.find('.nav-links').exists()).toBe(isVisible);
     });
   });
@@ -432,10 +451,14 @@ describe('RepoEditor', () => {
         activeFile: dummyFile.markdown,
       });
 
-      updateDimensionsSpy = jest.spyOn(vm.editor, 'updateDimensions');
+      const ext = extensionsStore.get('EditorWebIde');
+      updateDimensionsSpy = jest.fn();
+      spyOnApi(ext, {
+        updateDimensions: updateDimensionsSpy,
+      });
 
       changeViewMode(FILE_VIEW_MODE_PREVIEW);
-      await vm.$nextTick();
+      await nextTick();
     });
 
     it('do not show the editor', () => {
@@ -447,7 +470,7 @@ describe('RepoEditor', () => {
       expect(updateDimensionsSpy).not.toHaveBeenCalled();
 
       changeViewMode(FILE_VIEW_MODE_EDITOR);
-      await vm.$nextTick();
+      await nextTick();
 
       expect(updateDimensionsSpy).toHaveBeenCalled();
     });
@@ -459,7 +482,7 @@ describe('RepoEditor', () => {
       jest.spyOn(vm, 'shouldHideEditor', 'get').mockReturnValue(true);
 
       vm.initEditor();
-      await vm.$nextTick();
+      await nextTick();
     };
 
     it('does not fetch file information for temp entries', async () => {
@@ -510,20 +533,20 @@ describe('RepoEditor', () => {
 
       const origFile = vm.file;
       vm.file.pending = true;
-      await vm.$nextTick();
+      await nextTick();
 
       wrapper.setProps({
         file: file('testing'),
       });
       vm.file.content = 'foo'; // need to prevent full cycle of initEditor
-      await vm.$nextTick();
+      await nextTick();
 
       expect(vm.removePendingTab).toHaveBeenCalledWith(origFile);
     });
 
     it('does not call initEditor if the file did not change', async () => {
       Vue.set(vm, 'file', vm.file);
-      await vm.$nextTick();
+      await nextTick();
 
       expect(vm.initEditor).not.toHaveBeenCalled();
     });
@@ -537,8 +560,7 @@ describe('RepoEditor', () => {
           key: 'new',
         },
       });
-      await vm.$nextTick();
-      await vm.$nextTick();
+      await nextTick();
 
       expect(vm.initEditor).toHaveBeenCalled();
     });
@@ -565,8 +587,8 @@ describe('RepoEditor', () => {
         // switching from edit to diff mode usually triggers editor initialization
         vm.$store.state.viewer = viewerTypes.diff;
 
-        // we delay returning the file to make sure editor doesn't initialize before we fetch file content
-        await waitUsingRealTimer(30);
+        jest.runOnlyPendingTimers();
+
         return 'rawFileData123\n';
       });
 
@@ -596,8 +618,9 @@ describe('RepoEditor', () => {
           return aContent;
         })
         .mockImplementationOnce(async () => {
-          // we delay returning fileB content to make sure the editor doesn't initialize prematurely
-          await waitUsingRealTimer(30);
+          // we delay returning fileB content
+          // to make sure the editor doesn't initialize prematurely
+          jest.advanceTimersByTime(30);
           return bContent;
         });
 

@@ -9,7 +9,7 @@ RSpec.describe 'Password reset' do
       forgot_password(user)
 
       expect(page).to have_content(I18n.t('devise.passwords.send_paranoid_instructions'))
-      expect(current_path).to eq new_user_session_path
+      expect(page).to have_current_path new_user_session_path, ignore_query: true
       expect(user.recently_sent_password_reset?).to be_truthy
     end
 
@@ -20,7 +20,7 @@ RSpec.describe 'Password reset' do
 
       expect { forgot_password(user) }.to change { user.reset_password_sent_at }
       expect(page).to have_content(I18n.t('devise.passwords.send_paranoid_instructions'))
-      expect(current_path).to eq new_user_session_path
+      expect(page).to have_current_path new_user_session_path, ignore_query: true
     end
 
     it 'throttles multiple resets in a short timespan' do
@@ -31,7 +31,7 @@ RSpec.describe 'Password reset' do
 
       expect { forgot_password(user) }.not_to change { user.reset_password_sent_at }
       expect(page).to have_content(I18n.t('devise.passwords.send_paranoid_instructions'))
-      expect(current_path).to eq new_user_session_path
+      expect(page).to have_current_path new_user_session_path, ignore_query: true
     end
   end
 
@@ -44,13 +44,13 @@ RSpec.describe 'Password reset' do
 
       visit(edit_user_password_path(reset_password_token: token))
 
-      fill_in 'New password', with: 'hello1234'
-      fill_in 'Confirm new password', with: 'hello1234'
+      fill_in 'New password', with: "new" + Gitlab::Password.test_default
+      fill_in 'Confirm new password', with: "new" + Gitlab::Password.test_default
 
       click_button 'Change your password'
 
       expect(page).to have_content(I18n.t('devise.passwords.updated_not_active'))
-      expect(current_path).to eq new_user_session_path
+      expect(page).to have_current_path new_user_session_path, ignore_query: true
     end
   end
 

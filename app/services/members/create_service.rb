@@ -4,8 +4,11 @@ module Members
   class CreateService < Members::BaseService
     BlankInvitesError = Class.new(StandardError)
     TooManyInvitesError = Class.new(StandardError)
+    MembershipLockedError = Class.new(StandardError)
 
     DEFAULT_INVITE_LIMIT = 100
+
+    attr_reader :membership_locked
 
     def initialize(*args)
       super
@@ -16,19 +19,28 @@ module Members
     end
 
     def execute
+      raise Gitlab::Access::AccessDeniedError unless can?(current_user, create_member_permission(source), source)
+
       validate_invite_source!
-      validate_invites!
+      validate_invitable!
 
       add_members
       enqueue_onboarding_progress_action
+
+      publish_event!
+
       result
-    rescue BlankInvitesError, TooManyInvitesError => e
+    rescue BlankInvitesError, TooManyInvitesError, MembershipLockedError => e
       error(e.message)
+    end
+
+    def single_member
+      members.last
     end
 
     private
 
-    attr_reader :source, :errors, :invites, :member_created_namespace_id
+    attr_reader :source, :errors, :invites, :member_created_namespace_id, :members
 
     def invites_from_params
       params[:user_ids]
@@ -38,7 +50,7 @@ module Members
       raise ArgumentError, s_('AddMember|No invite source provided.') unless invite_source.present?
     end
 
-    def validate_invites!
+    def validate_invitable!
       raise BlankInvitesError, blank_invites_message if invites.blank?
 
       return unless user_limit && invites.size > user_limit
@@ -52,14 +64,18 @@ module Members
     end
 
     def add_members
-      members = source.add_users(
+      @members = source.add_users(
         invites,
         params[:access_level],
         expires_at: params[:expires_at],
-        current_user: current_user
+        current_user: current_user,
+        tasks_to_be_done: params[:tasks_to_be_done],
+        tasks_project_id: params[:tasks_project_id]
       )
 
       members.each { |member| process_result(member) }
+
+      create_tasks_to_be_done
     end
 
     def process_result(member)
@@ -81,7 +97,6 @@ module Members
       super
 
       track_invite_source(member)
-      track_areas_of_focus(member)
     end
 
     def track_invite_source(member)
@@ -99,14 +114,16 @@ module Members
       member.invite? ? 'net_new_user' : 'existing_user'
     end
 
-    def track_areas_of_focus(member)
-      areas_of_focus.each do |area_of_focus|
-        Gitlab::Tracking.event(self.class.name, 'area_of_focus', label: area_of_focus, property: member.id.to_s)
-      end
-    end
+    def create_tasks_to_be_done
+      return if params[:tasks_to_be_done].blank? || params[:tasks_project_id].blank?
 
-    def areas_of_focus
-      params[:areas_of_focus] || []
+      valid_members = members.select { |member| member.valid? && member.member_task.valid? }
+      return unless valid_members.present?
+
+      # We can take the first `member_task` here, since all tasks will have the same attributes needed
+      # for the `TasksToBeDone::CreateWorker`, ie. `project` and `tasks_to_be_done`.
+      member_task = valid_members[0].member_task
+      TasksToBeDone::CreateWorker.perform_async(member_task.id, current_user.id, valid_members.map(&:user_id))
     end
 
     def user_limit
@@ -131,6 +148,26 @@ module Members
 
     def formatted_errors
       errors.to_sentence
+    end
+
+    def publish_event!
+      Gitlab::EventStore.publish(
+        Members::MembersAddedEvent.new(data: {
+          source_id: source.id,
+          source_type: source.class.name
+        })
+      )
+    end
+
+    def create_member_permission(source)
+      case source
+      when Group
+        :admin_group_member
+      when Project
+        :admin_project_member
+      else
+        raise "Unknown source type: #{source.class}!"
+      end
     end
   end
 end

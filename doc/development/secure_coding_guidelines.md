@@ -184,13 +184,15 @@ and [possessive quantifiers](https://www.regular-expressions.info/possessive.htm
 - Avoid nested quantifiers if possible (for example `(a+)+`)
 - Try to be as precise as possible in your regex and avoid the `.` if there's an alternative
   - For example, Use `_[^_]+_` instead of `_.*_` to match `_text here_`
+- Use reasonable ranges (for example, `{1,10}`) for repeating patterns instead of unbounded `*` and `+` matchers
+- When possible, perform simple input validation such as maximum string length checks before using regular expressions
 - If in doubt, don't hesitate to ping `@gitlab-com/gl-security/appsec`
 
 #### Go
 
-Go's [`regexp`](https://golang.org/pkg/regexp/) package uses `re2` and isn't vulnerable to backtracking issues.
+Go's [`regexp`](https://pkg.go.dev/regexp) package uses `re2` and isn't vulnerable to backtracking issues.
 
-## Further Links
+### Further Links
 
 - [Rubular](https://rubular.com/) is a nice online tool to fiddle with Ruby Regexps.
 - [Runaway Regular Expressions](https://www.regular-expressions.info/catastrophic.html)
@@ -251,11 +253,26 @@ the mitigations for a new feature.
 
 - [More details](https://dev.gitlab.org/gitlab/gitlabhq/-/merge_requests/2530/diffs)
 
+#### URL blocker & validation libraries
+
+[`Gitlab::UrlBlocker`](https://gitlab.com/gitlab-org/gitlab/-/blob/master/lib/gitlab/url_blocker.rb) can be used to validate that a
+provided URL meets a set of constraints. Importantly, when `dns_rebind_protection` is `true`, the method returns a known-safe URI where the hostname
+has been replaced with an IP address. This prevents DNS rebinding attacks, because the DNS record has been resolved. However, if we ignore this returned
+value, we **will not** be protected against DNS rebinding.
+
+This is the case with validators such as the `AddressableUrlValidator` (called with `validates :url, addressable_url: {opts}` or `public_url: {opts}`).
+Validation errors are only raised when validations are called, for example when a record is created or saved. If we ignore the value returned by the validation
+when persisting the record, **we need to recheck** its validity before using it. You can learn more about [Time of Check to Time of Use bugs](#time-of-check-to-time-of-use-bugs) in a later section
+of these guidelines.
+
 #### Feature-specific mitigations
 
-For situations in which an allowlist or GitLab:HTTP cannot be used, it will be necessary to implement mitigations directly in the feature. It is best to validate the destination IP addresses themselves, not just domain names, as DNS can be controlled by the attacker. Below are a list of mitigations that should be implemented.
-
 There are many tricks to bypass common SSRF validations. If feature-specific mitigations are necessary, they should be reviewed by the AppSec team, or a developer who has worked on SSRF mitigations previously.
+
+For situations in which you can't use an allowlist or GitLab:HTTP, you must implement mitigations
+directly in the feature. It's best to validate the destination IP addresses themselves, not just
+domain names, as the attacker can control DNS. Below is a list of mitigations that you should
+implement.
 
 - Block connections to all localhost addresses
   - `127.0.0.1/8` (IPv4 - note the subnet mask)
@@ -268,9 +285,36 @@ There are many tricks to bypass common SSRF validations. If feature-specific mit
   - `169.254.0.0/16`
   - In particular, for GCP: `metadata.google.internal` -> `169.254.169.254`
 - For HTTP connections: Disable redirects or validate the redirect destination
-- To mitigate DNS rebinding attacks, validate and use the first IP address received
+- To mitigate DNS rebinding attacks, validate and use the first IP address received.
 
-See [`url_blocker_spec.rb`](https://gitlab.com/gitlab-org/gitlab/-/blob/master/spec/lib/gitlab/url_blocker_spec.rb) for examples of SSRF payloads
+See [`url_blocker_spec.rb`](https://gitlab.com/gitlab-org/gitlab/-/blob/master/spec/lib/gitlab/url_blocker_spec.rb) for examples of SSRF payloads. See [time of check to time of use bugs](#time-of-check-to-time-of-use-bugs) to learn more about DNS rebinding's class of bug.
+
+Don't rely on methods like `.start_with?` when validating a URL, or make assumptions about which
+part of a string maps to which part of a URL. Use the `URI` class to parse the string, and validate
+each component (scheme, host, port, path, and so on). Attackers can create valid URLs which look
+safe, but lead to malicious locations.
+
+```ruby
+user_supplied_url = "https://my-safe-site.com@my-evil-site.com" # Content before an @ in a URL is usually for basic authentication
+user_supplied_url.start_with?("https://my-safe-site.com")       # Don't trust with start_with? for URLs!
+=> true
+URI.parse(user_supplied_url).host
+=> "my-evil-site.com"
+
+user_supplied_url = "https://my-safe-site.com-my-evil-site.com"
+user_supplied_url.start_with?("https://my-safe-site.com")      # Don't trust with start_with? for URLs!
+=> true
+URI.parse(user_supplied_url).host
+=> "my-safe-site.com-my-evil-site.com"
+
+# Here's an example where we unsafely attempt to validate a host while allowing for
+# subdomains
+user_supplied_url = "https://my-evil-site-my-safe-site.com"
+user_supplied_host = URI.parse(user_supplied_url).host
+=> "my-evil-site-my-safe-site.com"
+user_supplied_host.end_with?("my-safe-site.com")      # Don't trust with end_with?
+=> true
+```
 
 ## XSS guidelines
 
@@ -294,6 +338,8 @@ The injected client-side code is executed on the victim's browser in the context
 - perform actions that lead to data loss/theft or account takeover
 
 Much of the impact is contingent upon the function of the application and the capabilities of the victim's session. For further impact possibilities, please check out [the beef project](https://beefproject.com/).
+
+For a demonstration of the impact on GitLab with a realistic attack scenario, see [this video on the GitLab Unfiltered channel](https://www.youtube.com/watch?v=t4PzHNycoKo) (internal, it requires being logged in with the GitLab Unfiltered account).
 
 ### When to consider?
 
@@ -444,8 +490,7 @@ parameter when using `check_allowed_absolute_path!()`.
 To use a combination of both checks, follow the example below:
 
 ```ruby
-path = Gitlab::Utils.check_path_traversal!(path)
-Gitlab::Utils.check_allowed_absolute_path!(path, path_allowlist)
+Gitlab::Utils.check_allowed_absolute_path_and_path_traversal!(path, path_allowlist)
 ```
 
 In the REST API, we have the [`FilePath`](https://gitlab.com/gitlab-org/security/gitlab/-/blob/master/lib/api/validations/validators/file_path.rb)
@@ -538,6 +583,94 @@ out, _ = exec.Command("sh", "-c", "echo 1 | cat /etc/passwd").Output()
 
 This outputs `1` followed by the content of `/etc/passwd`.
 
+## General recommendations
+
+### TLS minimum recommended version
+
+As we have [moved away from supporting TLS 1.0 and 1.1](https://about.gitlab.com/blog/2018/10/15/gitlab-to-deprecate-older-tls/), you must use TLS 1.2 and above.
+
+#### Ciphers
+
+We recommend using the ciphers that Mozilla is providing in their [recommended SSL configuration generator](https://ssl-config.mozilla.org/#server=go&version=1.17&config=intermediate&guideline=5.6) for TLS 1.2:
+
+- `ECDHE-ECDSA-AES128-GCM-SHA256`
+- `ECDHE-RSA-AES128-GCM-SHA256`
+- `ECDHE-ECDSA-AES256-GCM-SHA384`
+- `ECDHE-RSA-AES256-GCM-SHA384`
+- `ECDHE-ECDSA-CHACHA20-POLY1305`
+- `ECDHE-RSA-CHACHA20-POLY1305`
+
+And the following cipher suites (according to the [RFC 8446](https://datatracker.ietf.org/doc/html/rfc8446#appendix-B.4)) for TLS 1.3:
+
+- `TLS_AES_128_GCM_SHA256`
+- `TLS_AES_256_GCM_SHA384`
+- `TLS_CHACHA20_POLY1305_SHA256`
+
+*Note*: **Golang** does [not support](https://github.com/golang/go/blob/go1.17/src/crypto/tls/cipher_suites.go#L676) all cipher suites with TLS 1.3.
+
+##### Implementation examples
+
+##### TLS 1.3
+
+For TLS 1.3, **Golang** only supports [3 cipher suites](https://github.com/golang/go/blob/go1.17/src/crypto/tls/cipher_suites.go#L676), as such we only need to set the TLS version:
+
+```golang
+cfg := &tls.Config{
+    MinVersion: tls.VersionTLS13,
+}
+```
+
+For **Ruby**, you can use [HTTParty](https://github.com/jnunemaker/httparty) and specify TLS 1.3 version as well as ciphers:
+
+Whenever possible this example should be **avoided** for security purposes:
+
+```ruby
+response = HTTParty.get('https://gitlab.com', ssl_version: :TLSv1_3, ciphers: ['TLS_AES_128_GCM_SHA256', 'TLS_AES_256_GCM_SHA384', 'TLS_CHACHA20_POLY1305_SHA256'])
+```
+
+When using [`GitLab::HTTP`](#gitlab-http-library), the code looks like:
+
+This is the **recommended** implementation to avoid security issues such as SSRF:
+
+```ruby
+response = GitLab::HTTP.perform_request(Net::HTTP::Get, 'https://gitlab.com', ssl_version: :TLSv1_3, ciphers: ['TLS_AES_128_GCM_SHA256', 'TLS_AES_256_GCM_SHA384', 'TLS_CHACHA20_POLY1305_SHA256'])
+```
+
+##### TLS 1.2
+
+**Golang** does support multiple cipher suites that we do not want to use with TLS 1.2. We need to explicitly list authorized ciphers:
+
+```golang
+func secureCipherSuites() []uint16 {
+  return []uint16{
+    tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
+    tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
+    tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
+    tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
+    tls.TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305,
+    tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305,
+  }
+```
+
+And then use `secureCipherSuites()` in `tls.Config`:
+
+```golang
+tls.Config{
+  (...),
+  CipherSuites: secureCipherSuites(),
+  MinVersion:   tls.VersionTLS12,
+  (...),
+}
+```
+
+This example was taken [here](https://gitlab.com/gitlab-org/cluster-integration/gitlab-agent/-/blob/871b52dc700f1a66f6644fbb1e78a6d463a6ff83/internal/tool/tlstool/tlstool.go#L72).
+
+For **Ruby**, you can use again [HTTParty](https://github.com/jnunemaker/httparty) and specify this time TLS 1.2 version alongside with the recommended ciphers:
+
+```ruby
+response = GitLab::HTTP.perform_request(Net::HTTP::Get, 'https://gitlab.com', ssl_version: :TLSv1_2, ciphers: ['ECDHE-ECDSA-AES128-GCM-SHA256', 'ECDHE-RSA-AES128-GCM-SHA256', 'ECDHE-ECDSA-AES256-GCM-SHA384', 'ECDHE-RSA-AES256-GCM-SHA384', 'ECDHE-ECDSA-CHACHA20-POLY1305', 'ECDHE-RSA-CHACHA20-POLY1305'])
+```
+
 ## GitLab Internal Authorization
 
 ### Introduction
@@ -590,3 +723,490 @@ In order to prevent this from happening, it is recommended to use the method `us
           forbidden!(api_access_denied_message(user))
         end
 ```
+
+## Guidelines when defining missing methods with metaprogramming
+
+Metaprogramming is a way to define methods **at runtime**, instead of at the time of writing and deploying the code. It is a powerful tool, but can be dangerous if we allow untrusted actors (like users) to define their own arbitrary methods. For example, imagine we accidentally let an attacker overwrite an access control method to always return true! It can lead to many classes of vulnerabilities such as access control bypass, information disclosure, arbitrary file reads, and remote code execution.
+
+Key methods to watch out for are `method_missing`, `define_method`, `delegate`, and similar methods.
+
+### Insecure metaprogramming example
+
+This example is adapted from an example submitted by [@jobert](https://hackerone.com/jobert?type=user) through our HackerOne bug bounty program.
+Thank you for your contribution!
+
+Before Ruby 2.5.1, you could implement delegators using the `delegate` or `method_missing` methods. For example:
+
+```ruby
+class User
+  def initialize(attributes)
+    @options = OpenStruct.new(attributes)
+  end
+
+  def is_admin?
+    name.eql?("Sid") # Note - never do this!
+  end
+
+  def method_missing(method, *args)
+    @options.send(method, *args)
+  end
+end
+```
+
+When a method was called on a `User` instance that didn't exist, it passed it along to the `@options` instance variable.
+
+```ruby
+User.new({name: "Jeeves"}).is_admin?
+# => false
+
+User.new(name: "Sid").is_admin?
+# => true
+
+User.new(name: "Jeeves", "is_admin?" => true).is_admin?
+# => false
+```
+
+Because the `is_admin?` method is already defined on the class, its behavior is not overridden when passing `is_admin?` to the initializer.
+
+This class can be refactored to use the `Forwardable` method and `def_delegators`:
+
+```ruby
+class User
+  extend Forwardable
+
+  def initialize(attributes)
+    @options = OpenStruct.new(attributes)
+
+    self.class.instance_eval do
+      def_delegators :@options, *attributes.keys
+    end
+  end
+
+  def is_admin?
+    name.eql?("Sid") # Note - never do this!
+  end
+end
+```
+
+It might seem like this example has the same behavior as the first code example. However, there's one crucial difference: **because the delegators are meta-programmed after the class is loaded, it can overwrite existing methods**:
+
+```ruby
+User.new({name: "Jeeves"}).is_admin?
+# => false
+
+User.new(name: "Sid").is_admin?
+# => true
+
+User.new(name: "Jeeves", "is_admin?" => true).is_admin?
+# => true
+#     ^------------------ The method is overwritten! Sneaky Jeeves!
+```
+
+In the example above, the `is_admin?` method is overwritten when passing it to the initializer.
+
+### Best practices
+
+- Never pass user-provided details into method-defining metaprogramming methods.
+  - If you must, be **very** confident that you've sanitized the values correctly.
+    Consider creating an allowlist of values, and validating the user input against that.
+- When extending classes that use metaprogramming, make sure you don't inadvertently override any method definition safety checks.
+
+## Working with archive files
+
+Working with archive files like `zip`, `tar`, `jar`, `war`, `cpio`, `apk`, `rar` and `7z` presents an area where potentially critical security vulnerabilities can sneak into an application.
+
+### Zip Slip
+
+In 2018, the security company Snyk [released a blog post](https://snyk.io/research/zip-slip-vulnerability) describing research into a widespread and critical vulnerability present in many libraries and applications which allows an attacker to overwrite arbitrary files on the server file system which, in many cases, can be leveraged to achieve remote code execution. The vulnerability was dubbed Zip Slip.
+
+A Zip Slip vulnerability happens when an application extracts an archive without validating and sanitizing the filenames inside the archive for directory traversal sequences that change the file location when the file is extracted.
+
+Example malicious file names:
+
+- `../../etc/passwd`
+- `../../root/.ssh/authorized_keys`
+- `../../etc/gitlab/gitlab.rb`
+
+If a vulnerable application extracts an archive file with any of these file names, the attacker can overwrite these files with arbitrary content.
+
+### Insecure archive extraction examples
+
+#### Ruby
+
+For zip files, the [rubyzip](https://rubygems.org/gems/rubyzip) Ruby gem is already patched against the Zip Slip vulnerability and will refuse to extract files that try to perform directory traversal, so for this vulnerable example we will extract a `tar.gz` file with `Gem::Package::TarReader`:
+
+```ruby
+# Vulnerable tar.gz extraction example!
+
+begin
+  tar_extract = Gem::Package::TarReader.new(Zlib::GzipReader.open("/tmp/uploaded.tar.gz"))
+rescue Errno::ENOENT
+  STDERR.puts("archive file does not exist or is not readable")
+  exit(false)
+end
+tar_extract.rewind
+
+tar_extract.each do |entry|
+  next unless entry.file? # Only process files in this example for simplicity.
+
+  destination = "/tmp/extracted/#{entry.full_name}" # Oops! We blindly use the entry file name for the destination.
+  File.open(destination, "wb") do |out|
+    out.write(entry.read)
+  end
+end
+```
+
+#### Go
+
+```golang
+// unzip INSECURELY extracts source zip file to destination.
+func unzip(src, dest string) error {
+  r, err := zip.OpenReader(src)
+  if err != nil {
+    return err
+  }
+  defer r.Close()
+
+  os.MkdirAll(dest, 0750)
+
+  for _, f := range r.File {
+    if f.FileInfo().IsDir() { // Skip directories in this example for simplicity.
+      continue
+    }
+
+    rc, err := f.Open()
+    if err != nil {
+      return err
+    }
+    defer rc.Close()
+
+    path := filepath.Join(dest, f.Name) // Oops! We blindly use the entry file name for the destination.
+    os.MkdirAll(filepath.Dir(path), f.Mode())
+    f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, f.Mode())
+    if err != nil {
+      return err
+    }
+    defer f.Close()
+
+    if _, err := io.Copy(f, rc); err != nil {
+      return err
+    }
+  }
+
+  return nil
+}
+```
+
+#### Best practices
+
+Always expand the destination file path by resolving all potential directory traversals and other sequences that can alter the path and refuse extraction if the final destination path does not start with the intended destination directory.
+
+##### Ruby
+
+```ruby
+# tar.gz extraction example with protection against Zip Slip attacks.
+
+begin
+  tar_extract = Gem::Package::TarReader.new(Zlib::GzipReader.open("/tmp/uploaded.tar.gz"))
+rescue Errno::ENOENT
+  STDERR.puts("archive file does not exist or is not readable")
+  exit(false)
+end
+tar_extract.rewind
+
+tar_extract.each do |entry|
+  next unless entry.file? # Only process files in this example for simplicity.
+
+  # safe_destination will raise an exception in case of Zip Slip / directory traversal.
+  destination = safe_destination(entry.full_name, "/tmp/extracted")
+
+  File.open(destination, "wb") do |out|
+    out.write(entry.read)
+  end
+end
+
+def safe_destination(filename, destination_dir)
+  raise "filename cannot start with '/'" if filename.start_with?("/")
+
+  destination_dir = File.realpath(destination_dir)
+  destination = File.expand_path(filename, destination_dir)
+
+  raise "filename is outside of destination directory" unless
+    destination.start_with?(destination_dir + "/"))
+
+  destination
+end
+```
+
+```ruby
+# zip extraction example using rubyzip with built-in protection against Zip Slip attacks.
+require 'zip'
+
+Zip::File.open("/tmp/uploaded.zip") do |zip_file|
+  zip_file.each do |entry|
+    # Extract entry to /tmp/extracted directory.
+    entry.extract("/tmp/extracted")
+  end
+end
+```
+
+##### Go
+
+You are encouraged to use the secure archive utilities provided by [LabSec](https://gitlab.com/gitlab-com/gl-security/appsec/labsec) which will handle Zip Slip and other types of vulnerabilities for you. The LabSec utilities are also context aware which makes it possible to cancel or timeout extractions:
+
+```golang
+package main
+
+import "gitlab-com/gl-security/appsec/labsec/archive/zip"
+
+func main() {
+  f, err := os.Open("/tmp/uploaded.zip")
+  if err != nil {
+    panic(err)
+  }
+  defer f.Close()
+
+  fi, err := f.Stat()
+  if err != nil {
+    panic(err)
+  }
+
+  if err := zip.Extract(context.Background(), f, fi.Size(), "/tmp/extracted"); err != nil {
+    panic(err)
+  }
+}
+```
+
+In case the LabSec utilities do not fit your needs, here is an example for extracting a zip file with protection against Zip Slip attacks:
+
+```golang
+// unzip extracts source zip file to destination with protection against Zip Slip attacks.
+func unzip(src, dest string) error {
+  r, err := zip.OpenReader(src)
+  if err != nil {
+    return err
+  }
+  defer r.Close()
+
+  os.MkdirAll(dest, 0750)
+
+  for _, f := range r.File {
+    if f.FileInfo().IsDir() { // Skip directories in this example for simplicity.
+      continue
+    }
+
+    rc, err := f.Open()
+    if err != nil {
+      return err
+    }
+    defer rc.Close()
+
+    path := filepath.Join(dest, f.Name)
+
+    // Check for Zip Slip / directory traversal
+    if !strings.HasPrefix(path, filepath.Clean(dest) + string(os.PathSeparator)) {
+      return fmt.Errorf("illegal file path: %s", path)
+    }
+
+    os.MkdirAll(filepath.Dir(path), f.Mode())
+    f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, f.Mode())
+    if err != nil {
+      return err
+    }
+    defer f.Close()
+
+    if _, err := io.Copy(f, rc); err != nil {
+      return err
+    }
+  }
+
+  return nil
+}
+```
+
+### Symlink attacks
+
+Symlink attacks makes it possible for an attacker to read the contents of arbitrary files on the server of a vulnerable application. While it is a high-severity vulnerability that can often lead to remote code execution and other critical vulnerabilities, it is only exploitable in scenarios where a vulnerable application accepts archive files from the attacker and somehow displays the extracted contents back to the attacker without any validation or sanitization of symbolic links inside the archive.
+
+### Insecure archive symlink extraction examples
+
+#### Ruby
+
+For zip files, the [rubyzip](https://rubygems.org/gems/rubyzip) Ruby gem is already patched against symlink attacks as it simply ignores symbolic links, so for this vulnerable example we will extract a `tar.gz` file with `Gem::Package::TarReader`:
+
+```ruby
+# Vulnerable tar.gz extraction example!
+
+begin
+  tar_extract = Gem::Package::TarReader.new(Zlib::GzipReader.open("/tmp/uploaded.tar.gz"))
+rescue Errno::ENOENT
+  STDERR.puts("archive file does not exist or is not readable")
+  exit(false)
+end
+tar_extract.rewind
+
+# Loop over each entry and output file contents
+tar_extract.each do |entry|
+  next if entry.directory?
+
+  # Oops! We don't check if the file is actually a symbolic link to a potentially sensitive file.
+  puts entry.read
+end
+```
+
+#### Go
+
+```golang
+// printZipContents INSECURELY prints contents of files in a zip file.
+func printZipContents(src string) error {
+  r, err := zip.OpenReader(src)
+  if err != nil {
+    return err
+  }
+  defer r.Close()
+
+  // Loop over each entry and output file contents
+  for _, f := range r.File {
+    if f.FileInfo().IsDir() {
+      continue
+    }
+
+    rc, err := f.Open()
+    if err != nil {
+      return err
+    }
+    defer rc.Close()
+
+    // Oops! We don't check if the file is actually a symbolic link to a potentially sensitive file.
+    buf, err := ioutil.ReadAll(rc)
+    if err != nil {
+      return err
+    }
+
+    fmt.Println(buf.String())
+  }
+
+  return nil
+}
+```
+
+#### Best practices
+
+Always check the type of the archive entry before reading the contents and ignore entries that are not plain files. If you absolutely must support symbolic links, ensure that they only point to files inside the archive and nowhere else.
+
+##### Ruby
+
+```ruby
+# tar.gz extraction example with protection against symlink attacks.
+
+begin
+  tar_extract = Gem::Package::TarReader.new(Zlib::GzipReader.open("/tmp/uploaded.tar.gz"))
+rescue Errno::ENOENT
+  STDERR.puts("archive file does not exist or is not readable")
+  exit(false)
+end
+tar_extract.rewind
+
+# Loop over each entry and output file contents
+tar_extract.each do |entry|
+  next if entry.directory?
+
+  # By skipping symbolic links entirely, we are sure they can't cause any trouble!
+  next if entry.symlink?
+
+  puts entry.read
+end
+```
+
+##### Go
+
+You are encouraged to use the secure archive utilities provided by [LabSec](https://gitlab.com/gitlab-com/gl-security/appsec/labsec) which will handle Zip Slip and symlink vulnerabilities for you. The LabSec utilities are also context aware which makes it possible to cancel or timeout extractions.
+
+In case the LabSec utilities do not fit your needs, here is an example for extracting a zip file with protection against symlink attacks:
+
+```golang
+// printZipContents prints contents of files in a zip file with protection against symlink attacks.
+func printZipContents(src string) error {
+  r, err := zip.OpenReader(src)
+  if err != nil {
+    return err
+  }
+  defer r.Close()
+
+  // Loop over each entry and output file contents
+  for _, f := range r.File {
+    if f.FileInfo().IsDir() {
+      continue
+    }
+
+    // By skipping all irregular file types (including symbolic links), we are sure they can't cause any trouble!
+    if !zf.Mode().IsRegular() {
+      continue
+    }
+
+    rc, err := f.Open()
+    if err != nil {
+      return err
+    }
+    defer rc.Close()
+
+    buf, err := ioutil.ReadAll(rc)
+    if err != nil {
+      return err
+    }
+
+    fmt.Println(buf.String())
+  }
+
+  return nil
+}
+```
+
+## Time of check to time of use bugs
+
+Time of check to time of use, or TOCTOU, is a class of error which occur when the state of something changes unexpectedly partway during a process.
+More specifically, it's when the property you checked and validated has changed when you finally get around to using that property. 
+
+These types of bugs are often seen in environments which allow multi-threading and concurrency, like filesystems and distributed web applications; these are a type of race condition. TOCTOU also occurs when state is checked and stored, then after a period of time that state is relied on without re-checking its accuracy and/or validity.
+
+### Examples
+
+**Example 1:** you have a model which accepts a URL as input. When the model is created you verify that the URL's host resolves to a public IP address, to prevent attackers making internal network calls. But DNS records can change ([DNS rebinding](#server-side-request-forgery-ssrf)]). An attacker updates the DNS record to `127.0.0.1`, and when your code resolves those URL's host it results in sending a potentially malicious request to a server on the internal network. The property was valid at the "time of check", but invalid and malicious at "time of use".
+
+GitLab-specific example can be found in [this issue](https://gitlab.com/gitlab-org/gitlab/-/issues/214401) where, although `Gitlab::UrlBlocker.validate!` was called, the returned value was not used. This made it vulnerable to TOCTOU bug and SSRF protection bypass through [DNS rebinding](#server-side-request-forgery-ssrf). The fix was to [use the validated IP address](https://gitlab.com/gitlab-org/gitlab/-/commit/7af8abd4df9a98f7a1ae7c4ec9840d0a7a8c684d).
+
+**Example 2:** you have a feature which schedules jobs. When the user schedules the job, they have permission to do so. But imagine if, between the time they schedule the job and the time it is run, their permissions are restricted. Unless you re-check permissions at time of use, you could inadvertently allow unauthorized activity.
+
+**Example 3:** you need to fetch a remote file, and perform a `HEAD` request to get and validate the content length and content type. When you subsequently make a `GET` request, though, the file delivered is a different size or different file type. (This is stretching the definition of TOCTOU, but things _have_ changed between time of check and time of use).
+
+**Example 4:** you allow users to upvote a comment if they haven't already. The server is multi-threaded, and you aren't using transactions or an applicable database index. By repeatedly clicking upvote in quick succession a malicious user is able to add multiple upvotes: the requests arrive at the same time, the checks run in parallel and confirm that no upvote exists yet, and so each upvote is written to the database. 
+
+Here's some pseudocode showing an example of a potential TOCTOU bug:
+
+```ruby
+def upvote(comment, user)
+  # The time between calling .exists? and .create can lead to TOCTOU,
+  # particularly if .create is a slow method, or runs in a background job
+  if Upvote.exists?(comment: comment, user: user)
+    return
+  else
+    Upvote.create(comment: comment, user: user)
+  end
+end
+```
+
+### Prevention & defense
+
+- Assume values will change between the time you validate them and the time you use them.
+- Perform checks as close to execution time as possible.
+- Perform checks after your operation completes.
+- Use your framework's validations and database features to impose constraints and atomic reads and writes.
+- Read about [Server Side Request Forgery (SSRF) and DNS rebinding](#server-side-request-forgery-ssrf)
+
+An example of well implemented `Gitlab::UrlBlocker.validate!` call that prevents TOCTOU bug:
+
+1. [Preventing DNS rebinding in Gitea importer](https://gitlab.com/gitlab-org/gitlab/-/commit/7af8abd4df9a98f7a1ae7c4ec9840d0a7a8c684d)
+
+### Resources
+
+- [CWE-367: Time-of-check Time-of-use (TOCTOU) Race Condition](https://cwe.mitre.org/data/definitions/367.html)

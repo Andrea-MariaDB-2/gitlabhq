@@ -1,10 +1,20 @@
 import getStateKey from 'ee_else_ce/vue_merge_request_widget/stores/get_state_key';
 import { statusBoxState } from '~/issuable/components/status_box.vue';
 import { formatDate, getTimeago } from '~/lib/utils/datetime_utility';
-import { MTWPS_MERGE_STRATEGY, MT_MERGE_STRATEGY, MWPS_MERGE_STRATEGY } from '../constants';
+import { machine } from '~/lib/utils/finite_state_machine';
+import {
+  MTWPS_MERGE_STRATEGY,
+  MT_MERGE_STRATEGY,
+  MWPS_MERGE_STRATEGY,
+  STATE_MACHINE,
+  stateToTransitionMap,
+} from '../constants';
 import { stateKey } from './state_maps';
 
 const { format } = getTimeago();
+
+const { states } = STATE_MACHINE;
+const { IDLE } = states;
 
 export default class MergeRequestStore {
   constructor(data) {
@@ -16,10 +26,19 @@ export default class MergeRequestStore {
     this.apiUnapprovePath = data.api_unapprove_path;
     this.hasApprovalsAvailable = data.has_approvals_available;
 
+    this.stateMachine = machine(STATE_MACHINE.definition);
+    this.machineValue = this.stateMachine.value;
+
     this.setPaths(data);
 
     this.setData(data);
+    this.initCodeQualityReport(data);
     this.setGitpodData(data);
+  }
+
+  initCodeQualityReport(data) {
+    this.blobPath = data.blob_path;
+    this.codeQuality = data.codequality_reports_path;
   }
 
   setData(data, isRebased) {
@@ -46,7 +65,6 @@ export default class MergeRequestStore {
     this.sourceBranch = data.source_branch;
     this.sourceBranchProtected = data.source_branch_protected;
     this.conflictsDocsPath = data.conflicts_docs_path;
-    this.mergeTrainWhenPipelineSucceedsDocsPath = data.merge_train_when_pipeline_succeeds_docs_path;
     this.commitMessage = data.default_merge_commit_message;
     this.shortMergeCommitSha = data.short_merged_commit_sha;
     this.mergeCommitSha = data.merged_commit_sha;
@@ -70,14 +88,16 @@ export default class MergeRequestStore {
       const { closing } = links;
       const mentioned = links.mentioned_but_not_closing;
       const assignToMe = links.assign_to_closing;
+      const unassignedCount = links.assign_to_closing_count;
 
-      if (closing || mentioned || assignToMe) {
+      if (closing || mentioned || unassignedCount) {
         this.relatedLinks = {
           closing,
           mentioned,
           assignToMe,
           closingCount: links.closing_count,
           mentionedCount: links.mentioned_count,
+          unassignedCount: links.assign_to_closing_count,
         };
       }
     }
@@ -151,7 +171,7 @@ export default class MergeRequestStore {
       this.projectArchived = data.project_archived;
       this.isSHAMismatch = this.sha !== data.diff_head_sha;
       this.shouldBeRebased = Boolean(data.should_be_rebased);
-      this.workInProgress = data.work_in_progress;
+      this.draft = data.draft;
     }
 
     const currentUser = data.current_user;
@@ -194,7 +214,7 @@ export default class MergeRequestStore {
     this.isPipelineFailed = this.ciStatus === 'failed' || this.ciStatus === 'canceled';
     this.isSHAMismatch = this.sha !== mergeRequest.diffHeadSha;
     this.shouldBeRebased = mergeRequest.shouldBeRebased;
-    this.workInProgress = mergeRequest.workInProgress;
+    this.draft = mergeRequest.draft;
     this.mergeRequestState = mergeRequest.state;
 
     this.setState();
@@ -210,15 +230,14 @@ export default class MergeRequestStore {
     this.showGitpodButton = data.show_gitpod_button;
     this.gitpodUrl = data.gitpod_url;
     this.gitpodEnabled = data.gitpod_enabled;
+    this.userPreferencesGitpodPath = data.user_preferences_gitpod_path;
+    this.userProfileEnableGitpodPath = data.user_profile_enable_gitpod_path;
   }
 
   setState() {
     if (this.mergeOngoing) {
       this.state = 'merging';
-      return;
-    }
-
-    if (this.isOpen) {
+    } else if (this.isOpen) {
       this.state = getStateKey.call(this);
     } else {
       switch (this.mergeRequestState) {
@@ -232,6 +251,8 @@ export default class MergeRequestStore {
           this.state = null;
       }
     }
+
+    this.translateStateToMachine();
   }
 
   setPaths(data) {
@@ -277,7 +298,7 @@ export default class MergeRequestStore {
 
     // Security reports
     this.sastComparisonPath = data.sast_comparison_path;
-    this.secretScanningComparisonPath = data.secret_scanning_comparison_path;
+    this.secretDetectionComparisonPath = data.secret_detection_comparison_path;
   }
 
   get isNothingToMergeState() {
@@ -346,5 +367,40 @@ export default class MergeRequestStore {
   setApprovals(data) {
     this.approvals = data;
     this.isApproved = data.approved || false;
+
+    this.setState();
+  }
+
+  // eslint-disable-next-line class-methods-use-this
+  get hasMergeChecksFailed() {
+    return false;
+  }
+
+  // Because the state machine doesn't yet handle every state and transition,
+  //    some use-cases will need to force a state that can't be reached by
+  //    a known transition. This is undesirable long-term (as it subverts
+  //    the intent of a state machine), but is necessary until the machine
+  //    can handle all possible combinations. (unsafeForce)
+  transitionStateMachine({ transition, state, unsafeForce = false } = {}) {
+    if (unsafeForce && state) {
+      this.stateMachine.value = state;
+    } else {
+      this.stateMachine.send(transition);
+    }
+
+    this.machineValue = this.stateMachine.value;
+  }
+  translateStateToMachine() {
+    const transition = stateToTransitionMap[this.state];
+    let transitionOptions = {
+      state: IDLE,
+      unsafeForce: true,
+    };
+
+    if (transition) {
+      transitionOptions = { transition };
+    }
+
+    this.transitionStateMachine(transitionOptions);
   }
 }

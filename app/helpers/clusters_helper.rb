@@ -1,43 +1,32 @@
 # frozen_string_literal: true
 
 module ClustersHelper
-  def create_new_cluster_label(provider: nil)
-    case provider
-    when 'aws'
-      s_('ClusterIntegration|Create new cluster on EKS')
-    when 'gcp'
-      s_('ClusterIntegration|Create new cluster on GKE')
-    else
-      s_('ClusterIntegration|Create new cluster')
-    end
+  def display_cluster_agents?(clusterable)
+    clusterable.is_a?(Project)
   end
 
-  def display_cluster_agents?(_clusterable)
-    false
-  end
-
-  def js_cluster_agents_list_data(clusterable_project)
-    {
-      default_branch_name: clusterable_project.default_branch,
-      empty_state_image: image_path('illustrations/clusters_empty.svg'),
-      project_path: clusterable_project.full_path,
-      agent_docs_url: help_page_path('user/clusters/agent/index'),
-      install_docs_url: help_page_path('administration/clusters/kas'),
-      get_started_docs_url: help_page_path('user/clusters/agent/index', anchor: 'define-a-configuration-repository'),
-      integration_docs_url: help_page_path('user/clusters/agent/index', anchor: 'get-started-with-gitops-and-the-gitlab-agent'),
-      kas_address: Gitlab::Kas.external_url
-    }
-  end
-
-  def js_clusters_list_data(path = nil)
+  def js_clusters_list_data(clusterable)
     {
       ancestor_help_path: help_page_path('user/group/clusters/index', anchor: 'cluster-precedence'),
-      endpoint: path,
+      endpoint: clusterable.index_path(format: :json),
       img_tags: {
         aws: { path: image_path('illustrations/logos/amazon_eks.svg'), text: s_('ClusterIntegration|Amazon EKS') },
         default: { path: image_path('illustrations/logos/kubernetes.svg'), text: _('Kubernetes Cluster') },
         gcp: { path: image_path('illustrations/logos/google_gke.svg'), text: s_('ClusterIntegration|Google GKE') }
-      }
+      },
+      clusters_empty_state_image: image_path('illustrations/empty-state/empty-state-clusters.svg'),
+      empty_state_image: image_path('illustrations/empty-state/empty-state-agents.svg'),
+      empty_state_help_text: clusterable.empty_state_help_text,
+      new_cluster_path: clusterable.new_path,
+      add_cluster_path: clusterable.connect_path,
+      can_add_cluster: clusterable.can_add_cluster?.to_s,
+      can_admin_cluster: clusterable.can_admin_cluster?.to_s,
+      display_cluster_agents: display_cluster_agents?(clusterable).to_s,
+      certificate_based_clusters_enabled: Feature.enabled?(:certificate_based_clusters, clusterable, default_enabled: :yaml, type: :ops).to_s,
+      default_branch_name: default_branch_name(clusterable),
+      project_path: clusterable_project_path(clusterable),
+      kas_address: Gitlab::Kas.external_url,
+      gitlab_version: Gitlab.version_info
     }
   end
 
@@ -118,5 +107,15 @@ module ClustersHelper
 
   def can_admin_cluster?(user, cluster)
     can?(user, :admin_cluster, cluster)
+  end
+
+  private
+
+  def default_branch_name(clusterable)
+    clusterable.default_branch if clusterable.is_a?(Project)
+  end
+
+  def clusterable_project_path(clusterable)
+    clusterable.full_path if clusterable.is_a?(Project)
   end
 end

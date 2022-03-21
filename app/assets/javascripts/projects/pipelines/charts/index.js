@@ -7,13 +7,20 @@ import ProjectPipelinesCharts from './components/app.vue';
 Vue.use(VueApollo);
 
 const apolloProvider = new VueApollo({
-  defaultClient: createDefaultClient({}, { assumeImmutableResults: true }),
+  defaultClient: createDefaultClient(),
 });
 
 const mountPipelineChartsApp = (el) => {
-  const { projectPath } = el.dataset;
+  const {
+    projectPath,
+    failedPipelinesLink,
+    coverageChartPath,
+    defaultBranch,
+    testRunsEmptyStateImagePath,
+  } = el.dataset;
 
   const shouldRenderDoraCharts = parseBoolean(el.dataset.shouldRenderDoraCharts);
+  const shouldRenderQualitySummary = parseBoolean(el.dataset.shouldRenderQualitySummary);
 
   return new Vue({
     el,
@@ -24,7 +31,12 @@ const mountPipelineChartsApp = (el) => {
     apolloProvider,
     provide: {
       projectPath,
+      failedPipelinesLink,
       shouldRenderDoraCharts,
+      shouldRenderQualitySummary,
+      coverageChartPath,
+      defaultBranch,
+      testRunsEmptyStateImagePath,
     },
     render: (createElement) => createElement(ProjectPipelinesCharts, {}),
   });

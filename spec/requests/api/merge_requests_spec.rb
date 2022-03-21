@@ -49,6 +49,12 @@ RSpec.describe API::MergeRequests do
 
         expect_successful_response_with_paginated_array
       end
+
+      it_behaves_like 'issuable anonymous search' do
+        let(:url) { endpoint_path }
+        let(:issuable) { merge_request }
+        let(:result) { [merge_request_merged.id, merge_request_locked.id, merge_request_closed.id, merge_request.id] }
+      end
     end
 
     context 'when authenticated' do
@@ -430,6 +436,26 @@ RSpec.describe API::MergeRequests do
           response_dates = json_response.map { |merge_request| merge_request['created_at'] }
           expect(response_dates).to eq(response_dates.sort)
         end
+
+        context 'returns an array of merge_requests ordered by title' do
+          it 'asc when requested' do
+            path = endpoint_path + '?order_by=title&sort=asc'
+
+            get api(path, user)
+
+            response_titles = json_response.map { |merge_request| merge_request['title'] }
+            expect(response_titles).to eq(response_titles.sort)
+          end
+
+          it 'desc when requested' do
+            path = endpoint_path + '?order_by=title&sort=desc'
+
+            get api(path, user)
+
+            response_titles = json_response.map { |merge_request| merge_request['title'] }
+            expect(response_titles).to eq(response_titles.sort.reverse)
+          end
+        end
       end
 
       context 'NOT params' do
@@ -611,6 +637,12 @@ RSpec.describe API::MergeRequests do
           merge_request_merged.id, merge_request_locked.id,
           merge_request_closed.id, merge_request.id
         )
+      end
+
+      it_behaves_like 'issuable anonymous search' do
+        let(:url) { '/merge_requests' }
+        let(:issuable) { merge_request }
+        let(:result) { [merge_request_merged.id, merge_request_locked.id, merge_request_closed.id, merge_request.id] }
       end
 
       it "returns authentication error without any scope" do
@@ -973,14 +1005,6 @@ RSpec.describe API::MergeRequests do
 
     it_behaves_like 'merge requests list'
 
-    context 'when :api_caching_merge_requests is disabled' do
-      before do
-        stub_feature_flags(api_caching_merge_requests: false)
-      end
-
-      it_behaves_like 'merge requests list'
-    end
-
     it "returns 404 for non public projects" do
       project = create(:project, :private)
 
@@ -1072,7 +1096,7 @@ RSpec.describe API::MergeRequests do
   end
 
   describe "GET /groups/:id/merge_requests" do
-    let_it_be(:group) { create(:group, :public) }
+    let_it_be(:group, reload: true) { create(:group, :public) }
     let_it_be(:project) { create(:project, :public, :repository, creator: user, namespace: group, only_allow_merge_if_pipeline_succeeds: false) }
 
     include_context 'with merge requests'
@@ -1257,6 +1281,7 @@ RSpec.describe API::MergeRequests do
         get api("/projects/#{project.id}/merge_requests/#{merge_request.iid}", user)
 
         expect(json_response).to include('merged_by',
+          'merge_user',
           'merged_at',
           'closed_by',
           'closed_at',
@@ -1267,9 +1292,10 @@ RSpec.describe API::MergeRequests do
       end
 
       it 'returns correct values' do
-        get api("/projects/#{project.id}/merge_requests/#{merge_request.reload.iid}", user)
+        get api("/projects/#{project.id}/merge_requests/#{merge_request.iid}", user)
 
         expect(json_response['merged_by']['id']).to eq(merge_request.metrics.merged_by_id)
+        expect(json_response['merge_user']['id']).to eq(merge_request.metrics.merged_by_id)
         expect(Time.parse(json_response['merged_at'])).to be_like_time(merge_request.metrics.merged_at)
         expect(json_response['closed_by']['id']).to eq(merge_request.metrics.latest_closed_by_id)
         expect(Time.parse(json_response['closed_at'])).to be_like_time(merge_request.metrics.latest_closed_at)
@@ -1277,6 +1303,32 @@ RSpec.describe API::MergeRequests do
         expect(Time.parse(json_response['latest_build_started_at'])).to be_like_time(merge_request.metrics.latest_build_started_at)
         expect(Time.parse(json_response['latest_build_finished_at'])).to be_like_time(merge_request.metrics.latest_build_finished_at)
         expect(Time.parse(json_response['first_deployed_to_production_at'])).to be_like_time(merge_request.metrics.first_deployed_to_production_at)
+      end
+    end
+
+    context 'merge_user' do
+      context 'when MR is set to MWPS' do
+        let(:merge_request) { create(:merge_request, :merge_when_pipeline_succeeds, source_project: project, target_project: project) }
+
+        it 'returns user who set MWPS' do
+          get api("/projects/#{project.id}/merge_requests/#{merge_request.iid}", user)
+
+          expect(response).to have_gitlab_http_status(:ok)
+          expect(json_response['merge_user']['id']).to eq(user.id)
+        end
+
+        context 'when MR is already merged' do
+          before do
+            merge_request.metrics.update!(merged_by: user2)
+          end
+
+          it 'returns user who actually merged' do
+            get api("/projects/#{project.id}/merge_requests/#{merge_request.iid}", user)
+
+            expect(response).to have_gitlab_http_status(:ok)
+            expect(json_response['merge_user']['id']).to eq(user2.id)
+          end
+        end
       end
     end
 
@@ -2836,7 +2888,7 @@ RSpec.describe API::MergeRequests do
 
         it 'is false for an unauthorized user' do
           expect do
-            put api("/projects/#{target_project.id}/merge_requests/#{merge_request.iid}", target_project.owner), params: { state_event: 'close', remove_source_branch: true }
+            put api("/projects/#{target_project.id}/merge_requests/#{merge_request.iid}", target_project.first_owner), params: { state_event: 'close', remove_source_branch: true }
           end.not_to change { merge_request.reload.merge_params }
 
           expect(response).to have_gitlab_http_status(:ok)
@@ -3266,7 +3318,10 @@ RSpec.describe API::MergeRequests do
 
       context 'when skip_ci parameter is set' do
         it 'enqueues a rebase of the merge request with skip_ci flag set' do
-          expect(RebaseWorker).to receive(:perform_async).with(merge_request.id, user.id, true).and_call_original
+          with_status = RebaseWorker.with_status
+
+          expect(RebaseWorker).to receive(:with_status).and_return(with_status)
+          expect(with_status).to receive(:perform_async).with(merge_request.id, user.id, true).and_call_original
 
           Sidekiq::Testing.fake! do
             expect do
@@ -3278,6 +3333,18 @@ RSpec.describe API::MergeRequests do
           expect(merge_request.reload).to be_rebase_in_progress
           expect(json_response['rebase_in_progress']).to be(true)
         end
+      end
+    end
+
+    context 'when merge request branch does not allow force push' do
+      before do
+        create(:protected_branch, project: project, name: merge_request.source_branch, allow_force_push: false)
+      end
+
+      it 'returns 403' do
+        put api("/projects/#{project.id}/merge_requests/#{merge_request.iid}/rebase", user)
+
+        expect(response).to have_gitlab_http_status(:forbidden)
       end
     end
 

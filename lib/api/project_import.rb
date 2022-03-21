@@ -6,9 +6,10 @@ module API
 
     helpers Helpers::ProjectsHelpers
     helpers Helpers::FileUploadHelpers
-    helpers Helpers::RateLimiter
 
     feature_category :importers
+
+    before { authenticate! unless route.settings[:skip_authentication] }
 
     helpers do
       def import_params
@@ -80,20 +81,22 @@ module API
       post 'import' do
         require_gitlab_workhorse!
 
-        check_rate_limit! :project_import, [current_user, :project_import]
+        check_rate_limit! :project_import, scope: [current_user, :project_import]
 
         Gitlab::QueryLimiting.disable!('https://gitlab.com/gitlab-org/gitlab/-/issues/21041')
 
         validate_file!
 
-        response = ::Import::GitlabProjects::CreateProjectFromUploadedFileService.new(
+        response = ::Import::GitlabProjects::CreateProjectService.new(
           current_user,
-          path: import_params[:path],
-          namespace: namespace_from(import_params, current_user),
-          name: import_params[:name],
-          file: import_params[:file],
-          overwrite: import_params[:overwrite],
-          override: filtered_override_params(import_params)
+          params: {
+            path: import_params[:path],
+            namespace: namespace_from(import_params, current_user),
+            name: import_params[:name],
+            file: import_params[:file],
+            overwrite: import_params[:overwrite],
+            override: filtered_override_params(import_params)
+          }
         ).execute
 
         if response.success?
@@ -106,10 +109,11 @@ module API
       params do
         requires :id, type: String, desc: 'The ID of a project'
       end
-      desc 'Get a project export status' do
+      desc 'Get a project import status' do
         detail 'This feature was introduced in GitLab 10.6.'
         success Entities::ProjectImportStatus
       end
+      route_setting :skip_authentication, true
       get ':id/import' do
         present user_project, with: Entities::ProjectImportStatus
       end
@@ -131,18 +135,70 @@ module API
         success Entities::ProjectImportStatus
       end
       post 'remote-import' do
-        not_found! unless ::Feature.enabled?(:import_project_from_remote_file)
+        not_found! unless ::Feature.enabled?(:import_project_from_remote_file, default_enabled: :yaml)
 
-        check_rate_limit! :project_import, [current_user, :project_import]
+        check_rate_limit! :project_import, scope: [current_user, :project_import]
 
-        response = ::Import::GitlabProjects::CreateProjectFromRemoteFileService.new(
+        response = ::Import::GitlabProjects::CreateProjectService.new(
           current_user,
-          path: import_params[:path],
-          namespace: namespace_from(import_params, current_user),
-          name: import_params[:name],
-          remote_import_url: import_params[:url],
-          overwrite: import_params[:overwrite],
-          override: filtered_override_params(import_params)
+          params: {
+            path: import_params[:path],
+            namespace: namespace_from(import_params, current_user),
+            name: import_params[:name],
+            remote_import_url: import_params[:url],
+            overwrite: import_params[:overwrite],
+            override: filtered_override_params(import_params)
+          },
+          file_acquisition_strategy: ::Import::GitlabProjects::FileAcquisitionStrategies::RemoteFile
+        ).execute
+
+        if response.success?
+          present(response.payload, with: Entities::ProjectImportStatus)
+        else
+          render_api_error!(response.message, response.http_status)
+        end
+      end
+
+      params do
+        requires :region, type: String, desc: 'AWS region'
+        requires :bucket_name, type: String, desc: 'Bucket name'
+        requires :file_key, type: String, desc: 'File key'
+        requires :access_key_id, type: String, desc: 'Access key id'
+        requires :secret_access_key, type: String, desc: 'Secret access key'
+        requires :path, type: String, desc: 'The new project path and name'
+        optional :name, type: String, desc: 'The name of the project to be imported. Defaults to the path of the project if not provided.'
+        optional :namespace, type: String, desc: "The ID or name of the namespace that the project will be imported into. Defaults to the current user's namespace."
+        optional :overwrite, type: Boolean, default: false, desc: 'If there is a project in the same namespace and with the same name overwrite it'
+        optional :override_params,
+          type: Hash,
+          desc: 'New project params to override values in the export' do
+            use :optional_project_params
+          end
+      end
+      desc 'Create a new project import using a file from AWS S3' do
+        detail 'This feature was introduced in GitLab 14.9.'
+        success Entities::ProjectImportStatus
+      end
+      post 'remote-import-s3' do
+        not_found! unless ::Feature.enabled?(:import_project_from_remote_file_s3, default_enabled: :yaml)
+
+        check_rate_limit! :project_import, scope: [current_user, :project_import]
+
+        response = ::Import::GitlabProjects::CreateProjectService.new(
+          current_user,
+          params: {
+            path: import_params[:path],
+            namespace: namespace_from(import_params, current_user),
+            name: import_params[:name],
+            overwrite: import_params[:overwrite],
+            override: filtered_override_params(import_params),
+            region: import_params[:region],
+            bucket_name: import_params[:bucket_name],
+            file_key: import_params[:file_key],
+            access_key_id: import_params[:access_key_id],
+            secret_access_key: import_params[:secret_access_key]
+          },
+          file_acquisition_strategy: ::Import::GitlabProjects::FileAcquisitionStrategies::RemoteFileS3
         ).execute
 
         if response.success?

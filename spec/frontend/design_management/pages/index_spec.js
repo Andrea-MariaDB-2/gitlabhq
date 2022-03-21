@@ -1,10 +1,12 @@
 import { GlEmptyState } from '@gitlab/ui';
-import { createLocalVue, shallowMount } from '@vue/test-utils';
-import { nextTick } from 'vue';
+import { shallowMount } from '@vue/test-utils';
+import Vue, { nextTick } from 'vue';
+
 import VueApollo, { ApolloMutation } from 'vue-apollo';
 import VueRouter from 'vue-router';
 import VueDraggable from 'vuedraggable';
 import createMockApollo from 'helpers/mock_apollo_helper';
+import waitForPromises from 'helpers/wait_for_promises';
 import { mockTracking, unmockTracking } from 'helpers/tracking_helper';
 import permissionsQuery from 'shared_queries/design_management/design_permissions.query.graphql';
 import getDesignListQuery from 'shared_queries/design_management/get_design_list.query.graphql';
@@ -48,9 +50,8 @@ jest.spyOn(utils, 'getPageLayoutElement').mockReturnValue(mockPageEl);
 const scrollIntoViewMock = jest.fn();
 HTMLElement.prototype.scrollIntoView = scrollIntoViewMock;
 
-const localVue = createLocalVue();
 const router = createRouter();
-localVue.use(VueRouter);
+Vue.use(VueRouter);
 
 const mockDesigns = [
   {
@@ -91,6 +92,8 @@ const designToMove = {
 };
 
 describe('Design management index page', () => {
+  const registerPath = '/users/sign_up?redirect_to_referer=yes';
+  const signInPath = '/users/sign_in?redirect_to_referer=yes';
   let mutate;
   let wrapper;
   let fakeApollo;
@@ -113,8 +116,7 @@ describe('Design management index page', () => {
   const findDesignToolbarWrapper = () => wrapper.find('[data-testid="design-toolbar-wrapper"]');
 
   async function moveDesigns(localWrapper) {
-    await jest.runOnlyPendingTimers();
-    await nextTick();
+    await waitForPromises();
 
     localWrapper.find(VueDraggable).vm.$emit('input', reorderedDesigns);
     localWrapper.find(VueDraggable).vm.$emit('change', {
@@ -157,13 +159,14 @@ describe('Design management index page', () => {
         };
       },
       mocks: { $apollo },
-      localVue,
       router,
       stubs: { DesignDestroyer, ApolloMutation, VueDraggable, ...stubs },
       attachTo: document.body,
       provide: {
         projectPath: 'project-path',
         issueIid: '1',
+        registerPath,
+        signInPath,
       },
     });
   }
@@ -171,7 +174,7 @@ describe('Design management index page', () => {
   function createComponentWithApollo({
     moveHandler = jest.fn().mockResolvedValue(moveDesignMutationResponse),
   }) {
-    localVue.use(VueApollo);
+    Vue.use(VueApollo);
     moveDesignHandler = moveHandler;
 
     const requestHandlers = [
@@ -182,10 +185,13 @@ describe('Design management index page', () => {
 
     fakeApollo = createMockApollo(requestHandlers);
     wrapper = shallowMount(Index, {
-      localVue,
       apolloProvider: fakeApollo,
       router,
       stubs: { VueDraggable },
+      provide: {
+        registerPath,
+        signInPath,
+      },
     });
   }
 
@@ -204,6 +210,8 @@ describe('Design management index page', () => {
     it('renders error', async () => {
       createComponent();
 
+      // setData usage is discouraged. See https://gitlab.com/groups/gitlab-org/-/epics/7330 for details
+      // eslint-disable-next-line no-restricted-syntax
       wrapper.setData({ error: true });
 
       await nextTick();
@@ -381,6 +389,8 @@ describe('Design management index page', () => {
 
     it('updates state appropriately after upload complete', async () => {
       createComponent({ stubs: { GlEmptyState } });
+      // setData usage is discouraged. See https://gitlab.com/groups/gitlab-org/-/epics/7330 for details
+      // eslint-disable-next-line no-restricted-syntax
       wrapper.setData({ filesToBeSaved: [{ name: 'test' }] });
 
       wrapper.vm.onUploadDesignDone(designUploadMutationCreatedResponse);
@@ -393,6 +403,8 @@ describe('Design management index page', () => {
 
     it('updates state appropriately after upload error', async () => {
       createComponent({ stubs: { GlEmptyState } });
+      // setData usage is discouraged. See https://gitlab.com/groups/gitlab-org/-/epics/7330 for details
+      // eslint-disable-next-line no-restricted-syntax
       wrapper.setData({ filesToBeSaved: [{ name: 'test' }] });
 
       wrapper.vm.onUploadDesignError();
@@ -630,6 +642,16 @@ describe('Design management index page', () => {
       expect(mockMutate).not.toHaveBeenCalled();
     });
 
+    it('does not upload designs if designs wrapper is destroyed', () => {
+      findDesignsWrapper().trigger('mouseenter');
+
+      wrapper.destroy();
+
+      document.dispatchEvent(event);
+
+      expect(mockMutate).not.toHaveBeenCalled();
+    });
+
     describe('when designs wrapper is hovered', () => {
       let realDateNow;
       const today = () => new Date('2020-12-25');
@@ -657,6 +679,20 @@ describe('Design management index page', () => {
           projectPath: 'project-path',
         });
         expect(variables.files).toEqual(event.clipboardData.files.map((f) => new File([f], '')));
+      });
+
+      it('display original file name', () => {
+        event.clipboardData.files = [new File([new Blob()], 'test.png', { type: 'image/png' })];
+        document.dispatchEvent(event);
+
+        const [{ mutation, variables }] = mockMutate.mock.calls[0];
+        expect(mutation).toBe(uploadDesignMutation);
+        expect(variables).toStrictEqual({
+          files: expect.any(Array),
+          iid: '1',
+          projectPath: 'project-path',
+        });
+        expect(variables.files[0].name).toEqual('test.png');
       });
 
       it('renames a design if it has an image.png filename', () => {
@@ -708,9 +744,7 @@ describe('Design management index page', () => {
   describe('with mocked Apollo client', () => {
     it('has a design with id 1 as a first one', async () => {
       createComponentWithApollo({});
-
-      await jest.runOnlyPendingTimers();
-      await nextTick();
+      await waitForPromises();
 
       expect(findDesigns()).toHaveLength(3);
       expect(findDesigns().at(0).props('id')).toBe('1');
@@ -723,21 +757,18 @@ describe('Design management index page', () => {
 
       expect(moveDesignHandler).toHaveBeenCalled();
 
-      await nextTick();
+      await waitForPromises();
 
       expect(findDesigns().at(0).props('id')).toBe('2');
     });
 
     it('prevents reordering when reorderDesigns mutation is in progress', async () => {
       createComponentWithApollo({});
-
       await moveDesigns(wrapper);
 
       expect(draggableAttributes().disabled).toBe(true);
 
-      await jest.runOnlyPendingTimers(); // kick off the mocked GQL stuff (promises)
-      await nextTick(); // kick off the DOM update
-      await nextTick(); // kick off the DOM update for finally block
+      await waitForPromises();
 
       expect(draggableAttributes().disabled).toBe(false);
     });
@@ -748,8 +779,7 @@ describe('Design management index page', () => {
       });
 
       await moveDesigns(wrapper);
-
-      await nextTick();
+      await waitForPromises();
 
       expect(createFlash).toHaveBeenCalledWith({ message: 'Houston, we have a problem' });
     });
@@ -760,10 +790,7 @@ describe('Design management index page', () => {
       });
 
       await moveDesigns(wrapper);
-
-      await nextTick(); // kick off the DOM update
-      await jest.runOnlyPendingTimers(); // kick off the mocked GQL stuff (promises)
-      await nextTick(); // kick off the DOM update for flash
+      await waitForPromises();
 
       expect(createFlash).toHaveBeenCalledWith({
         message: 'Something went wrong when reordering designs. Please try again',

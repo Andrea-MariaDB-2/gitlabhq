@@ -8,6 +8,10 @@ RSpec.describe Groups::CreateService, '#execute' do
 
   subject { service.execute }
 
+  shared_examples 'has sync-ed traversal_ids' do
+    specify { expect(subject.reload.traversal_ids).to eq([subject.parent&.traversal_ids, subject.id].flatten.compact) }
+  end
+
   describe 'visibility level restrictions' do
     let!(:service) { described_class.new(user, group_params) }
 
@@ -21,6 +25,16 @@ RSpec.describe Groups::CreateService, '#execute' do
       end
 
       it { is_expected.not_to be_persisted }
+    end
+  end
+
+  context 'when `setup_for_company:true` is passed' do
+    let(:params) { group_params.merge(setup_for_company: true) }
+    let(:service) { described_class.new(user, params) }
+    let(:created_group) { service.execute }
+
+    it 'creates group with the specified setup_for_company' do
+      expect(created_group.setup_for_company).to eq(true)
     end
   end
 
@@ -67,6 +81,10 @@ RSpec.describe Groups::CreateService, '#execute' do
       it 'adds an onboarding progress record' do
         expect { subject }.to change(OnboardingProgress, :count).from(0).to(1)
       end
+
+      context 'with before_commit callback' do
+        it_behaves_like 'has sync-ed traversal_ids'
+      end
     end
 
     context 'when user can not create a group' do
@@ -92,6 +110,8 @@ RSpec.describe Groups::CreateService, '#execute' do
       it 'does not add an onboarding progress record' do
         expect { subject }.not_to change(OnboardingProgress, :count).from(0)
       end
+
+      it_behaves_like 'has sync-ed traversal_ids'
     end
 
     context 'as guest' do
@@ -171,7 +191,7 @@ RSpec.describe Groups::CreateService, '#execute' do
 
       context 'with an active group-level integration' do
         let(:service) { described_class.new(user, group_params.merge(parent_id: group.id)) }
-        let!(:group_integration) { create(:prometheus_integration, group: group, project: nil, api_url: 'https://prometheus.group.com/') }
+        let!(:group_integration) { create(:prometheus_integration, :group, group: group, api_url: 'https://prometheus.group.com/') }
         let(:group) do
           create(:group).tap do |group|
             group.add_owner(user)
@@ -186,7 +206,7 @@ RSpec.describe Groups::CreateService, '#execute' do
 
         context 'with an active subgroup' do
           let(:service) { described_class.new(user, group_params.merge(parent_id: subgroup.id)) }
-          let!(:subgroup_integration) { create(:prometheus_integration, group: subgroup, project: nil, api_url: 'https://prometheus.subgroup.com/') }
+          let!(:subgroup_integration) { create(:prometheus_integration, :group, group: subgroup, api_url: 'https://prometheus.subgroup.com/') }
           let(:subgroup) do
             create(:group, parent: group).tap do |subgroup|
               subgroup.add_owner(user)
@@ -239,6 +259,72 @@ RSpec.describe Groups::CreateService, '#execute' do
 
         expect(new_group.shared_runners_enabled).to eq(true)
         expect(new_group.allow_descendants_override_disabled_shared_runners).to eq(false)
+      end
+    end
+  end
+
+  describe 'invite team email' do
+    let(:service) { described_class.new(user, group_params) }
+
+    before do
+      allow(Namespaces::InviteTeamEmailWorker).to receive(:perform_in)
+    end
+
+    it 'is sent' do
+      group = service.execute
+      delay = Namespaces::InviteTeamEmailService::DELIVERY_DELAY_IN_MINUTES
+      expect(Namespaces::InviteTeamEmailWorker).to have_received(:perform_in).with(delay, group.id, user.id)
+    end
+
+    context 'when group has not been persisted' do
+      let(:service) { described_class.new(user, group_params.merge(name: '<script>alert("Attack!")</script>')) }
+
+      it 'not sent' do
+        expect(Namespaces::InviteTeamEmailWorker).not_to receive(:perform_in)
+        service.execute
+      end
+    end
+
+    context 'when group is not root' do
+      let(:parent_group) { create :group }
+      let(:service) { described_class.new(user, group_params.merge(parent_id: parent_group.id)) }
+
+      before do
+        parent_group.add_owner(user)
+      end
+
+      it 'not sent' do
+        expect(Namespaces::InviteTeamEmailWorker).not_to receive(:perform_in)
+        service.execute
+      end
+    end
+  end
+
+  describe 'logged_out_marketing_header experiment', :experiment do
+    let(:service) { described_class.new(user, group_params) }
+
+    subject { service.execute }
+
+    before do
+      stub_experiments(logged_out_marketing_header: :candidate)
+    end
+
+    it 'tracks signed_up event' do
+      expect(experiment(:logged_out_marketing_header)).to track(
+        :namespace_created,
+        namespace: an_instance_of(Group)
+      ).on_next_instance.with_context(actor: user)
+
+      subject
+    end
+
+    context 'when group has not been persisted' do
+      let(:service) { described_class.new(user, group_params.merge(name: '<script>alert("Attack!")</script>')) }
+
+      it 'does not track signed_up event' do
+        expect(experiment(:logged_out_marketing_header)).not_to track(:namespace_created)
+
+        subject
       end
     end
   end

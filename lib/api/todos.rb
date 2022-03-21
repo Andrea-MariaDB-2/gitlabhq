@@ -6,7 +6,7 @@ module API
 
     before { authenticate! }
 
-    feature_category :issue_tracking
+    feature_category :team_planning
 
     ISSUABLE_TYPES = {
       'merge_requests' => ->(iid) { find_merge_request_with_access(iid) },
@@ -28,10 +28,6 @@ module API
         end
         post ":id/#{type}/:#{type_id_str}/todo" do
           issuable = instance_exec(params[type_id_str], &finder)
-
-          unless can?(current_user, :read_merge_request, issuable.project)
-            not_found!(type.split("_").map(&:capitalize).join(" "))
-          end
 
           todo = TodoService.new.mark_todo(issuable, current_user).first
 

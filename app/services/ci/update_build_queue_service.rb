@@ -14,7 +14,7 @@ module Ci
     # Add a build to the pending builds queue
     #
     def push(build, transition)
-      return unless maintain_pending_builds_queue?(build)
+      return unless maintain_pending_builds_queue?
 
       raise InvalidQueueTransition unless transition.to == 'pending'
 
@@ -33,7 +33,7 @@ module Ci
     # Remove a build from the pending builds queue
     #
     def pop(build, transition)
-      return unless maintain_pending_builds_queue?(build)
+      return unless maintain_pending_builds_queue?
 
       raise InvalidQueueTransition unless transition.from == 'pending'
 
@@ -52,7 +52,7 @@ module Ci
     # Add shared runner build tracking entry (used for queuing).
     #
     def track(build, transition)
-      return unless Feature.enabled?(:ci_track_shared_runner_builds, build.project, default_enabled: :yaml)
+      return unless maintain_pending_builds_queue?
       return unless build.shared_runner_build?
 
       raise InvalidQueueTransition unless transition.to == 'running'
@@ -73,7 +73,7 @@ module Ci
     # queuing).
     #
     def untrack(build, transition)
-      return unless Feature.enabled?(:ci_untrack_shared_runner_builds, build.project, default_enabled: :yaml)
+      return unless maintain_pending_builds_queue?
       return unless build.shared_runner_build?
 
       raise InvalidQueueTransition unless transition.from == 'running'
@@ -100,7 +100,7 @@ module Ci
 
     def tick_for(build, runners)
       runners = runners.with_recent_runner_queue
-      runners = runners.with_tags if Feature.enabled?(:ci_preload_runner_tags, default_enabled: :yaml)
+      runners = runners.with_tags
 
       metrics.observe_active_runners(-> { runners.to_a.size })
 
@@ -111,8 +111,8 @@ module Ci
       end
     end
 
-    def maintain_pending_builds_queue?(build)
-      Feature.enabled?(:ci_pending_builds_queue_maintain, build.project, default_enabled: :yaml)
+    def maintain_pending_builds_queue?
+      ::Ci::PendingBuild.maintain_denormalized_data?
     end
   end
 end

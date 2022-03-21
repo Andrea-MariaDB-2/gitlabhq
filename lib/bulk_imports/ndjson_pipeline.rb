@@ -10,11 +10,16 @@ module BulkImports
       ndjson_pipeline!
 
       def transform(context, data)
+        return unless data
+
         relation_hash, relation_index = data
+
+        return unless relation_hash
+
         relation_definition = import_export_config.top_relation_tree(relation)
 
-        deep_transform_relation!(relation_hash, relation, relation_definition) do |key, hash|
-          Gitlab::ImportExport::Group::RelationFactory.create(
+        relation_object = deep_transform_relation!(relation_hash, relation, relation_definition) do |key, hash|
+          relation_factory.create(
             relation_index: relation_index,
             relation_sym: key.to_sym,
             relation_hash: hash,
@@ -25,12 +30,13 @@ module BulkImports
             excluded_keys: import_export_config.relation_excluded_keys(key)
           )
         end
+
+        relation_object.assign_attributes(portable_class_sym => portable)
+        relation_object
       end
 
       def load(_, object)
-        return unless object
-
-        object.save! unless object.persisted?
+        object&.save!
       end
 
       def deep_transform_relation!(relation_hash, relation_key, relation_definition, &block)
@@ -62,7 +68,7 @@ module BulkImports
       end
 
       def after_run(_)
-        extractor.remove_tmp_dir if extractor.respond_to?(:remove_tmp_dir)
+        extractor.remove_tmpdir if extractor.respond_to?(:remove_tmpdir)
       end
 
       def relation_class(relation_key)
@@ -83,12 +89,20 @@ module BulkImports
         "Gitlab::ImportExport::#{portable.class}::ObjectBuilder".constantize
       end
 
+      def relation_factory
+        "Gitlab::ImportExport::#{portable.class}::RelationFactory".constantize
+      end
+
       def relation
         self.class.relation
       end
 
       def members_mapper
         @members_mapper ||= BulkImports::UsersMapper.new(context: context)
+      end
+
+      def portable_class_sym
+        portable.class.to_s.downcase.to_sym
       end
     end
   end

@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-class GroupPolicy < BasePolicy
+class GroupPolicy < Namespaces::GroupProjectNamespaceSharedPolicy
   include FindGroupProjects
 
   desc "Group is public"
@@ -22,6 +22,9 @@ class GroupPolicy < BasePolicy
   condition(:share_with_group_locked, scope: :subject) { @subject.share_with_group_lock? }
   condition(:parent_share_with_group_locked, scope: :subject) { @subject.parent&.share_with_group_lock? }
   condition(:can_change_parent_share_with_group_lock) { can?(:change_share_with_group_lock, @subject.parent) }
+
+  desc "User is a project bot"
+  condition(:project_bot) { user.project_bot? && access_level >= GroupMember::GUEST }
 
   condition(:has_projects) do
     group_projects_for(user: @user, group: @subject).any?
@@ -75,6 +78,12 @@ class GroupPolicy < BasePolicy
   with_scope :subject
   condition(:has_project_with_service_desk_enabled) { @subject.has_project_with_service_desk_enabled? }
 
+  condition(:crm_enabled, score: 0, scope: :subject) { Feature.enabled?(:customer_relations, @subject) && @subject.crm_enabled? }
+
+  condition(:group_runner_registration_allowed) do
+    Feature.disabled?(:runner_registration_control, default_enabled: :yaml) || Gitlab::CurrentSettings.valid_runner_registrars.include?('group')
+  end
+
   rule { can?(:read_group) & design_management_enabled }.policy do
     enable :read_design_activity
   end
@@ -89,6 +98,8 @@ class GroupPolicy < BasePolicy
   rule { guest }.policy do
     enable :read_group
     enable :upload_file
+    enable :guest_access
+    enable :read_release
   end
 
   rule { admin }.policy do
@@ -130,6 +141,10 @@ class GroupPolicy < BasePolicy
     enable :create_custom_emoji
     enable :create_package
     enable :create_package_settings
+    enable :developer_access
+    enable :admin_crm_organization
+    enable :admin_crm_contact
+    enable :read_cluster
   end
 
   rule { reporter }.policy do
@@ -143,6 +158,8 @@ class GroupPolicy < BasePolicy
     enable :read_prometheus
     enable :read_package
     enable :read_package_settings
+    enable :read_crm_organization
+    enable :read_crm_contact
   end
 
   rule { maintainer }.policy do
@@ -150,14 +167,13 @@ class GroupPolicy < BasePolicy
     enable :create_projects
     enable :admin_pipeline
     enable :admin_build
-    enable :read_cluster
     enable :add_cluster
     enable :create_cluster
     enable :update_cluster
     enable :admin_cluster
     enable :read_deploy_token
     enable :create_jira_connect_subscription
-    enable :update_runners_registration_token
+    enable :maintainer_access
   end
 
   rule { owner }.policy do
@@ -166,6 +182,10 @@ class GroupPolicy < BasePolicy
     enable :admin_group_member
     enable :change_visibility_level
 
+    enable :read_group_runners
+    enable :admin_group_runners
+    enable :register_group_runners
+
     enable :set_note_created_at
     enable :set_emails_disabled
     enable :change_prevent_sharing_groups_outside_hierarchy
@@ -173,6 +193,8 @@ class GroupPolicy < BasePolicy
     enable :update_default_branch_protection
     enable :create_deploy_token
     enable :destroy_deploy_token
+    enable :update_runners_registration_token
+    enable :owner_access
   end
 
   rule { can?(:read_nested_project_resources) }.policy do
@@ -226,8 +248,11 @@ class GroupPolicy < BasePolicy
   rule { dependency_proxy_access_allowed & dependency_proxy_available }
     .enable :read_dependency_proxy
 
-  rule { developer & dependency_proxy_available }
-    .enable :admin_dependency_proxy
+  rule { developer & dependency_proxy_available }.policy do
+    enable :admin_dependency_proxy
+  end
+
+  rule { project_bot }.enable :project_bot_access
 
   rule { can?(:admin_group) & resource_access_token_feature_available }.policy do
     enable :read_resource_access_tokens
@@ -239,8 +264,23 @@ class GroupPolicy < BasePolicy
     enable :create_resource_access_tokens
   end
 
+  rule { can?(:project_bot_access) }.policy do
+    prevent :create_resource_access_tokens
+  end
+
   rule { support_bot & has_project_with_service_desk_enabled }.policy do
     enable :read_label
+  end
+
+  rule { ~crm_enabled }.policy do
+    prevent :read_crm_contact
+    prevent :read_crm_organization
+    prevent :admin_crm_contact
+    prevent :admin_crm_organization
+  end
+
+  rule { ~admin & ~group_runner_registration_allowed }.policy do
+    prevent :register_group_runners
   end
 
   def access_level(for_any_session: false)

@@ -41,6 +41,11 @@ export default {
       type: Object,
       required: true,
     },
+    hideLineNumbers: {
+      type: Boolean,
+      required: false,
+      default: false,
+    },
   },
   computed: {
     viewer() {
@@ -60,7 +65,7 @@ export default {
 };
 </script>
 <template>
-  <div class="blob-viewer" :data-type="activeViewer.type">
+  <div class="blob-viewer" :data-type="activeViewer.type" :data-loaded="!loading">
     <gl-loading-icon v-if="loading" size="md" color="dark" class="my-4 mx-auto" />
 
     <template v-else>
@@ -80,7 +85,8 @@ export default {
         :is-raw-content="isRawContent"
         :file-name="blob.name"
         :type="activeViewer.fileType"
-        data-qa-selector="file_content"
+        :hide-line-numbers="hideLineNumbers"
+        data-qa-selector="blob_viewer_file_content"
       />
     </template>
   </div>

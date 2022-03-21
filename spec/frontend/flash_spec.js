@@ -1,37 +1,17 @@
+import * as Sentry from '@sentry/browser';
+import { setHTMLFixture } from 'helpers/fixtures';
 import createFlash, {
-  createFlashEl,
-  createAction,
   hideFlash,
-  removeFlashClickListener,
+  addDismissFlashClickListener,
+  FLASH_TYPES,
+  FLASH_CLOSED_EVENT,
+  createAlert,
+  VARIANT_WARNING,
 } from '~/flash';
 
+jest.mock('@sentry/browser');
+
 describe('Flash', () => {
-  describe('createFlashEl', () => {
-    let el;
-
-    beforeEach(() => {
-      el = document.createElement('div');
-    });
-
-    afterEach(() => {
-      el.innerHTML = '';
-    });
-
-    it('creates flash element with type', () => {
-      el.innerHTML = createFlashEl('testing', 'alert');
-
-      expect(el.querySelector('.flash-alert')).not.toBeNull();
-    });
-
-    it('escapes text', () => {
-      el.innerHTML = createFlashEl('<script>alert("a");</script>', 'alert');
-
-      expect(el.querySelector('.flash-text').textContent.trim()).toBe(
-        '<script>alert("a");</script>',
-      );
-    });
-  });
-
   describe('hideFlash', () => {
     let el;
 
@@ -79,61 +59,254 @@ describe('Flash', () => {
 
       expect(el.remove.mock.calls.length).toBe(1);
     });
+
+    it(`dispatches ${FLASH_CLOSED_EVENT} event after transitionend event`, () => {
+      jest.spyOn(el, 'dispatchEvent');
+
+      hideFlash(el);
+
+      el.dispatchEvent(new Event('transitionend'));
+
+      expect(el.dispatchEvent).toHaveBeenCalledWith(new Event(FLASH_CLOSED_EVENT));
+    });
   });
 
-  describe('createAction', () => {
-    let el;
+  describe('createAlert', () => {
+    const mockMessage = 'a message';
+    let alert;
 
-    beforeEach(() => {
-      el = document.createElement('div');
+    describe('no flash-container', () => {
+      it('does not add to the DOM', () => {
+        alert = createAlert({ message: mockMessage });
+
+        expect(alert).toBeNull();
+        expect(document.querySelector('.gl-alert')).toBeNull();
+      });
     });
 
-    it('creates link with href', () => {
-      el.innerHTML = createAction({
-        href: 'testing',
-        title: 'test',
+    describe('with flash-container', () => {
+      beforeEach(() => {
+        setHTMLFixture('<div class="flash-container"></div>');
       });
 
-      expect(el.querySelector('.flash-action').href).toContain('testing');
-    });
-
-    it('uses hash as href when no href is present', () => {
-      el.innerHTML = createAction({
-        title: 'test',
+      afterEach(() => {
+        if (alert) {
+          alert.$destroy();
+        }
+        document.querySelector('.flash-container')?.remove();
       });
 
-      expect(el.querySelector('.flash-action').href).toContain('#');
-    });
+      it('adds alert element into the document by default', () => {
+        alert = createAlert({ message: mockMessage });
 
-    it('adds role when no href is present', () => {
-      el.innerHTML = createAction({
-        title: 'test',
+        expect(document.querySelector('.flash-container').textContent.trim()).toBe(mockMessage);
+        expect(document.querySelector('.flash-container .gl-alert')).not.toBeNull();
       });
 
-      expect(el.querySelector('.flash-action').getAttribute('role')).toBe('button');
-    });
+      it('adds flash of a warning type', () => {
+        alert = createAlert({ message: mockMessage, variant: VARIANT_WARNING });
 
-    it('escapes the title text', () => {
-      el.innerHTML = createAction({
-        title: '<script>alert("a")</script>',
+        expect(
+          document.querySelector('.flash-container .gl-alert.gl-alert-warning'),
+        ).not.toBeNull();
       });
 
-      expect(el.querySelector('.flash-action').textContent.trim()).toBe(
-        '<script>alert("a")</script>',
-      );
+      it('escapes text', () => {
+        alert = createAlert({ message: '<script>alert("a");</script>' });
+
+        const html = document.querySelector('.flash-container').innerHTML;
+
+        expect(html).toContain('&lt;script&gt;alert("a");&lt;/script&gt;');
+        expect(html).not.toContain('<script>alert("a");</script>');
+      });
+
+      it('adds alert into specified container', () => {
+        setHTMLFixture(`
+            <div class="my-alert-container"></div>
+            <div class="my-other-container"></div>
+        `);
+
+        alert = createAlert({ message: mockMessage, containerSelector: '.my-alert-container' });
+
+        expect(document.querySelector('.my-alert-container .gl-alert')).not.toBeNull();
+        expect(document.querySelector('.my-alert-container').innerText.trim()).toBe(mockMessage);
+
+        expect(document.querySelector('.my-other-container .gl-alert')).toBeNull();
+        expect(document.querySelector('.my-other-container').innerText.trim()).toBe('');
+      });
+
+      it('adds alert into specified parent', () => {
+        setHTMLFixture(`
+            <div id="my-parent">
+              <div class="flash-container"></div>
+            </div>
+            <div id="my-other-parent">
+              <div class="flash-container"></div>
+            </div>
+        `);
+
+        alert = createAlert({ message: mockMessage, parent: document.getElementById('my-parent') });
+
+        expect(document.querySelector('#my-parent .flash-container .gl-alert')).not.toBeNull();
+        expect(document.querySelector('#my-parent .flash-container').innerText.trim()).toBe(
+          mockMessage,
+        );
+
+        expect(document.querySelector('#my-other-parent .flash-container .gl-alert')).toBeNull();
+        expect(document.querySelector('#my-other-parent .flash-container').innerText.trim()).toBe(
+          '',
+        );
+      });
+
+      it('removes element after clicking', () => {
+        alert = createAlert({ message: mockMessage });
+
+        expect(document.querySelector('.flash-container .gl-alert')).not.toBeNull();
+
+        document.querySelector('.gl-dismiss-btn').click();
+
+        expect(document.querySelector('.flash-container .gl-alert')).toBeNull();
+      });
+
+      it('does not capture error using Sentry', () => {
+        alert = createAlert({
+          message: mockMessage,
+          captureError: false,
+          error: new Error('Error!'),
+        });
+
+        expect(Sentry.captureException).not.toHaveBeenCalled();
+      });
+
+      it('captures error using Sentry', () => {
+        alert = createAlert({
+          message: mockMessage,
+          captureError: true,
+          error: new Error('Error!'),
+        });
+
+        expect(Sentry.captureException).toHaveBeenCalledWith(expect.any(Error));
+        expect(Sentry.captureException).toHaveBeenCalledWith(
+          expect.objectContaining({
+            message: 'Error!',
+          }),
+        );
+      });
+
+      describe('with buttons', () => {
+        const findAlertAction = () => document.querySelector('.flash-container .gl-alert-action');
+
+        it('adds primary button', () => {
+          alert = createAlert({
+            message: mockMessage,
+            primaryButton: {
+              text: 'Ok',
+            },
+          });
+
+          expect(findAlertAction().textContent.trim()).toBe('Ok');
+        });
+
+        it('creates link with href', () => {
+          alert = createAlert({
+            message: mockMessage,
+            primaryButton: {
+              link: '/url',
+              text: 'Ok',
+            },
+          });
+
+          const action = findAlertAction();
+
+          expect(action.textContent.trim()).toBe('Ok');
+          expect(action.nodeName).toBe('A');
+          expect(action.getAttribute('href')).toBe('/url');
+        });
+
+        it('create button as href when no href is present', () => {
+          alert = createAlert({
+            message: mockMessage,
+            primaryButton: {
+              text: 'Ok',
+            },
+          });
+
+          const action = findAlertAction();
+
+          expect(action.nodeName).toBe('BUTTON');
+          expect(action.getAttribute('href')).toBe(null);
+        });
+
+        it('escapes the title text', () => {
+          alert = createAlert({
+            message: mockMessage,
+            primaryButton: {
+              text: '<script>alert("a")</script>',
+            },
+          });
+
+          const html = findAlertAction().innerHTML;
+
+          expect(html).toContain('&lt;script&gt;alert("a")&lt;/script&gt;');
+          expect(html).not.toContain('<script>alert("a")</script>');
+        });
+
+        it('calls actionConfig clickHandler on click', () => {
+          const clickHandler = jest.fn();
+
+          alert = createAlert({
+            message: mockMessage,
+            primaryButton: {
+              text: 'Ok',
+              clickHandler,
+            },
+          });
+
+          expect(clickHandler).toHaveBeenCalledTimes(0);
+
+          findAlertAction().click();
+
+          expect(clickHandler).toHaveBeenCalledTimes(1);
+          expect(clickHandler).toHaveBeenCalledWith(expect.any(MouseEvent));
+        });
+      });
+
+      describe('Alert API', () => {
+        describe('dismiss', () => {
+          it('dismiss programmatically with .dismiss()', () => {
+            expect(document.querySelector('.gl-alert')).toBeNull();
+
+            alert = createAlert({ message: mockMessage });
+
+            expect(document.querySelector('.gl-alert')).not.toBeNull();
+
+            alert.dismiss();
+
+            expect(document.querySelector('.gl-alert')).toBeNull();
+          });
+
+          it('calls onDismiss when dismissed', () => {
+            const dismissHandler = jest.fn();
+
+            alert = createAlert({ message: mockMessage, onDismiss: dismissHandler });
+
+            expect(dismissHandler).toHaveBeenCalledTimes(0);
+
+            alert.dismiss();
+
+            expect(dismissHandler).toHaveBeenCalledTimes(1);
+          });
+        });
+      });
     });
   });
 
   describe('createFlash', () => {
     const message = 'test';
-    const type = 'alert';
-    const parent = document;
     const fadeTransition = false;
     const addBodyClass = true;
     const defaultParams = {
       message,
-      type,
-      parent,
       actionConfig: null,
       fadeTransition,
       addBodyClass,
@@ -151,7 +324,7 @@ describe('Flash', () => {
 
     describe('with flash-container', () => {
       beforeEach(() => {
-        setFixtures(
+        setHTMLFixture(
           '<div class="content-wrapper js-content-wrapper"><div class="flash-container"></div></div>',
         );
       });
@@ -160,12 +333,27 @@ describe('Flash', () => {
         document.querySelector('.js-content-wrapper').remove();
       });
 
-      it('adds flash element into container', () => {
+      it('adds flash alert element into the document by default', () => {
         createFlash({ ...defaultParams });
 
-        expect(document.querySelector('.flash-alert')).not.toBeNull();
-
+        expect(document.querySelector('.flash-container .flash-alert')).not.toBeNull();
         expect(document.body.className).toContain('flash-shown');
+      });
+
+      it('adds flash of a warning type', () => {
+        createFlash({ ...defaultParams, type: FLASH_TYPES.WARNING });
+
+        expect(document.querySelector('.flash-container .flash-warning')).not.toBeNull();
+        expect(document.body.className).toContain('flash-shown');
+      });
+
+      it('escapes text', () => {
+        createFlash({ ...defaultParams, message: '<script>alert("a")</script>' });
+
+        const html = document.querySelector('.flash-text').innerHTML;
+
+        expect(html).toContain('&lt;script&gt;alert("a")&lt;/script&gt;');
+        expect(html).not.toContain('<script>alert("a")</script>');
       });
 
       it('adds flash into specified parent', () => {
@@ -199,7 +387,26 @@ describe('Flash', () => {
         expect(document.body.className).not.toContain('flash-shown');
       });
 
+      it('does not capture error using Sentry', () => {
+        createFlash({ ...defaultParams, captureError: false, error: new Error('Error!') });
+
+        expect(Sentry.captureException).not.toHaveBeenCalled();
+      });
+
+      it('captures error using Sentry', () => {
+        createFlash({ ...defaultParams, captureError: true, error: new Error('Error!') });
+
+        expect(Sentry.captureException).toHaveBeenCalledWith(expect.any(Error));
+        expect(Sentry.captureException).toHaveBeenCalledWith(
+          expect.objectContaining({
+            message: 'Error!',
+          }),
+        );
+      });
+
       describe('with actionConfig', () => {
+        const findFlashAction = () => document.querySelector('.flash-container .flash-action');
+
         it('adds action link', () => {
           createFlash({
             ...defaultParams,
@@ -208,20 +415,74 @@ describe('Flash', () => {
             },
           });
 
-          expect(document.querySelector('.flash-action')).not.toBeNull();
+          expect(findFlashAction()).not.toBeNull();
+        });
+
+        it('creates link with href', () => {
+          createFlash({
+            ...defaultParams,
+            actionConfig: {
+              href: 'testing',
+              title: 'test',
+            },
+          });
+
+          const action = findFlashAction();
+
+          expect(action.href).toBe(`${window.location}testing`);
+          expect(action.textContent.trim()).toBe('test');
+        });
+
+        it('uses hash as href when no href is present', () => {
+          createFlash({
+            ...defaultParams,
+            actionConfig: {
+              title: 'test',
+            },
+          });
+
+          expect(findFlashAction().href).toBe(`${window.location}#`);
+        });
+
+        it('adds role when no href is present', () => {
+          createFlash({
+            ...defaultParams,
+            actionConfig: {
+              title: 'test',
+            },
+          });
+
+          expect(findFlashAction().getAttribute('role')).toBe('button');
+        });
+
+        it('escapes the title text', () => {
+          createFlash({
+            ...defaultParams,
+            actionConfig: {
+              title: '<script>alert("a")</script>',
+            },
+          });
+
+          const html = findFlashAction().innerHTML;
+
+          expect(html).toContain('&lt;script&gt;alert("a")&lt;/script&gt;');
+          expect(html).not.toContain('<script>alert("a")</script>');
         });
 
         it('calls actionConfig clickHandler on click', () => {
-          const actionConfig = {
-            title: 'test',
-            clickHandler: jest.fn(),
-          };
+          const clickHandler = jest.fn();
 
-          createFlash({ ...defaultParams, actionConfig });
+          createFlash({
+            ...defaultParams,
+            actionConfig: {
+              title: 'test',
+              clickHandler,
+            },
+          });
 
-          document.querySelector('.flash-action').click();
+          findFlashAction().click();
 
-          expect(actionConfig.clickHandler).toHaveBeenCalled();
+          expect(clickHandler).toHaveBeenCalled();
         });
       });
 
@@ -241,7 +502,7 @@ describe('Flash', () => {
     });
   });
 
-  describe('removeFlashClickListener', () => {
+  describe('addDismissFlashClickListener', () => {
     let el;
 
     describe('with close icon', () => {
@@ -256,16 +517,12 @@ describe('Flash', () => {
         `;
       });
 
-      it('removes global flash on click', (done) => {
-        removeFlashClickListener(el, false);
+      it('removes global flash on click', () => {
+        addDismissFlashClickListener(el, false);
 
         el.querySelector('.js-close-icon').click();
 
-        setImmediate(() => {
-          expect(document.querySelector('.flash')).toBeNull();
-
-          done();
-        });
+        expect(document.querySelector('.flash')).toBeNull();
       });
     });
 
@@ -281,7 +538,7 @@ describe('Flash', () => {
       });
 
       it('does not throw', () => {
-        expect(() => removeFlashClickListener(el, false)).not.toThrow();
+        expect(() => addDismissFlashClickListener(el, false)).not.toThrow();
       });
     });
   });

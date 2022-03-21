@@ -13,7 +13,7 @@ RSpec.describe Gitlab::Diff::File do
   def create_file(file_name, content)
     Files::CreateService.new(
       project,
-      project.owner,
+      project.first_owner,
       commit_message: 'Update',
       start_branch: branch_name,
       branch_name: branch_name,
@@ -27,7 +27,7 @@ RSpec.describe Gitlab::Diff::File do
   def update_file(file_name, content)
     Files::UpdateService.new(
       project,
-      project.owner,
+      project.first_owner,
       commit_message: 'Update',
       start_branch: branch_name,
       branch_name: branch_name,
@@ -41,7 +41,7 @@ RSpec.describe Gitlab::Diff::File do
   def delete_file(file_name)
     Files::DeleteService.new(
       project,
-      project.owner,
+      project.first_owner,
       commit_message: 'Update',
       start_branch: branch_name,
       branch_name: branch_name,
@@ -49,6 +49,32 @@ RSpec.describe Gitlab::Diff::File do
     ).execute
 
     project.commit(branch_name).diffs.diff_files.first
+  end
+
+  describe '#has_renderable?' do
+    context 'file is ipynb' do
+      let(:commit) { project.commit("532c837") }
+
+      it 'has renderable viewer' do
+        expect(diff_file.has_renderable?).to be_truthy
+      end
+    end
+
+    context 'file is not ipynb' do
+      let(:commit) { project.commit("d59c60028b053793cecfb4022de34602e1a9218e") }
+
+      it 'does not have renderable viewer' do
+        expect(diff_file.has_renderable?).to be_falsey
+      end
+    end
+  end
+
+  describe '#rendered' do
+    let(:commit) { project.commit("532c837") }
+
+    it 'creates a NotebookDiffFile for rendering' do
+      expect(diff_file.rendered).to be_kind_of(Gitlab::Diff::Rendered::Notebook::DiffFile)
+    end
   end
 
   describe '#diff_lines' do

@@ -39,8 +39,23 @@ RSpec.describe Projects::Serverless::FunctionsController do
                        project_id: project.to_param)
   end
 
+  shared_examples_for 'behind :deprecated_serverless feature flag' do
+    before do
+      stub_feature_flags(deprecated_serverless: false)
+    end
+
+    it 'returns 404' do
+      action
+      expect(response).to have_gitlab_http_status(:not_found)
+    end
+  end
+
   describe 'GET #index' do
     let(:expected_json) { { 'knative_installed' => knative_state, 'functions' => functions } }
+
+    it_behaves_like 'behind :deprecated_serverless feature flag' do
+      let(:action) { get :index, params: params({ format: :json }) }
+    end
 
     context 'when cache is being read' do
       let(:knative_state) { 'checking' }
@@ -128,7 +143,7 @@ RSpec.describe Projects::Serverless::FunctionsController do
 
             expect(json_response["functions"]).to all(
               include(
-                'url' => "https://#{function_name}-#{serverless_domain_cluster.uuid[0..1]}a1#{serverless_domain_cluster.uuid[2..-3]}f2#{serverless_domain_cluster.uuid[-2..-1]}#{"%x" % environment.id}-#{environment.slug}.#{serverless_domain_cluster.domain}"
+                'url' => "https://#{function_name}-#{serverless_domain_cluster.uuid[0..1]}a1#{serverless_domain_cluster.uuid[2..-3]}f2#{serverless_domain_cluster.uuid[-2..]}#{"%x" % environment.id}-#{environment.slug}.#{serverless_domain_cluster.domain}"
               )
             )
           end
@@ -147,6 +162,10 @@ RSpec.describe Projects::Serverless::FunctionsController do
   end
 
   describe 'GET #show' do
+    it_behaves_like 'behind :deprecated_serverless feature flag' do
+      let(:action) { get :show, params: params({ format: :json, environment_id: "*", id: "foo" }) }
+    end
+
     context 'with function that does not exist' do
       it 'returns 404' do
         get :show, params: params({ format: :json, environment_id: "*", id: "foo" })
@@ -166,7 +185,7 @@ RSpec.describe Projects::Serverless::FunctionsController do
             expect(response).to have_gitlab_http_status(:ok)
 
             expect(json_response).to include(
-              'url' => "https://#{function_name}-#{serverless_domain_cluster.uuid[0..1]}a1#{serverless_domain_cluster.uuid[2..-3]}f2#{serverless_domain_cluster.uuid[-2..-1]}#{"%x" % environment.id}-#{environment.slug}.#{serverless_domain_cluster.domain}"
+              'url' => "https://#{function_name}-#{serverless_domain_cluster.uuid[0..1]}a1#{serverless_domain_cluster.uuid[2..-3]}f2#{serverless_domain_cluster.uuid[-2..]}#{"%x" % environment.id}-#{environment.slug}.#{serverless_domain_cluster.domain}"
             )
           end
 
@@ -239,6 +258,10 @@ RSpec.describe Projects::Serverless::FunctionsController do
   end
 
   describe 'GET #metrics' do
+    it_behaves_like 'behind :deprecated_serverless feature flag' do
+      let(:action) { get :metrics, params: params({ format: :json, environment_id: "*", id: "foo" }) }
+    end
+
     context 'invalid data' do
       it 'has a bad function name' do
         get :metrics, params: params({ format: :json, environment_id: "*", id: "foo" })

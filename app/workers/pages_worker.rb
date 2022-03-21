@@ -14,18 +14,9 @@ class PagesWorker # rubocop:disable Scalability/IdempotentWorker
     send(action, *arg) # rubocop:disable GitlabSecurity/PublicSend
   end
 
-  # rubocop: disable CodeReuse/ActiveRecord
   def deploy(build_id)
-    build = Ci::Build.find_by(id: build_id)
-    update_contents = Projects::UpdatePagesService.new(build.project, build).execute
-    if update_contents[:status] == :success
-      Projects::UpdatePagesConfigurationService.new(build.project).execute
-    end
-  end
-  # rubocop: enable CodeReuse/ActiveRecord
+    build = Ci::Build.find_by_id(build_id)
 
-  def remove(namespace_path, project_path)
-    full_path = File.join(Settings.pages.path, namespace_path, project_path)
-    FileUtils.rm_r(full_path, force: true)
+    Projects::UpdatePagesService.new(build.project, build).execute
   end
 end

@@ -178,6 +178,73 @@ RSpec.shared_examples 'rejects invalid recipe' do
   end
 end
 
+RSpec.shared_examples 'handling validation error for package' do
+  context 'with validation error' do
+    before do
+      allow_next_instance_of(Packages::Package) do |instance|
+        instance.errors.add(:base, 'validation error')
+
+        allow(instance).to receive(:valid?).and_return(false)
+      end
+    end
+
+    it 'returns 400' do
+      subject
+
+      expect(response).to have_gitlab_http_status(:bad_request)
+      expect(json_response['message']).to include('Validation failed')
+    end
+  end
+end
+
+RSpec.shared_examples 'handling empty values for username and channel' do
+  using RSpec::Parameterized::TableSyntax
+
+  let(:recipe_path) { "#{package.name}/#{package.version}/#{package_username}/#{channel}" }
+
+  where(:username, :channel, :status) do
+    'username' | 'channel' | :ok
+    'username' | '_'       | :bad_request
+    '_'        | 'channel' | :bad_request_or_not_found
+    '_'        | '_'       | :ok_or_not_found
+  end
+
+  with_them do
+    let(:package_username) do
+      if username == 'username'
+        package.conan_metadatum.package_username
+      else
+        username
+      end
+    end
+
+    before do
+      project.add_maintainer(user) # avoid any permission issue
+    end
+
+    it 'returns the correct status code' do |example|
+      project_level = example.full_description.include?('api/v4/projects')
+
+      expected_status = case status
+                        when :ok_or_not_found
+                          project_level ? :ok : :not_found
+                        when :bad_request_or_not_found
+                          project_level ? :bad_request : :not_found
+                        else
+                          status
+                        end
+
+      if expected_status == :ok
+        package.conan_metadatum.update!(package_username: package_username, package_channel: channel)
+      end
+
+      subject
+
+      expect(response).to have_gitlab_http_status(expected_status)
+    end
+  end
+end
+
 RSpec.shared_examples 'rejects invalid file_name' do |invalid_file_name|
   let(:file_name) { invalid_file_name }
 
@@ -300,6 +367,7 @@ RSpec.shared_examples 'recipe snapshot endpoint' do
   it_behaves_like 'rejects invalid recipe'
   it_behaves_like 'rejects recipe for invalid project'
   it_behaves_like 'empty recipe for not found package'
+  it_behaves_like 'handling empty values for username and channel'
 
   context 'with existing package' do
     it 'returns a hash of files with their md5 hashes' do
@@ -324,6 +392,7 @@ RSpec.shared_examples 'package snapshot endpoint' do
   it_behaves_like 'rejects invalid recipe'
   it_behaves_like 'rejects recipe for invalid project'
   it_behaves_like 'empty recipe for not found package'
+  it_behaves_like 'handling empty values for username and channel'
 
   context 'with existing package' do
     it 'returns a hash of md5 values for the files' do
@@ -344,12 +413,14 @@ RSpec.shared_examples 'recipe download_urls endpoint' do
   it_behaves_like 'rejects invalid recipe'
   it_behaves_like 'rejects recipe for invalid project'
   it_behaves_like 'recipe download_urls'
+  it_behaves_like 'handling empty values for username and channel'
 end
 
 RSpec.shared_examples 'package download_urls endpoint' do
   it_behaves_like 'rejects invalid recipe'
   it_behaves_like 'rejects recipe for invalid project'
   it_behaves_like 'package download_urls'
+  it_behaves_like 'handling empty values for username and channel'
 end
 
 RSpec.shared_examples 'recipe upload_urls endpoint' do
@@ -362,6 +433,7 @@ RSpec.shared_examples 'recipe upload_urls endpoint' do
 
   it_behaves_like 'rejects invalid recipe'
   it_behaves_like 'rejects invalid upload_url params'
+  it_behaves_like 'handling empty values for username and channel'
 
   it 'returns a set of upload urls for the files requested' do
     subject
@@ -423,6 +495,7 @@ RSpec.shared_examples 'package upload_urls endpoint' do
 
   it_behaves_like 'rejects invalid recipe'
   it_behaves_like 'rejects invalid upload_url params'
+  it_behaves_like 'handling empty values for username and channel'
 
   it 'returns a set of upload urls for the files requested' do
     expected_response = {
@@ -458,6 +531,7 @@ RSpec.shared_examples 'delete package endpoint' do
   let(:recipe_path) { package.conan_recipe_path }
 
   it_behaves_like 'rejects invalid recipe'
+  it_behaves_like 'handling empty values for username and channel'
 
   it 'returns unauthorized for users without valid permission' do
     subject
@@ -568,12 +642,14 @@ RSpec.shared_examples 'recipe file download endpoint' do
   it_behaves_like 'a public project with packages'
   it_behaves_like 'an internal project with packages'
   it_behaves_like 'a private project with packages'
+  it_behaves_like 'handling empty values for username and channel'
 end
 
 RSpec.shared_examples 'package file download endpoint' do
   it_behaves_like 'a public project with packages'
   it_behaves_like 'an internal project with packages'
   it_behaves_like 'a private project with packages'
+  it_behaves_like 'handling empty values for username and channel'
 
   context 'tracking the conan_package.tgz download' do
     let(:package_file) { package.package_files.find_by(file_name: ::Packages::Conan::FileMetadatum::PACKAGE_BINARY) }
@@ -598,6 +674,7 @@ RSpec.shared_examples 'workhorse authorize endpoint' do
   it_behaves_like 'rejects invalid recipe'
   it_behaves_like 'rejects invalid file_name', 'conanfile.py.git%2fgit-upload-pack'
   it_behaves_like 'workhorse authorization'
+  it_behaves_like 'handling empty values for username and channel'
 end
 
 RSpec.shared_examples 'workhorse recipe file upload endpoint' do
@@ -619,6 +696,8 @@ RSpec.shared_examples 'workhorse recipe file upload endpoint' do
   it_behaves_like 'rejects invalid file_name', 'conanfile.py.git%2fgit-upload-pack'
   it_behaves_like 'uploads a package file'
   it_behaves_like 'creates build_info when there is a job'
+  it_behaves_like 'handling empty values for username and channel'
+  it_behaves_like 'handling validation error for package'
 end
 
 RSpec.shared_examples 'workhorse package file upload endpoint' do
@@ -640,6 +719,8 @@ RSpec.shared_examples 'workhorse package file upload endpoint' do
   it_behaves_like 'rejects invalid file_name', 'conaninfo.txttest'
   it_behaves_like 'uploads a package file'
   it_behaves_like 'creates build_info when there is a job'
+  it_behaves_like 'handling empty values for username and channel'
+  it_behaves_like 'handling validation error for package'
 
   context 'tracking the conan_package.tgz upload' do
     let(:file_name) { ::Packages::Conan::FileMetadatum::PACKAGE_BINARY }
@@ -716,6 +797,32 @@ RSpec.shared_examples 'uploads a package file' do
         expect(ObjectStorage::BackgroundMoveWorker).not_to receive(:perform_async)
 
         subject
+      end
+
+      context 'with existing package' do
+        let!(:existing_package) { create(:conan_package, name: 'foo', version: 'bar', project: project) }
+
+        before do
+          existing_package.conan_metadatum.update!(package_username: project.full_path.tr('/', '+'), package_channel: 'baz')
+        end
+
+        it 'does not create a new package' do
+          expect { subject }
+            .to not_change { project.packages.count }
+            .and not_change { Packages::Conan::Metadatum.count }
+            .and change { Packages::PackageFile.count }.by(1)
+        end
+
+        context 'marked as pending_destruction' do
+          it 'does not create a new package' do
+            existing_package.pending_destruction!
+
+            expect { subject }
+              .to change { project.packages.count }.by(1)
+              .and change { Packages::Conan::Metadatum.count }.by(1)
+              .and change { Packages::PackageFile.count }.by(1)
+          end
+        end
       end
     end
   end

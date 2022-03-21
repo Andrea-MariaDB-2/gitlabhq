@@ -1,8 +1,9 @@
 import { shallowMount, createLocalVue } from '@vue/test-utils';
 import VueApollo from 'vue-apollo';
+import { nextTick } from 'vue';
 import createMockApollo from 'helpers/mock_apollo_helper';
 import waitForPromises from 'helpers/wait_for_promises';
-import { GlCard, GlLoadingIcon } from 'jest/registry/shared/stubs';
+import { GlCard, GlLoadingIcon } from 'jest/packages_and_registries/shared/stubs';
 import component from '~/packages_and_registries/settings/project/components/settings_form.vue';
 import {
   UPDATE_SETTINGS_ERROR_MESSAGE,
@@ -47,6 +48,11 @@ describe('Settings Form', () => {
   const findKeepRegexInput = () => wrapper.find('[data-testid="keep-regex-input"]');
   const findOlderThanDropdown = () => wrapper.find('[data-testid="older-than-dropdown"]');
   const findRemoveRegexInput = () => wrapper.find('[data-testid="remove-regex-input"]');
+
+  const submitForm = async () => {
+    findForm().trigger('submit');
+    return waitForPromises();
+  };
 
   const mountComponent = ({
     props = defaultProps,
@@ -201,7 +207,7 @@ describe('Settings Form', () => {
         finder().vm.$emit('input', 'foo');
         expect(finder().props('error')).toEqual('bar');
 
-        await wrapper.vm.$nextTick();
+        await nextTick();
 
         expect(finder().props('error')).toEqual('');
       });
@@ -213,7 +219,7 @@ describe('Settings Form', () => {
 
         finder().vm.$emit('validation', false);
 
-        await wrapper.vm.$nextTick();
+        await nextTick();
 
         expect(findSaveButton().props('disabled')).toBe(true);
       });
@@ -252,7 +258,7 @@ describe('Settings Form', () => {
 
         findForm().trigger('reset');
 
-        await wrapper.vm.$nextTick();
+        await nextTick();
 
         expect(findKeepRegexInput().props('error')).toBe('');
         expect(findRemoveRegexInput().props('error')).toBe('');
@@ -317,27 +323,24 @@ describe('Settings Form', () => {
           mutationResolver: jest.fn().mockResolvedValue(expirationPolicyMutationPayload()),
         });
 
-        findForm().trigger('submit');
-        await waitForPromises();
-        await wrapper.vm.$nextTick();
+        await submitForm();
 
         expect(wrapper.vm.$toast.show).toHaveBeenCalledWith(UPDATE_SETTINGS_SUCCESS_MESSAGE);
       });
 
       describe('when submit fails', () => {
         describe('user recoverable errors', () => {
-          it('when there is an error is shown in a toast', async () => {
+          it('when there is an error is shown in the nameRegex field t', async () => {
             mountComponentWithApollo({
               mutationResolver: jest
                 .fn()
                 .mockResolvedValue(expirationPolicyMutationPayload({ errors: ['foo'] })),
             });
 
-            findForm().trigger('submit');
-            await waitForPromises();
-            await wrapper.vm.$nextTick();
+            await submitForm();
 
-            expect(wrapper.vm.$toast.show).toHaveBeenCalledWith('foo');
+            expect(wrapper.vm.$toast.show).toHaveBeenCalledWith(UPDATE_SETTINGS_ERROR_MESSAGE);
+            expect(findRemoveRegexInput().props('error')).toBe('foo');
           });
         });
 
@@ -347,9 +350,7 @@ describe('Settings Form', () => {
               mutationResolver: jest.fn().mockRejectedValue(expirationPolicyMutationPayload()),
             });
 
-            findForm().trigger('submit');
-            await waitForPromises();
-            await wrapper.vm.$nextTick();
+            await submitForm();
 
             expect(wrapper.vm.$toast.show).toHaveBeenCalledWith(UPDATE_SETTINGS_ERROR_MESSAGE);
           });
@@ -366,9 +367,7 @@ describe('Settings Form', () => {
             });
             mountComponent({ mocks: { $apollo: { mutate } } });
 
-            findForm().trigger('submit');
-            await waitForPromises();
-            await wrapper.vm.$nextTick();
+            await submitForm();
 
             expect(findKeepRegexInput().props('error')).toEqual('baz');
           });

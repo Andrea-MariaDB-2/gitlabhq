@@ -62,8 +62,8 @@ The value must be the full URL of the merge request.
 
 ### GitLab Enterprise changes
 
-If a change is for GitLab Enterprise Edition, you must also add the trailer `EE:
-true`:
+If a change is exclusively for GitLab Enterprise Edition, **you must add** the
+trailer `EE: true`:
 
 ```plaintext
 Update git vendor to gitlab
@@ -76,6 +76,8 @@ Changelog: changed
 MR: https://gitlab.com/foo/bar/-/merge_requests/123
 EE: true
 ```
+
+**Do not** add the trailer for changes that apply to both EE and CE.
 
 ## What warrants a changelog entry?
 
@@ -99,7 +101,10 @@ EE: true
 - _Any_ contribution from a community member, no matter how small, **may** have
   a changelog entry regardless of these guidelines if the contributor wants one.
 - Any [GLEX experiment](experiment_guide/gitlab_experiment.md) changes **should not** have a changelog entry.
-- [Removing](feature_flags/#changelog) a feature flag, when the new code is retained.
+- An MR that includes only documentation changes **should not** have a changelog entry.
+
+For more information, see
+[how to handle changelog entries with feature flags](feature_flags/index.md#changelog).
 
 ## Writing good changelog entries
 

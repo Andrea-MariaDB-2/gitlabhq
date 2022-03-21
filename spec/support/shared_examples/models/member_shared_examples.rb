@@ -3,7 +3,7 @@
 RSpec.shared_examples 'inherited access level as a member of entity' do
   let(:parent_entity) { create(:group) }
   let(:user) { create(:user) }
-  let(:member) { entity.is_a?(Group) ? entity.group_member(user) : entity.project_member(user) }
+  let(:member) { entity.member(user) }
 
   context 'with root parent_entity developer member' do
     before do
@@ -49,7 +49,7 @@ RSpec.shared_examples 'inherited access level as a member of entity' do
 
       entity.add_maintainer(non_member_user)
 
-      non_member = entity.is_a?(Group) ? entity.group_member(non_member_user) : entity.project_member(non_member_user)
+      non_member = entity.member(non_member_user)
 
       expect { non_member.update!(access_level: Gitlab::Access::GUEST) }
         .to change { non_member.reload.access_level }
@@ -299,6 +299,56 @@ RSpec.shared_examples_for "member creation" do
         end
       end
     end
+
+    context 'when `tasks_to_be_done` and `tasks_project_id` are passed' do
+      let(:task_project) { source.is_a?(Group) ? create(:project, group: source) : source }
+
+      it 'creates a member_task with the correct attributes', :aggregate_failures do
+        described_class.new(source, user, :developer, tasks_to_be_done: %w(ci code), tasks_project_id: task_project.id).execute
+
+        member = source.members.last
+
+        expect(member.tasks_to_be_done).to match_array([:ci, :code])
+        expect(member.member_task.project).to eq(task_project)
+      end
+
+      context 'with an already existing member' do
+        before do
+          source.add_user(user, :developer)
+        end
+
+        it 'does not update tasks to be done if tasks already exist', :aggregate_failures do
+          member = source.members.find_by(user_id: user.id)
+          create(:member_task, member: member, project: task_project, tasks_to_be_done: %w(code ci))
+
+          expect do
+            described_class.new(source,
+                                user,
+                                :developer,
+                                tasks_to_be_done: %w(issues),
+                                tasks_project_id: task_project.id).execute
+          end.not_to change(MemberTask, :count)
+
+          member.reset
+          expect(member.tasks_to_be_done).to match_array([:code, :ci])
+          expect(member.member_task.project).to eq(task_project)
+        end
+
+        it 'adds tasks to be done if they do not exist', :aggregate_failures do
+          expect do
+            described_class.new(source,
+                                user,
+                                :developer,
+                                tasks_to_be_done: %w(issues),
+                                tasks_project_id: task_project.id).execute
+          end.to change(MemberTask, :count).by(1)
+
+          member = source.members.find_by(user_id: user.id)
+          expect(member.tasks_to_be_done).to match_array([:issues])
+          expect(member.member_task.project).to eq(task_project)
+        end
+      end
+    end
   end
 end
 
@@ -321,8 +371,7 @@ RSpec.shared_examples_for "bulk member creation" do
     it 'returns a Member objects' do
       members = described_class.add_users(source, [user1, user2], :maintainer)
 
-      expect(members).to be_a Array
-      expect(members.size).to eq(2)
+      expect(members.map(&:user)).to contain_exactly(user1, user2)
       expect(members).to all(be_a(member_type))
       expect(members).to all(be_persisted)
     end
@@ -344,23 +393,37 @@ RSpec.shared_examples_for "bulk member creation" do
     end
 
     context 'with de-duplication' do
-      it 'with the same user by id and user' do
+      it 'has the same user by id and user' do
         members = described_class.add_users(source, [user1.id, user1, user1.id, user2, user2.id, user2], :maintainer)
 
-        expect(members).to be_a Array
-        expect(members.size).to eq(2)
+        expect(members.map(&:user)).to contain_exactly(user1, user2)
         expect(members).to all(be_a(member_type))
         expect(members).to all(be_persisted)
       end
 
-      it 'with the same user sent more than once' do
+      it 'has the same user sent more than once' do
         members = described_class.add_users(source, [user1, user1], :maintainer)
 
-        expect(members).to be_a Array
-        expect(members.size).to eq(1)
+        expect(members.map(&:user)).to contain_exactly(user1)
         expect(members).to all(be_a(member_type))
         expect(members).to all(be_persisted)
       end
+    end
+
+    it 'with the same user sent more than once by user and by email' do
+      members = described_class.add_users(source, [user1, user1.email], :maintainer)
+
+      expect(members.map(&:user)).to contain_exactly(user1)
+      expect(members).to all(be_a(member_type))
+      expect(members).to all(be_persisted)
+    end
+
+    it 'with the same user sent more than once by user id and by email' do
+      members = described_class.add_users(source, [user1.id, user1.email], :maintainer)
+
+      expect(members.map(&:user)).to contain_exactly(user1)
+      expect(members).to all(be_a(member_type))
+      expect(members).to all(be_persisted)
     end
 
     context 'when a member already exists' do
@@ -368,15 +431,84 @@ RSpec.shared_examples_for "bulk member creation" do
         source.add_user(user1, :developer)
       end
 
-      it 'supports existing users as expected' do
+      it 'has the same user sent more than once with the member already existing' do
+        expect do
+          members = described_class.add_users(source, [user1, user1, user2], :maintainer)
+          expect(members.map(&:user)).to contain_exactly(user1, user2)
+          expect(members).to all(be_a(member_type))
+          expect(members).to all(be_persisted)
+        end.to change { Member.count }.by(1)
+      end
+
+      it 'supports existing users as expected with user_ids passed' do
         user3 = create(:user)
 
-        members = described_class.add_users(source, [user1.id, user2, user3.id], :maintainer)
+        expect do
+          members = described_class.add_users(source, [user1.id, user2, user3.id], :maintainer)
+          expect(members.map(&:user)).to contain_exactly(user1, user2, user3)
+          expect(members).to all(be_a(member_type))
+          expect(members).to all(be_persisted)
+        end.to change { Member.count }.by(2)
+      end
 
-        expect(members).to be_a Array
-        expect(members.size).to eq(3)
-        expect(members).to all(be_a(member_type))
-        expect(members).to all(be_persisted)
+      it 'supports existing users as expected without user ids passed' do
+        user3 = create(:user)
+
+        expect do
+          members = described_class.add_users(source, [user1, user2, user3], :maintainer)
+          expect(members.map(&:user)).to contain_exactly(user1, user2, user3)
+          expect(members).to all(be_a(member_type))
+          expect(members).to all(be_persisted)
+        end.to change { Member.count }.by(2)
+      end
+    end
+
+    context 'when `tasks_to_be_done` and `tasks_project_id` are passed' do
+      let(:task_project) { source.is_a?(Group) ? create(:project, group: source) : source }
+
+      it 'creates a member_task with the correct attributes', :aggregate_failures do
+        members = described_class.add_users(source, [user1], :developer, tasks_to_be_done: %w(ci code), tasks_project_id: task_project.id)
+        member = members.last
+
+        expect(member.tasks_to_be_done).to match_array([:ci, :code])
+        expect(member.member_task.project).to eq(task_project)
+      end
+
+      context 'with an already existing member' do
+        before do
+          source.add_user(user1, :developer)
+        end
+
+        it 'does not update tasks to be done if tasks already exist', :aggregate_failures do
+          member = source.members.find_by(user_id: user1.id)
+          create(:member_task, member: member, project: task_project, tasks_to_be_done: %w(code ci))
+
+          expect do
+            described_class.add_users(source,
+                                      [user1.id],
+                                      :developer,
+                                      tasks_to_be_done: %w(issues),
+                                      tasks_project_id: task_project.id)
+          end.not_to change(MemberTask, :count)
+
+          member.reset
+          expect(member.tasks_to_be_done).to match_array([:code, :ci])
+          expect(member.member_task.project).to eq(task_project)
+        end
+
+        it 'adds tasks to be done if they do not exist', :aggregate_failures do
+          expect do
+            described_class.add_users(source,
+                                      [user1.id],
+                                      :developer,
+                                      tasks_to_be_done: %w(issues),
+                                      tasks_project_id: task_project.id)
+          end.to change(MemberTask, :count).by(1)
+
+          member = source.members.find_by(user_id: user1.id)
+          expect(member.tasks_to_be_done).to match_array([:issues])
+          expect(member.member_task.project).to eq(task_project)
+        end
       end
     end
   end

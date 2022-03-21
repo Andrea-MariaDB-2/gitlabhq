@@ -20,7 +20,7 @@ To disable Geo, follow these steps:
 1. [Remove the primary site from the UI](#remove-the-primary-site-from-the-ui).
 1. [Remove secondary replication slots](#remove-secondary-replication-slots).
 1. [Remove Geo-related configuration](#remove-geo-related-configuration).
-1. [(Optional) Revert PostgreSQL settings to use a password and listen on an IP](#optional-revert-postgresql-settings-to-use-a-password-and-listen-on-an-ip).
+1. [Optional. Revert PostgreSQL settings to use a password and listen on an IP](#optional-revert-postgresql-settings-to-use-a-password-and-listen-on-an-ip).
 
 ## Remove all secondary Geo sites
 
@@ -28,7 +28,7 @@ To disable Geo, you need to first remove all your secondary Geo sites, which mea
 anymore on these sites. You can follow our docs to [remove your secondary Geo sites](remove_geo_site.md).
 
 If the current site that you want to keep using is a secondary site, you need to first promote it to primary.
-You can use our steps on [how to promote a secondary site](../disaster_recovery/#step-3-promoting-a-secondary-node)
+You can use our steps on [how to promote a secondary site](../disaster_recovery/#step-3-promoting-a-secondary-site)
 to do that.
 
 ## Remove the primary site from the UI

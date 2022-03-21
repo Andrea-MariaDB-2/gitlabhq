@@ -29,8 +29,16 @@ Dependency Scanning supports the following official analyzers:
 The analyzers are published as Docker images, which Dependency Scanning uses
 to launch dedicated containers for each analysis.
 
+The Dependency Scanning analyzers' current major version number is 2.
+
 Dependency Scanning is pre-configured with a set of **default images** that are
 maintained by GitLab, but users can also integrate their own **custom images**.
+
+WARNING:
+The `bundler-audit` analyzer is deprecated and will be removed in GitLab 15.0 since it duplicates the functionality of the `gemnasium` analyzer. For more information, read the [deprecation announcement](../../../update/deprecations.md#bundler-audit-dependency-scanning-tool).
+
+WARNING:
+The `retire.js` analyzer is deprecated and will be removed in GitLab 15.0 since it duplicates the functionality of the `gemnasium` analyzer. For more information, read the [deprecation announcement](../../../update/deprecations.md#retire-js-dependency-scanning-tool).
 
 ## Official default analyzers
 
@@ -42,12 +50,12 @@ Any custom change to the official analyzers can be achieved by using a
 You can switch to a custom Docker registry that provides the official analyzer
 images under a different prefix. For instance, the following instructs Dependency
 Scanning to pull `my-docker-registry/gl-images/gemnasium`
-instead of `registry.gitlab.com/gitlab-org/security-products/analyzers/gemnasium`.
+instead of `registry.gitlab.com/security-products/gemnasium`.
 In `.gitlab-ci.yml` define:
 
 ```yaml
 include:
-  template: Dependency-Scanning.gitlab-ci.yml
+  template: Security/Dependency-Scanning.gitlab-ci.yml
 
 variables:
   SECURE_ANALYZERS_PREFIX: my-docker-registry/gl-images
@@ -64,7 +72,7 @@ In `.gitlab-ci.yml` define:
 
 ```yaml
 include:
-  template: Dependency-Scanning.gitlab-ci.yml
+  template: Security/Dependency-Scanning.gitlab-ci.yml
 
 variables:
   DS_EXCLUDED_ANALYZERS: "bundler-audit, gemnasium"
@@ -77,7 +85,7 @@ In `.gitlab-ci.yml` define:
 
 ```yaml
 include:
-  template: Dependency-Scanning.gitlab-ci.yml
+  template: Security/Dependency-Scanning.gitlab-ci.yml
 
 variables:
   DS_EXCLUDED_ANALYZERS: "gemnasium, gemnasium-maven, gemnasium-python, bundler-audit, retire.js"
@@ -118,12 +126,12 @@ The following table lists the data available for each official analyzer.
 | File                                  | ✓                  | ⚠                  | ✓                  |
 | Start line                            | 𐄂                  | 𐄂                  | 𐄂                  |
 | End line                              | 𐄂                  | 𐄂                  | 𐄂                  |
-| External ID (e.g., CVE)               | ✓                  | ✓                  | ⚠                  |
+| External ID (for example, CVE)        | ✓                  | ✓                  | ⚠                  |
 | URLs                                  | ✓                  | ✓                  | ✓                  |
 | Internal doc/explanation              | ✓                  | 𐄂                  | 𐄂                  |
 | Solution                              | ✓                  | ✓                  | 𐄂                  |
 | Confidence                            | 𐄂                  | 𐄂                  | 𐄂                  |
-| Affected item (e.g. class or package) | ✓                  | ✓                  | ✓                  |
+| Affected item (for example, class or package) | ✓                  | ✓                  | ✓                  |
 | Source code extract                   | 𐄂                  | 𐄂                  | 𐄂                  |
 | Internal ID                           | ✓                  | 𐄂                  | 𐄂                  |
 | Date                                  | ✓                  | 𐄂                  | 𐄂                  |
@@ -134,4 +142,4 @@ The following table lists the data available for each official analyzer.
 - 𐄂 => we don't have that data, or it would need to develop specific or inefficient/unreliable logic to obtain it.
 
 The values provided by these tools are heterogeneous, so they are sometimes
-normalized into common values (e.g., `severity`, `confidence`, etc).
+normalized into common values (for example, `severity`, `confidence`, etc).

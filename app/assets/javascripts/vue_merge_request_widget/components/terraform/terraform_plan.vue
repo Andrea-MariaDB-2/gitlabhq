@@ -20,8 +20,8 @@ export default {
       'Terraform|Reported Resource Changes: %{addNum} to add, %{changeNum} to change, %{deleteNum} to delete',
     ),
     generationErrored: s__('Terraform|Generating the report caused an error.'),
-    namedReportFailed: s__('Terraform|The report %{name} failed to generate.'),
-    namedReportGenerated: s__('Terraform|The report %{name} was generated in your pipelines.'),
+    namedReportFailed: s__('Terraform|The job %{name} failed to generate a report.'),
+    namedReportGenerated: s__('Terraform|The job %{name} generated a report.'),
     reportFailed: s__('Terraform|A report failed to generate.'),
     reportGenerated: s__('Terraform|A report was generated in your pipelines.'),
   },
@@ -104,7 +104,7 @@ export default {
           :href="plan.job_path"
           target="_blank"
           data-testid="terraform-report-link"
-          data-track-event="click_terraform_mr_plan_button"
+          data-track-action="click_terraform_mr_plan_button"
           data-track-label="mr_widget_terraform_mr_plan_button"
           data-track-property="terraform_mr_plan_button"
           class="btn btn-sm"

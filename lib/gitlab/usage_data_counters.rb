@@ -16,7 +16,8 @@ module Gitlab
       DesignsCounter,
       KubernetesAgentCounter,
       StaticSiteEditorCounter,
-      DiffsCounter
+      DiffsCounter,
+      ServiceUsageDataCounter
     ].freeze
 
     UsageDataCounterError = Class.new(StandardError)
@@ -39,3 +40,5 @@ module Gitlab
     end
   end
 end
+
+Gitlab::UsageDataCounters.prepend_mod_with('Gitlab::UsageDataCounters')

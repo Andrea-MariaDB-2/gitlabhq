@@ -99,7 +99,7 @@ module QA
             end
 
             # Disable /dev/shm use in CI. See https://gitlab.com/gitlab-org/gitlab/issues/4252
-            capabilities['goog:chromeOptions'][:args] << 'disable-dev-shm-usage' if QA::Runtime::Env.running_in_ci?
+            capabilities['goog:chromeOptions'][:args] << 'disable-dev-shm-usage' if QA::Runtime::Env.disable_dev_shm?
 
             # Specify the user-agent to allow challenges to be bypassed
             # See https://gitlab.com/gitlab-com/gl-infra/infrastructure/-/issues/11938
@@ -205,6 +205,9 @@ module QA
 
           simulate_slow_connection if Runtime::Env.simulate_slow_connection?
 
+          # Wait until the new page is ready for us to interact with it
+          Support::WaitForRequests.wait_for_requests
+
           page_class.validate_elements_present! if page_class.respond_to?(:validate_elements_present!)
 
           if QA::Runtime::Env.qa_cookies
@@ -217,6 +220,28 @@ module QA
           end
 
           yield.tap { clear! } if block_given?
+        end
+
+        # To redirect the browser to a canary or non-canary web node
+        #   after loading a subject test page
+        # @param [Boolean] Send to canary true or false
+        # @example:
+        #   Runtime::Browser::Session.target_canary(true)
+        def self.target_canary(enable_canary)
+          if QA::Runtime::Env.qa_cookies.to_s.include?("gitlab_canary=true")
+            QA::Runtime::Logger.warn("WARNING: Setting cookie through QA_COOKIES var is incompatible with this method.")
+            return
+          end
+
+          browser = Capybara.current_session.driver.browser
+
+          if enable_canary
+            browser.manage.add_cookie name: "gitlab_canary", value: "true"
+          else
+            browser.manage.delete_cookie("gitlab_canary")
+          end
+
+          browser.navigate.refresh
         end
 
         ##

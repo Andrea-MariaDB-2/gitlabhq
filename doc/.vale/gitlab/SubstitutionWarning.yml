@@ -11,16 +11,15 @@ link: https://about.gitlab.com/handbook/communication/#top-misused-terms
 level: warning
 ignorecase: true
 swap:
+  click: select
   code base: codebase
   config: configuration
+  deselect: clear
+  deselected: cleared
   distro: distribution
   file name: filename
   filesystem: file system
   info: information
-  need to: must
   repo: repository
   timezone: time zone
   utilize: use
-  administrator access: the Administrator role
-  administrator permission: the Administrator role
-  administrator permissions: the Administrator role

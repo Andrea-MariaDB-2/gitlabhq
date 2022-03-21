@@ -1,13 +1,11 @@
 ---
 stage: Create
 group: Source Code
-info: "To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments"
+info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
 disqus_identifier: 'https://docs.gitlab.com/ee/workflow/gitlab_flow.html'
 ---
 
 # Introduction to GitLab Flow **(FREE)**
-
-![GitLab Flow](img/gitlab_flow.png)
 
 Git allows a wide variety of branching strategies and workflows.
 Because of this, many organizations end up with workflows that are too complicated, not clearly defined, or not integrated with issue tracking systems.
@@ -16,17 +14,22 @@ It combines [feature-driven development](https://en.wikipedia.org/wiki/Feature-d
 
 Organizations coming to Git from other version control systems frequently find it hard to develop a productive workflow.
 This article describes GitLab flow, which integrates the Git workflow with an issue tracking system.
-It offers a transparent and effective way to work with Git.
+It offers a transparent and effective way to work with Git:
 
-![Four stages (working copy, index, local repository, remote repository) and three steps between them](img/gitlab_flow_four_stages.png)
+```mermaid
+graph LR
+    subgraph Git workflow
+    A[Working copy] --> |git add| B[Index]
+    B --> |git commit| C[Local repository]
+    C --> |git push| D[Remote repository]
+    end
+```
 
 When converting to Git, you have to get used to the fact that it takes three steps to share a commit with colleagues.
 Most version control systems have only one step: committing from the working copy to a shared server.
 In Git, you add files from the working copy to the staging area. After that, you commit them to your local repository.
 The third step is pushing to a shared remote repository.
 After getting used to these three steps, the next challenge is the branching model.
-
-![Multiple long-running branches and merging in all directions](img/gitlab_flow_messy_flow.png)
 
 Because many organizations new to Git have no conventions for how to work with it, their repositories can quickly become messy.
 The biggest problem is that many long-running branches emerge that all contain part of the changes.
@@ -44,9 +47,11 @@ For a video introduction of how this works in GitLab, see [GitLab Flow](https://
 
 <!-- vale gitlab.Spelling = YES -->
 
-Git flow was one of the first proposals to use Git branches, and it has received a lot of attention.
-It suggests a `main` branch and a separate `develop` branch, as well as supporting branches for features, releases, and hotfixes.
-The development happens on the `develop` branch, moves to a release branch, and is finally merged into the `main` branch.
+Git flow was one of the first proposals to use Git branches, and it has received
+a lot of attention. It suggests a `main` branch and a separate `develop` branch,
+with supporting branches for features, releases, and hotfixes. The development
+happens on the `develop` branch, moves to a release branch, and is finally merged
+into the `main` branch.
 
 Git flow is a well-defined standard, but its complexity introduces two problems.
 The first problem is that developers must use the `develop` branch and not `main`. `main` is reserved for code that is released to production.
@@ -65,10 +70,20 @@ For example, many projects do releases but don't need to do hotfixes.
 
 ## GitHub flow as a simpler alternative
 
-![Branch with feature branches merged in](img/gitlab_flow_github_flow.png)
-
 In reaction to Git flow, GitHub created a simpler alternative.
-[GitHub flow](https://guides.github.com/introduction/flow/index.html) has only feature branches and a `main` branch.
+[GitHub flow](https://docs.github.com/en/get-started/quickstart/github-flow) has only feature branches and a `main` branch:
+
+```mermaid
+graph TD
+    subgraph Feature branches in GitHub Flow
+    A[main branch] ===>B[main branch]
+    D[nav branch] --> |add navigation| B
+    B ===> C[main branch]
+    E[feature-branch] --> |add feature| C
+    C ==> F[main branch]
+    end
+```
+
 This flow is clean and straightforward, and many organizations have adopted it with great success.
 Atlassian recommends [a similar strategy](https://www.atlassian.com/blog/git/simple-git-workflow-is-simple), although they rebase feature branches.
 Merging everything into the `main` branch and frequently deploying means you minimize the amount of unreleased code. This approach is in line with lean and continuous delivery best practices.
@@ -76,8 +91,6 @@ However, this flow still leaves a lot of questions unanswered regarding deployme
 With GitLab flow, we offer additional guidance for these questions.
 
 ## Production branch with GitLab flow
-
-![Branches with an arrow that indicates a deployment](img/gitlab_flow_production_branch.png)
 
 GitHub flow assumes you can deploy to production every time you merge a feature branch.
 While this is possible in some cases, such as SaaS applications, there are some cases where this is not possible, such as:
@@ -88,7 +101,22 @@ While this is possible in some cases, such as SaaS applications, there are some 
   operations team is at full capacity - but you also merge code at other times.
 
 In these cases, you can make a production branch that reflects the deployed code.
-You can deploy a new version by merging `main` into the production branch.
+You can deploy a new version by merging `development` into the production branch:
+
+```mermaid
+graph TD
+    subgraph Production branch in GitLab Flow
+    A[development] ==>B[development]
+    B ==> C[development]
+    C ==> D[development]
+
+    E[production] ====> F[production]
+    C --> |deployment| F
+    D ==> G[development]
+    F ==> H[production]
+    end
+```
+
 If you need to know what code is in production, you can check out the production branch to see.
 The approximate time of deployment is visible as the merge commit in the version control system.
 This time is pretty accurate if you automatically deploy your production branch.
@@ -97,32 +125,72 @@ This flow prevents the overhead of releasing, tagging, and merging that happens 
 
 ## Environment branches with GitLab flow
 
-![Multiple branches with the code cascading from one to another](img/gitlab_flow_environment_branches.png)
-
-It might be a good idea to have an environment that is automatically updated to the `main` branch.
+It might be a good idea to have an environment that is automatically updated to the `staging` branch.
 Only, in this case, the name of this environment might differ from the branch name.
-Suppose you have a staging environment, a pre-production environment, and a production environment.
-In this case, deploy the `main` branch to staging.
-To deploy to pre-production, create a merge request from the `main` branch to the pre-production branch.
-Go live by merging the pre-production branch into the production branch.
+Suppose you have a staging environment, a pre-production environment, and a production environment:
+
+```mermaid
+graph LR
+    subgraph Environment branches in GitLab Flow
+
+    A[staging] ==> B[staging]
+    B ==> C[staging]
+    C ==> D[staging]
+
+    A --> |deploy to<br>pre-prod| G
+
+    F[pre-prod] ==> G[pre-prod]
+    G ==> H[pre-prod]
+    H ==> I[pre-prod]
+
+    C --> |deploy to<br>pre-prod| I
+
+    J[production] ==> K[production]
+    K ==> L[production]
+
+    G --> |production <br>deployment| K
+
+    end
+```
+
+In this case, deploy the `staging` branch to your staging environment.
+To deploy to pre-production, create a merge request from the `staging` branch to the `pre-prod` branch.
+Go live by merging the `pre-prod` branch into the `production` branch.
 This workflow, where commits only flow downstream, ensures that everything is tested in all environments.
-If you need to cherry-pick a commit with a hotfix, it is common to develop it on a feature branch and merge it into `main` with a merge request.
+If you need to cherry-pick a commit with a hotfix, it is common to develop it on a feature branch and merge it into `production` with a merge request.
 In this case, do not delete the feature branch yet.
-If `main` passes automatic testing, you then merge the feature branch into the other branches.
+If `production` passes automatic testing, you then merge the feature branch into the other branches.
 If this is not possible because more manual testing is required, you can send merge requests from the feature branch to the downstream branches.
 
 ## Release branches with GitLab flow
 
-![Multiple release branches that vary in length with cherry-picks](img/gitlab_flow_release_branches.png)
+You should work with release branches only if you need to release software to
+the outside world. In this case, each branch contains a minor version, such as
+`2.3-stable` or `2.4-stable`:
 
-You only need to work with release branches if you need to release software to the outside world.
-In this case, each branch contains a minor version, such as `2-3-stable` or `2-4-stable`.
+```mermaid
+graph LR
+    A:::main ===> B((main))
+    B:::main ==> C((main))
+    C:::main ==> D((main))
+    D:::main ==> E((main))
+
+    A((main)) ----> F((2.3-stable)):::first
+    F --> G((2.3-stable)):::first
+    C -.-> |cherry-pick| G
+    D --> H((2.4-stable)):::second
+
+    classDef main fill:#f4f0ff,stroke:#7b58cf
+    classDef first fill:#e9f3fc,stroke:#1f75cb
+    classDef second fill:#ecf4ee,stroke:#108548
+```
+
 Create stable branches using `main` as a starting point, and branch as late as possible.
 By doing this, you minimize the length of time during which you have to apply bug fixes to multiple branches.
 After announcing a release branch, only add serious bug fixes to the branch.
 If possible, first merge these bug fixes into `main`, and then cherry-pick them into the release branch.
 If you start by merging into the release branch, you might forget to cherry-pick them into `main`, and then you'd encounter the same bug in subsequent releases.
-Merging into `main` and then cherry-picking into release is called an "upstream first" policy, which is also practiced by [Google](https://www.chromium.org/chromium-os/chromiumos-design-docs/upstream-first) and [Red Hat](https://www.redhat.com/en/blog/a-community-for-using-openstack-with-red-hat-rdo).
+Merging into `main` and then cherry-picking into release is called an "upstream first" policy, which is also practiced by [Google](https://www.chromium.org/chromium-os/chromiumos-design-docs/upstream-first/) and [Red Hat](https://www.redhat.com/en/blog/a-community-for-using-openstack-with-red-hat-rdo).
 Every time you include a bug fix in a release branch, increase the patch version (to comply with [Semantic Versioning](https://semver.org/)) by setting a new tag.
 Some projects also have a stable branch that points to the same commit as the latest released branch.
 In this flow, it is not common to have a production branch (or Git flow `main` branch).
@@ -153,7 +221,7 @@ If the assigned person does not feel comfortable, they can request more changes 
 
 In GitLab, it is common to protect the long-lived branches, such as the `main` branch, so [most developers can't modify them](../user/permissions.md).
 So, if you want to merge into a protected branch, assign your merge request to someone with the
-[Maintainer role](../user/permissions.md).
+Maintainer role.
 
 After you merge a feature branch, you should remove it from the source control software.
 In GitLab, you can do this when merging.
@@ -166,8 +234,6 @@ When you reopen an issue you need to create a new merge request.
 ![Remove checkbox for branch in merge requests](img/gitlab_flow_remove_checkbox.png)
 
 ## Issue tracking with GitLab flow
-
-![Merge request with the branch name "15-require-a-password-to-change-it" and assignee field shown](img/gitlab_flow_merge_request.png)
 
 GitLab flow is a way to make the relation between the code and the issue tracker more transparent.
 
@@ -207,8 +273,6 @@ It is possible that one feature branch solves more than one issue.
 
 ## Linking and closing issues from merge requests
 
-![Merge request showing the linked issues to close](img/gitlab_flow_close_issue_mr.png)
-
 Link to issues by mentioning them in commit messages or the description of a merge request, for example, "Fixes #16" or "Duck typing is preferred. See #12."
 GitLab then creates links to the mentioned issues and creates comments in the issues linking back to the merge request.
 
@@ -218,10 +282,35 @@ If you have an issue that spans across multiple repositories, create an issue fo
 
 ## Squashing commits with rebase
 
-![Vim screen showing the rebase view](img/gitlab_flow_rebase.png)
-
 With Git, you can use an interactive rebase (`rebase -i`) to squash multiple commits into one or reorder them.
-This feature helps you replace a couple of small commits with a single commit, or if you want to make the order more logical.
+This feature helps you replace a couple of small commits with a single commit, or if you want to make the order more logical:
+
+```shell
+pick c6ee4d3 add a new file to the repo
+pick c3c130b change readme
+
+# Rebase 168afa0..c3c130b onto 168afa0
+#
+# Commands:
+# p, pick = use commit
+# r, reword = use commit, but edit the commit message
+# e, edit = use commit, but stop for amending
+# s, squash = use commit, but meld into previous commit
+# f, fixup = like "squash", but discard this commit's log message
+# x, exec = run command (the rest of the line) using shell
+#
+# These lines can be re-ordered; they are executed from top to bottom.
+#
+# If you remove a line here THAT COMMIT WILL BE LOST.
+#
+# However, if you remove everything, the rebase will be aborted.
+#
+# Note that empty commits are commented out
+~
+~
+~
+"~/demo/gitlab-ce/.git/rebase-merge/git-rebase-todo" 20L, 673C
+```
 
 However, you should avoid rebasing commits you have pushed to a remote server if you have other active contributors in the same branch.
 Because rebasing creates new commits for all your changes, it can cause confusion because the same change would have multiple identifiers.
@@ -244,8 +333,6 @@ Git does not allow you to merge the code again otherwise.
 
 ## Reducing merge commits in feature branches
 
-![List of sequential merge commits](img/gitlab_flow_merge_commits.png)
-
 Having lots of merge commits can make your repository history messy.
 Therefore, you should try to avoid merge commits in feature branches.
 Often, people avoid merge commits by just using rebase to reorder their commits after the commits on the `main` branch.
@@ -254,7 +341,7 @@ However, as discussed in [the section about rebasing](#squashing-commits-with-re
 
 Rebasing could create more work, as every time you rebase, you may need to resolve the same conflicts.
 Sometimes you can reuse recorded resolutions (`rerere`), but merging is better, because you only have to resolve conflicts once.
-Atlassian has a more thorough explanation of the tradeoffs between merging and rebasing [on their blog](https://www.atlassian.com/blog/git/git-team-workflows-merge-or-rebase).
+Atlassian has [a more thorough explanation of the tradeoffs between merging and rebasing](https://www.atlassian.com/blog/git/git-team-workflows-merge-or-rebase) on their blog.
 
 A good way to prevent creating many merge commits is to not frequently merge `main` into the feature branch.
 There are three reasons to merge in `main`: utilizing new code, resolving merge conflicts, and updating long-running branches.
@@ -303,14 +390,20 @@ Sharing your work before it's complete also allows for discussion and feedback a
 
 ## How to write a good commit message
 
-![Good and bad commit message](img/gitlab_flow_good_commit.png)
-
 A commit message should reflect your intention, not just the contents of the commit.
-You can see the changes in a commit, so the commit message should explain why you made those changes.
+You can see the changes in a commit, so the commit message should explain why you made those changes:
+
+```shell
+# This commit message doesn't give enough information
+git commit -m 'Improve XML generation'
+
+# These commit messages clearly state the intent of the commit
+git commit -m 'Properly escape special characters in XML generation'
+```
+
 An example of a good commit message is: "Combine templates to reduce duplicate code in the user views."
 The words "change," "improve," "fix," and "refactor" don't add much information to a commit message.
-For example, "Improve XML generation" could be better written as "Properly escape special characters in XML generation."
-For more information about formatting commit messages, please see this excellent [blog post by Tim Pope](https://tbaggery.com/2008/04/19/a-note-about-git-commit-messages.html).
+For more information, please see Tim Pope's excellent [note about formatting commit messages](https://tbaggery.com/2008/04/19/a-note-about-git-commit-messages.html).
 
 To add more context to a commit message, consider adding information regarding the
 origin of the change. For example, the URL of a GitLab issue, or a Jira issue number,
@@ -326,8 +419,6 @@ Issue: gitlab.com/gitlab-org/gitlab/-/issues/1
 
 ## Testing before merging
 
-![Merge requests showing the test states: red, yellow, and green](img/gitlab_flow_ci_mr.png)
-
 In old workflows, the continuous integration (CI) server commonly ran tests on the `main` branch only.
 Developers had to ensure their code did not break the `main` branch.
 When using GitLab flow, developers create their branches from this `main` branch, so it is essential that it never breaks.
@@ -342,8 +433,6 @@ If new commits in `main` cause merge conflicts with the feature branch, merge `m
 As said before, if you often have feature branches that last for more than a few days, you should make your issues smaller.
 
 ## Working with feature branches
-
-![Shell output showing git pull output](img/gitlab_flow_git_pull.png)
 
 When creating a feature branch, always branch from an up-to-date `main`.
 If you know before you start that your work depends on another branch, you can also branch from there.

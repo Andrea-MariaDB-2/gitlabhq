@@ -1,18 +1,22 @@
-import { shallowMount, createLocalVue } from '@vue/test-utils';
+import { shallowMount } from '@vue/test-utils';
+import Vue, { nextTick } from 'vue';
+import VueApollo from 'vue-apollo';
 import Vuex from 'vuex';
+import createMockApollo from 'helpers/mock_apollo_helper';
 import { extendedWrapper } from 'helpers/vue_test_utils_helper';
 
-import { mockLabelList } from 'jest/boards/mock_data';
+import { boardListQueryResponse, mockLabelList } from 'jest/boards/mock_data';
 import BoardListHeader from '~/boards/components/board_list_header.vue';
 import { ListType } from '~/boards/constants';
+import listQuery from 'ee_else_ce/boards/graphql/board_lists_deferred.query.graphql';
 
-const localVue = createLocalVue();
-
-localVue.use(Vuex);
+Vue.use(VueApollo);
+Vue.use(Vuex);
 
 describe('Board List Header Component', () => {
   let wrapper;
   let store;
+  let fakeApollo;
 
   const updateListSpy = jest.fn();
   const toggleListCollapsedSpy = jest.fn();
@@ -20,6 +24,7 @@ describe('Board List Header Component', () => {
   afterEach(() => {
     wrapper.destroy();
     wrapper = null;
+    fakeApollo = null;
 
     localStorage.clear();
   });
@@ -29,6 +34,7 @@ describe('Board List Header Component', () => {
     collapsed = false,
     withLocalStorage = true,
     currentUserId = 1,
+    listQueryHandler = jest.fn().mockResolvedValue(boardListQueryResponse()),
   } = {}) => {
     const boardId = '1';
 
@@ -56,10 +62,12 @@ describe('Board List Header Component', () => {
       getters: { isEpicBoard: () => false },
     });
 
+    fakeApollo = createMockApollo([[listQuery, listQueryHandler]]);
+
     wrapper = extendedWrapper(
       shallowMount(BoardListHeader, {
+        apolloProvider: fakeApollo,
         store,
-        localVue,
         propsData: {
           disabled: false,
           list: listMock,
@@ -140,7 +148,7 @@ describe('Board List Header Component', () => {
 
       findCaret().vm.$emit('click');
 
-      await wrapper.vm.$nextTick();
+      await nextTick();
       expect(toggleListCollapsedSpy).toHaveBeenCalledTimes(1);
     });
 
@@ -148,7 +156,7 @@ describe('Board List Header Component', () => {
       createComponent({ withLocalStorage: false, currentUserId: 1 });
 
       findCaret().vm.$emit('click');
-      await wrapper.vm.$nextTick();
+      await nextTick();
 
       expect(updateListSpy).toHaveBeenCalledTimes(1);
       expect(localStorage.getItem(`${wrapper.vm.uniqueKey}.collapsed`)).toBe(null);
@@ -160,7 +168,7 @@ describe('Board List Header Component', () => {
       });
 
       findCaret().vm.$emit('click');
-      await wrapper.vm.$nextTick();
+      await nextTick();
 
       expect(updateListSpy).not.toHaveBeenCalled();
       expect(localStorage.getItem(`${wrapper.vm.uniqueKey}.collapsed`)).toBe(String(isCollapsed()));
@@ -172,18 +180,18 @@ describe('Board List Header Component', () => {
     const canDragList = [ListType.label, ListType.milestone, ListType.iteration, ListType.assignee];
 
     it.each(cannotDragList)(
-      'does not have user-can-drag-class so user cannot drag list',
+      'does not have gl-cursor-grab class so user cannot drag list',
       (listType) => {
         createComponent({ listType });
 
-        expect(findTitle().classes()).not.toContain('user-can-drag');
+        expect(findTitle().classes()).not.toContain('gl-cursor-grab');
       },
     );
 
-    it.each(canDragList)('has user-can-drag-class so user can drag list', (listType) => {
+    it.each(canDragList)('has gl-cursor-grab class so user can drag list', (listType) => {
       createComponent({ listType });
 
-      expect(findTitle().classes()).toContain('user-can-drag');
+      expect(findTitle().classes()).toContain('gl-cursor-grab');
     });
   });
 });

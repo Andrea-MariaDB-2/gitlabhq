@@ -1,14 +1,17 @@
 import { GlButton } from '@gitlab/ui';
 import Vue from 'vue';
+import Vuex from 'vuex';
 import { parseBoolean } from '~/lib/utils/common_utils';
 import { escapeFileUrl } from '~/lib/utils/url_utility';
 import { __ } from '~/locale';
 import initWebIdeLink from '~/pages/projects/shared/web_ide_link';
 import PerformancePlugin from '~/performance/vue_performance_plugin';
+import createStore from '~/code_navigation/store';
 import App from './components/app.vue';
 import Breadcrumbs from './components/breadcrumbs.vue';
 import DirectoryDownloadLinks from './components/directory_download_links.vue';
 import LastCommit from './components/last_commit.vue';
+import BlobControls from './components/blob_controls.vue';
 import apolloProvider from './graphql';
 import commitsQuery from './queries/commits.query.graphql';
 import projectPathQuery from './queries/project_path.query.graphql';
@@ -18,6 +21,7 @@ import createRouter from './router';
 import { updateFormAction } from './utils/dom';
 import { setTitle } from './utils/title';
 
+Vue.use(Vuex);
 Vue.use(PerformancePlugin, {
   components: ['SimpleViewer', 'BlobContent'],
 });
@@ -71,7 +75,25 @@ export default function setupVueRepositoryList() {
       },
     });
 
+  const initBlobControlsApp = () =>
+    new Vue({
+      el: document.getElementById('js-blob-controls'),
+      router,
+      apolloProvider,
+      render(h) {
+        return h(BlobControls, {
+          props: {
+            projectPath,
+          },
+        });
+      },
+    });
+
   initLastCommitApp();
+
+  if (gon.features.refactorBlobViewer) {
+    initBlobControlsApp();
+  }
 
   router.afterEach(({ params: { path } }) => {
     setTitle(path, ref, fullName);
@@ -120,6 +142,7 @@ export default function setupVueRepositoryList() {
             forkNewDirectoryPath,
             forkUploadBlobPath,
             uploadPath,
+            newDirPath,
           },
         });
       },
@@ -143,7 +166,7 @@ export default function setupVueRepositoryList() {
             }`,
             // Ideally passing this class to `props` should work
             // But it doesn't work here. :(
-            class: 'btn btn-default btn-md gl-button ml-sm-0',
+            class: 'btn btn-default btn-md gl-button',
           },
         },
         [__('History')],
@@ -180,6 +203,7 @@ export default function setupVueRepositoryList() {
   // eslint-disable-next-line no-new
   new Vue({
     el,
+    store: createStore(),
     router,
     apolloProvider,
     render(h) {
@@ -187,5 +211,5 @@ export default function setupVueRepositoryList() {
     },
   });
 
-  return { router, data: dataset };
+  return { router, data: dataset, apolloProvider, projectPath };
 }

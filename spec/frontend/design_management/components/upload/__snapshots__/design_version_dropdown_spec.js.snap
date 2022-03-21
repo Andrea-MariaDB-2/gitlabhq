@@ -3,8 +3,12 @@
 exports[`Design management design version dropdown component renders design version dropdown button 1`] = `
 <gl-dropdown-stub
   category="primary"
+  clearalltext="Clear all"
+  clearalltextclass="gl-px-5"
   headertext=""
   hideheaderborder="true"
+  highlighteditemstitle="Selected"
+  highlighteditemstitleclass="gl-px-5"
   issueiid=""
   projectpath=""
   size="small"
@@ -80,8 +84,12 @@ exports[`Design management design version dropdown component renders design vers
 exports[`Design management design version dropdown component renders design version list 1`] = `
 <gl-dropdown-stub
   category="primary"
+  clearalltext="Clear all"
+  clearalltextclass="gl-px-5"
   headertext=""
   hideheaderborder="true"
+  highlighteditemstitle="Selected"
+  highlighteditemstitleclass="gl-px-5"
   issueiid=""
   projectpath=""
   size="small"

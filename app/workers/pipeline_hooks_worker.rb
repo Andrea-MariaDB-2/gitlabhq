@@ -10,11 +10,10 @@ class PipelineHooksWorker # rubocop:disable Scalability/IdempotentWorker
   worker_resource_boundary :cpu
   data_consistency :delayed
 
-  # rubocop: disable CodeReuse/ActiveRecord
   def perform(pipeline_id)
-    Ci::Pipeline
-      .find_by(id: pipeline_id)
-      .try(:execute_hooks)
+    pipeline = Ci::Pipeline.find_by_id(pipeline_id)
+    return unless pipeline
+
+    Ci::Pipelines::HookService.new(pipeline).execute
   end
-  # rubocop: enable CodeReuse/ActiveRecord
 end

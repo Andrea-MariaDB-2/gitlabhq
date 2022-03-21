@@ -6,6 +6,7 @@ module Projects
       class NotifyService
         include Gitlab::Utils::StrongMemoize
         include ::IncidentManagement::Settings
+        include ::AlertManagement::Responses
 
         # This set of keys identifies a payload as a valid Prometheus
         # payload and thus processable by this service. See also
@@ -17,6 +18,14 @@ module Projects
 
         SUPPORTED_VERSION = '4'
 
+        # If feature flag :prometheus_notify_max_alerts is enabled truncate
+        # alerts to 100 and process only them.
+        # If feature flag is disabled process any amount of alerts.
+        #
+        # This is to mitigate incident:
+        # https://gitlab.com/gitlab-com/gl-infra/production/-/issues/6086
+        PROCESS_MAX_ALERTS = 100
+
         def initialize(project, payload)
           @project = project
           @payload = payload
@@ -27,9 +36,11 @@ module Projects
           return unprocessable_entity unless self.class.processable?(payload)
           return unauthorized unless valid_alert_manager_token?(token, integration)
 
-          process_prometheus_alerts
+          truncate_alerts! if max_alerts_exceeded?
 
-          ServiceResponse.success
+          alert_responses = process_prometheus_alerts
+
+          alert_response(alert_responses)
         end
 
         def self.processable?(payload)
@@ -48,12 +59,23 @@ module Projects
           Gitlab::Utils::DeepSize.new(payload).valid?
         end
 
-        def firings
-          @firings ||= alerts_by_status('firing')
+        def max_alerts_exceeded?
+          return false unless Feature.enabled?(:prometheus_notify_max_alerts, project, type: :ops)
+
+          alerts.size > PROCESS_MAX_ALERTS
         end
 
-        def alerts_by_status(status)
-          alerts.select { |alert| alert['status'] == status }
+        def truncate_alerts!
+          Gitlab::AppLogger.warn(
+            message: 'Prometheus payload exceeded maximum amount of alerts. Truncating alerts.',
+            project_id: project.id,
+            alerts: {
+              total: alerts.size,
+              max: PROCESS_MAX_ALERTS
+            }
+          )
+
+          payload['alerts'] = alerts.first(PROCESS_MAX_ALERTS)
         end
 
         def alerts
@@ -128,23 +150,17 @@ module Projects
         end
 
         def process_prometheus_alerts
-          alerts.each do |alert|
+          alerts.map do |alert|
             AlertManagement::ProcessPrometheusAlertService
               .new(project, alert.to_h)
               .execute
           end
         end
 
-        def bad_request
-          ServiceResponse.error(message: 'Bad Request', http_status: :bad_request)
-        end
+        def alert_response(alert_responses)
+          alerts = alert_responses.flat_map { |resp| resp.payload[:alerts] }.compact
 
-        def unauthorized
-          ServiceResponse.error(message: 'Unauthorized', http_status: :unauthorized)
-        end
-
-        def unprocessable_entity
-          ServiceResponse.error(message: 'Unprocessable Entity', http_status: :unprocessable_entity)
+          success(alerts)
         end
       end
     end

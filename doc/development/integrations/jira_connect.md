@@ -54,7 +54,7 @@ To install the app in Jira:
 
    1. Click **Upload**.
 
-   If the install was successful, you should see the **GitLab for Jira** app under **Manage apps**.
+   If the install was successful, you should see the **GitLab.com for Jira Cloud** app under **Manage apps**.
    You can also click **Getting Started** to open the configuration page rendered from your GitLab instance.
 
    _Note that any changes to the app descriptor requires you to uninstall then reinstall the app._
@@ -66,29 +66,51 @@ If the app install failed, you might need to delete `jira_connect_installations`
 1. Open the [database console](https://gitlab.com/gitlab-org/gitlab-development-kit/-/blob/main/doc/howto/postgresql.md#access-postgresql).
 1. Run `TRUNCATE TABLE jira_connect_installations CASCADE;`.
 
-## Add a namespace
+#### Not authorized to access the file
 
-To add a [namespace](../../user/group/index.md#namespaces) to Jira:
+If you use Gitpod and you get an error about Jira not being able to access the descriptor file, you might need to make the GDK's port public by following these steps:
 
-1. Make sure you are logged in on your GitLab development instance.
-1. On the GitLab app page in Jira, click **Get started**.
-1. Open your browser's developer tools and navigate to the **Network** tab.
-1. Try to add the namespace in Jira.
-1. If the request fails with 401 "not authorized", copy the request as a cURL command
-   and paste it in your terminal.
+1. Open your GitLab workspace in Gitpod.
+1. When the GDK is running, select **Ports** in the bottom-right corner.
+1. On the left sidebar, select the port the GDK is listening to (typically `3000`).
+1. If the port is marked as private, select the lock icon to make it public.
 
-   ![Example Vulnerability](img/copy_curl.png)
+## Test the GitLab OAuth authentication flow
 
-1. Go to your development instance (usually at: <http://localhost:3000>), open developer
-   tools, navigate to the Network tab and reload the page.
-1. Copy all cookies from the first request.
+> [Introduced](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/81126) in GitLab 14.9 [with a flag](../../administration/feature_flags.md) named `jira_connect_oauth`. Disabled by default.
 
-   ![Example Vulnerability](img/copy_cookies.png)
+GitLab for Jira users can authenticate with GitLab using GitLab OAuth. 
 
-1. Append the cookies to the cURL command in your terminal:
-   `--cookies "<cookies from the request>"`.
-1. Submit the cURL request.
-1. If the response is `{"success":true}`, the namespace was added.
-1. Append the cookies to the cURL command in your terminal `--cookies "PASTE COOKIES HERE"`.
-1. Submit the cURL request.
-1. If the response is `{"success":true}` the namespace was added.
+WARNING:
+This feature is not ready for production use. The feature flag should only be enabled in development.
+
+The following steps describe setting up an environment to test the GitLab OAuth flow:
+
+1. Start a Gitpod session and open the rails console.
+
+    ```shell
+    bundle exec rails console
+    ```
+
+1. Enable the feature flag.
+
+    ```shell
+    Feature.enable(:jira_connect_oauth)
+    ```
+
+1. On your GitLab instance, go to **Admin > Applications**.
+1. Create a new application with the following settings:
+    - Name: `Jira Connect`
+    - Redirect URI: `YOUR_GITPOD_INSTANCE/-/jira_connect/oauth_callbacks`
+    - Scopes: `api`
+    - Trusted: **No**
+    - Confidential: **No**
+1. Copy the Application ID.
+1. Go to [gitpod.io/variables](https://gitpod.io/variables).
+1. Create a new variable named `JIRA_CONNECT_OAUTH_CLIENT_ID`, with a scope of `*/*`, and paste the Application ID as the value.
+
+If you already have an active Gitpod instance, use the following command in the Gitpod terminal to set the environment variable:
+
+```shell
+eval $(gp env -e JIRA_CONNECT_OAUTH_CLIENT_ID=$YOUR_APPLICATION_ID)
+```

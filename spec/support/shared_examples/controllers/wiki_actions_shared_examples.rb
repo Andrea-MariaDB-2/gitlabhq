@@ -220,8 +220,8 @@ RSpec.shared_examples 'wiki controller actions' do
 
       context 'page view tracking' do
         it_behaves_like 'tracking unique hll events' do
-          let(:target_id) { 'wiki_action' }
-          let(:expected_type) { instance_of(String) }
+          let(:target_event) { 'wiki_action' }
+          let(:expected_value) { instance_of(String) }
         end
 
         it 'increases the page view counter' do
@@ -299,7 +299,7 @@ RSpec.shared_examples 'wiki controller actions' do
           expect(response.headers['Content-Disposition']).to match(/^inline/)
           expect(response.headers[Gitlab::Workhorse::DETECT_HEADER]).to eq('true')
           expect(response.cache_control[:public]).to be(false)
-          expect(response.headers['Cache-Control']).to eq('no-store')
+          expect(response.headers['Cache-Control']).to eq('max-age=60, private')
         end
       end
     end

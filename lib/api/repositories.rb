@@ -10,6 +10,32 @@ module API
 
     helpers ::API::Helpers::HeadersHelpers
 
+    helpers do
+      params :release_params do
+        requires :version,
+          type: String,
+          regexp: Gitlab::Regex.unbounded_semver_regex,
+          desc: 'The version of the release, using the semantic versioning format'
+
+        optional :from,
+          type: String,
+          desc: 'The first commit in the range of commits to use for the changelog'
+
+        optional :to,
+          type: String,
+          desc: 'The last commit in the range of commits to use for the changelog'
+
+        optional :date,
+          type: DateTime,
+          desc: 'The date and time of the release'
+
+        optional :trailer,
+          type: String,
+          desc: 'The Git trailer to use for determining if commits are to be included in the changelog',
+          default: ::Repositories::ChangelogService::DEFAULT_TRAILER
+      end
+    end
+
     before { authorize! :download_code, user_project }
 
     feature_category :source_code_management
@@ -19,7 +45,7 @@ module API
     end
     resource :projects, requirements: API::NAMESPACE_OR_PROJECT_REQUIREMENTS do
       helpers do
-        include ::Gitlab::RateLimitHelpers
+        include Gitlab::RepositoryArchiveRateLimiter
 
         def handle_project_member_errors(errors)
           if errors[:project_access].any?
@@ -42,6 +68,26 @@ module API
 
           not_found! 'Blob' unless @blob
         end
+
+        def fetch_target_project(current_user, user_project, params)
+          return user_project unless params[:from_project_id].present?
+
+          MergeRequestTargetProjectFinder
+            .new(current_user: current_user, source_project: user_project, project_feature: :repository)
+            .execute(include_routes: true).find_by_id(params[:from_project_id])
+        end
+
+        def compare_cache_key(current_user, user_project, target_project, params)
+          [
+            user_project,
+            target_project,
+            current_user,
+            :repository_compare,
+            target_project.repository.commit(params[:from]),
+            user_project.repository.commit(params[:to]),
+            params
+          ]
+        end
       end
 
       desc 'Get a project repository tree' do
@@ -51,18 +97,22 @@ module API
         optional :ref, type: String, desc: 'The name of a repository branch or tag, if not given the default branch is used'
         optional :path, type: String, desc: 'The path of the tree'
         optional :recursive, type: Boolean, default: false, desc: 'Used to get a recursive tree'
+
         use :pagination
+        optional :pagination, type: String, values: %w(legacy keyset), default: 'legacy', desc: 'Specify the pagination method'
+
+        given pagination: -> (value) { value == 'keyset' } do
+          optional :page_token, type: String, desc: 'Record from which to start the keyset pagination'
+        end
       end
-      get ':id/repository/tree' do
-        ref = params[:ref] || user_project.default_branch
-        path = params[:path] || nil
+      get ':id/repository/tree', urgency: :low do
+        tree_finder = ::Repositories::TreeFinder.new(user_project, declared_params(include_missing: false))
 
-        commit = user_project.commit(ref)
-        not_found!('Tree') unless commit
+        not_found!("Tree") unless tree_finder.commit_exists?
 
-        tree = user_project.repository.tree(commit.id, path, recursive: params[:recursive])
-        entries = ::Kaminari.paginate_array(tree.sorted_entries)
-        present paginate(entries), with: Entities::TreeObject
+        tree = Gitlab::Pagination::GitalyKeysetPager.new(self, user_project).paginate(tree_finder)
+
+        present tree, with: Entities::TreeObject
       end
 
       desc 'Get raw blob contents from the repository'
@@ -97,15 +147,16 @@ module API
       params do
         optional :sha, type: String, desc: 'The commit sha of the archive to be downloaded'
         optional :format, type: String, desc: 'The archive format'
+        optional :path, type: String, desc: 'Subfolder of the repository to be downloaded'
       end
       get ':id/repository/archive', requirements: { format: Gitlab::PathRegex.archive_formats_regex } do
-        if archive_rate_limit_reached?(current_user, user_project)
-          render_api_error!({ error: ::Gitlab::RateLimitHelpers::ARCHIVE_RATE_LIMIT_REACHED_MESSAGE }, 429)
+        check_archive_rate_limit!(current_user, user_project) do
+          render_api_error!({ error: _('This archive has been requested too many times. Try again later.') }, 429)
         end
 
         not_acceptable! if Gitlab::HotlinkingDetector.intercept_hotlinking?(request)
 
-        send_git_archive user_project.repository, ref: params[:sha], format: params[:format], append_sha: true
+        send_git_archive user_project.repository, ref: params[:sha], format: params[:format], append_sha: true, path: params[:path]
       rescue StandardError
         not_found!('File')
       end
@@ -119,22 +170,16 @@ module API
         optional :from_project_id, type: String, desc: 'The project to compare from'
         optional :straight, type: Boolean, desc: 'Comparison method, `true` for direct comparison between `from` and `to` (`from`..`to`), `false` to compare using merge base (`from`...`to`)', default: false
       end
-      get ':id/repository/compare' do
-        ff_enabled = Feature.enabled?(:api_caching_rate_limit_repository_compare, user_project, default_enabled: :yaml)
+      get ':id/repository/compare', urgency: :low do
+        target_project = fetch_target_project(current_user, user_project, params)
 
-        cache_action_if(ff_enabled, [user_project, :repository_compare, current_user, declared_params], expires_in: 1.minute) do
-          if params[:from_project_id].present?
-            target_project = MergeRequestTargetProjectFinder
-              .new(current_user: current_user, source_project: user_project, project_feature: :repository)
-              .execute(include_routes: true).find_by_id(params[:from_project_id])
+        if target_project.blank?
+          render_api_error!("Target project id:#{params[:from_project_id]} is not a fork of project id:#{params[:id]}", 400)
+        end
 
-            if target_project.blank?
-              render_api_error!("Target project id:#{params[:from_project_id]} is not a fork of project id:#{params[:id]}", 400)
-            end
-          else
-            target_project = user_project
-          end
+        cache_key = compare_cache_key(current_user, user_project, target_project, declared_params)
 
+        cache_action(cache_key, expires_in: 1.minute) do
           compare = CompareService.new(user_project, params[:to]).execute(target_project, params[:from], straight: params[:straight])
 
           if compare
@@ -188,35 +233,34 @@ module API
         end
       end
 
-      desc 'Generates a changelog section for a release' do
+      desc 'Generates a changelog section for a release and returns it' do
+        detail 'This feature was introduced in GitLab 14.6'
+      end
+      params do
+        use :release_params
+      end
+      get ':id/repository/changelog' do
+        service = ::Repositories::ChangelogService.new(
+          user_project,
+          current_user,
+          **declared_params(include_missing: false)
+        )
+        changelog = service.execute(commit_to_changelog: false)
+
+        present changelog, with: Entities::Changelog
+      rescue Gitlab::Changelog::Error => ex
+        render_api_error!("Failed to generate the changelog: #{ex.message}", 422)
+      end
+
+      desc 'Generates a changelog section for a release and commits it in a changelog file' do
         detail 'This feature was introduced in GitLab 13.9'
       end
       params do
-        requires :version,
-          type: String,
-          regexp: Gitlab::Regex.unbounded_semver_regex,
-          desc: 'The version of the release, using the semantic versioning format'
-
-        optional :from,
-          type: String,
-          desc: 'The first commit in the range of commits to use for the changelog'
-
-        optional :to,
-          type: String,
-          desc: 'The last commit in the range of commits to use for the changelog'
-
-        optional :date,
-          type: DateTime,
-          desc: 'The date and time of the release'
+        use :release_params
 
         optional :branch,
           type: String,
           desc: 'The branch to commit the changelog changes to'
-
-        optional :trailer,
-          type: String,
-          desc: 'The Git trailer to use for determining if commits are to be included in the changelog',
-          default: ::Repositories::ChangelogService::DEFAULT_TRAILER
 
         optional :file,
           type: String,
@@ -241,7 +285,7 @@ module API
           **declared_params(include_missing: false)
         )
 
-        service.execute
+        service.execute(commit_to_changelog: true)
         status(200)
       rescue Gitlab::Changelog::Error => ex
         render_api_error!("Failed to generate the changelog: #{ex.message}", 422)
@@ -249,3 +293,5 @@ module API
     end
   end
 end
+
+API::Repositories.prepend_mod

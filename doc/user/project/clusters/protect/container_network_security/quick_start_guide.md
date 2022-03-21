@@ -1,10 +1,17 @@
 ---
 stage: Protect
 group: Container Security
-info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#designated-technical-writers
+info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
 ---
 
 # Getting started with Container Network Security **(FREE)**
+
+> [Deprecated](https://gitlab.com/groups/gitlab-org/-/epics/7476) in GitLab 14.8, and planned for [removal](https://gitlab.com/groups/gitlab-org/-/epics/7477) in GitLab 15.0.
+
+WARNING:
+Container Network Security is in its end-of-life process. It's [deprecated](https://gitlab.com/groups/gitlab-org/-/epics/7476)
+for use in GitLab 14.8, and planned for [removal](https://gitlab.com/groups/gitlab-org/-/epics/7477)
+in GitLab 15.0.
 
 The following steps are recommended for installing Container Network Security.
 
@@ -57,7 +64,7 @@ to install Cilium in your Kubernetes cluster.
     ```
 
 1. Merge or push these changes to the default branch of your cluster management project,
-and [GitLab CI/CD](../../../../../ci/README.md) will automatically install Cilium.
+and [GitLab CI/CD](../../../../../ci/index.md) will automatically install Cilium.
 
 WARNING:
 Installation and removal of the Cilium requires a **manual**
@@ -137,7 +144,7 @@ Network Policies can be managed through GitLab in one of two ways:
 - Management through a YAML file in each application's project (for projects using Auto DevOps). For
   more information, see the [Network Policy documentation](../../../../../topics/autodevops/stages.md#network-policy).
 - Management through the GitLab Policy management UI (for projects not using Auto DevOps). For more
-  information, see the [Container Network Policy documentation](../../../../application_security/threat_monitoring/index.md#container-network-policy-management) (Ultimate only).
+  information, see the [Container Network Policy documentation](../../../../application_security/policies/index.md#container-network-policy) (Ultimate only).
 
 Each method has benefits and drawbacks:
 
@@ -167,7 +174,7 @@ hubble:
 ```
 
 Additional information about the statistics page is available in the
-[documentation that describes the Threat Management UI](../../../../application_security/threat_monitoring/index.md#container-network-policy).
+[documentation that describes the Threat Management UI](../../../../application_security/policies/index.md#container-network-policy).
 
 ## Forwarding logs to a SIEM
 
@@ -192,11 +199,10 @@ violations but don't block any traffic. To set Cilium to Blocking mode, you must
 lines to the `applications/cilium/values.yaml` file in your cluster management project:
 
 ```yaml
-config:
-  policyAuditMode: false
+policyEnforcementMode: "always"
 
 monitor:
-  eventTypes: ["drop"]
+  eventTypes: ["drop", "policy-verdict"]
 ```
 
 ### Traffic is not being allowed as expected

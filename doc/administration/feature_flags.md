@@ -1,8 +1,7 @@
 ---
-stage: none
-group: Development
-info: "See the Technical Writers assigned to Development Guidelines: https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments-to-development-guidelines"
-type: reference
+stage: Enablement
+group: Distribution
+info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
 description: "GitLab administrator: enable and disable GitLab features deployed behind feature flags"
 ---
 
@@ -27,7 +26,7 @@ Features behind flags can be gradually rolled out, typically:
 1. The feature becomes enabled by default.
 1. The feature flag is removed.
 
-These features can be enabled and disabled to allow or disallow users to use
+These features can be enabled and disabled to allow or prevent users from using
 them. It can be done by GitLab administrators with access to GitLab Rails
 console.
 
@@ -37,16 +36,20 @@ For example, data is not recorded and services do not run.
 If you used a certain feature and identified a bug, a misbehavior, or an
 error, it's very important that you [**provide feedback**](https://gitlab.com/gitlab-org/gitlab/-/issues/new?issue[title]=Docs%20-%20feature%20flag%20feedback%3A%20Feature%20Name&issue[description]=Describe%20the%20problem%20you%27ve%20encountered.%0A%0A%3C!--%20Don%27t%20edit%20below%20this%20line%20--%3E%0A%0A%2Flabel%20~%22docs%5C-comments%22%20) to GitLab as soon
 as possible so we can improve or fix it while behind a flag. When you upgrade
-GitLab to an earlier version, the feature flag status may change.
+GitLab, the feature flag status may change.
 
 ## Risks when enabling features still in development
 
 Features that are disabled by default may change or be removed without notice in a future version of GitLab.
 
-Data corruption, stability degradation, or performance degradation might occur if
+Data corruption, stability degradation, performance degradation, or security issues might occur if
 you enable a feature that's disabled by default. Problems caused by using a default
 disabled feature aren't covered by GitLab support, unless you were directed by GitLab
 to enable the feature.
+
+Security issues found in features that are disabled by default are patched in regular releases
+and do not follow our regular [maintenance policy](../policy/maintenance.md#security-releases)
+with regards to backporting the fix.
 
 ## Risks when disabling released features
 
@@ -127,11 +130,15 @@ irb(main):001:0> Feature.enable(:my_awesome_feature)
 => nil
 ```
 
-To check if a flag is enabled or disabled you can use `Feature.enabled?` or `Feature.disabled?`. For example, for a fictional feature flag named `my_awesome_feature`:
+When the feature is ready, GitLab removes the feature flag, and the option for
+enabling and disabling it no longer exists. The feature becomes available in all instances.
+
+### Check if a feature flag is enabled
+
+To check if a flag is enabled or disabled, use `Feature.enabled?` or `Feature.disabled?`.
+For example, for a feature flag named `my_awesome_feature` that is already enabled:
 
 ```ruby
-Feature.enable(:my_awesome_feature)
-=> nil
 Feature.enabled?(:my_awesome_feature)
 => true
 Feature.disabled?(:my_awesome_feature)
@@ -140,3 +147,21 @@ Feature.disabled?(:my_awesome_feature)
 
 When the feature is ready, GitLab removes the feature flag, and the option for
 enabling and disabling it no longer exists. The feature becomes available in all instances.
+
+### View set feature flags
+
+You can view all GitLab administrator set feature flags:
+
+```ruby
+Feature.all
+=> [#<Flipper::Feature:198220 name="my_awesome_feature", state=:on, enabled_gate_names=[:boolean], adapter=:memoizable>]
+```
+
+### Unset feature flag
+
+You can unset a feature flag so that GitLab will fall back to the current defaults for that flag:
+
+```ruby
+Feature.remove(:my_awesome_feature)
+=> true
+```

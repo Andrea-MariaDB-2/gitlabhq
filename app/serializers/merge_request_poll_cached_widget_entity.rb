@@ -1,12 +1,13 @@
 # frozen_string_literal: true
 
 class MergeRequestPollCachedWidgetEntity < IssuableEntity
+  include MergeRequestMetricsHelper
+
   expose :auto_merge_enabled
   expose :state
   expose :merged_commit_sha
   expose :short_merged_commit_sha
   expose :merge_error
-  expose :public_merge_status, as: :merge_status
   expose :merge_user_id
   expose :source_branch
   expose :source_project_id
@@ -15,7 +16,6 @@ class MergeRequestPollCachedWidgetEntity < IssuableEntity
   expose :target_project_id
   expose :squash
   expose :rebase_in_progress?, as: :rebase_in_progress
-  expose :default_squash_commit_message
   expose :commits_count
   expose :merge_ongoing?, as: :merge_ongoing
   expose :work_in_progress?, as: :work_in_progress
@@ -24,6 +24,15 @@ class MergeRequestPollCachedWidgetEntity < IssuableEntity
   expose :remove_source_branch?, as: :remove_source_branch
   expose :source_branch_exists?, as: :source_branch_exists
   expose :branch_missing?, as: :branch_missing
+
+  expose :merge_status do |merge_request|
+    merge_request.check_mergeability(async: true)
+    merge_request.public_merge_status
+  end
+
+  expose :default_squash_commit_message do |merge_request|
+    merge_request.default_squash_commit_message(user: request.current_user)
+  end
 
   expose :commits_without_merge_commits, using: MergeRequestWidgetCommitEntity do |merge_request|
     merge_request.recent_commits.without_merge_commits
@@ -157,29 +166,6 @@ class MergeRequestPollCachedWidgetEntity < IssuableEntity
   def presenter(merge_request)
     @presenters ||= {}
     @presenters[merge_request] ||= MergeRequestPresenter.new(merge_request, current_user: current_user) # rubocop: disable CodeReuse/Presenter
-  end
-
-  # Once SchedulePopulateMergeRequestMetricsWithEventsData fully runs,
-  # we can remove this method and just serialize MergeRequest#metrics
-  # instead. See https://gitlab.com/gitlab-org/gitlab-foss/issues/41587
-  def build_metrics(merge_request)
-    # There's no need to query and serialize metrics data for merge requests that are not
-    # merged or closed.
-    return unless merge_request.merged? || merge_request.closed?
-    return merge_request.metrics if merge_request.merged? && merge_request.metrics&.merged_by_id
-    return merge_request.metrics if merge_request.closed? && merge_request.metrics&.latest_closed_by_id
-
-    build_metrics_from_events(merge_request)
-  end
-
-  def build_metrics_from_events(merge_request)
-    closed_event = merge_request.closed_event
-    merge_event = merge_request.merge_event
-
-    MergeRequest::Metrics.new(latest_closed_at: closed_event&.updated_at,
-                              latest_closed_by: closed_event&.author,
-                              merged_at: merge_event&.updated_at,
-                              merged_by: merge_event&.author)
   end
 end
 

@@ -1,6 +1,6 @@
 ---
 stage: Manage
-group: Access
+group: Authentication and Authorization
 info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
 ---
 
@@ -40,6 +40,8 @@ Settings are not cascading by default. To define a cascading setting, take the f
     ```ruby
     class AddDelayedProjectRemovalCascadingSetting < Gitlab::Database::Migration[1.0]
       include Gitlab::Database::MigrationHelpers::CascadingNamespaceSettings
+
+      enable_lock_retries!
 
       def up
         add_cascading_namespace_setting :delayed_project_removal, :boolean, default: false, null: false
@@ -133,7 +135,7 @@ Renders the enforcement checkbox.
 | `attribute`      | Name of the setting. For example, `:delayed_project_removal`.                                                                                                                                                                                              | `String` or `Symbol`                                                                           | `true`                                          |
 | `group`     | Current group. | [`Group`](https://gitlab.com/gitlab-org/gitlab/-/blob/master/app/models/group.rb) | `true` |
 | `form`           | [Rails FormBuilder object](https://apidock.com/rails/ActionView/Helpers/FormBuilder).                                                                                                                                                                      | [`ActionView::Helpers::FormBuilder`](https://apidock.com/rails/ActionView/Helpers/FormBuilder) | `true`                                          |
-| `setting_locked` | If the setting is locked by an ancestor group or admin setting. Can be calculated with [`cascading_namespace_setting_locked?`](https://gitlab.com/gitlab-org/gitlab/-/blob/c2736823b8e922e26fd35df4f0cd77019243c858/app/helpers/namespaces_helper.rb#L86). | `Boolean`                                                                                      | `true`                                          |
+| `setting_locked` | If the setting is locked by an ancestor group or administrator setting. Can be calculated with [`cascading_namespace_setting_locked?`](https://gitlab.com/gitlab-org/gitlab/-/blob/c2736823b8e922e26fd35df4f0cd77019243c858/app/helpers/namespaces_helper.rb#L86). | `Boolean`                                                                                      | `true`                                          |
 | `help_text`      | Text shown below the checkbox.                                                                                                                                                                                                                             | `String`                                                                                       | `false` (Subgroups cannot change this setting.) |
 
 [`_setting_label_checkbox.html.haml`](https://gitlab.com/gitlab-org/gitlab/-/blob/c2736823b8e922e26fd35df4f0cd77019243c858/app/views/shared/namespaces/cascading_settings/_setting_label_checkbox.html.haml)
@@ -145,7 +147,7 @@ Renders the label for a checkbox setting.
 | `attribute`            | Name of the setting. For example, `:delayed_project_removal`.                                                                                                                                                                                              | `String` or `Symbol`                                                                           | `true`                   |
 | `group`     | Current group. | [`Group`](https://gitlab.com/gitlab-org/gitlab/-/blob/master/app/models/group.rb) | `true` |
 | `form`                 | [Rails FormBuilder object](https://apidock.com/rails/ActionView/Helpers/FormBuilder).                                                                                                                                                                      | [`ActionView::Helpers::FormBuilder`](https://apidock.com/rails/ActionView/Helpers/FormBuilder) | `true`                   |
-| `setting_locked`       | If the setting is locked by an ancestor group or admin setting. Can be calculated with [`cascading_namespace_setting_locked?`](https://gitlab.com/gitlab-org/gitlab/-/blob/c2736823b8e922e26fd35df4f0cd77019243c858/app/helpers/namespaces_helper.rb#L86). | `Boolean`                                                                                      | `true`                   |
+| `setting_locked`       | If the setting is locked by an ancestor group or administrator setting. Can be calculated with [`cascading_namespace_setting_locked?`](https://gitlab.com/gitlab-org/gitlab/-/blob/c2736823b8e922e26fd35df4f0cd77019243c858/app/helpers/namespaces_helper.rb#L86). | `Boolean`                                                                                      | `true`                   |
 | `settings_path_helper` | Lambda function that generates a path to the ancestor setting. For example, `settings_path_helper: -> (locked_ancestor) { edit_group_path(locked_ancestor, anchor: 'js-permissions-settings') }`                                                           | `Lambda`                                                                                       | `true`                   |
 | `help_text`            | Text shown below the checkbox.                                                                                                                                                                                                                             | `String`                                                                                       | `false` (`nil`)          |
 
@@ -192,7 +194,7 @@ This function should be imported and called in the [page-specific JavaScript](fe
           setting_locked: delayed_project_removal_locked,
           settings_path_helper: -> (locked_ancestor) { edit_group_path(locked_ancestor, anchor: 'js-permissions-settings') },
           help_text: s_('Settings|Projects will be permanently deleted after a 7-day delay. Inherited by subgroups.') do
-        = s_('Settings|Enable delayed project removal')
+        = s_('Settings|Enable delayed project deletion')
       = render 'shared/namespaces/cascading_settings/enforcement_checkbox',
           attribute: :delayed_project_removal,
           group: @group,

@@ -87,9 +87,9 @@ module SearchHelper
 
   def search_entries_info_template(collection)
     if collection.total_pages > 1
-      s_("SearchResults|Showing %{from} - %{to} of %{count} %{scope} for%{term_element}").html_safe
+      s_("SearchResults|Showing %{from} - %{to} of %{count} %{scope} for %{term_element}").html_safe
     else
-      s_("SearchResults|Showing %{count} %{scope} for%{term_element}").html_safe
+      s_("SearchResults|Showing %{count} %{scope} for %{term_element}").html_safe
     end
   end
 
@@ -141,7 +141,7 @@ module SearchHelper
         }
       },
       {
-        title: _('Last updated'),
+        title: _('Updated date'),
         sortable: true,
         sortParam: {
           asc: 'updated_asc',
@@ -162,6 +162,23 @@ module SearchHelper
     end
 
     options
+  end
+
+  # search_context exposes a bit too much data to the frontend, this controls what data we share and when.
+  def header_search_context
+    {}.tap do |hash|
+      hash[:group] = { id: search_context.group.id, name: search_context.group.name } if search_context.for_group?
+      hash[:group_metadata] = search_context.group_metadata if search_context.for_group?
+
+      hash[:project] = { id: search_context.project.id, name: search_context.project.name } if search_context.for_project?
+      hash[:project_metadata] = search_context.project_metadata if search_context.for_project?
+
+      hash[:scope] = search_context.scope if search_context.for_project? || search_context.for_group?
+      hash[:code_search] = search_context.code_search? if search_context.for_project? || search_context.for_group?
+
+      hash[:ref] = search_context.ref if can?(current_user, :download_code, search_context.project)
+      hash[:for_snippets] = search_context.for_snippets?
+    end
   end
 
   private
@@ -201,18 +218,30 @@ module SearchHelper
     if @project && @project.repository.root_ref
       ref = @ref || @project.repository.root_ref
 
-      result = [
-        { category: "In this project", label: _("Files"),          url: project_tree_path(@project, ref) },
-        { category: "In this project", label: _("Commits"),        url: project_commits_path(@project, ref) },
-        { category: "In this project", label: _("Network"),        url: project_network_path(@project, ref) },
-        { category: "In this project", label: _("Graph"),          url: project_graph_path(@project, ref) },
+      result = []
+
+      if can?(current_user, :download_code, @project)
+        result.concat([
+          { category: "In this project", label: _("Files"),          url: project_tree_path(@project, ref) },
+          { category: "In this project", label: _("Commits"),        url: project_commits_path(@project, ref) }
+        ])
+      end
+
+      if can?(current_user, :read_repository_graphs, @project)
+        result.concat([
+          { category: "In this project", label: _("Network"),        url: project_network_path(@project, ref) },
+          { category: "In this project", label: _("Graph"),          url: project_graph_path(@project, ref) }
+        ])
+      end
+
+      result.concat([
         { category: "In this project", label: _("Issues"),         url: project_issues_path(@project) },
         { category: "In this project", label: _("Merge requests"), url: project_merge_requests_path(@project) },
         { category: "In this project", label: _("Milestones"),     url: project_milestones_path(@project) },
         { category: "In this project", label: _("Snippets"),       url: project_snippets_path(@project) },
         { category: "In this project", label: _("Members"),        url: project_project_members_path(@project) },
         { category: "In this project", label: _("Wiki"),           url: project_wikis_path(@project) }
-      ]
+      ])
 
       if can?(current_user, :read_feature_flag, @project)
         result << { category: "In this project", label: _("Feature Flags"), url: project_feature_flags_path(@project) }
@@ -324,7 +353,7 @@ module SearchHelper
       link_to search_path(search_params) do
         concat label
         concat ' '
-        concat content_tag(:span, count, class: ['badge badge-pill gl-badge badge-muted sm', badge_class], data: badge_data)
+        concat gl_badge_tag(count, { size: :sm }, { class: badge_class, data: badge_data })
       end
     end
   end

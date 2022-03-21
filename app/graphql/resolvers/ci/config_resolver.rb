@@ -38,6 +38,8 @@ module Resolvers
           .validate(content, dry_run: dry_run)
 
         response(result).merge(merged_yaml: result.merged_yaml)
+      rescue GRPC::InvalidArgument => error
+        Gitlab::ErrorTracking.track_and_raise_exception(error, sha: sha)
       end
 
       private
@@ -47,11 +49,13 @@ module Resolvers
           {
             status: :valid,
             errors: [],
+            warnings: result.warnings,
             stages: make_stages(result.jobs)
           }
         else
           {
             status: :invalid,
+            warnings: result.warnings,
             errors: result.errors
           }
         end

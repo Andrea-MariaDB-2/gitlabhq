@@ -23,13 +23,21 @@ module Gitlab
 
         def records_fetcher
           strong_memoize(:records_fetcher) do
-            RecordsFetcher.new(stage: stage, query: query, params: params)
+            if use_aggregated_data_collector?
+              aggregated_data_collector.records_fetcher
+            else
+              RecordsFetcher.new(stage: stage, query: query, params: params)
+            end
           end
         end
 
         def median
           strong_memoize(:median) do
-            Median.new(stage: stage, query: query, params: params)
+            if use_aggregated_data_collector?
+              aggregated_data_collector.median
+            else
+              Median.new(stage: stage, query: query, params: params)
+            end
           end
         end
 
@@ -41,7 +49,11 @@ module Gitlab
 
         def count
           strong_memoize(:count) do
-            limit_count
+            if use_aggregated_data_collector?
+              aggregated_data_collector.count
+            else
+              limit_count
+            end
           end
         end
 
@@ -50,7 +62,11 @@ module Gitlab
         attr_reader :stage, :params
 
         def query
-          BaseQueryBuilder.new(stage: stage, params: params).build
+          query_builder.build
+        end
+
+        def query_builder
+          @query_builder ||= BaseQueryBuilder.new(stage: stage, params: params)
         end
 
         # Limiting the maximum number of records so the COUNT(*) query stays efficient for large groups.
@@ -58,6 +74,14 @@ module Gitlab
         # COUNT < 1001, show the actual number on the UI
         def limit_count
           query.limit(MAX_COUNT).count
+        end
+
+        def aggregated_data_collector
+          @aggregated_data_collector ||= Aggregated::DataCollector.new(stage: stage, params: params)
+        end
+
+        def use_aggregated_data_collector?
+          params.fetch(:use_aggregated_data_collector, false)
         end
       end
     end

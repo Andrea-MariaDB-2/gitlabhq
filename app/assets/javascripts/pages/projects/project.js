@@ -1,7 +1,7 @@
 /* eslint-disable func-names, no-return-assign */
 
 import $ from 'jquery';
-import Cookies from 'js-cookie';
+import { setCookie } from '~/lib/utils/common_utils';
 import initClonePanel from '~/clone_panel';
 import initDeprecatedJQueryDropdown from '~/deprecated_jquery_dropdown';
 import createFlash from '~/flash';
@@ -23,20 +23,20 @@ export default class Project {
       });
     }
 
-    $('.hide-no-ssh-message').on('click', function (e) {
-      Cookies.set('hide_no_ssh_message', 'false');
-      $(this).parents('.no-ssh-key-message').remove();
+    $('.js-hide-no-ssh-message').on('click', function (e) {
+      setCookie('hide_no_ssh_message', 'false');
+      $(this).parents('.js-no-ssh-key-message').remove();
       return e.preventDefault();
     });
-    $('.hide-no-password-message').on('click', function (e) {
-      Cookies.set('hide_no_password_message', 'false');
-      $(this).parents('.no-password-message').remove();
+    $('.js-hide-no-password-message').on('click', function (e) {
+      setCookie('hide_no_password_message', 'false');
+      $(this).parents('.js-no-password-message').remove();
       return e.preventDefault();
     });
     $('.hide-auto-devops-implicitly-enabled-banner').on('click', function (e) {
       const projectId = $(this).data('project-id');
       const cookieKey = `hide_auto_devops_implicitly_enabled_banner_${projectId}`;
-      Cookies.set(cookieKey, 'false');
+      setCookie(cookieKey, 'false');
       $(this).parents('.auto-devops-implicitly-enabled-banner').remove();
       return e.preventDefault();
     });

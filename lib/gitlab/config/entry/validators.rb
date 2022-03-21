@@ -39,6 +39,17 @@ module Gitlab
           end
         end
 
+        class MutuallyExclusiveKeysValidator < ActiveModel::EachValidator
+          def validate_each(record, attribute, value)
+            mutually_exclusive_keys = value.try(:keys).to_a & options[:in]
+
+            if mutually_exclusive_keys.length > 1
+              record.errors.add(attribute, "please use only one the following keys: " +
+                mutually_exclusive_keys.join(', '))
+            end
+          end
+        end
+
         class AllowedValuesValidator < ActiveModel::EachValidator
           def validate_each(record, attribute, value)
             unless options[:in].include?(value.to_s)
@@ -213,14 +224,8 @@ module Gitlab
 
           def validate_each(record, attribute, value)
             unless validate_regexp(value)
-              record.errors.add(attribute, 'must be a regular expression')
+              record.errors.add(attribute, 'must be a regular expression with re2 syntax')
             end
-          end
-
-          protected
-
-          def fallback
-            false
           end
 
           private
@@ -231,18 +236,22 @@ module Gitlab
 
           def validate_regexp(value)
             matches_syntax?(value) &&
-              Gitlab::UntrustedRegexp::RubySyntax.valid?(value, fallback: fallback)
+              Gitlab::UntrustedRegexp::RubySyntax.valid?(value)
           end
         end
 
         class ArrayOfStringsOrRegexpsValidator < RegexpValidator
           def validate_each(record, attribute, value)
             unless validate_array_of_strings_or_regexps(value)
-              record.errors.add(attribute, 'should be an array of strings or regexps')
+              record.errors.add(attribute, validation_message)
             end
           end
 
           private
+
+          def validation_message
+            'should be an array of strings or regular expressions using re2 syntax'
+          end
 
           def validate_array_of_strings_or_regexps(values)
             values.is_a?(Array) && values.all?(&method(:validate_string_or_regexp))
@@ -252,14 +261,6 @@ module Gitlab
             return false unless value.is_a?(String)
             return validate_regexp(value) if matches_syntax?(value)
 
-            true
-          end
-        end
-
-        class ArrayOfStringsOrRegexpsWithFallbackValidator < ArrayOfStringsOrRegexpsValidator
-          protected
-
-          def fallback
             true
           end
         end
@@ -275,20 +276,6 @@ module Gitlab
 
           def validate_array_of_strings_or_string(values)
             validate_array_of_strings(values) || validate_string(values)
-          end
-        end
-
-        class NestedArrayOfStringsValidator < ArrayOfStringsOrStringValidator
-          def validate_each(record, attribute, value)
-            unless validate_nested_array_of_strings(value)
-              record.errors.add(attribute, 'should be an array containing strings and arrays of strings')
-            end
-          end
-
-          private
-
-          def validate_nested_array_of_strings(values)
-            values.is_a?(Array) && values.all? { |element| validate_array_of_strings_or_string(element) }
           end
         end
 

@@ -8,6 +8,8 @@ RSpec.describe 'Projects > Settings > User transfers a project', :js do
   let(:group) { create(:group) }
 
   before do
+    stub_const('Gitlab::QueryLimiting::Transaction::THRESHOLD', 120)
+
     group.add_owner(user)
     sign_in(user)
   end
@@ -16,10 +18,12 @@ RSpec.describe 'Projects > Settings > User transfers a project', :js do
     visit edit_project_path(project)
 
     page.within('.js-project-transfer-form') do
-      page.find('.select2-container').click
+      page.find('[data-testid="transfer-project-namespace"]').click
     end
 
-    page.find("div[role='option']", text: group.full_name).click
+    page.within('[data-testid="transfer-project-namespace"]') do
+      page.find("li button", text: group.full_name).click
+    end
 
     click_button('Transfer project')
 
@@ -47,13 +51,13 @@ RSpec.describe 'Projects > Settings > User transfers a project', :js do
     visit new_path
     wait_for_requests
 
-    expect(current_path).to eq(new_path)
+    expect(page).to have_current_path(new_path, ignore_query: true)
     expect(find('.breadcrumbs')).to have_content(project.name)
 
     visit old_path
     wait_for_requests
 
-    expect(current_path).to eq(new_path)
+    expect(page).to have_current_path(new_path, ignore_query: true)
     expect(find('.breadcrumbs')).to have_content(project.name)
   end
 
@@ -65,7 +69,7 @@ RSpec.describe 'Projects > Settings > User transfers a project', :js do
       new_project = create(:project, namespace: user.namespace, path: project_path)
       visit old_path
 
-      expect(current_path).to eq(old_path)
+      expect(page).to have_current_path(old_path, ignore_query: true)
       expect(find('.breadcrumbs')).to have_content(new_project.name)
     end
   end

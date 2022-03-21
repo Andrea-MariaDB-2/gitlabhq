@@ -14,6 +14,13 @@ class Projects::MergeRequests::DiffsController < Projects::MergeRequests::Applic
 
   after_action :track_viewed_diffs_events, only: [:diffs_batch]
 
+  urgency :low, [
+    :show,
+    :diff_for_path,
+    :diffs_batch,
+    :diffs_metadata
+  ]
+
   def show
     render_diffs
   end
@@ -28,25 +35,23 @@ class Projects::MergeRequests::DiffsController < Projects::MergeRequests::Applic
 
     diffs = @compare.diffs_in_batch(params[:page], params[:per_page], diff_options: diff_options_hash)
     unfoldable_positions = @merge_request.note_positions_for_paths(diffs.diff_file_paths, current_user).unfoldable
-    environment = @merge_request.environments_for(current_user, latest: true).last
 
     diffs.unfold_diff_files(unfoldable_positions)
     diffs.write_cache
 
     options = {
-      environment: environment,
       merge_request: @merge_request,
+      commit: commit,
       diff_view: diff_view,
       merge_ref_head_diff: render_merge_ref_head_diff?,
       pagination_data: diffs.pagination_data,
       allow_tree_conflicts: display_merge_conflicts_in_diff?
     }
 
-    if diff_options_hash[:paths].blank? && Feature.enabled?(:diffs_batch_render_cached, project, default_enabled: :yaml)
+    if diff_options_hash[:paths].blank?
       # NOTE: Any variables that would affect the resulting json needs to be added to the cache_context to avoid stale cache issues.
       cache_context = [
         current_user&.cache_key,
-        environment&.cache_key,
         unfoldable_positions.map(&:to_h),
         diff_view,
         params[:w],
@@ -90,7 +95,6 @@ class Projects::MergeRequests::DiffsController < Projects::MergeRequests::Applic
   # Deprecated: https://gitlab.com/gitlab-org/gitlab/issues/37735
   def render_diffs
     diffs = @compare.diffs(diff_options)
-    @environment = @merge_request.environments_for(current_user, latest: true).last
 
     diffs.unfold_diff_files(note_positions.unfoldable)
     diffs.write_cache
@@ -107,9 +111,7 @@ class Projects::MergeRequests::DiffsController < Projects::MergeRequests::Applic
       allow_tree_conflicts: display_merge_conflicts_in_diff?
     )
 
-    if @merge_request.project.context_commits_enabled?
-      options[:context_commits] = @merge_request.recent_context_commits
-    end
+    options[:context_commits] = @merge_request.recent_context_commits
 
     render json: DiffsSerializer.new(request).represent(diffs, options)
   end
@@ -167,7 +169,6 @@ class Projects::MergeRequests::DiffsController < Projects::MergeRequests::Applic
 
   def additional_attributes
     {
-      environment: @environment,
       merge_request: @merge_request,
       merge_request_diff: @merge_request_diff,
       merge_request_diffs: @merge_request_diffs,

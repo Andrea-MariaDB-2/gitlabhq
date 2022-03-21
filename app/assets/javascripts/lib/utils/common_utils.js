@@ -6,6 +6,7 @@ import { GlBreakpointInstance as breakpointInstance } from '@gitlab/ui/dist/util
 import $ from 'jquery';
 import Cookies from 'js-cookie';
 import { isFunction, defer } from 'lodash';
+import { SCOPED_LABEL_DELIMITER } from '~/vue_shared/components/sidebar/labels_select_widget/constants';
 import { convertToCamelCase, convertToSnakeCase } from './text_utility';
 import { isObject } from './type_utility';
 import { getLocationHash } from './url_utility';
@@ -117,7 +118,6 @@ export const handleLocationHash = () => {
 };
 
 // Check if element scrolled into viewport from above or below
-// Courtesy http://stackoverflow.com/a/7557433/414749
 export const isInViewport = (el, offset = {}) => {
   const rect = el.getBoundingClientRect();
   const { top, left } = offset;
@@ -128,19 +128,6 @@ export const isInViewport = (el, offset = {}) => {
     rect.bottom <= window.innerHeight &&
     parseInt(rect.right, 10) <= window.innerWidth
   );
-};
-
-export const parseUrl = (url) => {
-  const parser = document.createElement('a');
-  parser.href = url;
-  return parser;
-};
-
-export const parseUrlPathname = (url) => {
-  const parsedUrl = parseUrl(url);
-  // parsedUrl.pathname will return an absolute path for Firefox and a relative path for IE11
-  // We have to make sure we always have an absolute path.
-  return parsedUrl.pathname.charAt(0) === '/' ? parsedUrl.pathname : `/${parsedUrl.pathname}`;
 };
 
 export const isMetaKey = (e) => e.metaKey || e.ctrlKey || e.altKey || e.shiftKey;
@@ -181,6 +168,7 @@ export const contentTop = () => {
     },
     () => getOuterHeight('.merge-request-tabs'),
     () => getOuterHeight('.js-diff-files-changed'),
+    () => getOuterHeight('.issue-sticky-header.gl-fixed'),
     ({ desktop }) => {
       const diffsTabIsActive = window.mrTabs?.currentAction === 'diffs';
       let size;
@@ -220,16 +208,16 @@ export const scrollToElement = (element, options = {}) => {
     // In the previous implementation, jQuery naturally deferred this scrolling.
     // Unfortunately, we're quite coupled to this implementation detail now.
     defer(() => {
-      const { duration = 200, offset = 0 } = options;
+      const { duration = 200, offset = 0, behavior = duration ? 'smooth' : 'auto' } = options;
       const y = el.getBoundingClientRect().top + window.pageYOffset + offset - contentTop();
-      window.scrollTo({ top: y, behavior: duration ? 'smooth' : 'auto' });
+      window.scrollTo({ top: y, behavior });
     });
   }
 };
 
-export const scrollToElementWithContext = (element) => {
+export const scrollToElementWithContext = (element, options) => {
   const offsetMultiplier = -0.1;
-  return scrollToElement(element, { offset: window.innerHeight * offsetMultiplier });
+  return scrollToElement(element, { ...options, offset: window.innerHeight * offsetMultiplier });
 };
 
 /**
@@ -560,11 +548,9 @@ export const addSelectOnFocusBehaviour = (selector = '.js-select-on-focus') => {
  * Method to round of values with decimal places
  * with provided precision.
  *
- * Taken from https://stackoverflow.com/a/7343013/414749
- *
  * Eg; roundOffFloat(3.141592, 3) = 3.142
  *
- * Refer to spec/javascripts/lib/utils/common_utils_spec.js for
+ * Refer to spec/frontend/lib/utils/common_utils_spec.js for
  * more supported examples.
  *
  * @param {Float} number
@@ -581,7 +567,7 @@ export const roundOffFloat = (number, precision = 0) => {
  *
  * Eg; roundToNearestHalf(3.141592) = 3, roundToNearestHalf(3.41592) = 3.5
  *
- * Refer to spec/javascripts/lib/utils/common_utils_spec.js for
+ * Refer to spec/frontend/lib/utils/common_utils_spec.js for
  * more supported examples.
  *
  * @param {Float} number
@@ -595,7 +581,7 @@ export const roundToNearestHalf = (num) => Math.round(num * 2).toFixed() / 2;
  *
  * Eg; roundDownFloat(3.141592, 3) = 3.141
  *
- * Refer to spec/javascripts/lib/utils/common_utils_spec.js for
+ * Refer to spec/frontend/lib/utils/common_utils_spec.js for
  * more supported examples.
  *
  * @param {Float} number
@@ -645,7 +631,7 @@ export const NavigationType = {
  *        matched with our query.
  *
  *    You can learn more about behaviour of this method by referring to tests
- *    within `spec/javascripts/lib/utils/common_utils_spec.js`.
+ *    within `spec/frontend/lib/utils/common_utils_spec.js`.
  *
  * @param {string} query String to search for
  * @param {object} searchSpace Object containing properties to search in for `query`
@@ -688,21 +674,28 @@ export const searchBy = (query = '', searchSpace = {}) => {
  * @param {Object} label
  * @returns Boolean
  */
-export const isScopedLabel = ({ title = '' } = {}) => title.indexOf('::') !== -1;
+export const isScopedLabel = ({ title = '' } = {}) => title.includes(SCOPED_LABEL_DELIMITER);
+
+const scopedLabelRegex = new RegExp(`(.*)${SCOPED_LABEL_DELIMITER}.*`);
 
 /**
- * Returns the base value of the scoped label
+ * Returns the key of a scoped label.
+ * For example:
+ * - returns `scoped` if the label is `scoped::value`.
+ * - returns `scoped::label` if the label is `scoped::label::value`.
  *
- * Expected Label to be an Object with `title` as a key:
- *   { title: 'LabelTitle', ...otherProperties };
- *
- * @param {Object} label
- * @returns String
+ * @param {Object} label object containing `title` property
+ * @returns String scoped label key, or full label if it is not a scoped label
  */
-export const scopedLabelKey = ({ title = '' }) => isScopedLabel({ title }) && title.split('::')[0];
+export const scopedLabelKey = ({ title = '' }) => {
+  return title.replace(scopedLabelRegex, '$1');
+};
 
 // Methods to set and get Cookie
-export const setCookie = (name, value) => Cookies.set(name, value, { expires: 365 });
+export const setCookie = (name, value, attributes) => {
+  const defaults = { expires: 365, secure: Boolean(window.gon?.secure) };
+  Cookies.set(name, value, { ...defaults, ...attributes });
+};
 
 export const getCookie = (name) => Cookies.get(name);
 
@@ -733,3 +726,23 @@ export const isFeatureFlagEnabled = (flag) => window.gon.features?.[flag];
 export const convertArrayToCamelCase = (array) => array.map((i) => convertToCamelCase(i));
 
 export const isLoggedIn = () => Boolean(window.gon?.current_user_id);
+
+/**
+ * This method takes in array of objects with snake_case
+ * property names and returns a new array of objects with
+ * camelCase property names
+ *
+ * @param {Array[Object]} array - Array to be converted
+ * @returns {Array[Object]} Converted array
+ */
+export const convertArrayOfObjectsToCamelCase = (array) =>
+  array.map((o) => convertObjectPropsToCamelCase(o));
+
+export const getFirstPropertyValue = (data) => {
+  if (!data) return null;
+
+  const [key] = Object.keys(data);
+  if (!key) return null;
+
+  return data[key];
+};

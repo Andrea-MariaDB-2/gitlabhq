@@ -1,4 +1,4 @@
-import Vue from 'vue';
+import Vue, { nextTick } from 'vue';
 import { mountComponentWithStore } from 'helpers/vue_mount_component_helper';
 import Bar from '~/ide/components/file_templates/bar.vue';
 import { createStore } from '~/ide/stores';
@@ -36,7 +36,7 @@ describe('IDE file templates bar component', () => {
     it('calls setSelectedTemplateType when clicking item', () => {
       jest.spyOn(vm, 'setSelectedTemplateType').mockImplementation();
 
-      vm.$el.querySelector('.dropdown-content button').click();
+      vm.$el.querySelector('.dropdown-menu button').click();
 
       expect(vm.setSelectedTemplateType).toHaveBeenCalledWith({
         name: '.gitlab-ci.yml',
@@ -46,7 +46,7 @@ describe('IDE file templates bar component', () => {
   });
 
   describe('template dropdown', () => {
-    beforeEach((done) => {
+    beforeEach(async () => {
       vm.$store.state.fileTemplates.templates = [
         {
           name: 'test',
@@ -57,17 +57,17 @@ describe('IDE file templates bar component', () => {
         key: 'gitlab_ci_ymls',
       };
 
-      vm.$nextTick(done);
+      await nextTick();
     });
 
     it('renders dropdown component', () => {
       expect(vm.$el.querySelectorAll('.dropdown')[1].textContent).toContain('Choose a template');
     });
 
-    it('calls fetchTemplate on click', () => {
+    it('calls fetchTemplate on dropdown open', () => {
       jest.spyOn(vm, 'fetchTemplate').mockImplementation();
 
-      vm.$el.querySelectorAll('.dropdown-content')[1].querySelector('button').click();
+      vm.$el.querySelectorAll('.dropdown-menu')[1].querySelector('button').click();
 
       expect(vm.fetchTemplate).toHaveBeenCalledWith({
         name: 'test',
@@ -75,25 +75,22 @@ describe('IDE file templates bar component', () => {
     });
   });
 
-  it('shows undo button if updateSuccess is true', (done) => {
+  it('shows undo button if updateSuccess is true', async () => {
     vm.$store.state.fileTemplates.updateSuccess = true;
 
-    vm.$nextTick(() => {
-      expect(vm.$el.querySelector('.btn-default').style.display).not.toBe('none');
-
-      done();
-    });
+    await nextTick();
+    expect(vm.$el.querySelector('.btn-default').style.display).not.toBe('none');
   });
 
   it('calls undoFileTemplate when clicking undo button', () => {
     jest.spyOn(vm, 'undoFileTemplate').mockImplementation();
 
-    vm.$el.querySelector('.btn-default').click();
+    vm.$el.querySelector('.btn-default-secondary').click();
 
     expect(vm.undoFileTemplate).toHaveBeenCalled();
   });
 
-  it('calls setSelectedTemplateType if activeFile name matches a template', (done) => {
+  it('calls setSelectedTemplateType if activeFile name matches a template', async () => {
     const fileName = '.gitlab-ci.yml';
 
     jest.spyOn(vm, 'setSelectedTemplateType').mockImplementation(() => {});
@@ -101,13 +98,10 @@ describe('IDE file templates bar component', () => {
 
     vm.setInitialType();
 
-    vm.$nextTick(() => {
-      expect(vm.setSelectedTemplateType).toHaveBeenCalledWith({
-        name: fileName,
-        key: 'gitlab_ci_ymls',
-      });
-
-      done();
+    await nextTick();
+    expect(vm.setSelectedTemplateType).toHaveBeenCalledWith({
+      name: fileName,
+      key: 'gitlab_ci_ymls',
     });
   });
 });

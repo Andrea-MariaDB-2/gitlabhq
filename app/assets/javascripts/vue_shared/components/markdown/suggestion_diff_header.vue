@@ -1,11 +1,11 @@
 <script>
-import { GlButton, GlLoadingIcon, GlTooltipDirective, GlIcon } from '@gitlab/ui';
+import { GlBadge, GlButton, GlLoadingIcon, GlTooltipDirective, GlIcon } from '@gitlab/ui';
 import { isLoggedIn } from '~/lib/utils/common_utils';
 import { __ } from '~/locale';
 import ApplySuggestion from './apply_suggestion.vue';
 
 export default {
-  components: { GlIcon, GlButton, GlLoadingIcon, ApplySuggestion },
+  components: { GlBadge, GlIcon, GlButton, GlLoadingIcon, ApplySuggestion },
   directives: { 'gl-tooltip': GlTooltipDirective },
   props: {
     batchSuggestionsCount: {
@@ -39,7 +39,8 @@ export default {
     },
     defaultCommitMessage: {
       type: String,
-      required: true,
+      required: false,
+      default: null,
     },
     inapplicableReason: {
       type: String,
@@ -57,12 +58,19 @@ export default {
       isApplyingSingle: false,
     };
   },
+
   computed: {
     isApplying() {
       return this.isApplyingSingle || this.isApplyingBatch;
     },
     tooltipMessage() {
-      return this.canApply ? __('This also resolves this thread') : this.inapplicableReason;
+      if (!this.canApply) {
+        return this.inapplicableReason;
+      }
+
+      return this.batchSuggestionsCount > 1
+        ? __('This also resolves all related threads')
+        : __('This also resolves this thread');
     },
     isDisableButton() {
       return this.isApplying || !this.canApply;
@@ -71,13 +79,30 @@ export default {
       if (this.isApplyingSingle || this.batchSuggestionsCount < 2) {
         return __('Applying suggestion...');
       }
+
       return __('Applying suggestions...');
     },
     isLoggedIn() {
       return isLoggedIn();
     },
+    showApplySuggestion() {
+      if (!this.isLoggedIn) return false;
+
+      if (this.batchSuggestionsCount >= 1 && !this.isBatched) {
+        return false;
+      }
+
+      return true;
+    },
   },
   methods: {
+    apply(message) {
+      if (this.batchSuggestionsCount > 1) {
+        this.applySuggestionBatch(message);
+      } else {
+        this.applySuggestion(message);
+      }
+    },
     applySuggestion(message) {
       if (!this.canApply) return;
       this.isApplyingSingle = true;
@@ -87,9 +112,9 @@ export default {
     applySuggestionCallback() {
       this.isApplyingSingle = false;
     },
-    applySuggestionBatch() {
+    applySuggestionBatch(message) {
       if (!this.canApply) return;
-      this.$emit('applyBatch');
+      this.$emit('applyBatch', message);
     },
     addSuggestionToBatch() {
       this.$emit('addToBatch');
@@ -109,50 +134,45 @@ export default {
         <gl-icon name="question-o" css-classes="link-highlight" />
       </a>
     </div>
-    <div v-if="isApplied" class="badge badge-success">{{ __('Applied') }}</div>
-    <div v-else-if="isApplying" class="d-flex align-items-center text-secondary">
+    <gl-badge v-if="isApplied" variant="success" data-qa-selector="applied_badge">
+      {{ __('Applied') }}
+    </gl-badge>
+    <div
+      v-else-if="isApplying"
+      class="d-flex align-items-center text-secondary"
+      data-qa-selector="applying_badge"
+    >
       <gl-loading-icon size="sm" class="d-flex-center mr-2" />
       <span>{{ applyingSuggestionsMessage }}</span>
     </div>
-    <div v-else-if="canApply && isBatched" class="d-flex align-items-center">
-      <gl-button
-        class="btn-inverted js-remove-from-batch-btn btn-grouped"
-        :disabled="isApplying"
-        @click="removeSuggestionFromBatch"
-      >
-        {{ __('Remove from batch') }}
-      </gl-button>
-      <gl-button
-        v-gl-tooltip.viewport="__('This also resolves all related threads')"
-        class="btn-inverted js-apply-batch-btn btn-grouped"
-        data-qa-selector="apply_suggestions_batch_button"
-        :disabled="isApplying"
-        variant="success"
-        @click="applySuggestionBatch"
-      >
-        {{ __('Apply suggestions') }}
-        <span class="badge badge-pill badge-pill-success">
-          {{ batchSuggestionsCount }}
-        </span>
-      </gl-button>
-    </div>
-    <div v-else class="d-flex align-items-center">
-      <gl-button
-        v-if="suggestionsCount > 1 && !isDisableButton"
-        class="btn-inverted js-add-to-batch-btn btn-grouped"
-        data-qa-selector="add_suggestion_batch_button"
-        :disabled="isDisableButton"
-        @click="addSuggestionToBatch"
-      >
-        {{ __('Add suggestion to batch') }}
-      </gl-button>
+    <div v-else-if="isLoggedIn" class="d-flex align-items-center">
+      <div v-if="isBatched">
+        <gl-button
+          class="btn-inverted js-remove-from-batch-btn btn-grouped"
+          :disabled="isApplying"
+          @click="removeSuggestionFromBatch"
+        >
+          {{ __('Remove from batch') }}
+        </gl-button>
+      </div>
+      <div v-else-if="!isDisableButton && suggestionsCount > 1">
+        <gl-button
+          class="btn-inverted js-add-to-batch-btn btn-grouped"
+          data-qa-selector="add_suggestion_batch_button"
+          :disabled="isDisableButton"
+          @click="addSuggestionToBatch"
+        >
+          {{ __('Add suggestion to batch') }}
+        </gl-button>
+      </div>
       <apply-suggestion
-        v-if="isLoggedIn"
+        v-if="showApplySuggestion"
         v-gl-tooltip.viewport="tooltipMessage"
         :disabled="isDisableButton"
         :default-commit-message="defaultCommitMessage"
+        :batch-suggestions-count="batchSuggestionsCount"
         class="gl-ml-3"
-        @apply="applySuggestion"
+        @apply="apply"
       />
     </div>
   </div>

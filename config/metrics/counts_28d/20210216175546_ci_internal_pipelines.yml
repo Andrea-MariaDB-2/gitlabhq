@@ -1,5 +1,5 @@
 ---
-data_category: optional
+data_category: operational
 key_path: usage_activity_by_stage_monthly.verify.ci_internal_pipelines
 description: Total pipelines in GitLab repositories in a month
 product_section: ops
@@ -7,7 +7,7 @@ product_stage: verify
 product_group: group::pipeline execution
 product_category: continuous_integration
 value_type: number
-status: data_available
+status: active
 time_frame: 28d
 data_source: database
 distribution:
@@ -18,3 +18,5 @@ tier:
 - premium
 - ultimate
 performance_indicator_type: []
+milestone: "12.9"
+introduced_by_url: "https://gitlab.com/gitlab-org/gitlab/-/merge_requests/26441"

@@ -16,7 +16,7 @@ Service Ping consists of two kinds of data:
 To implement a new metric in Service Ping, follow these steps:
 
 1. [Implement the required counter](#types-of-counters)
-1. [Name and place the metric](#name-and-place-the-metric)
+1. [Name and place the metric](metrics_dictionary.md#metric-key_path)
 1. [Test counters manually using your Rails console](#test-counters-manually-using-your-rails-console)
 1. [Generate the SQL query](#generate-the-sql-query)
 1. [Optimize queries with `#database-lab`](#optimize-queries-with-database-lab)
@@ -28,7 +28,10 @@ To implement a new metric in Service Ping, follow these steps:
 
 ## Instrumentation classes
 
-We recommend you use [instrumentation classes](metrics_instrumentation.md) in `usage_data.rb` where possible.
+NOTE:
+Implementing metrics directly in `usage_data.rb` is deprecated.
+When you add or change a Service Ping Metric, you must migrate metrics to [instrumentation classes](metrics_instrumentation.md).
+For information about the progress on migrating Service Ping metrics, see this [epic](https://gitlab.com/groups/gitlab-org/-/epics/5547).
 
 For example, we have the following instrumentation class:
 `lib/gitlab/usage/metrics/instrumentations/count_boards_metric.rb`.
@@ -41,7 +44,7 @@ boards: add_metric('CountBoardsMetric', time_frame: 'all'),
 
 ## Types of counters
 
-There are several types of counters in `usage_data.rb`:
+There are several types of counters for metrics:
 
 - **[Batch counters](#batch-counters)**: Used for counts and sums.
 - **[Redis counters](#redis-counters):** Used for in-memory counts.
@@ -68,63 +71,38 @@ you must add a specialized index on the columns involved in a counter.
 
 #### Ordinary batch counters
 
-Simple count of a given `ActiveRecord_Relation`, does a non-distinct batch count, smartly reduces `batch_size`, and handles errors.
-Handles the `ActiveRecord::StatementInvalid` error.
+Create a new [database metrics](metrics_instrumentation.md#database-metrics) instrumentation class with `count` operation for a given `ActiveRecord_Relation`
 
 Method:
 
 ```ruby
-count(relation, column = nil, batch: true, start: nil, finish: nil)
+add_metric('CountIssuesMetric', time_frame: 'all')
 ```
-
-Arguments:
-
-- `relation` the ActiveRecord_Relation to perform the count
-- `column` the column to perform the count on, by default is the primary key
-- `batch`: default `true` to use batch counting
-- `start`: custom start of the batch counting to avoid complex min calculations
-- `end`: custom end of the batch counting to avoid complex min calculations
 
 Examples:
 
-```ruby
-count(User.active)
-count(::Clusters::Cluster.aws_installed.enabled, :cluster_id)
-count(::Clusters::Cluster.aws_installed.enabled, :cluster_id, start: ::Clusters::Cluster.minimum(:id), finish: ::Clusters::Cluster.maximum(:id))
-```
+Examples using `usage_data.rb` have been [deprecated](usage_data.md). We recommend to use [instrumentation classes](metrics_instrumentation.md).
 
 #### Distinct batch counters
 
-Distinct count of a given `ActiveRecord_Relation` on given column, a distinct batch count, smartly reduces `batch_size`, and handles errors.
-Handles the `ActiveRecord::StatementInvalid` error.
+Create a new [database metrics](metrics_instrumentation.md#database-metrics) instrumentation class with `distinct_count` operation for a given `ActiveRecord_Relation`.
 
 Method:
 
 ```ruby
-distinct_count(relation, column = nil, batch: true, batch_size: nil, start: nil, finish: nil)
+add_metric('CountUsersAssociatingMilestonesToReleasesMetric', time_frame: 'all')
 ```
-
-Arguments:
-
-- `relation`: the ActiveRecord_Relation to perform the count
-- `column`: the column to perform the distinct count, by default is the primary key
-- `batch`: default `true` to use batch counting
-- `batch_size`: if none set it uses default value 10000 from `Gitlab::Database::BatchCounter`
-- `start`: custom start of the batch counting to avoid complex min calculations
-- `end`: custom end of the batch counting to avoid complex min calculations
 
 WARNING:
 Counting over non-unique columns can lead to performance issues. For more information, see the [iterating tables in batches](../iterating_tables_in_batches.md) guide.
 
 Examples:
 
-```ruby
-distinct_count(::Project, :creator_id)
-distinct_count(::Note.with_suggestions.where(time_period), :author_id, start: ::User.minimum(:id), finish: ::User.maximum(:id))
-distinct_count(::Clusters::Applications::CertManager.where(time_period).available.joins(:cluster), 'clusters.user_id')
-```
+Examples using `usage_data.rb` have been [deprecated](usage_data.md). We recommend to use [instrumentation classes](metrics_instrumentation.md).
 
 #### Sum batch operation
+
+There is no support for `sum` for database metrics.
 
 Sum the values of a given ActiveRecord_Relation on given column and handles errors.
 Handles the `ActiveRecord::StatementInvalid` error
@@ -295,19 +273,22 @@ Examples of implementation:
 - Using Redis methods [`INCR`](https://redis.io/commands/incr), [`GET`](https://redis.io/commands/get), and [`Gitlab::UsageDataCounters::WikiPageCounter`](https://gitlab.com/gitlab-org/gitlab/-/blob/master/lib/gitlab/usage_data_counters/wiki_page_counter.rb)
 - Using Redis methods [`HINCRBY`](https://redis.io/commands/hincrby), [`HGETALL`](https://redis.io/commands/hgetall), and [`Gitlab::UsageCounters::PodLogs`](https://gitlab.com/gitlab-org/gitlab/-/blob/master/lib/gitlab/usage_counters/pod_logs.rb)
 
+##### `UsageData` API
+
+You can use the `UsageData` API to track events.
+To track events, the `usage_data_api` feature flag must
+be enabled (set to `default_enabled: true`).
+Enabled by default in GitLab 13.7 and later.
+
 ##### UsageData API tracking
 
-<!-- There's nearly identical content in `##### Adding new events`. If you fix errors here, you may need to fix the same errors in the other location. -->
+1. Track events using the [`UsageData` API](#usagedata-api).
 
-1. Track event using `UsageData` API
-
-   Increment event count using ordinary Redis counter, for given event name.
-
-   Tracking events using the `UsageData` API requires the `usage_data_api` feature flag to be enabled, which is enabled by default.
+   Increment event count using an ordinary Redis counter, for a given event name.
 
    API requests are protected by checking for a valid CSRF token.
 
-   To be able to increment the values, the related feature `usage_data_<event_name>` should be enabled.
+   To increment the values, the related feature `usage_data_<event_name>` must be enabled.
 
    ```plaintext
    POST /usage_data/increment_counter
@@ -315,18 +296,18 @@ Examples of implementation:
 
    | Attribute | Type | Required | Description |
    | :-------- | :--- | :------- | :---------- |
-   | `event` | string | yes | The event name it should be tracked |
+   | `event` | string | yes | The event name to track. |
 
    Response:
 
-   - `200` if event was tracked
-   - `400 Bad request` if event parameter is missing
-   - `401 Unauthorized` if user is not authenticated
-   - `403 Forbidden` for invalid CSRF token provided
+   - `200` if the event was tracked.
+   - `400 Bad request` if the event parameter is missing.
+   - `401 Unauthorized` if the user is not authenticated.
+   - `403 Forbidden` if an invalid CSRF token is provided.
 
-1. Track events using JavaScript/Vue API helper which calls the API above
+1. Track events using the JavaScript/Vue API helper which calls the [`UsageData` API](#usagedata-api).
 
-   Note that `usage_data_api` and `usage_data_#{event_name}` should be enabled to be able to track events
+   To track events, `usage_data_api` and `usage_data_#{event_name}` must be enabled.
 
    ```javascript
    import api from '~/api';
@@ -339,6 +320,9 @@ Examples of implementation:
 WARNING:
 HyperLogLog (HLL) is a probabilistic algorithm and its **results always includes some small error**. According to [Redis documentation](https://redis.io/commands/pfcount), data from
 used HLL implementation is "approximated with a standard error of 0.81%".
+
+NOTE:
+ A user's consent for usage_stats (`User.single_user&.requires_usage_stats_consent?`) is not checked during the data tracking stage due to performance reasons. Keys corresponding to those counters are present in Redis even if `usage_stats_consent` is still required. However, no metric is collected from Redis and reported back to GitLab as long as `usage_stats_consent` is required.
 
 With `Gitlab::UsageDataCounters::HLLRedisCounter` we have available data structures used to count unique values.
 
@@ -457,13 +441,9 @@ Implemented using Redis methods [PFADD](https://redis.io/commands/pfadd) and [PF
        track_usage_event(:incident_management_incident_created, current_user.id)
      ```
 
-   - Using the `UsageData` API.
-     <!-- There's nearly identical content in `##### UsageData API Tracking`. If you find / fix errors here, you may need to fix errors in that section too. -->
+   - Using the [`UsageData` API](#usagedata-api).
 
      Increment unique users count using Redis HLL, for a given event name.
-
-     To track events using the `UsageData` API, ensure the `usage_data_api` feature flag
-     is set to `default_enabled: true`. Enabled by default in GitLab 13.7 and later.
 
      API requests are protected by checking for a valid CSRF token.
 
@@ -482,10 +462,7 @@ Implemented using Redis methods [PFADD](https://redis.io/commands/pfadd) and [PF
      - `401 Unauthorized` if the user is not authenticated.
      - `403 Forbidden` if an invalid CSRF token is provided.
 
-   - Using the JavaScript/Vue API helper, which calls the `UsageData` API.
-
-     To track events using the `UsageData` API, ensure the `usage_data_api` feature flag
-     is set to `default_enabled: true`. Enabled by default in GitLab 13.7 and later.
+   - Using the JavaScript/Vue API helper, which calls the [`UsageData` API](#usagedata-api).
 
      Example for an existing event already defined in [known events](https://gitlab.com/gitlab-org/gitlab/-/blob/master/lib/gitlab/usage_data_counters/known_events/):
 
@@ -556,13 +533,18 @@ We can also disable tracking completely by using the global flag:
 
 ##### Known events are added automatically in Service Data payload
 
-All events added in [`known_events/common.yml`](https://gitlab.com/gitlab-org/gitlab/-/blob/master/lib/gitlab/usage_data_counters/known_events/common.yml) are automatically added to Service Data generation under the `redis_hll_counters` key. This column is stored in [version-app as a JSON](https://gitlab.com/gitlab-services/version-gitlab-com/-/blob/master/db/schema.rb#L209).
+Service Ping adds all events [`known_events/*.yml`](https://gitlab.com/gitlab-org/gitlab/-/blob/master/lib/gitlab/usage_data_counters/known_events) to Service Data generation under the `redis_hll_counters` key. This column is stored in [version-app as a JSON](https://gitlab.com/gitlab-services/version-gitlab-com/-/blob/master/db/schema.rb#L209).
 For each event we add metrics for the weekly and monthly time frames, and totals for each where applicable:
 
 - `#{event_name}_weekly`: Data for 7 days for daily [aggregation](#add-new-events) events and data for the last complete week for weekly [aggregation](#add-new-events) events.
 - `#{event_name}_monthly`: Data for 28 days for daily [aggregation](#add-new-events) events and data for the last 4 complete weeks for weekly [aggregation](#add-new-events) events.
 
-Redis HLL implementation calculates automatic total metrics, if there are more than one metric for the same category, aggregation, and Redis slot.
+Redis HLL implementation calculates total metrics when both of these conditions are met:
+
+- The category is manually included in [CATEGORIES_FOR_TOTALS](https://gitlab.com/gitlab-org/gitlab/-/blob/master/lib/gitlab/usage_data_counters/hll_redis_counter.rb#L21).
+- There is more than one metric for the same category, aggregation, and Redis slot.
+
+We add total unique counts for the weekly and monthly time frames where applicable:
 
 - `#{category}_total_unique_counts_weekly`: Total unique counts for events in the same category for the last 7 days or the last complete week, if events are in the same Redis slot and we have more than one metric.
 - `#{category}_total_unique_counts_monthly`: Total unique counts for events in same category for the last 28 days or the last 4 complete weeks, if events are in the same Redis slot and we have more than one metric.
@@ -678,29 +660,6 @@ We return fallback values in these cases:
 | Timeouts, general failures  | -1    |
 | Standard errors in counters | -2    |
 
-## Name and place the metric
-
-Add the metric in one of the top-level keys:
-
-- `settings`: for settings related metrics.
-- `counts_weekly`: for counters that have data for the most recent 7 days.
-- `counts_monthly`: for counters that have data for the most recent 28 days.
-- `counts`: for counters that have data for all time.
-
-### How to get a metric name suggestion
-
-The metric YAML generator can suggest a metric name for you.
-To generate a metric name suggestion, first instrument the metric at the provided `key_path`.
-Then, generate the metric's YAML definition and
-return to the instrumentation and update it.
-
-1. Add the metric instrumentation to `lib/gitlab/usage_data.rb` inside one
-   of the [top-level keys](#name-and-place-the-metric), using any name you choose.
-1. Run the [metrics YAML generator](metrics_dictionary.md#metrics-definition-and-validation).
-1. Use the metric name suggestion to select a suitable metric name.
-1. Update the instrumentation you created in the first step and change the metric name to the suggested name.
-1. Update the metric's YAML definition with the correct `key_path`.
-
 ## Test counters manually using your Rails console
 
 ```ruby
@@ -785,13 +744,15 @@ The Service Ping JSON payload for GitLab.com is shared in the
 You may also use the [Service Ping QA dashboard](https://app.periscopedata.com/app/gitlab/632033/Usage-Ping-QA) to check how well your metric performs.
 The dashboard allows filtering by GitLab version, by "Self-managed" and "SaaS", and shows you how many failures have occurred for each metric. Whenever you notice a high failure rate, you can re-optimize your metric.
 
+Use [Metrics Dictionary](https://metrics.gitlab.com/) [copy query to clipboard feature](https://www.youtube.com/watch?v=n4o65ivta48&list=PL05JrBw4t0Krg3mbR6chU7pXtMt_es6Pb) to get a query ready to run in Sisense for a specific metric.
+
 ## Set up and test Service Ping locally
 
 To set up Service Ping locally, you must:
 
 1. [Set up local repositories](#set-up-local-repositories).
 1. [Test local setup](#test-local-setup).
-1. (Optional) [Test Prometheus-based Service Ping](#test-prometheus-based-service-ping).
+1. Optional. [Test Prometheus-based Service Ping](#test-prometheus-based-service-ping).
 
 ### Set up local repositories
 
@@ -939,7 +900,6 @@ Aggregated metrics collected in `7d` and `28d` time frames are added into Servic
     :packages => 155,
     :personal_snippets => 2106,
     :project_snippets => 407,
-    :promoted_issues => 719,
     :aggregated_metrics => {
       :example_metrics_union => 7,
       :example_metrics_intersection => 2
@@ -1028,9 +988,9 @@ Example metrics persistence:
 class UsageData
   def count_secure_pipelines(time_period)
     ...
-    relation = ::Security::Scan.latest_successful_by_build.by_scan_types(scan_type).where(security_scans: time_period)
+    relation = ::Security::Scan.by_scan_types(scan_type).where(time_period)
 
-    pipelines_with_secure_jobs['dependency_scanning_pipeline'] = estimate_batch_distinct_count(relation, :commit_id, batch_size: 1000, start: start_id, finish: finish_id) do |result|
+    pipelines_with_secure_jobs['dependency_scanning_pipeline'] = estimate_batch_distinct_count(relation, :pipeline_id, batch_size: 1000, start: start_id, finish: finish_id) do |result|
       ::Gitlab::Usage::Metrics::Aggregates::Sources::PostgresHll
         .save_aggregated_metrics(metric_name: 'dependency_scanning_pipeline', recorded_at_timestamp: recorded_at, time_period: time_period, data: result)
     end

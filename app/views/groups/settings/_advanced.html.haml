@@ -1,3 +1,4 @@
+- remove_form_id = 'js-remove-group-form'
 = render 'groups/settings/export', group: @group
 
 .sub-section
@@ -6,9 +7,8 @@
     = form_errors(@group)
     .form-group
       %p
-        = s_('GroupSettings|Changing group URL can have unintended side effects.')
-        = succeed '.' do
-          = link_to _('Learn more'), help_page_path('user/group/index', anchor: 'change-a-groups-path'), target: '_blank'
+        = s_("GroupSettings|Changing a group's URL can have unintended side effects.")
+        = link_to _('Learn more.'), help_page_path('user/group/index', anchor: 'change-a-groups-path'), target: '_blank', rel: 'noopener noreferrer'
 
       .input-group.gl-field-error-anchor
         .group-root-path.input-group-prepend.has-tooltip{ title: group_path(@group), :'data-placement' => 'bottom' }
@@ -26,6 +26,6 @@
     = f.submit s_('GroupSettings|Change group URL'), class: 'btn gl-button btn-warning'
 
 = render 'groups/settings/transfer', group: @group
-= render 'groups/settings/remove', group: @group
+= render 'groups/settings/remove', group: @group, remove_form_id: remove_form_id
 = render_if_exists 'groups/settings/restore', group: @group
-= render_if_exists 'groups/settings/immediately_remove', group: @group
+= render_if_exists 'groups/settings/immediately_remove', group: @group, remove_form_id: remove_form_id

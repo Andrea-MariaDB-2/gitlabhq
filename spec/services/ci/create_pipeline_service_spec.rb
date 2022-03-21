@@ -5,8 +5,8 @@ require 'spec_helper'
 RSpec.describe Ci::CreatePipelineService do
   include ProjectForksHelper
 
-  let_it_be(:project, reload: true) { create(:project, :repository) }
-  let_it_be(:user, reload: true) { project.owner }
+  let_it_be_with_refind(:project) { create(:project, :repository) }
+  let_it_be_with_reload(:user) { project.first_owner }
 
   let(:ref_name) { 'refs/heads/master' }
 
@@ -45,6 +45,47 @@ RSpec.describe Ci::CreatePipelineService do
       end
     end
     # rubocop:enable Metrics/ParameterLists
+
+    context 'performance' do
+      it_behaves_like 'pipelines are created without N+1 SQL queries' do
+        let(:config1) do
+          <<~YAML
+          job1:
+            stage: build
+            script: exit 0
+
+          job2:
+            stage: test
+            script: exit 0
+          YAML
+        end
+
+        let(:config2) do
+          <<~YAML
+          job1:
+            stage: build
+            script: exit 0
+
+          job2:
+            stage: test
+            script: exit 0
+
+          job3:
+            stage: deploy
+            script: exit 0
+          YAML
+        end
+
+        let(:accepted_n_plus_ones) do
+          1 + # SELECT "ci_instance_variables"
+          1 + # INSERT INTO "ci_stages"
+          1 + # SELECT "ci_builds".* FROM "ci_builds"
+          1 + # INSERT INTO "ci_builds"
+          1 + # INSERT INTO "ci_builds_metadata"
+          1   # SELECT "taggings".* FROM "taggings"
+        end
+      end
+    end
 
     context 'valid params' do
       let(:pipeline) { execute_service.payload }
@@ -105,138 +146,20 @@ RSpec.describe Ci::CreatePipelineService do
       end
 
       context 'when merge requests already exist for this source branch' do
-        let(:merge_request_1) do
+        let!(:merge_request_1) do
           create(:merge_request, source_branch: 'feature', target_branch: "master", source_project: project)
         end
 
-        let(:merge_request_2) do
+        let!(:merge_request_2) do
           create(:merge_request, source_branch: 'feature', target_branch: "v1.1.0", source_project: project)
-        end
-
-        context 'when related merge request is already merged' do
-          let!(:merged_merge_request) do
-            create(:merge_request, source_branch: 'master', target_branch: "branch_2", source_project: project, state: 'merged')
-          end
-
-          it 'does not schedule update head pipeline job' do
-            expect(UpdateHeadPipelineForMergeRequestWorker).not_to receive(:perform_async).with(merged_merge_request.id)
-
-            execute_service
-          end
         end
 
         context 'when the head pipeline sha equals merge request sha' do
           it 'updates head pipeline of each merge request', :sidekiq_might_not_need_inline do
-            merge_request_1
-            merge_request_2
-
             head_pipeline = execute_service(ref: 'feature', after: nil).payload
 
             expect(merge_request_1.reload.head_pipeline).to eq(head_pipeline)
             expect(merge_request_2.reload.head_pipeline).to eq(head_pipeline)
-          end
-        end
-
-        context 'when the head pipeline sha does not equal merge request sha' do
-          it 'does not update the head piepeline of MRs' do
-            merge_request_1
-            merge_request_2
-
-            allow_any_instance_of(Ci::Pipeline).to receive(:latest?).and_return(true)
-
-            expect { execute_service(after: 'ae73cb07c9eeaf35924a10f713b364d32b2dd34f') }.not_to raise_error
-
-            last_pipeline = Ci::Pipeline.last
-
-            expect(merge_request_1.reload.head_pipeline).not_to eq(last_pipeline)
-            expect(merge_request_2.reload.head_pipeline).not_to eq(last_pipeline)
-          end
-        end
-
-        context 'when there is no pipeline for source branch' do
-          it "does not update merge request head pipeline" do
-            merge_request = create(:merge_request, source_branch: 'feature',
-                                                   target_branch: "branch_1",
-                                                   source_project: project)
-
-            head_pipeline = execute_service.payload
-
-            expect(merge_request.reload.head_pipeline).not_to eq(head_pipeline)
-          end
-        end
-
-        context 'when merge request target project is different from source project' do
-          let!(:project) { fork_project(target_project, nil, repository: true) }
-          let!(:target_project) { create(:project, :repository) }
-          let!(:user) { create(:user) }
-
-          before do
-            project.add_developer(user)
-          end
-
-          it 'updates head pipeline for merge request', :sidekiq_might_not_need_inline do
-            merge_request = create(:merge_request, source_branch: 'feature',
-                                                   target_branch: "master",
-                                                   source_project: project,
-                                                   target_project: target_project)
-
-            head_pipeline = execute_service(ref: 'feature', after: nil).payload
-
-            expect(merge_request.reload.head_pipeline).to eq(head_pipeline)
-          end
-        end
-
-        context 'when the pipeline is not the latest for the branch' do
-          it 'does not update merge request head pipeline' do
-            merge_request = create(:merge_request, source_branch: 'master',
-                                                   target_branch: "branch_1",
-                                                   source_project: project)
-
-            allow_any_instance_of(MergeRequest)
-              .to receive(:find_actual_head_pipeline) { }
-
-            execute_service
-
-            expect(merge_request.reload.head_pipeline).to be_nil
-          end
-        end
-
-        context 'when pipeline has errors' do
-          before do
-            stub_ci_pipeline_yaml_file('some invalid syntax')
-          end
-
-          it 'updates merge request head pipeline reference', :sidekiq_might_not_need_inline do
-            merge_request = create(:merge_request, source_branch: 'master',
-                                                   target_branch: 'feature',
-                                                   source_project: project)
-
-            head_pipeline = execute_service.payload
-
-            expect(head_pipeline).to be_persisted
-            expect(head_pipeline.yaml_errors).to be_present
-            expect(head_pipeline.messages).to be_present
-            expect(merge_request.reload.head_pipeline).to eq head_pipeline
-          end
-        end
-
-        context 'when pipeline has been skipped' do
-          before do
-            allow_any_instance_of(Ci::Pipeline)
-              .to receive(:git_commit_message)
-              .and_return('some commit [ci skip]')
-          end
-
-          it 'updates merge request head pipeline', :sidekiq_might_not_need_inline do
-            merge_request = create(:merge_request, source_branch: 'master',
-                                                   target_branch: 'feature',
-                                                   source_project: project)
-
-            head_pipeline = execute_service.payload
-
-            expect(head_pipeline).to be_skipped
-            expect(head_pipeline).to be_persisted
-            expect(merge_request.reload.head_pipeline).to eq head_pipeline
           end
         end
       end
@@ -1041,22 +964,6 @@ RSpec.describe Ci::CreatePipelineService do
 
         expect(execute_service.payload).to be_created_successfully
       end
-
-      context 'when the env_vars_resource_group feature flag is disabled' do
-        before do
-          stub_feature_flags(env_vars_resource_group: false)
-        end
-
-        it 'does not create a resource group because its key contains an invalid character' do
-          result = execute_service.payload
-          deploy_job = result.builds.find_by_name!(:review_app)
-          stop_job = result.builds.find_by_name!(:stop_review_app)
-          expect(result).to be_persisted
-          expect(deploy_job.resource_group).to be_nil
-          expect(stop_job.resource_group).to be_nil
-          expect(project.resource_groups.count).to eq(0)
-        end
-      end
     end
 
     context 'with timeout' do
@@ -1630,7 +1537,7 @@ RSpec.describe Ci::CreatePipelineService do
               expect(pipeline.target_sha).to be_nil
             end
 
-            it 'schedules update for the head pipeline of the merge request' do
+            it 'schedules update for the head pipeline of the merge request', :sidekiq_inline do
               expect(UpdateHeadPipelineForMergeRequestWorker)
                 .to receive(:perform_async).with(merge_request.id)
 
@@ -1966,6 +1873,75 @@ RSpec.describe Ci::CreatePipelineService do
       let(:regular_job) { find_job('regular-job') }
       let(:rules_job)   { find_job('rules-job') }
       let(:delayed_job) { find_job('delayed-job') }
+
+      context 'with when:manual' do
+        let(:config) do
+          <<-EOY
+          job-with-rules:
+            script: 'echo hey'
+            rules:
+              - if: $CI_COMMIT_REF_NAME =~ /master/
+
+          job-when-with-rules:
+            script: 'echo hey'
+            when: manual
+            rules:
+              - if: $CI_COMMIT_REF_NAME =~ /master/
+
+          job-when-with-rules-when:
+            script: 'echo hey'
+            when: manual
+            rules:
+              - if: $CI_COMMIT_REF_NAME =~ /master/
+                when: on_success
+
+          job-with-rules-when:
+            script: 'echo hey'
+            rules:
+              - if: $CI_COMMIT_REF_NAME =~ /master/
+                when: manual
+
+          job-without-rules:
+            script: 'echo this is a job with NO rules'
+          EOY
+        end
+
+        let(:job_with_rules) { find_job('job-with-rules') }
+        let(:job_when_with_rules) { find_job('job-when-with-rules') }
+        let(:job_when_with_rules_when) { find_job('job-when-with-rules-when') }
+        let(:job_with_rules_when) { find_job('job-with-rules-when') }
+        let(:job_without_rules) { find_job('job-without-rules') }
+
+        context 'when matching the rules' do
+          let(:ref_name) { 'refs/heads/master' }
+
+          it 'adds the job-with-rules with a when:manual' do
+            expect(job_with_rules).to be_persisted
+            expect(job_when_with_rules).to be_persisted
+            expect(job_when_with_rules_when).to be_persisted
+            expect(job_with_rules_when).to be_persisted
+            expect(job_without_rules).to be_persisted
+
+            expect(job_with_rules.when).to eq('on_success')
+            expect(job_when_with_rules.when).to eq('manual')
+            expect(job_when_with_rules_when.when).to eq('on_success')
+            expect(job_with_rules_when.when).to eq('manual')
+            expect(job_without_rules.when).to eq('on_success')
+          end
+        end
+
+        context 'when there is no match to the rule' do
+          let(:ref_name) { 'refs/heads/wip' }
+
+          it 'does not add job_with_rules' do
+            expect(job_with_rules).to be_nil
+            expect(job_when_with_rules).to be_nil
+            expect(job_when_with_rules_when).to be_nil
+            expect(job_with_rules_when).to be_nil
+            expect(job_without_rules).to be_persisted
+          end
+        end
+      end
 
       shared_examples 'rules jobs are excluded' do
         it 'only persists the job without rules' do

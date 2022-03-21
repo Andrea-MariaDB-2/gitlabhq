@@ -1,10 +1,12 @@
 <script>
-import { pickBy } from 'lodash';
+import { pickBy, isEmpty, mapValues } from 'lodash';
 import { mapActions } from 'vuex';
+import { getIdFromGraphQLId, isGid } from '~/graphql_shared/utils';
 import { updateHistory, setUrlParams } from '~/lib/utils/url_utility';
 import { __ } from '~/locale';
 import { FILTERED_SEARCH_TERM } from '~/vue_shared/components/filtered_search_bar/constants';
 import FilteredSearch from '~/vue_shared/components/filtered_search_bar/filtered_search_bar_root.vue';
+import { AssigneeFilterType } from '~/boards/constants';
 
 export default {
   i18n: {
@@ -19,6 +21,11 @@ export default {
       type: Array,
       required: true,
     },
+    eeFilters: {
+      required: false,
+      type: Object,
+      default: () => ({}),
+    },
   },
   data() {
     return {
@@ -26,15 +33,203 @@ export default {
     };
   },
   computed: {
+    getFilteredSearchValue() {
+      const {
+        authorUsername,
+        labelName,
+        assigneeUsername,
+        assigneeId,
+        search,
+        milestoneTitle,
+        iterationId,
+        types,
+        weight,
+        epicId,
+        myReactionEmoji,
+        releaseTag,
+        confidential,
+      } = this.filterParams;
+      const filteredSearchValue = [];
+
+      if (authorUsername) {
+        filteredSearchValue.push({
+          type: 'author',
+          value: { data: authorUsername, operator: '=' },
+        });
+      }
+
+      if (assigneeUsername) {
+        filteredSearchValue.push({
+          type: 'assignee',
+          value: { data: assigneeUsername, operator: '=' },
+        });
+      }
+
+      if (assigneeId) {
+        filteredSearchValue.push({
+          type: 'assignee',
+          value: { data: assigneeId, operator: '=' },
+        });
+      }
+
+      if (types) {
+        filteredSearchValue.push({
+          type: 'type',
+          value: { data: types, operator: '=' },
+        });
+      }
+
+      if (labelName?.length) {
+        filteredSearchValue.push(
+          ...labelName.map((label) => ({
+            type: 'label',
+            value: { data: label, operator: '=' },
+          })),
+        );
+      }
+
+      if (milestoneTitle) {
+        filteredSearchValue.push({
+          type: 'milestone',
+          value: { data: milestoneTitle, operator: '=' },
+        });
+      }
+
+      if (iterationId) {
+        filteredSearchValue.push({
+          type: 'iteration',
+          value: { data: iterationId, operator: '=' },
+        });
+      }
+
+      if (weight) {
+        filteredSearchValue.push({
+          type: 'weight',
+          value: { data: weight, operator: '=' },
+        });
+      }
+
+      if (myReactionEmoji) {
+        filteredSearchValue.push({
+          type: 'my-reaction',
+          value: { data: myReactionEmoji, operator: '=' },
+        });
+      }
+
+      if (releaseTag) {
+        filteredSearchValue.push({
+          type: 'release',
+          value: { data: releaseTag, operator: '=' },
+        });
+      }
+
+      if (confidential !== undefined) {
+        filteredSearchValue.push({
+          type: 'confidential',
+          value: { data: confidential },
+        });
+      }
+
+      if (epicId) {
+        filteredSearchValue.push({
+          type: 'epic',
+          value: { data: epicId, operator: '=' },
+        });
+      }
+
+      if (this.filterParams['not[authorUsername]']) {
+        filteredSearchValue.push({
+          type: 'author',
+          value: { data: this.filterParams['not[authorUsername]'], operator: '!=' },
+        });
+      }
+
+      if (this.filterParams['not[milestoneTitle]']) {
+        filteredSearchValue.push({
+          type: 'milestone',
+          value: { data: this.filterParams['not[milestoneTitle]'], operator: '!=' },
+        });
+      }
+
+      if (this.filterParams['not[iterationId]']) {
+        filteredSearchValue.push({
+          type: 'iteration',
+          value: { data: this.filterParams['not[iterationId]'], operator: '!=' },
+        });
+      }
+
+      if (this.filterParams['not[weight]']) {
+        filteredSearchValue.push({
+          type: 'weight',
+          value: { data: this.filterParams['not[weight]'], operator: '!=' },
+        });
+      }
+
+      if (this.filterParams['not[assigneeUsername]']) {
+        filteredSearchValue.push({
+          type: 'assignee',
+          value: { data: this.filterParams['not[assigneeUsername]'], operator: '!=' },
+        });
+      }
+
+      if (this.filterParams['not[labelName]']) {
+        filteredSearchValue.push(
+          ...this.filterParams['not[labelName]'].map((label) => ({
+            type: 'label',
+            value: { data: label, operator: '!=' },
+          })),
+        );
+      }
+
+      if (this.filterParams['not[types]']) {
+        filteredSearchValue.push({
+          type: 'type',
+          value: { data: this.filterParams['not[types]'], operator: '!=' },
+        });
+      }
+
+      if (this.filterParams['not[epicId]']) {
+        filteredSearchValue.push({
+          type: 'epic',
+          value: { data: this.filterParams['not[epicId]'], operator: '!=' },
+        });
+      }
+
+      if (this.filterParams['not[myReactionEmoji]']) {
+        filteredSearchValue.push({
+          type: 'my-reaction',
+          value: { data: this.filterParams['not[myReactionEmoji]'], operator: '!=' },
+        });
+      }
+
+      if (this.filterParams['not[releaseTag]']) {
+        filteredSearchValue.push({
+          type: 'release',
+          value: { data: this.filterParams['not[releaseTag]'], operator: '!=' },
+        });
+      }
+
+      if (search) {
+        filteredSearchValue.push(search);
+      }
+
+      return filteredSearchValue;
+    },
     urlParams() {
       const {
         authorUsername,
         labelName,
         assigneeUsername,
+        assigneeId,
         search,
         milestoneTitle,
         types,
         weight,
+        epicId,
+        myReactionEmoji,
+        iterationId,
+        releaseTag,
+        confidential,
       } = this.filterParams;
       let notParams = {};
 
@@ -47,22 +242,51 @@ export default {
             'not[types]': this.filterParams.not.types,
             'not[milestone_title]': this.filterParams.not.milestoneTitle,
             'not[weight]': this.filterParams.not.weight,
+            'not[epic_id]': this.filterParams.not.epicId,
+            'not[my_reaction_emoji]': this.filterParams.not.myReactionEmoji,
+            'not[iteration_id]': this.filterParams.not.iterationId,
+            'not[release_tag]': this.filterParams.not.releaseTag,
           },
           undefined,
         );
       }
 
-      return {
-        ...notParams,
-        author_username: authorUsername,
-        'label_name[]': labelName,
-        assignee_username: assigneeUsername,
-        milestone_title: milestoneTitle,
-        search,
-        types,
-        weight,
-      };
+      return mapValues(
+        {
+          ...notParams,
+          author_username: authorUsername,
+          'label_name[]': labelName,
+          assignee_username: assigneeUsername,
+          assignee_id: assigneeId,
+          milestone_title: milestoneTitle,
+          iteration_id: iterationId,
+          search,
+          types,
+          weight,
+          epic_id: isGid(epicId) ? getIdFromGraphQLId(epicId) : epicId,
+          my_reaction_emoji: myReactionEmoji,
+          release_tag: releaseTag,
+          confidential,
+        },
+        (value) => {
+          if (value || value === false) {
+            // note: need to check array for labels.
+            if (Array.isArray(value)) {
+              return value.map((valueItem) => encodeURIComponent(valueItem));
+            }
+
+            return encodeURIComponent(value);
+          }
+
+          return value;
+        },
+      );
     },
+  },
+  created() {
+    if (!isEmpty(this.eeFilters)) {
+      this.filterParams = this.eeFilters;
+    }
   },
   methods: {
     ...mapActions(['performSearch']),
@@ -76,112 +300,6 @@ export default {
       });
 
       this.performSearch();
-    },
-    getFilteredSearchValue() {
-      const {
-        authorUsername,
-        labelName,
-        assigneeUsername,
-        search,
-        milestoneTitle,
-        types,
-        weight,
-      } = this.filterParams;
-      const filteredSearchValue = [];
-
-      if (authorUsername) {
-        filteredSearchValue.push({
-          type: 'author_username',
-          value: { data: authorUsername, operator: '=' },
-        });
-      }
-
-      if (assigneeUsername) {
-        filteredSearchValue.push({
-          type: 'assignee_username',
-          value: { data: assigneeUsername, operator: '=' },
-        });
-      }
-
-      if (types) {
-        filteredSearchValue.push({
-          type: 'types',
-          value: { data: types, operator: '=' },
-        });
-      }
-
-      if (labelName?.length) {
-        filteredSearchValue.push(
-          ...labelName.map((label) => ({
-            type: 'label_name',
-            value: { data: label, operator: '=' },
-          })),
-        );
-      }
-
-      if (milestoneTitle) {
-        filteredSearchValue.push({
-          type: 'milestone_title',
-          value: { data: milestoneTitle, operator: '=' },
-        });
-      }
-
-      if (weight) {
-        filteredSearchValue.push({
-          type: 'weight',
-          value: { data: weight, operator: '=' },
-        });
-      }
-
-      if (this.filterParams['not[authorUsername]']) {
-        filteredSearchValue.push({
-          type: 'author_username',
-          value: { data: this.filterParams['not[authorUsername]'], operator: '!=' },
-        });
-      }
-
-      if (this.filterParams['not[milestoneTitle]']) {
-        filteredSearchValue.push({
-          type: 'milestone_title',
-          value: { data: this.filterParams['not[milestoneTitle]'], operator: '!=' },
-        });
-      }
-
-      if (this.filterParams['not[weight]']) {
-        filteredSearchValue.push({
-          type: 'weight',
-          value: { data: this.filterParams['not[weight]'], operator: '!=' },
-        });
-      }
-
-      if (this.filterParams['not[assigneeUsername]']) {
-        filteredSearchValue.push({
-          type: 'assignee_username',
-          value: { data: this.filterParams['not[assigneeUsername]'], operator: '!=' },
-        });
-      }
-
-      if (this.filterParams['not[labelName]']) {
-        filteredSearchValue.push(
-          ...this.filterParams['not[labelName]'].map((label) => ({
-            type: 'label_name',
-            value: { data: label, operator: '!=' },
-          })),
-        );
-      }
-
-      if (this.filterParams['not[types]']) {
-        filteredSearchValue.push({
-          type: 'types',
-          value: { data: this.filterParams['not[types]'], operator: '!=' },
-        });
-      }
-
-      if (search) {
-        filteredSearchValue.push(search);
-      }
-
-      return filteredSearchValue;
     },
     getFilterParams(filters = []) {
       const notFilters = filters.filter((item) => item.value.operator === '!=');
@@ -198,23 +316,42 @@ export default {
 
       filters.forEach((filter) => {
         switch (filter.type) {
-          case 'author_username':
+          case 'author':
             filterParams.authorUsername = filter.value.data;
             break;
-          case 'assignee_username':
-            filterParams.assigneeUsername = filter.value.data;
+          case 'assignee':
+            if (Object.values(AssigneeFilterType).includes(filter.value.data)) {
+              filterParams.assigneeId = filter.value.data;
+            } else {
+              filterParams.assigneeUsername = filter.value.data;
+            }
             break;
-          case 'types':
+          case 'type':
             filterParams.types = filter.value.data;
             break;
-          case 'label_name':
+          case 'label':
             labels.push(filter.value.data);
             break;
-          case 'milestone_title':
+          case 'milestone':
             filterParams.milestoneTitle = filter.value.data;
+            break;
+          case 'iteration':
+            filterParams.iterationId = filter.value.data;
             break;
           case 'weight':
             filterParams.weight = filter.value.data;
+            break;
+          case 'epic':
+            filterParams.epicId = filter.value.data;
+            break;
+          case 'my-reaction':
+            filterParams.myReactionEmoji = filter.value.data;
+            break;
+          case 'release':
+            filterParams.releaseTag = filter.value.data;
+            break;
+          case 'confidential':
+            filterParams.confidential = filter.value.data;
             break;
           case 'filtered-search-term':
             if (filter.value.data) plainText.push(filter.value.data);
@@ -231,6 +368,7 @@ export default {
       if (plainText.length) {
         filterParams.search = plainText.join(' ');
       }
+
       return filterParams;
     },
   },
@@ -243,7 +381,7 @@ export default {
     namespace=""
     :tokens="tokens"
     :search-input-placeholder="$options.i18n.search"
-    :initial-filter-value="getFilteredSearchValue()"
+    :initial-filter-value="getFilteredSearchValue"
     @onFilter="handleFilter"
   />
 </template>

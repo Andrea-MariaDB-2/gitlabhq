@@ -7,7 +7,7 @@ type: reference
 
 # Pipeline efficiency **(FREE)**
 
-[CI/CD Pipelines](index.md) are the fundamental building blocks for [GitLab CI/CD](../README.md).
+[CI/CD Pipelines](index.md) are the fundamental building blocks for [GitLab CI/CD](../index.md).
 Making pipelines more efficient helps you save developer time, which:
 
 - Speeds up your DevOps processes
@@ -28,6 +28,7 @@ The easiest indicators to check for inefficient pipelines are the runtimes of th
 stages, and the total runtime of the pipeline itself. The total pipeline duration is
 heavily influenced by the:
 
+- [Size of the repository](../large_repositories/index.md)
 - Total number of stages and jobs.
 - Dependencies between jobs.
 - The ["critical path"](#directed-acyclic-graphs-dag-visualization), which represents

@@ -85,12 +85,44 @@ RSpec.describe MergeRequests::AfterCreateService do
 
     context 'when merge request is in preparing state' do
       before do
+        merge_request.mark_as_unchecked! unless merge_request.unchecked?
         merge_request.mark_as_preparing!
+      end
+
+      it 'checks for mergeability' do
+        expect(merge_request).to receive(:check_mergeability).with(async: true)
+
         execute_service
       end
 
-      it 'marks the merge request as unchecked' do
-        expect(merge_request.reload).to be_unchecked
+      context 'when preparing for mergeability fails' do
+        before do
+          # This is only one of the possible cases that can fail. This is to
+          # simulate a failure that happens during the service call.
+          allow(merge_request)
+            .to receive(:update_head_pipeline)
+            .and_raise(StandardError)
+        end
+
+        it 'does not mark the merge request as unchecked' do
+          expect { execute_service }.to raise_error(StandardError)
+          expect(merge_request.reload).to be_preparing
+        end
+      end
+
+      context 'when preparing merge request fails' do
+        before do
+          # This is only one of the possible cases that can fail. This is to
+          # simulate a failure that happens during the service call.
+          allow(merge_request)
+            .to receive_message_chain(:diffs, :write_cache)
+            .and_raise(StandardError)
+        end
+
+        it 'still checks for mergeability' do
+          expect(merge_request).to receive(:check_mergeability).with(async: true)
+          expect { execute_service }.to raise_error(StandardError)
+        end
       end
     end
 

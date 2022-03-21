@@ -9,7 +9,7 @@ class GlobalPolicy < BasePolicy
   with_options scope: :user, score: 0
   condition(:access_locked) { @user&.access_locked? }
 
-  condition(:can_create_fork, scope: :user) { @user && @user.manageable_namespaces.any? { |namespace| @user.can?(:create_projects, namespace) } }
+  condition(:can_create_fork, scope: :user) { @user && @user.forkable_namespaces.any? { |namespace| @user.can?(:create_projects, namespace) } }
 
   condition(:required_terms_not_accepted, scope: :user, score: 0) do
     @user&.required_terms_not_accepted?
@@ -115,7 +115,6 @@ class GlobalPolicy < BasePolicy
     enable :approve_user
     enable :reject_user
     enable :read_usage_trends_measurement
-    enable :update_runners_registration_token
   end
 
   # We can't use `read_statistics` because the user may have different permissions for different projects

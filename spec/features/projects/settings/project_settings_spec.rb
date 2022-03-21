@@ -5,7 +5,7 @@ require 'spec_helper'
 RSpec.describe 'Projects settings' do
   let_it_be(:project) { create(:project) }
 
-  let(:user) { project.owner }
+  let(:user) { project.first_owner }
   let(:panel) { find('.general-settings', match: :first) }
   let(:button) { panel.find('.btn.gl-button.js-settings-toggle') }
   let(:title) { panel.find('.settings-title') }
@@ -47,7 +47,7 @@ RSpec.describe 'Projects settings' do
       # disable by clicking toggle
       forking_enabled_button.click
       page.within('.sharing-permissions') do
-        find('input[value="Save changes"]').click
+        find('[data-testid="project-features-save-button"]').click
       end
       wait_for_requests
 
@@ -77,7 +77,7 @@ RSpec.describe 'Projects settings' do
       expect(default_award_emojis_input.value).to eq('false')
 
       page.within('.sharing-permissions') do
-        find('input[value="Save changes"]').click
+        find('[data-testid="project-features-save-button"]').click
       end
       wait_for_requests
 

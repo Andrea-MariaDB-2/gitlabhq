@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-RSpec.shared_context 'project service activation' do
+RSpec.shared_context 'project integration activation' do
   include_context 'integration activation'
 
   let_it_be(:project) { create(:project) }
@@ -28,7 +28,7 @@ RSpec.shared_context 'project service activation' do
   end
 
   def click_test_integration
-    click_link('Test settings')
+    click_button('Test settings')
   end
 
   def click_test_then_save_integration(expect_test_to_fail: true)

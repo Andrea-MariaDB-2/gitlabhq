@@ -1,68 +1,70 @@
 <script>
-import { GlAlert, GlButton, GlLink, GlModal, GlModalDirective, GlSprintf } from '@gitlab/ui';
+import { GlAlert, GlLink, GlSprintf } from '@gitlab/ui';
+import { isEmpty } from 'lodash';
 import { mapState, mapMutations } from 'vuex';
-import { retrieveAlert, getLocation } from '~/jira_connect/subscriptions/utils';
-import { __ } from '~/locale';
+import { retrieveAlert } from '~/jira_connect/subscriptions/utils';
+import { I18N_DEFAULT_SIGN_IN_ERROR_MESSAGE } from '../constants';
 import { SET_ALERT } from '../store/mutation_types';
-import GroupsList from './groups_list.vue';
-import SubscriptionsList from './subscriptions_list.vue';
+import SignInPage from '../pages/sign_in.vue';
+import SubscriptionsPage from '../pages/subscriptions.vue';
+import UserLink from './user_link.vue';
+import CompatibilityAlert from './compatibility_alert.vue';
 
 export default {
   name: 'JiraConnectApp',
   components: {
     GlAlert,
-    GlButton,
     GlLink,
-    GlModal,
     GlSprintf,
-    GroupsList,
-    SubscriptionsList,
-  },
-  directives: {
-    GlModalDirective,
+    UserLink,
+    CompatibilityAlert,
+    SignInPage,
+    SubscriptionsPage,
   },
   inject: {
     usersPath: {
       default: '',
     },
+    subscriptions: {
+      default: [],
+    },
   },
   data() {
     return {
-      location: '',
+      user: null,
     };
   },
   computed: {
     ...mapState(['alert']),
-    usersPathWithReturnTo() {
-      if (this.location) {
-        return `${this.usersPath}?return_to=${this.location}`;
-      }
-
-      return this.usersPath;
-    },
     shouldShowAlert() {
       return Boolean(this.alert?.message);
     },
-  },
-  modal: {
-    cancelProps: {
-      text: __('Cancel'),
+    hasSubscriptions() {
+      return !isEmpty(this.subscriptions);
+    },
+    userSignedIn() {
+      return Boolean(!this.usersPath || this.user);
     },
   },
   created() {
     this.setInitialAlert();
-    this.setLocation();
   },
   methods: {
     ...mapMutations({
       setAlert: SET_ALERT,
     }),
-    async setLocation() {
-      this.location = await getLocation();
-    },
     setInitialAlert() {
       const { linkUrl, title, message, variant } = retrieveAlert() || {};
       this.setAlert({ linkUrl, title, message, variant });
+    },
+    onSignInOauth(user) {
+      this.user = user;
+    },
+    onSignInError() {
+      this.setAlert({
+        message: I18N_DEFAULT_SIGN_IN_ERROR_MESSAGE,
+        variant: 'danger',
+      });
     },
   },
 };
@@ -70,11 +72,14 @@ export default {
 
 <template>
   <div>
+    <compatibility-alert />
+
     <gl-alert
       v-if="shouldShowAlert"
       class="gl-mb-7"
       :variant="alert.variant"
       :title="alert.title"
+      data-testid="jira-connect-persisted-alert"
       @dismiss="setAlert"
     >
       <gl-sprintf v-if="alert.linkUrl" :message="alert.message">
@@ -88,38 +93,17 @@ export default {
       </template>
     </gl-alert>
 
-    <h2 class="gl-text-center">{{ s__('JiraService|GitLab for Jira Configuration') }}</h2>
+    <user-link :user-signed-in="userSignedIn" :has-subscriptions="hasSubscriptions" :user="user" />
 
-    <div class="jira-connect-app-body gl-my-7 gl-px-5 gl-pb-4">
-      <div class="gl-display-flex gl-justify-content-end">
-        <gl-button
-          v-if="usersPath"
-          category="primary"
-          variant="info"
-          class="gl-align-self-center"
-          :href="usersPathWithReturnTo"
-          target="_blank"
-          >{{ s__('Integrations|Sign in to add namespaces') }}</gl-button
-        >
-        <template v-else>
-          <gl-button
-            v-gl-modal-directive="'add-namespace-modal'"
-            category="primary"
-            variant="info"
-            class="gl-align-self-center"
-            >{{ s__('Integrations|Add namespace') }}</gl-button
-          >
-          <gl-modal
-            modal-id="add-namespace-modal"
-            :title="s__('Integrations|Link namespaces')"
-            :action-cancel="$options.modal.cancelProps"
-          >
-            <groups-list />
-          </gl-modal>
-        </template>
-      </div>
-
-      <subscriptions-list />
+    <h2 class="gl-text-center gl-mb-7">{{ s__('JiraService|GitLab for Jira Configuration') }}</h2>
+    <div class="gl-layout-w-limited gl-mx-auto gl-px-5 gl-mb-7">
+      <sign-in-page
+        v-if="!userSignedIn"
+        :has-subscriptions="hasSubscriptions"
+        @sign-in-oauth="onSignInOauth"
+        @error="onSignInError"
+      />
+      <subscriptions-page v-else :has-subscriptions="hasSubscriptions" />
     </div>
   </div>
 </template>

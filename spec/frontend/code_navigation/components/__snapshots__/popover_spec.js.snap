@@ -14,7 +14,6 @@ exports[`Code navigation popover component renders popover 1`] = `
     contentclass="gl-py-0"
     navclass="gl-hidden"
     queryparamname="tab"
-    theme="indigo"
     value="0"
   >
     <gl-tab-stub
@@ -42,6 +41,8 @@ exports[`Code navigation popover component renders popover 1`] = `
               <span>
                  main() {
               </span>
+               
+              <br />
             </span>
             <span
               class="line"
@@ -50,6 +51,8 @@ exports[`Code navigation popover component renders popover 1`] = `
               <span>
                 }
               </span>
+               
+              <br />
             </span>
           </pre>
         </div>

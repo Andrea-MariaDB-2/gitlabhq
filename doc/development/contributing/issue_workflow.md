@@ -15,9 +15,7 @@ feature proposal. Show your support with an award emoji and/or join the
 discussion.
 
 Please submit bugs using the ['Bug' issue template](https://gitlab.com/gitlab-org/gitlab/-/blob/master/.gitlab/issue_templates/Bug.md) provided on the issue tracker.
-The text in the parenthesis is there to help you with what to include. Omit it
-when submitting the actual issue. You can copy-paste it and then edit as you
-see fit.
+The text in the comments (`<!-- ... -->`) is there to help you with what to include.
 
 ## Issue triaging
 
@@ -30,12 +28,12 @@ The most important thing is making sure valid issues receive feedback from the
 development team. Therefore the priority is mentioning developers that can help
 on those issues. Please select someone with relevant experience from the
 [GitLab team](https://about.gitlab.com/company/team/).
-If there is nobody mentioned with that expertise look in the commit history for
+If there is nobody mentioned with that expertise, look in the commit history for
 the affected files to find someone.
 
 We also use [GitLab Triage](https://gitlab.com/gitlab-org/gitlab-triage) to automate
 some triaging policies. This is currently set up as a scheduled pipeline
-(`https://gitlab.com/gitlab-org/quality/triage-ops/pipeline_schedules/10512/editpipeline_schedules/10512/edit`,
+(`https://gitlab.com/gitlab-org/quality/triage-ops/-/pipeline_schedules/10512/edit`,
 must have at least the Developer role in the project) running on [quality/triage-ops](https://gitlab.com/gitlab-org/quality/triage-ops)
 project.
 
@@ -47,7 +45,7 @@ scheduling into milestones. Labeling is a task for everyone. (For some projects,
 
 Most issues will have labels for at least one of the following:
 
-- Type. For example: `~feature`, `~bug`, `~tooling`, or `~documentation`.
+- Type. For example: `~"type::feature"`, `~"type::bug"`, or `~"type::maintenance"`.
 - Stage. For example: `~"devops::plan"` or `~"devops::create"`.
 - Group. For example: `~"group::source code"`, `~"group::knowledge"`, or `~"group::editor"`.
 - Category. For example: `~"Category:Code Analytics"`, `~"Category:DevOps Reports"`, or `~"Category:Templates"`.
@@ -58,6 +56,10 @@ Most issues will have labels for at least one of the following:
 - Release Scoping: `~Deliverable`, `~Stretch`, `~"Next Patch Release"`
 - Priority: `~"priority::1"`, `~"priority::2"`, `~"priority::3"`, `~"priority::4"`
 - Severity: ~`"severity::1"`, `~"severity::2"`, `~"severity::3"`, `~"severity::4"`
+
+Please add `~"breaking change"` label if the issue can be considered as a [breaking change](index.md#breaking-changes).
+
+Please add `~security` label if the issue is related to application security.
 
 All labels, their meaning and priority are defined on the
 [labels page](https://gitlab.com/gitlab-org/gitlab/-/labels).
@@ -70,19 +72,7 @@ labels, you can _always_ add the type, stage, group, and often the category/feat
 Type labels are very important. They define what kind of issue this is. Every
 issue should have one and only one.
 
-The current type labels are:
-
-- `~feature`
-  - `~"feature::addition"`
-  - `~"feature::enhancement"`
-  - `~"feature::maintenance"`
-- `~bug`
-- `~tooling`
-  - `~"tooling::pipelines"`
-  - `~"tooling::workflow"`
-- `~"support request"`
-- `~meta`
-- `~documentation`
+The current type labels are [available in the handbook](https://about.gitlab.com/handbook/engineering/metrics/#work-type-classification)
 
 A number of type labels have a priority assigned to them, which automatically
 makes them float to the top, depending on their importance.
@@ -132,9 +122,9 @@ their color is `#A8D695`.
 <https://gitlab.com/gitlab-com/www-gitlab-com/blob/master/data/stages.yml>,
 with `_` replaced with a space.
 
-For instance, the "Continuous Integration" group is represented by the
-~"group::continuous integration" label in the `gitlab-org` group since its key
-under `stages.manage.groups` is `continuous_integration`.
+For instance, the "Pipeline Execution" group is represented by the
+~"group::pipeline execution" label in the `gitlab-org` group since its key
+under `stages.manage.groups` is `pipeline_execution`.
 
 The current group labels can be found by [searching the labels list for `group::`](https://gitlab.com/groups/gitlab-org/-/labels?search=group::).
 
@@ -146,17 +136,6 @@ You can find the groups listed in the [Product Stages, Groups, and Categories](h
 We use the term group to map down product requirements from our product stages.
 As a team needs some way to collect the work their members are planning to be assigned to, we use the `~group::` labels to do so.
 
-Normally there is a 1:1 relationship between Stage labels and Group labels. In
-the spirit of "Everyone can contribute", any issue can be picked up by any group,
-depending on current priorities. When picking up an issue belonging to a different
-group, it should be relabeled. For example, if an issue labeled `~"devops::create"`
-and `~"group::knowledge"` is picked up by someone in the Access group of the Plan stage,
-the issue should be relabeled as `~"group::access"` while keeping the original
-`~"devops::create"` unchanged.
-
-We also use stage and group labels to help measure our [merge request rates](https://about.gitlab.com/handbook/engineering/metrics/#merge-request-rate).
-Please read [Stage and Group labels](https://about.gitlab.com/handbook/engineering/metrics/#stage-and-group-labels) for more information on how the labels are used in this context.
-
 ### Category labels
 
 From the handbook's
@@ -164,7 +143,7 @@ From the handbook's
 page:
 
 > Categories are high-level capabilities that may be a standalone product at
-another company. e.g. Portfolio Management.
+another company, such as Portfolio Management, for example.
 
 It's highly recommended to add a category label, as it's used by our triage
 automation to
@@ -181,7 +160,7 @@ their color is `#428BCA`.
 `<Category Name>` is the category name as it is in the single source of truth for categories at
 <https://gitlab.com/gitlab-com/www-gitlab-com/blob/master/data/categories.yml>.
 
-For instance, the "DevOps Report" category is represented by the
+For instance, the "DevOps Reports" category is represented by the
 ~"Category:DevOps Reports" label in the `gitlab-org` group since its
 `devops_reports.name` value is "DevOps Reports".
 
@@ -195,7 +174,7 @@ From the handbook's
 [Product stages, groups, and categories](https://about.gitlab.com/handbook/product/categories/#hierarchy)
 page:
 
-> Features: Small, discrete functionalities. e.g. Issue weights. Some common
+> Features: Small, discrete functionalities, for example Issue weights. Some common
 features are listed within parentheses to facilitate finding responsible PMs by keyword.
 
 It's highly recommended to add a feature label if no category label applies, as
@@ -295,12 +274,12 @@ Please refer to the issue triage [severity label](https://about.gitlab.com/handb
 
 ### Label for community contributors
 
-Issues that are beneficial to our users, 'nice to haves', that we currently do
-not have the capacity for or want to give the priority to, are labeled as
-~"Accepting merge requests", so the community can make a contribution.
+There are many issues that have a clear solution with uncontroversial benefit to GitLab users.
+However, GitLab might not have the capacity for all these proposals in the current roadmap.
+These issues are labeled ~"Seeking community contributions" because we welcome merge requests to resolve them.
 
 Community contributors can submit merge requests for any issue they want, but
-the ~"Accepting merge requests" label has a special meaning. It points to
+the ~"Seeking community contributions" label has a special meaning. It points to
 changes that:
 
 1. We already agreed on,
@@ -308,20 +287,24 @@ changes that:
 1. Are likely to get accepted by a maintainer.
 
 We want to avoid a situation when a contributor picks an
-~"Accepting merge requests" issue and then their merge request gets closed,
+~"Seeking community contributions" issue and then their merge request gets closed,
 because we realize that it does not fit our vision, or we want to solve it in a
 different way.
 
-We automatically add the ~"Accepting merge requests" label to issues
-that match the [triage policy](https://about.gitlab.com/handbook/engineering/quality/triage-operations/#accepting-merge-requests).
+We manually add the ~"Seeking community contributions" label to issues
+that fit the criteria described above.
+We do not automatically add this label, because it requires human evaluation.
 
 We recommend people that have never contributed to any open source project to
-look for issues labeled `~"Accepting merge requests"` with a [weight of 1](https://gitlab.com/groups/gitlab-org/-/issues?state=opened&label_name[]=Accepting+merge+requests&assignee_id=None&sort=weight&weight=1) or the `~"Good for new contributors"` [label](https://gitlab.com/gitlab-org/gitlab/-/issues?scope=all&state=opened&label_name[]=good%20for%20new%20contributors&assignee_id=None) attached to it.
+look for issues labeled `~"Seeking community contributions"` with a
+[weight of 1](https://gitlab.com/groups/gitlab-org/-/issues?sort=created_date&state=opened&label_name[]=Seeking+community+contributions&assignee_id=None&weight=1) or the `~"good for new contributors"`
+[label](https://gitlab.com/gitlab-org/gitlab/-/issues?scope=all&state=opened&label_name[]=good%20for%20new%20contributors&assignee_id=None)
+attached to it.
 More experienced contributors are very welcome to tackle
-[any of them](https://gitlab.com/groups/gitlab-org/-/issues?state=opened&label_name[]=Accepting+merge+requests&assignee_id=None).
+[any of them](https://gitlab.com/groups/gitlab-org/-/issues?sort=created_date&state=opened&label_name[]=Seeking+community+contributions&assignee_id=None).
 
 For more complex features that have a weight of 2 or more and clear scope, we recommend looking at issues
-with the [label `~"Community Challenge"`](https://gitlab.com/gitlab-org/gitlab/-/issues?scope=all&state=opened&label_name[]=Accepting%20merge%20requests&label_name[]=Community%20challenge).
+with the [label `~"Community Challenge"`](https://gitlab.com/gitlab-org/gitlab/-/issues?sort=created_date&state=opened&label_name[]=Seeking+community+contributions&label_name[]=Community+challenge).
 If your MR for the `~"Community Challenge"` issue gets merged, you will also have a chance to win a custom
 GitLab merchandise.
 
@@ -332,7 +315,7 @@ members to further discuss scope, design, and technical considerations. This wil
 ensure that your contribution is aligned with the GitLab product and minimize
 any rework and delay in getting it merged into main.
 
-GitLab team members who apply the ~"Accepting merge requests" label to an issue
+GitLab team members who apply the ~"Seeking community contributions" label to an issue
 should update the issue description with a responsible product manager, inviting
 any potential community contributor to @-mention per above.
 
@@ -355,19 +338,22 @@ To create a feature proposal, open an issue on the
 [issue tracker](https://gitlab.com/gitlab-org/gitlab/-/issues).
 
 In order to help track the feature proposals, we have created a
-[`feature`](https://gitlab.com/gitlab-org/gitlab/-/issues?label_name=feature) label. For the time being, users that are not members
-of the project cannot add labels. You can instead ask one of the [core team](https://about.gitlab.com/community/core-team/)
-members to add the label ~feature to the issue or add the following
-code snippet right after your description in a new line: `~feature`.
+[`~"type::feature"`](https://gitlab.com/gitlab-org/gitlab/-/issues?label_name=type::feature) label.
+For the time being, users that are not members of the project cannot add labels.
+You can instead ask one of the [core team](https://about.gitlab.com/community/core-team/)
+members to add the label `~"type::feature"` to the issue or add the following
+code snippet right after your description in a new line: `~"type::feature"`.
 
 Please keep feature proposals as small and simple as possible, complex ones
 might be edited to make them small and simple.
 
-Please submit Feature Proposals using the ['Feature Proposal' issue template](https://gitlab.com/gitlab-org/gitlab/-/blob/master/.gitlab/issue_templates/Feature%20proposal%20-%20detailed.md) provided on the issue tracker.
+Please submit feature proposals using the ['Feature Proposal' issue template](https://gitlab.com/gitlab-org/gitlab/-/blob/master/.gitlab/issue_templates/Feature%20proposal%20-%20detailed.md) provided on the issue tracker.
 
-For changes in the interface, it is helpful to include a mockup. Issues that add to, or change, the interface should
-be given the ~"UX" label. This will allow the UX team to provide input and guidance. You may
-need to ask one of the [core team](https://about.gitlab.com/community/core-team/) members to add the label, if you do not have permissions to do it by yourself.
+For changes to the user interface (UI), follow our [design and UI guidelines](design.md),
+and include a visual example (screenshot, wireframe, or mockup). Such issues should
+be given the `~UX"` label for the Product Design team to provide input and guidance.
+You may need to ask one of the [core team](https://about.gitlab.com/community/core-team/)
+members to add the label, if you do not have permissions to do it by yourself.
 
 If you want to create something yourself, consider opening an issue first to
 discuss whether it is interesting to include this in GitLab.

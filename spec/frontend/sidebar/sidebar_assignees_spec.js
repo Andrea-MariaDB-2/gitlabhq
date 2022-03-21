@@ -1,6 +1,7 @@
 import { shallowMount } from '@vue/test-utils';
 import axios from 'axios';
 import AxiosMockAdapter from 'axios-mock-adapter';
+import { nextTick } from 'vue';
 import Assigness from '~/sidebar/components/assignees/assignees.vue';
 import AssigneesRealtime from '~/sidebar/components/assignees/assignees_realtime.vue';
 import SidebarAssignees from '~/sidebar/components/assignees/sidebar_assignees.vue';
@@ -13,7 +14,7 @@ describe('sidebar assignees', () => {
   let wrapper;
   let mediator;
   let axiosMock;
-  const createComponent = (realTimeIssueSidebar = false, props) => {
+  const createComponent = (props) => {
     wrapper = shallowMount(SidebarAssignees, {
       propsData: {
         issuableIid: '1',
@@ -23,11 +24,6 @@ describe('sidebar assignees', () => {
         projectPath: 'projectPath',
         changing: false,
         ...props,
-      },
-      provide: {
-        glFeatures: {
-          realTimeIssueSidebar,
-        },
       },
       // Attaching to document is required because this component emits something from the parent element :/
       attachTo: document.body,
@@ -74,39 +70,28 @@ describe('sidebar assignees', () => {
     expect(mediator.store.assignees.length).toBe(1);
   });
 
-  it('hides assignees until fetched', () => {
+  it('hides assignees until fetched', async () => {
     createComponent();
 
     expect(wrapper.find(Assigness).exists()).toBe(false);
 
     wrapper.vm.store.isFetching.assignees = false;
 
-    return wrapper.vm.$nextTick(() => {
-      expect(wrapper.find(Assigness).exists()).toBe(true);
+    await nextTick();
+    expect(wrapper.find(Assigness).exists()).toBe(true);
+  });
+
+  describe('when issuableType is issue', () => {
+    it('finds AssigneesRealtime component', () => {
+      createComponent();
+
+      expect(wrapper.find(AssigneesRealtime).exists()).toBe(true);
     });
   });
 
-  describe('when realTimeIssueSidebar is turned on', () => {
-    describe('when issuableType is issue', () => {
-      it('finds AssigneesRealtime componeont', () => {
-        createComponent(true);
-
-        expect(wrapper.find(AssigneesRealtime).exists()).toBe(true);
-      });
-    });
-
-    describe('when issuableType is MR', () => {
-      it('does not find AssigneesRealtime componeont', () => {
-        createComponent(true, { issuableType: 'MR' });
-
-        expect(wrapper.find(AssigneesRealtime).exists()).toBe(false);
-      });
-    });
-  });
-
-  describe('when realTimeIssueSidebar is turned off', () => {
-    it('does not find AssigneesRealtime', () => {
-      createComponent(false, { issuableType: 'issue' });
+  describe('when issuableType is MR', () => {
+    it('does not find AssigneesRealtime component', () => {
+      createComponent({ issuableType: 'MR' });
 
       expect(wrapper.find(AssigneesRealtime).exists()).toBe(false);
     });

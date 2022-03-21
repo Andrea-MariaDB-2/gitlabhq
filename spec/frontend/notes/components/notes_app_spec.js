@@ -1,8 +1,10 @@
 import { mount, shallowMount } from '@vue/test-utils';
 import AxiosMockAdapter from 'axios-mock-adapter';
 import $ from 'jquery';
-import Vue from 'vue';
+import { nextTick } from 'vue';
+import setWindowLocation from 'helpers/set_window_location_helper';
 import { setTestTimeout } from 'helpers/timeout';
+import waitForPromises from 'helpers/wait_for_promises';
 import DraftNote from '~/batch_comments/components/draft_note.vue';
 import batchComments from '~/batch_comments/stores/modules/batch_comments';
 import axios from '~/lib/utils/axios_utils';
@@ -292,24 +294,22 @@ describe('note_app', () => {
       return waitForDiscussionsRequest();
     });
 
-    it('should render markdown docs url', () => {
+    it('should render markdown docs url', async () => {
       wrapper.find('.js-note-edit').trigger('click');
       const { markdownDocsPath } = mockData.notesDataMock;
 
-      return Vue.nextTick().then(() => {
-        expect(wrapper.find(`.edit-note a[href="${markdownDocsPath}"]`).text().trim()).toEqual(
-          'Markdown is supported',
-        );
-      });
+      await nextTick();
+      expect(wrapper.find(`.edit-note a[href="${markdownDocsPath}"]`).text().trim()).toEqual(
+        'Markdown is supported',
+      );
     });
 
-    it('should not render quick actions docs url', () => {
+    it('should not render quick actions docs url', async () => {
       wrapper.find('.js-note-edit').trigger('click');
       const { quickActionsDocsPath } = mockData.notesDataMock;
 
-      return wrapper.vm.$nextTick().then(() => {
-        expect(wrapper.find(`.edit-note a[href="${quickActionsDocsPath}"]`).exists()).toBe(false);
-      });
+      await nextTick();
+      expect(wrapper.find(`.edit-note a[href="${quickActionsDocsPath}"]`).exists()).toBe(false);
     });
   });
 
@@ -372,6 +372,9 @@ describe('note_app', () => {
     beforeEach(() => {
       store = createStore();
       store.state.discussionSortOrder = constants.DESC;
+      store.state.isLoading = true;
+      store.state.discussions = [mockData.discussionMock];
+
       wrapper = shallowMount(NotesApp, {
         propsData,
         store,
@@ -384,11 +387,18 @@ describe('note_app', () => {
     it('finds CommentForm before notes list', () => {
       expect(getComponentOrder()).toStrictEqual([TYPE_COMMENT_FORM, TYPE_NOTES_LIST]);
     });
+
+    it('shows skeleton notes before the loaded discussions', () => {
+      expect(wrapper.find('#notes-list').html()).toMatchSnapshot();
+    });
   });
 
   describe('when sort direction is asc', () => {
     beforeEach(() => {
       store = createStore();
+      store.state.isLoading = true;
+      store.state.discussions = [mockData.discussionMock];
+
       wrapper = shallowMount(NotesApp, {
         propsData,
         store,
@@ -400,6 +410,10 @@ describe('note_app', () => {
 
     it('finds CommentForm after notes list', () => {
       expect(getComponentOrder()).toStrictEqual([TYPE_NOTES_LIST, TYPE_COMMENT_FORM]);
+    });
+
+    it('shows skeleton notes after the loaded discussions', () => {
+      expect(wrapper.find('#notes-list').html()).toMatchSnapshot();
     });
   });
 
@@ -428,6 +442,59 @@ describe('note_app', () => {
       expect(drafts.map((x) => x.props('draft'))).toEqual(
         mockData.draftComments.map(({ note }) => expect.objectContaining({ note })),
       );
+    });
+  });
+
+  describe('fetching discussions', () => {
+    describe('when note anchor is not present', () => {
+      it('does not include extra query params', async () => {
+        wrapper = shallowMount(NotesApp, { propsData, store: createStore() });
+        await waitForPromises();
+
+        expect(axiosMock.history.get[0].params).toBeUndefined();
+      });
+    });
+
+    describe('when note anchor is present', () => {
+      const mountWithNotesFilter = (notesFilter) =>
+        shallowMount(NotesApp, {
+          propsData: {
+            ...propsData,
+            notesData: {
+              ...propsData.notesData,
+              notesFilter,
+            },
+          },
+          store: createStore(),
+        });
+
+      beforeEach(() => {
+        setWindowLocation('#note_1');
+      });
+
+      it('does not include extra query params when filter is undefined', async () => {
+        wrapper = mountWithNotesFilter(undefined);
+        await waitForPromises();
+
+        expect(axiosMock.history.get[0].params).toBeUndefined();
+      });
+
+      it('does not include extra query params when filter is already set to default', async () => {
+        wrapper = mountWithNotesFilter(constants.DISCUSSION_FILTERS_DEFAULT_VALUE);
+        await waitForPromises();
+
+        expect(axiosMock.history.get[0].params).toBeUndefined();
+      });
+
+      it('includes extra query params when filter is not set to default', async () => {
+        wrapper = mountWithNotesFilter(constants.COMMENTS_ONLY_FILTER_VALUE);
+        await waitForPromises();
+
+        expect(axiosMock.history.get[0].params).toEqual({
+          notes_filter: constants.DISCUSSION_FILTERS_DEFAULT_VALUE,
+          persist_filter: false,
+        });
+      });
     });
   });
 });

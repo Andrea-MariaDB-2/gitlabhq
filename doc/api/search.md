@@ -1,14 +1,12 @@
 ---
 stage: Create
 group: Source Code
-info: "To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments"
-type: reference, api
+info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
 ---
 
 # Search API **(FREE)**
 
-> - [Introduced](https://gitlab.com/gitlab-org/gitlab-foss/-/issues/41763) in GitLab 10.5.
-> - [Feature flag `search_filter_by_confidential` removed](https://gitlab.com/gitlab-org/gitlab/-/issues/244923) in GitLab 13.6.
+> [Feature flag `search_filter_by_confidential` removed](https://gitlab.com/gitlab-org/gitlab/-/issues/244923) in GitLab 13.6.
 
 Every API call to search must be authenticated.
 
@@ -29,7 +27,7 @@ GET /search
 | `order_by`    | string   | no         | Allowed values are `created_at` only. If this is not set, the results are either sorted by `created_at` in descending order for basic search, or by the most relevant documents when using advanced search.|
 | `sort`    | string   | no         | Allowed values are `asc` or `desc` only. If this is not set, the results are either sorted by `created_at` in descending order for basic search, or by the most relevant documents when using advanced search.|
 
-Search the expression within the specified scope. Currently these scopes are supported: projects, issues, merge_requests, milestones, snippet_titles, users.
+Search the expression in the specified scope. These scopes are supported: projects, issues, merge_requests, milestones, snippet_titles, users.
 
 If Elasticsearch is enabled additional scopes available are blobs, wiki_blobs, notes, and commits. Find more about [the feature](../integration/elasticsearch.md). **(PREMIUM)**
 
@@ -346,7 +344,7 @@ Filters are available for this scope:
 - path
 - extension
 
-to use a filter simply include it in your query like so: `a query filename:some_name*`.
+To use a filter, include it in your query. For example: `a query filename:some_name*`.
 
 You may use wildcards (`*`) to use glob matching.
 
@@ -434,7 +432,7 @@ Example response:
 
 ## Group Search API
 
-Search within the specified group.
+Search in the specified group.
 
 If a user is not a member of a group and the group is private, a `GET` request on that group results in a `404` status code.
 
@@ -452,7 +450,7 @@ GET /groups/:id/search
 | `order_by`    | string   | no         | Allowed values are `created_at` only. If this is not set, the results are either sorted by `created_at` in descending order for basic search, or by the most relevant documents when using advanced search.|
 | `sort`    | string   | no         | Allowed values are `asc` or `desc` only. If this is not set, the results are either sorted by `created_at` in descending order for basic search, or by the most relevant documents when using advanced search.|
 
-Search the expression within the specified scope. Currently these scopes are supported: projects, issues, merge_requests, milestones, users.
+Search the expression in the specified scope. These scopes are supported: projects, issues, merge_requests, milestones, users.
 
 If Elasticsearch is enabled additional scopes available are blobs, wiki_blobs, notes, and commits. Find more about [the feature](../integration/elasticsearch.md). **(PREMIUM)**
 
@@ -738,7 +736,7 @@ Filters are available for this scope:
 - path
 - extension
 
-to use a filter simply include it in your query like so: `a query filename:some_name*`.
+To use a filter, include it in your query. For example: `a query filename:some_name*`.
 
 You may use wildcards (`*`) to use glob matching.
 
@@ -826,7 +824,7 @@ Example response:
 
 ## Project Search API
 
-Search within the specified project.
+Search in the specified project.
 
 If a user is not a member of a project and the project is private, a `GET` request on that project results in a `404` status code.
 
@@ -845,7 +843,7 @@ GET /projects/:id/search
 | `order_by`    | string   | no         | Allowed values are `created_at` only. If this is not set, the results are either sorted by `created_at` in descending order for basic search, or by the most relevant documents when using advanced search.|
 | `sort`    | string   | no         | Allowed values are `asc` or `desc` only. If this is not set, the results are either sorted by `created_at` in descending order for basic search, or by the most relevant documents when using advanced search.|
 
-Search the expression within the specified scope. Currently these scopes are supported: issues, merge_requests, milestones, notes, wiki_blobs, commits, blobs, users.
+Search the expression in the specified scope. These scopes are supported: issues, merge_requests, milestones, notes, wiki_blobs, commits, blobs, users.
 
 The response depends on the requested scope.
 
@@ -1067,7 +1065,7 @@ Filters are available for this scope:
 - path
 - extension
 
-To use a filter simply include it in your query like: `a query filename:some_name*`.
+To use a filter, include it in your query. For example: `a query filename:some_name*`.
 You may use wildcards (`*`) to use glob matching.
 
 Wiki blobs searches are performed on both filenames and contents. Search
@@ -1150,7 +1148,7 @@ Filters are available for this scope:
 - path
 - extension
 
-To use a filter simply include it in your query like: `a query filename:some_name*`.
+To use a filter, include it in your query. For example: `a query filename:some_name*`.
 You may use wildcards (`*`) to use glob matching.
 
 Blobs searches are performed on both filenames and contents. Search results:
@@ -1161,7 +1159,7 @@ Blobs searches are performed on both filenames and contents. Search results:
   times in the content.
 
 ```shell
-curl --header "PRIVATE-TOKEN: <your_access_token>" "https://gitlab.example.com/api/v4/projects/6/search?scope=blobs&search=installation&ref=feature"
+curl --request GET --header "PRIVATE-TOKEN: <your_access_token>" https://gitlab.example.com/api/v4/projects/6/search?scope=blobs&search=keyword%20filename:*.py
 ```
 
 Example response:
@@ -1175,7 +1173,7 @@ Example response:
     "path": "README.md",
     "filename": "README.md",
     "id": null,
-    "ref": "feature",
+    "ref": "master",
     "startline": 46,
     "project_id": 6
   }

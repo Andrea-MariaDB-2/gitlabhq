@@ -10,8 +10,6 @@ module FeatureFlags
         feature_flag = project.operations_feature_flags.new(params)
 
         if feature_flag.save
-          save_audit_event(audit_event(feature_flag))
-
           success(feature_flag: feature_flag)
         else
           error(feature_flag.errors.full_messages, 400)
@@ -24,8 +22,8 @@ module FeatureFlags
     def audit_message(feature_flag)
       message_parts = ["Created feature flag #{feature_flag.name} with description \"#{feature_flag.description}\"."]
 
-      message_parts += feature_flag.scopes.map do |scope|
-        created_scope_message(scope)
+      message_parts += feature_flag.strategies.map do |strategy|
+        created_strategy_message(strategy)
       end
 
       message_parts.join(" ")

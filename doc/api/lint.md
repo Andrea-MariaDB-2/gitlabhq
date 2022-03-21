@@ -30,6 +30,7 @@ POST /ci/lint
 | ---------- | ------- | -------- | -------- |
 | `content`              | string     | yes      | The CI/CD configuration content. |
 | `include_merged_yaml`  | boolean    | no       | If the [expanded CI/CD configuration](#yaml-expansion) should be included in the response. |
+| `include_jobs`  | boolean    | no       | If the list of jobs should be included in the response. This is false by default. |
 
 ```shell
 curl --header "Content-Type: application/json" --header "PRIVATE-TOKEN: <your_access_token>" "https://gitlab.example.com/api/v4/ci/lint" --data '{"content": "{ \"image\": \"ruby:2.6\", \"services\": [\"postgres\"], \"before_script\": [\"bundle install\", \"bundle exec rake db:create\"], \"variables\": {\"DB_NAME\": \"postgres\"}, \"types\": [\"test\", \"deploy\", \"notify\"], \"rspec\": { \"script\": \"rake spec\", \"tags\": [\"ruby\", \"postgres\"], \"only\": [\"branches\"]}}"}'
@@ -88,10 +89,10 @@ Example responses:
 
 The CI lint returns an expanded version of the configuration. The expansion does not
 work for CI configuration added with [`include: local`](../ci/yaml/index.md#includelocal),
-or with [`extends:`](../ci/yaml/index.md#extends).
+and the [`extends:`](../ci/yaml/index.md#extends) keyword is [not fully supported](https://gitlab.com/gitlab-org/gitlab/-/issues/258843).
 
 Example contents of a `.gitlab-ci.yml` passed to the CI Lint API with
-`include_merged_yaml` set as true:
+`include_merged_yaml` and `include_jobs` set as true:
 
 ```yaml
 include:
@@ -118,7 +119,39 @@ Example response:
 {
   "status": "valid",
   "errors": [],
-  "merged_yaml": "---\n:another_test:\n  :stage: test\n  :script: echo 2\n:test:\n  :stage: test\n  :script: echo 1\n"
+  "merged_yaml": "---\n:another_test:\n  :stage: test\n  :script: echo 2\n:test:\n  :stage: test\n  :script: echo 1\n",
+  "jobs": [
+    {
+      "name":"test",
+      "stage":"test",
+      "before_script":[],
+      "script":["echo 1"],
+      "after_script":[], 
+      "tag_list":[],
+      "environment":null,
+      "when":"on_success",
+      "allow_failure":false,
+      "only":{
+        "refs":["branches","tags"]
+      },
+      "except":null
+    },
+    {
+      "name":"another_test",
+      "stage":"test",
+      "before_script":[],
+      "script":["echo 2"],
+      "after_script":[],
+      "tag_list":[],
+      "environment":null,
+      "when":"on_success",
+      "allow_failure":false,
+      "only":{
+        "refs":["branches","tags"]
+      },
+      "except":null
+    }
+  ]
 }
 ```
 
@@ -136,7 +169,9 @@ POST /projects/:id/ci/lint
 | Attribute  | Type    | Required | Description |
 | ---------- | ------- | -------- | -------- |
 | `content`  | string  | yes      | The CI/CD configuration content. |
-| `dry_run`  | boolean | no       | Run [pipeline creation simulation](../ci/lint.md#pipeline-simulation), or only do static check. This is false by default. |
+| `dry_run`  | boolean | no       | Run [pipeline creation simulation](../ci/lint.md#simulate-a-pipeline), or only do static check. This is false by default. |
+| `include_jobs`  | boolean    | no       | If the list of jobs that would exist in a static check or pipeline simulation should be included in the response. This is false by default. |
+| `ref`      | string  | no       | When `dry_run` is `true`, sets the branch or tag to use. Defaults to the project's default branch when not set. |
 
 Example request:
 
@@ -185,6 +220,8 @@ GET /projects/:id/ci/lint
 | Attribute  | Type    | Required | Description |
 | ---------- | ------- | -------- | -------- |
 | `dry_run`  | boolean | no       | Run pipeline creation simulation, or only do static check. |
+| `include_jobs`  | boolean    | no       | If the list of jobs that would exist in a static check or pipeline simulation should be included in the response. This is false by default. |
+| `ref`      | string  | no       | When `dry_run` is `true`, sets the branch or tag to use. Defaults to the project's default branch when not set. |
 
 Example request:
 

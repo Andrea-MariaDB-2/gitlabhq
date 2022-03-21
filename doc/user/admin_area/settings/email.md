@@ -56,7 +56,7 @@ To change the hostname used in private commit emails:
 
 NOTE:
 After the hostname is configured, every private commit email using the previous hostname is not
-recognized by GitLab. This can directly conflict with certain [Push rules](../../../push_rules/push_rules.md) such as
+recognized by GitLab. This can directly conflict with certain [Push rules](../../project/repository/push_rules.md) such as
 `Check whether author is a GitLab user` and `Check whether committer is the current authenticated user`.
 
 ## Custom additional text **(PREMIUM SELF)**
@@ -70,6 +70,18 @@ To add additional text to emails:
 1. On the left sidebar, select **Settings > Preferences** (`/admin/application_settings/preferences`).
 1. Expand **Email**.
 1. Enter your text in the **Additional text** field.
+1. Select **Save changes**.
+
+## User deactivation emails
+
+GitLab sends email notifications to users when their account has been deactivated.
+
+To disable these notifications:
+
+1. On the top bar, select **Menu > Admin**.
+1. On the left sidebar, select **Settings > Preferences** (`/admin/application_settings/preferences`).
+1. Expand **Email**.
+1. Clear the **Enable user deactivation emails** checkbox.
 1. Select **Save changes**.
 
 <!-- ## Troubleshooting

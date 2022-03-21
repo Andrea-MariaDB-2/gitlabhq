@@ -1,10 +1,10 @@
 ---
 stage: Monitor
-group: Monitor
+group: Respond
 info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
 ---
 
-# Install Elastic Stack with a cluster management project
+# Install Elastic Stack with a cluster management project **(FREE)**
 
 > [Introduced](https://gitlab.com/gitlab-org/project-templates/cluster-management/-/merge_requests/5) in GitLab 14.0.
 
@@ -27,8 +27,3 @@ You can customize the installation of Elastic Stack by updating the
 management project. Refer to the
 [chart](https://gitlab.com/gitlab-org/charts/elastic-stack) for all
 available configuration options.
-
-Support for installing the Elastic Stack managed application is provided by the
-GitLab Monitor group. If you run into unknown issues,
-[open a new issue](https://gitlab.com/gitlab-org/gitlab/-/issues/new), and ping at
-least 2 people from the [Monitor group](https://about.gitlab.com/handbook/product/categories/#monitor-group).

@@ -3,11 +3,10 @@ stages:
   - prepare
   - build-images
   - fixtures
+  - lint
   - test
   - post-test
-  - review-prepare
   - review
-  - dast
   - qa
   - post-qa
   - pages
@@ -17,7 +16,7 @@ stages:
 # in cases where jobs require Docker-in-Docker, the job
 # definition must be extended with `.use-docker-in-docker`
 default:
-  image: "registry.gitlab.com/gitlab-org/gitlab-build-images:ruby-2.7.patched-golang-1.14-git-2.31-lfs-2.9-chrome-89-node-14.15-yarn-1.22-postgresql-11-graphicsmagick-1.3.36"
+  image: ${REGISTRY_HOST}/${REGISTRY_GROUP}/gitlab-build-images:debian-${DEBIAN_VERSION}-ruby-2.7.patched-golang-1.16-git-2.33-lfs-2.9-chrome-97-node-16.14-yarn-1.22-postgresql-11-graphicsmagick-1.3.36
   tags:
     - gitlab-org
   # All jobs are interruptible by default
@@ -66,13 +65,24 @@ variables:
   # we override the max_old_space_size to prevent OOM errors
   NODE_OPTIONS: --max_old_space_size=3584
   GIT_DEPTH: "20"
+  # 'GIT_STRATEGY: clone' optimizes the pack-objects cache hit ratio
+  GIT_STRATEGY: "clone"
   GIT_SUBMODULE_STRATEGY: "none"
   GET_SOURCES_ATTEMPTS: "3"
+  DEBIAN_VERSION: "bullseye"
 
+  TMP_TEST_FOLDER: "${CI_PROJECT_DIR}/tmp/tests"
+  GITLAB_WORKHORSE_FOLDER: "gitlab-workhorse"
+  TMP_TEST_GITLAB_WORKHORSE_PATH: "${TMP_TEST_FOLDER}/${GITLAB_WORKHORSE_FOLDER}"
   KNAPSACK_RSPEC_SUITE_REPORT_PATH: knapsack/report-master.json
-  FLAKY_RSPEC_SUITE_REPORT_PATH: rspec_flaky/report-suite.json
+  FLAKY_RSPEC_SUITE_REPORT_PATH: rspec/flaky/report-suite.json
   RSPEC_TESTS_MAPPING_PATH: crystalball/mapping.json
   RSPEC_PACKED_TESTS_MAPPING_PATH: crystalball/packed-mapping.json
+  RSPEC_PROFILING_FOLDER_PATH: rspec/profiling
+  FRONTEND_FIXTURES_MAPPING_PATH: crystalball/frontend_fixtures_mapping.json
+  RSPEC_LAST_RUN_RESULTS_FILE: rspec/rspec_last_run_results.txt
+  JUNIT_RESULT_FILE: rspec/junit_rspec.xml
+  JUNIT_RETRY_FILE: rspec/junit_rspec-retry.xml
 
   ES_JAVA_OPTS: "-Xms256m -Xmx256m"
   ELASTIC_URL: "http://elastic:changeme@elasticsearch:9200"
@@ -80,6 +90,9 @@ variables:
   CACHE_CLASSES: "true"
   CHECK_PRECOMPILED_ASSETS: "true"
   FF_USE_FASTZIP: "true"
+  SKIP_FLAKY_TESTS_AUTOMATICALLY: "true"
+  # Run with decomposed databases by default
+  DECOMPOSED_DB: "true"
 
   DOCS_REVIEW_APPS_DOMAIN: "178.62.207.141.nip.io"
   DOCS_GITLAB_REPO_SUFFIX: "ee"
@@ -89,11 +102,15 @@ variables:
   REVIEW_APPS_GCP_REGION: "us-central1"
 
   BUILD_ASSETS_IMAGE: "true"  # Set it to "false" to disable assets image building, used in `build-assets-image`
-  RSPEC_FAIL_FAST_ENABLED: "true"  # Set it to "false" to disable RSpec fail-fast
   SIMPLECOV: "true"
 
   # For the default QA image, we use $CI_COMMIT_SHA as tag since it's always available and we override it for specific workflow.rules (see above)
   QA_IMAGE: "${CI_REGISTRY}/${CI_PROJECT_PATH}/gitlab-ee-qa:${CI_COMMIT_SHA}"
+  # Default latest tag for particular branch
+  QA_IMAGE_BRANCH: "${CI_REGISTRY}/${CI_PROJECT_PATH}/gitlab-ee-qa:${CI_COMMIT_REF_SLUG}"
+
+  REGISTRY_HOST: "registry.gitlab.com"
+  REGISTRY_GROUP: "gitlab-org"
 
   # Preparing custom clone path to reduce space used by all random forks
   # on GitLab.com's Shared Runners. Our main forks - especially the security

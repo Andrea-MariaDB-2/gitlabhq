@@ -20,7 +20,6 @@ $solarized-light-line-color-new: #a1a080;
 $solarized-light-line-color-old: #ad9186;
 $solarized-light-highlight: #eee8d5;
 $solarized-light-hll-bg: #ddd8c5;
-$solarized-light-over-bg: #ded7fc;
 $solarized-light-expanded-border: #d2cdbd;
 $solarized-light-expanded-bg: #ece6d4;
 $solarized-light-coverage: #859900;
@@ -38,6 +37,7 @@ $solarized-light-cm: #93a1a1;
 $solarized-light-cp: #859900;
 $solarized-light-c1: #93a1a1;
 $solarized-light-cs: #859900;
+$solarized-light-cd: #93a1a1;
 $solarized-light-gd: #2aa198;
 $solarized-light-ge: #586e75;
 $solarized-light-gr: #dc322f;
@@ -106,7 +106,8 @@ $solarized-light-il: #2aa198;
   }
 
   .line-numbers,
-  .diff-line-num {
+  .diff-line-num,
+  .code-search-line {
     background-color: $solarized-light-line-bg;
   }
 
@@ -168,10 +169,11 @@ $solarized-light-il: #2aa198;
       }
     }
 
-    .diff-grid-left:hover,
-    .diff-grid-right:hover {
+    &:not(.match) .diff-grid-left:hover,
+    &:not(.match) .diff-grid-right:hover,
+    &.code-search-line:hover {
       .diff-line-num:not(.empty-cell) {
-        @include line-number-hover($solarized-light-over-bg);
+        @include line-number-hover;
       }
     }
 
@@ -190,7 +192,7 @@ $solarized-light-il: #2aa198;
     .diff-line-num {
       &.is-over,
       &.hll:not(.empty-cell).is-over {
-        @include line-number-hover($solarized-light-over-bg);
+        @include line-number-hover;
       }
     }
 
@@ -265,6 +267,7 @@ $solarized-light-il: #2aa198;
   .cp { color: $solarized-light-cp; } /* Comment.Preproc */
   .c1 { color: $solarized-light-c1; } /* Comment.Single */
   .cs { color: $solarized-light-cs; } /* Comment.Special */
+  .cd { color: $solarized-light-cd; } /* Comment.Doc */
   .gd { color: $solarized-light-gd; } /* Generic.Deleted */
   .ge { /* Generic.Emph */
     color: $solarized-light-ge;

@@ -5,13 +5,13 @@ require 'spec_helper'
 RSpec.describe BuildDetailsEntity do
   include ProjectForksHelper
 
-  it 'inherits from JobEntity' do
-    expect(described_class).to be < JobEntity
+  it 'inherits from Ci::JobEntity' do
+    expect(described_class).to be < Ci::JobEntity
   end
 
   describe '#as_json' do
     let(:project) { create(:project, :repository) }
-    let(:user) { project.owner }
+    let(:user) { project.first_owner }
     let(:pipeline) { create(:ci_pipeline, project: project) }
     let(:build) { create(:ci_build, :failed, pipeline: pipeline) }
     let(:request) { double('request', project: project) }
@@ -29,7 +29,7 @@ RSpec.describe BuildDetailsEntity do
     end
 
     it 'contains the needed key value pairs' do
-      expect(subject).to include(:coverage, :erased_at, :duration)
+      expect(subject).to include(:coverage, :erased_at, :finished_at, :duration)
       expect(subject).to include(:runner, :pipeline)
       expect(subject).to include(:raw_path, :new_issue_path)
     end

@@ -1,7 +1,15 @@
-const PATH_SEPARATOR = '/';
+export const DASH_SCOPE = '-';
+
+export const PATH_SEPARATOR = '/';
 const PATH_SEPARATOR_LEADING_REGEX = new RegExp(`^${PATH_SEPARATOR}+`);
 const PATH_SEPARATOR_ENDING_REGEX = new RegExp(`${PATH_SEPARATOR}+$`);
 const SHA_REGEX = /[\da-f]{40}/gi;
+
+// About GitLab default host (overwrite in jh)
+export const PROMO_HOST = 'about.gitlab.com';
+
+// About Gitlab default url (overwrite in jh)
+export const PROMO_URL = `https://${PROMO_HOST}`;
 
 // Reset the cursor in a Regex so that multiple uses before a recompile don't fail
 function resetRegExp(regex) {
@@ -9,6 +17,20 @@ function resetRegExp(regex) {
 
   return regex;
 }
+
+/**
+ * Returns the absolute pathname for a relative or absolute URL string.
+ *
+ * A few examples of inputs and outputs:
+ * 1) 'http://a.com/b/c/d' => '/b/c/d'
+ * 2) '/b/c/d' => '/b/c/d'
+ * 3) 'b/c/d' => '/b/c/d' or '[path]/b/c/d' depending of the current path of the
+ *    document.location
+ */
+export const parseUrlPathname = (url) => {
+  const { pathname } = new URL(url, document.location.href);
+  return pathname;
+};
 
 // Returns a decoded url parameter value
 // - Treats '+' as '%20'
@@ -397,6 +419,24 @@ export function isSafeURL(url) {
   }
 }
 
+/**
+ * Returns a normalized url
+ *
+ * https://gitlab.com/foo/../baz => https://gitlab.com/baz
+ *
+ * @param {String} url - URL to be transformed
+ * @param {String?} baseUrl - current base URL
+ * @returns {String}
+ */
+export const getNormalizedURL = (url, baseUrl) => {
+  const base = baseUrl || getBaseURL();
+  try {
+    return new URL(url, base).href;
+  } catch (e) {
+    return '';
+  }
+};
+
 export function getWebSocketProtocol() {
   return window.location.protocol.replace('http', 'ws');
 }
@@ -587,4 +627,31 @@ export function isSameOriginUrl(url) {
     // Invalid URLs cannot have the same origin
     return false;
   }
+}
+
+/**
+ * Returns a URL to WebIDE considering the current user's position in
+ * repository's tree. If not MR `iid` has been passed, the URL is fetched
+ * from the global `gl.webIDEPath`.
+ *
+ * @param sourceProjectFullPath Source project's full path. Used in MRs
+ * @param targetProjectFullPath Target project's full path. Used in MRs
+ * @param iid                   MR iid
+ * @returns {string}
+ */
+
+export function constructWebIDEPath({
+  sourceProjectFullPath,
+  targetProjectFullPath = '',
+  iid,
+} = {}) {
+  if (!iid || !sourceProjectFullPath) {
+    return window.gl?.webIDEPath;
+  }
+  return mergeUrlParams(
+    {
+      target_project: sourceProjectFullPath !== targetProjectFullPath ? targetProjectFullPath : '',
+    },
+    webIDEUrl(`/${sourceProjectFullPath}/merge_requests/${iid}`),
+  );
 }

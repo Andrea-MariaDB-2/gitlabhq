@@ -18,15 +18,15 @@ RSpec.describe 'Group Repository settings' do
 
     before do
       stub_container_registry_config(enabled: true)
-      visit group_settings_repository_path(group)
     end
 
     it_behaves_like 'a deploy token in settings' do
       let(:entity_type) { 'group' }
+      let(:page_path) { group_settings_repository_path(group) }
     end
   end
 
-  context 'Default initial branch name' do
+  context 'Default branch' do
     before do
       visit group_settings_repository_path(group)
     end
@@ -37,8 +37,8 @@ RSpec.describe 'Group Repository settings' do
 
     it 'renders the correct setting section content' do
       within("#js-default-branch-name") do
-        expect(page).to have_content("Default initial branch name")
-        expect(page).to have_content("The default name for the initial branch of new repositories created in the group.")
+        expect(page).to have_content("Default branch")
+        expect(page).to have_content("Set the initial name and protections for the default branch of new repositories created in the group.")
       end
     end
   end

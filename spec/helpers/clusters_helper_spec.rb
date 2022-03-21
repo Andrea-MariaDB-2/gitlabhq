@@ -31,68 +31,20 @@ RSpec.describe ClustersHelper do
     end
   end
 
-  describe '#create_new_cluster_label' do
-    subject { helper.create_new_cluster_label(provider: provider) }
-
-    context 'GCP provider' do
-      let(:provider) { 'gcp' }
-
-      it { is_expected.to eq('Create new cluster on GKE') }
-    end
-
-    context 'AWS provider' do
-      let(:provider) { 'aws' }
-
-      it { is_expected.to eq('Create new cluster on EKS') }
-    end
-
-    context 'other provider' do
-      let(:provider) { 'other' }
-
-      it { is_expected.to eq('Create new cluster') }
-    end
-
-    context 'no provider' do
-      let(:provider) { nil }
-
-      it { is_expected.to eq('Create new cluster') }
-    end
-  end
-
-  describe '#js_cluster_agents_list_data' do
-    let_it_be(:project) { build(:project, :repository) }
-
-    subject { helper.js_cluster_agents_list_data(project) }
-
-    it 'displays project default branch' do
-      expect(subject[:default_branch_name]).to eq(project.default_branch)
-    end
-
-    it 'displays image path' do
-      expect(subject[:empty_state_image]).to match(%r(/illustrations/logos/clusters_empty|svg))
-    end
-
-    it 'displays project path' do
-      expect(subject[:project_path]).to eq(project.full_path)
-    end
-
-    it 'generates docs urls' do
-      expect(subject[:agent_docs_url]).to eq(help_page_path('user/clusters/agent/index'))
-      expect(subject[:install_docs_url]).to eq(help_page_path('administration/clusters/kas'))
-      expect(subject[:get_started_docs_url]).to eq(help_page_path('user/clusters/agent/index', anchor: 'define-a-configuration-repository'))
-      expect(subject[:integration_docs_url]).to eq(help_page_path('user/clusters/agent/index', anchor: 'get-started-with-gitops-and-the-gitlab-agent'))
-    end
-
-    it 'displays kas address' do
-      expect(subject[:kas_address]).to eq(Gitlab::Kas.external_url)
-    end
-  end
-
   describe '#js_clusters_list_data' do
-    subject { helper.js_clusters_list_data('/path') }
+    let_it_be(:current_user) { create(:user) }
+    let_it_be(:project) { build(:project) }
+    let_it_be(:clusterable) { ClusterablePresenter.fabricate(project, current_user: current_user) }
+
+    subject { helper.js_clusters_list_data(clusterable) }
+
+    before do
+      helper.send(:default_branch_name, clusterable)
+      helper.send(:clusterable_project_path, clusterable)
+    end
 
     it 'displays endpoint path' do
-      expect(subject[:endpoint]).to eq('/path')
+      expect(subject[:endpoint]).to eq("#{project_path(project)}/-/clusters.json")
     end
 
     it 'generates svg image data', :aggregate_failures do
@@ -107,6 +59,106 @@ RSpec.describe ClustersHelper do
 
     it 'displays and ancestor_help_path' do
       expect(subject[:ancestor_help_path]).to eq(help_page_path('user/group/clusters/index', anchor: 'cluster-precedence'))
+    end
+
+    it 'displays empty image path' do
+      expect(subject[:clusters_empty_state_image]).to match(%r(/illustrations/empty-state/empty-state-clusters|svg))
+      expect(subject[:empty_state_image]).to match(%r(/illustrations/empty-state/empty-state-agents|svg))
+    end
+
+    it 'displays create cluster using certificate path' do
+      expect(subject[:new_cluster_path]).to eq("#{project_path(project)}/-/clusters/new")
+    end
+
+    it 'displays add cluster using certificate path' do
+      expect(subject[:add_cluster_path]).to eq("#{project_path(project)}/-/clusters/connect")
+    end
+
+    it 'displays project default branch' do
+      expect(subject[:default_branch_name]).to eq(project.default_branch)
+    end
+
+    it 'displays project path' do
+      expect(subject[:project_path]).to eq(project.full_path)
+    end
+
+    it 'displays kas address' do
+      expect(subject[:kas_address]).to eq(Gitlab::Kas.external_url)
+    end
+
+    it 'displays GitLab version' do
+      expect(subject[:gitlab_version]).to eq(Gitlab.version_info)
+    end
+
+    context 'user has no permissions to create a cluster' do
+      it 'displays that user can\'t add cluster' do
+        expect(subject[:can_add_cluster]).to eq("false")
+        expect(subject[:can_admin_cluster]).to eq("false")
+      end
+    end
+
+    context 'user is a maintainer' do
+      before do
+        project.add_maintainer(current_user)
+      end
+
+      it 'displays that the user can add cluster' do
+        expect(subject[:can_add_cluster]).to eq("true")
+        expect(subject[:can_admin_cluster]).to eq("true")
+      end
+    end
+
+    context 'project cluster' do
+      it 'doesn\'t display empty state help text' do
+        expect(subject[:empty_state_help_text]).to be_nil
+      end
+
+      it 'displays display_cluster_agents as true' do
+        expect(subject[:display_cluster_agents]).to eq("true")
+      end
+    end
+
+    context 'group cluster' do
+      let_it_be(:group) { create(:group) }
+      let_it_be(:clusterable) { ClusterablePresenter.fabricate(group, current_user: current_user) }
+
+      it 'displays empty state help text' do
+        expect(subject[:empty_state_help_text]).to eq(s_('ClusterIntegration|Adding an integration to your group will share the cluster across all your projects.'))
+      end
+
+      it 'displays display_cluster_agents as false' do
+        expect(subject[:display_cluster_agents]).to eq("false")
+      end
+
+      it 'does not include a default branch' do
+        expect(subject[:default_branch_name]).to be_nil
+      end
+
+      it 'does not include a project path' do
+        expect(subject[:project_path]).to be_nil
+      end
+    end
+
+    describe 'certificate based clusters enabled' do
+      before do
+        stub_feature_flags(certificate_based_clusters: flag_enabled)
+      end
+
+      context 'feature flag is enabled' do
+        let(:flag_enabled) { true }
+
+        it do
+          expect(subject[:certificate_based_clusters_enabled]).to eq('true')
+        end
+      end
+
+      context 'feature flag is disabled' do
+        let(:flag_enabled) { false }
+
+        it do
+          expect(subject[:certificate_based_clusters_enabled]).to eq('false')
+        end
+      end
     end
   end
 
@@ -149,6 +201,55 @@ RSpec.describe ClustersHelper do
         )
 
         is_expected.to eq('Cluster')
+      end
+    end
+  end
+
+  describe '#display_cluster_agents?' do
+    subject { helper.display_cluster_agents?(clusterable) }
+
+    context 'when clusterable is a project' do
+      let(:clusterable) { build(:project) }
+
+      it 'allows agents to display' do
+        expect(subject).to be_truthy
+      end
+    end
+
+    context 'when clusterable is a group' do
+      let(:clusterable) { build(:group) }
+
+      it 'does not allow agents to display' do
+        expect(subject).to be_falsey
+      end
+    end
+  end
+
+  describe '#default_branch_name' do
+    subject { default_branch_name(clusterable) }
+
+    context 'when clusterable is a project without a repository' do
+      let(:clusterable) { build(:project) }
+
+      it 'allows default branch name to display default name from settings' do
+        expect(subject).to eq(Gitlab::CurrentSettings.default_branch_name)
+      end
+    end
+
+    context 'when clusterable is a project with a repository' do
+      let(:clusterable) { build(:project, :repository) }
+      let(:repository) { clusterable.repository }
+
+      it 'allows default branch name to display repository root branch' do
+        expect(subject).to eq(repository.root_ref)
+      end
+    end
+
+    context 'when clusterable is a group' do
+      let(:clusterable) { build(:group) }
+
+      it 'does not allow default branch name to display' do
+        expect(subject).to be_nil
       end
     end
   end

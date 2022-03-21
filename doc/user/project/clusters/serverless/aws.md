@@ -290,7 +290,7 @@ The example code is available:
 - As a [clonable repository](https://gitlab.com/gitlab-org/serverless/examples/serverless-framework-js).
 - In a version with [tests and secret variables](https://gitlab.com/gitlab-org/project-templates/serverless-framework/).
 
-You can also use a [template](../../working_with_projects.md#project-templates)
+You can also use a [template](../../working_with_projects.md#create-a-project)
 (based on the version with tests and secret variables) from within the GitLab UI (see
 the `Serverless Framework/JS` template).
 
@@ -394,6 +394,8 @@ stages:
 production:
   stage: deploy
   before_script:
+    - apt-get update
+    - apt-get install -y python3-pip
     - pip3 install awscli --upgrade
     - pip3 install aws-sam-cli --upgrade
   script:
@@ -434,11 +436,11 @@ To test the application you deployed, please go to the build log and follow the 
 
 1. Click on "Show complete raw" on the upper right-hand corner:
 
-   ![sam-complete-raw](img/sam-complete-raw.png)
+   ![SAM complete raw](img/sam-complete-raw.png)
 
 1. Look for HelloWorldApi – API Gateway endpoint similar to shown below:
 
-   ![sam-api-endpoint](img/sam-api-endpoint.png)
+   ![SAM API endpoint](img/sam-api-endpoint.png)
 
 1. Use curl to test the API. For example:
 

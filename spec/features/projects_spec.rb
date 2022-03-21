@@ -16,7 +16,7 @@ RSpec.describe 'Project' do
 
     shared_examples 'creates from template' do |template, sub_template_tab = nil|
       it "is created from template", :js do
-        find('[data-qa-panel-name="create_from_template"]').click # rubocop:disable QA/SelectorUsage
+        click_link 'Create from template'
         find(".project-template #{sub_template_tab}").click if sub_template_tab
         find("label[for=#{template.name}]").click
         fill_in("project_name", with: template.name)
@@ -59,7 +59,7 @@ RSpec.describe 'Project' do
     let(:path)    { project_path(project) }
 
     before do
-      sign_in(project.owner)
+      sign_in(project.first_owner)
     end
 
     it 'parses Markdown' do
@@ -123,7 +123,7 @@ RSpec.describe 'Project' do
     let(:path)    { project_path(project) }
 
     before do
-      sign_in(project.owner)
+      sign_in(project.first_owner)
       visit path
     end
 
@@ -133,7 +133,7 @@ RSpec.describe 'Project' do
       visit path
 
       expect(page).to have_selector('[data-testid="project_topic_list"]')
-      expect(page).to have_link('topic1', href: explore_projects_path(topic: 'topic1'))
+      expect(page).to have_link('topic1', href: topic_explore_projects_path(topic_name: 'topic1'))
     end
 
     it 'shows up to 3 project topics' do
@@ -142,9 +142,9 @@ RSpec.describe 'Project' do
       visit path
 
       expect(page).to have_selector('[data-testid="project_topic_list"]')
-      expect(page).to have_link('topic1', href: explore_projects_path(topic: 'topic1'))
-      expect(page).to have_link('topic2', href: explore_projects_path(topic: 'topic2'))
-      expect(page).to have_link('topic3', href: explore_projects_path(topic: 'topic3'))
+      expect(page).to have_link('topic1', href: topic_explore_projects_path(topic_name: 'topic1'))
+      expect(page).to have_link('topic2', href: topic_explore_projects_path(topic_name: 'topic2'))
+      expect(page).to have_link('topic3', href: topic_explore_projects_path(topic_name: 'topic3'))
       expect(page).to have_content('+ 1 more')
     end
   end
@@ -154,7 +154,7 @@ RSpec.describe 'Project' do
     let(:path)    { project_path(project) }
 
     before do
-      sign_in(project.owner)
+      sign_in(project.first_owner)
       visit path
     end
 
@@ -201,7 +201,7 @@ RSpec.describe 'Project' do
 
     it 'does not show the name of the deleted project when the source was deleted', :sidekiq_might_not_need_inline do
       forked_project
-      Projects::DestroyService.new(base_project, base_project.owner).execute
+      Projects::DestroyService.new(base_project, base_project.first_owner).execute
 
       visit project_path(forked_project)
 
@@ -236,7 +236,7 @@ RSpec.describe 'Project' do
     it 'does not show an error' do
       wait_for_requests
 
-      expect(page).not_to have_selector('.flash-alert')
+      expect(page).not_to have_selector('[data-testid="alert-danger"]')
     end
   end
 
@@ -257,7 +257,7 @@ RSpec.describe 'Project' do
     end
 
     it 'deletes a project', :sidekiq_inline do
-      expect { remove_with_confirm('Delete project', project.path, 'Yes, delete project') }.to change { Project.count }.by(-1)
+      expect { remove_with_confirm('Delete project', project.path_with_namespace, 'Yes, delete project') }.to change { Project.count }.by(-1)
       expect(page).to have_content "Project '#{project.full_name}' is in the process of being deleted."
       expect(Project.all.count).to be_zero
       expect(project.issues).to be_empty
@@ -316,7 +316,7 @@ RSpec.describe 'Project' do
         wait_for_requests
 
         expect(page).to have_selector('.tree-item')
-        expect(page).not_to have_selector('.flash-alert')
+        expect(page).not_to have_selector('[data-testid="alert-danger"]')
       end
 
       context 'for signed commit' do
@@ -381,6 +381,24 @@ RSpec.describe 'Project' do
 
     it_behaves_like 'dirty submit form', [{ form: '.js-general-settings-form', input: 'input[name="project[name]"]' },
                                           { form: '.rspec-merge-request-settings', input: '#project_printing_merge_request_link_enabled' }]
+  end
+
+  describe 'view for a user without an access to a repo' do
+    let(:project) { create(:project, :repository) }
+    let(:user) { create(:user) }
+
+    it 'does not contain default branch information in its content' do
+      default_branch = 'merge-commit-analyze-side-branch'
+
+      project.add_guest(user)
+      project.change_head(default_branch)
+
+      sign_in(user)
+      visit project_path(project)
+
+      lines_with_default_branch = page.html.lines.select { |line| line.include?(default_branch) }
+      expect(lines_with_default_branch).to eq([])
+    end
   end
 
   def remove_with_confirm(button_text, confirm_with, confirm_button_text = 'Confirm')

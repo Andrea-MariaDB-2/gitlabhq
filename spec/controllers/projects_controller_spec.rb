@@ -213,21 +213,6 @@ RSpec.describe ProjectsController do
 
       before do
         sign_in(user)
-
-        allow(controller).to receive(:record_experiment_user)
-      end
-
-      context 'when user can push to default branch', :experiment do
-        let(:user) { empty_project.owner }
-
-        it 'creates an "view_project_show" experiment tracking event' do
-          expect(experiment(:empty_repo_upload)).to track(
-            :view_project_show,
-            property: 'empty'
-          ).on_next_instance
-
-          get :show, params: { namespace_id: empty_project.namespace, id: empty_project }
-        end
       end
 
       User.project_views.keys.each do |project_view|
@@ -311,6 +296,45 @@ RSpec.describe ProjectsController do
         RequestStore.clear!
 
         expect { get_show }.not_to change { Gitlab::GitalyClient.get_request_count }
+      end
+
+      it "renders files even with invalid license" do
+        controller.instance_variable_set(:@project, public_project)
+        expect(public_project.repository).to receive(:license_key).and_return('woozle wuzzle').at_least(:once)
+
+        get_show
+
+        expect(response).to have_gitlab_http_status(:ok)
+        expect(response).to render_template('_files')
+        expect(response.body).to have_content('LICENSE') # would be 'MIT license' if stub not works
+      end
+
+      describe "PUC highlighting" do
+        render_views
+
+        before do
+          expect(controller).to receive(:find_routable!).and_return(public_project)
+        end
+
+        context "option is enabled" do
+          it "adds the highlighting class" do
+            expect(public_project).to receive(:warn_about_potentially_unwanted_characters?).and_return(true)
+
+            get_show
+
+            expect(response.body).to have_css(".project-highlight-puc")
+          end
+        end
+
+        context "option is disabled" do
+          it "doesn't add the highlighting class" do
+            expect(public_project).to receive(:warn_about_potentially_unwanted_characters?).and_return(false)
+
+            get_show
+
+            expect(response.body).not_to have_css(".project-highlight-puc")
+          end
+        end
       end
     end
 
@@ -404,6 +428,71 @@ RSpec.describe ProjectsController do
 
         expect { get(:show, params: { namespace_id: public_project.namespace, id: public_project }) }
           .not_to exceed_query_limit(2).for_query(expected_query)
+      end
+    end
+  end
+
+  describe 'POST create' do
+    subject { post :create, params: { project: params } }
+
+    before do
+      sign_in(user)
+    end
+
+    context 'on import' do
+      let(:params) do
+        {
+          path: 'foo',
+          description: 'bar',
+          namespace_id: user.namespace.id,
+          import_url: project.http_url_to_repo
+        }
+      end
+
+      context 'when import by url is disabled' do
+        before do
+          stub_application_setting(import_sources: [])
+        end
+
+        it 'does not create project and reports an error' do
+          expect { subject }.not_to change { Project.count }
+
+          expect(response).to have_gitlab_http_status(:not_found)
+        end
+      end
+
+      context 'when import by url is enabled' do
+        before do
+          stub_application_setting(import_sources: ['git'])
+        end
+
+        it 'creates project' do
+          expect { subject }.to change { Project.count }
+
+          expect(response).to have_gitlab_http_status(:redirect)
+        end
+      end
+    end
+
+    context 'with new_project_sast_enabled', :experiment do
+      let(:params) do
+        {
+          path: 'foo',
+          description: 'bar',
+          namespace_id: user.namespace.id,
+          initialize_with_sast: '1'
+        }
+      end
+
+      it 'tracks an event on project creation' do
+        expect(experiment(:new_project_sast_enabled)).to track(:created,
+          property: 'blank',
+          checked: true,
+          project: an_instance_of(Project),
+          namespace: user.namespace
+        ).on_next_instance.with_context(user: user)
+
+        post :create, params: { project: params }
       end
     end
   end
@@ -810,9 +899,33 @@ RSpec.describe ProjectsController do
   describe '#transfer', :enable_admin_mode do
     render_views
 
-    let_it_be(:project, reload: true) { create(:project) }
+    let(:project) { create(:project) }
+
     let_it_be(:admin) { create(:admin) }
     let_it_be(:new_namespace) { create(:namespace) }
+
+    shared_examples 'project namespace is not changed' do |flash_message|
+      it 'project namespace is not changed' do
+        controller.instance_variable_set(:@project, project)
+        sign_in(admin)
+
+        old_namespace = project.namespace
+
+        put :transfer,
+            params: {
+              namespace_id: old_namespace.path,
+              new_namespace_id: new_namespace_id,
+              id: project.path
+            },
+            format: :js
+
+        project.reload
+
+        expect(project.namespace).to eq(old_namespace)
+        expect(response).to redirect_to(edit_project_path(project))
+        expect(flash[:alert]).to eq flash_message
+      end
+    end
 
     it 'updates namespace' do
       sign_in(admin)
@@ -828,30 +941,19 @@ RSpec.describe ProjectsController do
       project.reload
 
       expect(project.namespace).to eq(new_namespace)
-      expect(response).to have_gitlab_http_status(:ok)
+      expect(response).to redirect_to(edit_project_path(project))
     end
 
     context 'when new namespace is empty' do
-      it 'project namespace is not changed' do
-        controller.instance_variable_set(:@project, project)
-        sign_in(admin)
+      let(:new_namespace_id) { nil }
 
-        old_namespace = project.namespace
+      it_behaves_like 'project namespace is not changed', s_('TransferProject|Please select a new namespace for your project.')
+    end
 
-        put :transfer,
-            params: {
-              namespace_id: old_namespace.path,
-              new_namespace_id: nil,
-              id: project.path
-            },
-            format: :js
+    context 'when new namespace is the same as the current namespace' do
+      let(:new_namespace_id) { project.namespace.id }
 
-        project.reload
-
-        expect(project.namespace).to eq(old_namespace)
-        expect(response).to have_gitlab_http_status(:ok)
-        expect(flash[:alert]).to eq s_('TransferProject|Please select a new namespace for your project.')
-      end
+      it_behaves_like 'project namespace is not changed', s_('TransferProject|Project is already in this namespace.')
     end
   end
 
@@ -1003,7 +1105,7 @@ RSpec.describe ProjectsController do
 
           expect(forked_project.reload.forked?).to be_falsey
           expect(flash[:notice]).to eq(s_('The fork relationship has been removed.'))
-          expect(response).to render_template(:remove_fork)
+          expect(response).to redirect_to(edit_project_path(forked_project))
         end
       end
 
@@ -1019,7 +1121,7 @@ RSpec.describe ProjectsController do
               format: :js)
 
           expect(flash[:notice]).to be_nil
-          expect(response).to render_template(:remove_fork)
+          expect(response).to redirect_to(edit_project_path(unforked_project))
         end
       end
     end
@@ -1054,6 +1156,22 @@ RSpec.describe ProjectsController do
       expect(json_response["Commits"]).to include("123456")
     end
 
+    context 'when gitaly is unavailable' do
+      before do
+        expect_next_instance_of(TagsFinder) do |finder|
+          allow(finder).to receive(:execute).and_raise(Gitlab::Git::CommandError)
+        end
+      end
+
+      it 'gets an empty list of tags' do
+        get :refs, params: { namespace_id: project.namespace, id: project, ref: "123456" }
+
+        expect(json_response["Branches"]).to include("master")
+        expect(json_response["Tags"]).to eq([])
+        expect(json_response["Commits"]).to include("123456")
+      end
+    end
+
     context "when preferred language is Japanese" do
       before do
         user.update!(preferred_language: 'ja')
@@ -1082,6 +1200,16 @@ RSpec.describe ProjectsController do
 
           expect(response).to have_gitlab_http_status(:not_found)
         end
+      end
+    end
+
+    context 'when input params are invalid' do
+      let(:request) { get :refs, params: { namespace_id: project.namespace, id: project, ref: { invalid: :format } } }
+
+      it 'does not break' do
+        request
+
+        expect(response).to have_gitlab_http_status(:success)
       end
     end
   end
@@ -1332,12 +1460,12 @@ RSpec.describe ProjectsController do
         end
       end
 
-      context 'when the endpoint receives requests above the limit', :clean_gitlab_redis_cache do
+      context 'when the endpoint receives requests above the limit', :clean_gitlab_redis_rate_limiting do
         include_examples 'rate limits project export endpoint'
       end
     end
 
-    describe '#download_export', :clean_gitlab_redis_cache do
+    describe '#download_export', :clean_gitlab_redis_rate_limiting do
       let(:action) { :download_export }
 
       context 'object storage enabled' do
@@ -1372,7 +1500,7 @@ RSpec.describe ProjectsController do
           end
         end
 
-        context 'when the endpoint receives requests above the limit', :clean_gitlab_redis_cache do
+        context 'when the endpoint receives requests above the limit', :clean_gitlab_redis_rate_limiting do
           before do
             allow(Gitlab::ApplicationRateLimiter)
               .to receive(:increment)
@@ -1444,30 +1572,8 @@ RSpec.describe ProjectsController do
         end
       end
 
-      context 'when the endpoint receives requests above the limit', :clean_gitlab_redis_cache do
+      context 'when the endpoint receives requests above the limit', :clean_gitlab_redis_rate_limiting do
         include_examples 'rate limits project export endpoint'
-      end
-    end
-  end
-
-  context 'private project with token authentication' do
-    let_it_be(:private_project) { create(:project, :private) }
-
-    it_behaves_like 'authenticates sessionless user', :show, :atom, ignore_incrementing: true do
-      before do
-        default_params.merge!(id: private_project, namespace_id: private_project.namespace)
-
-        private_project.add_maintainer(user)
-      end
-    end
-  end
-
-  context 'public project with token authentication' do
-    let_it_be(:public_project) { create(:project, :public) }
-
-    it_behaves_like 'authenticates sessionless user', :show, :atom, public: true do
-      before do
-        default_params.merge!(id: public_project, namespace_id: public_project.namespace)
       end
     end
   end
@@ -1484,68 +1590,19 @@ RSpec.describe ProjectsController do
 
       get :show, format: :atom, params: { id: public_project, namespace_id: public_project.namespace }
 
-      expect(response).to render_template('xml.atom')
+      expect(response).to have_gitlab_http_status(:success)
+      expect(response).to render_template(:show)
+      expect(response).to render_template(layout: :xml)
       expect(assigns(:events)).to eq([event])
     end
 
     it 'filters by calling event.visible_to_user?' do
       get :show, format: :atom, params: { id: public_project, namespace_id: public_project.namespace }
 
-      expect(response).to render_template('xml.atom')
+      expect(response).to have_gitlab_http_status(:success)
+      expect(response).to render_template(:show)
+      expect(response).to render_template(layout: :xml)
       expect(assigns(:events)).to eq([event])
-    end
-  end
-
-  describe 'GET resolve' do
-    shared_examples 'resolvable endpoint' do
-      it 'redirects to the project page' do
-        get :resolve, params: { id: project.id }
-
-        expect(response).to have_gitlab_http_status(:found)
-        expect(response).to redirect_to(project_path(project))
-      end
-    end
-
-    context 'with an authenticated user' do
-      before do
-        sign_in(user)
-      end
-
-      context 'when user has access to the project' do
-        before do
-          project.add_developer(user)
-        end
-
-        it_behaves_like 'resolvable endpoint'
-      end
-
-      context 'when user has no access to the project' do
-        it 'gives 404 for existing project' do
-          get :resolve, params: { id: project.id }
-
-          expect(response).to have_gitlab_http_status(:not_found)
-        end
-      end
-
-      it 'gives 404 for non-existing project' do
-        get :resolve, params: { id: '0' }
-
-        expect(response).to have_gitlab_http_status(:not_found)
-      end
-    end
-
-    context 'non authenticated user' do
-      context 'with a public project' do
-        let(:project) { public_project }
-
-        it_behaves_like 'resolvable endpoint'
-      end
-
-      it 'gives 404 for private project' do
-        get :resolve, params: { id: project.id }
-
-        expect(response).to have_gitlab_http_status(:not_found)
-      end
     end
   end
 

@@ -1,9 +1,7 @@
-/* eslint-disable @gitlab/require-string-literal-i18n-helpers */
 import { __ } from '~/locale';
 
 export const DEBOUNCE_DELAY = 200;
 export const MAX_RECENT_TOKENS_SIZE = 3;
-export const WEIGHT_TOKEN_SUGGESTIONS_SIZE = 21;
 
 export const FILTER_NONE = 'None';
 export const FILTER_ANY = 'Any';
@@ -21,29 +19,24 @@ export const OPERATOR_IS_ONLY = [{ value: OPERATOR_IS, description: OPERATOR_IS_
 export const OPERATOR_IS_NOT_ONLY = [{ value: OPERATOR_IS_NOT, description: OPERATOR_IS_NOT_TEXT }];
 export const OPERATOR_IS_AND_IS_NOT = [...OPERATOR_IS_ONLY, ...OPERATOR_IS_NOT_ONLY];
 
-export const DEFAULT_LABEL_NONE = {
-  value: FILTER_NONE,
-  text: __(FILTER_NONE),
-  title: __(FILTER_NONE),
-};
-export const DEFAULT_LABEL_ANY = { value: FILTER_ANY, text: __(FILTER_ANY), title: __(FILTER_ANY) };
+export const DEFAULT_LABEL_NONE = { value: FILTER_NONE, text: __('None'), title: __('None') };
+export const DEFAULT_LABEL_ANY = { value: FILTER_ANY, text: __('Any'), title: __('Any') };
 export const DEFAULT_NONE_ANY = [DEFAULT_LABEL_NONE, DEFAULT_LABEL_ANY];
 
-export const DEFAULT_ITERATIONS = DEFAULT_NONE_ANY.concat([
-  { value: FILTER_CURRENT, text: __(FILTER_CURRENT) },
-]);
-
+export const DEFAULT_MILESTONE_UPCOMING = {
+  value: FILTER_UPCOMING,
+  text: __('Upcoming'),
+  title: __('Upcoming'),
+};
+export const DEFAULT_MILESTONE_STARTED = {
+  value: FILTER_STARTED,
+  text: __('Started'),
+  title: __('Started'),
+};
 export const DEFAULT_MILESTONES = DEFAULT_NONE_ANY.concat([
-  { value: FILTER_UPCOMING, text: __(FILTER_UPCOMING), title: __(FILTER_UPCOMING) },
-  { value: FILTER_STARTED, text: __(FILTER_STARTED), title: __(FILTER_STARTED) },
+  DEFAULT_MILESTONE_UPCOMING,
+  DEFAULT_MILESTONE_STARTED,
 ]);
-
-export const DEFAULT_MILESTONES_GRAPHQL = [
-  { value: 'any', text: __(FILTER_ANY), title: __(FILTER_ANY) },
-  { value: 'none', text: __(FILTER_NONE), title: __(FILTER_NONE) },
-  { value: '#upcoming', text: __(FILTER_UPCOMING), title: __(FILTER_UPCOMING) },
-  { value: '#started', text: __(FILTER_STARTED), title: __(FILTER_STARTED) },
-];
 
 export const SortDirection = {
   descending: 'descending',
@@ -58,8 +51,6 @@ export const TOKEN_TITLE_ASSIGNEE = __('Assignee');
 export const TOKEN_TITLE_MILESTONE = __('Milestone');
 export const TOKEN_TITLE_LABEL = __('Label');
 export const TOKEN_TITLE_TYPE = __('Type');
+export const TOKEN_TITLE_RELEASE = __('Release');
 export const TOKEN_TITLE_MY_REACTION = __('My-Reaction');
 export const TOKEN_TITLE_CONFIDENTIAL = __('Confidential');
-export const TOKEN_TITLE_ITERATION = __('Iteration');
-export const TOKEN_TITLE_EPIC = __('Epic');
-export const TOKEN_TITLE_WEIGHT = __('Weight');

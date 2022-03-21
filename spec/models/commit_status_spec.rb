@@ -47,7 +47,7 @@ RSpec.describe CommitStatus do
     let!(:commit_status) { create(:commit_status, :running, project: project) }
 
     it 'invalidates the cache after a transition' do
-      expect(ExpireJobCacheWorker).to receive(:perform_async).with(commit_status.id)
+      expect(commit_status).to receive(:expire_etag_cache!)
 
       commit_status.success!
     end
@@ -97,30 +97,14 @@ RSpec.describe CommitStatus do
     end
   end
 
-  describe '.updated_before' do
-    let!(:lookback) { 5.days.ago }
-    let!(:timeout) { 1.day.ago }
-    let!(:before_lookback) { lookback - 1.hour }
-    let!(:after_lookback) { lookback + 1.hour }
-    let!(:before_timeout) { timeout - 1.hour }
-    let!(:after_timeout) { timeout + 1.hour }
+  describe '.scheduled_at_before' do
+    let!(:never_scheduled) { create(:commit_status) }
+    let!(:stale_scheduled) { create(:commit_status, scheduled_at: 1.day.ago) }
+    let!(:fresh_scheduled) { create(:commit_status, scheduled_at: 1.minute.ago) }
 
-    subject { described_class.updated_before(lookback: lookback, timeout: timeout) }
+    subject { CommitStatus.scheduled_at_before(1.hour.ago) }
 
-    def create_build_with_set_timestamps(created_at:, updated_at:)
-      travel_to(created_at) { create(:ci_build, created_at: Time.current) }.tap do |build|
-        travel_to(updated_at) { build.update!(status: :failed) }
-      end
-    end
-
-    it 'finds builds updated and created in the window between lookback and timeout' do
-      build_in_lookback_timeout_window = create_build_with_set_timestamps(created_at: after_lookback, updated_at: before_timeout)
-      build_outside_lookback_window = create_build_with_set_timestamps(created_at: before_lookback, updated_at: before_timeout)
-      build_outside_timeout_window = create_build_with_set_timestamps(created_at: after_lookback, updated_at: after_timeout)
-
-      expect(subject).to contain_exactly(build_in_lookback_timeout_window)
-      expect(subject).not_to include(build_outside_lookback_window, build_outside_timeout_window)
-    end
+    it { is_expected.to contain_exactly(stale_scheduled) }
   end
 
   describe '#processed' do
@@ -366,6 +350,22 @@ RSpec.describe CommitStatus do
 
     it 'returns unique statuses' do
       is_expected.to contain_exactly(*statuses.values_at(0, 1, 2))
+    end
+  end
+
+  describe '.retried_ordered' do
+    subject { described_class.retried_ordered.to_a }
+
+    let!(:statuses) do
+      [create_status(name: 'aa', ref: 'bb', status: 'running', retried: true),
+       create_status(name: 'cc', ref: 'cc', status: 'pending', retried: true),
+       create_status(name: 'aa', ref: 'cc', status: 'success', retried: true),
+       create_status(name: 'cc', ref: 'bb', status: 'success'),
+       create_status(name: 'aa', ref: 'bb', status: 'success')]
+    end
+
+    it 'returns retried statuses in order' do
+      is_expected.to eq(statuses.values_at(2, 0, 1))
     end
   end
 
@@ -747,6 +747,34 @@ RSpec.describe CommitStatus do
 
       it_behaves_like 'incrementing failure reason counter'
     end
+
+    context 'when status is manual' do
+      let(:commit_status) { create(:commit_status, :manual) }
+
+      it 'is able to be dropped' do
+        expect { commit_status.drop! }.to change { commit_status.status }.from('manual').to('failed')
+      end
+    end
+
+    context 'when a failure reason is provided' do
+      context 'when a failure reason is a symbol' do
+        it 'correctly sets a failure reason' do
+          commit_status.drop!(:script_failure)
+
+          expect(commit_status).to be_script_failure
+        end
+      end
+
+      context 'when a failure reason is an object' do
+        it 'correctly sets a failure reason' do
+          reason = ::Gitlab::Ci::Build::Status::Reason.new(commit_status, :script_failure)
+
+          commit_status.drop!(reason)
+
+          expect(commit_status).to be_script_failure
+        end
+      end
+    end
   end
 
   describe 'ensure stage assignment' do
@@ -930,6 +958,47 @@ RSpec.describe CommitStatus do
       expect(build_old.reload).to have_attributes(retried: true, processed: true)
       expect(test.reload).to have_attributes(retried: false, processed: false)
       expect(build_from_other_pipeline.reload).to have_attributes(retried: false, processed: false)
+    end
+  end
+
+  describe '.bulk_insert_tags!' do
+    let(:statuses) { double('statuses') }
+    let(:inserter) { double('inserter') }
+
+    it 'delegates to bulk insert class' do
+      expect(Gitlab::Ci::Tags::BulkInsert)
+        .to receive(:new)
+        .with(statuses)
+        .and_return(inserter)
+
+      expect(inserter).to receive(:insert!)
+
+      described_class.bulk_insert_tags!(statuses)
+    end
+  end
+
+  describe '#expire_etag_cache!' do
+    it 'expires the etag cache' do
+      expect_next_instance_of(Gitlab::EtagCaching::Store) do |etag_store|
+        job_path = Gitlab::Routing.url_helpers.project_build_path(project, commit_status.id, format: :json)
+        expect(etag_store).to receive(:touch).with(job_path)
+      end
+
+      commit_status.expire_etag_cache!
+    end
+  end
+
+  context 'loose foreign key on ci_builds.project_id' do
+    it_behaves_like 'cleanup by a loose foreign key' do
+      let!(:parent) { create(:project) }
+      let!(:model) { create(:ci_build, project: parent) }
+    end
+  end
+
+  context 'loose foreign key on ci_builds.runner_id' do
+    it_behaves_like 'cleanup by a loose foreign key' do
+      let!(:parent) { create(:ci_runner) }
+      let!(:model) { create(:ci_build, runner: parent) }
     end
   end
 end

@@ -10,7 +10,7 @@ RSpec.describe "Admin > Admin sees background migrations" do
   let_it_be(:finished_migration) { create(:batched_background_migration, table_name: 'finished', status: :finished) }
 
   before_all do
-    create(:batched_background_migration_job, batched_migration: failed_migration, batch_size: 10, min_value: 6, max_value: 15, status: :failed, attempts: 3)
+    create(:batched_background_migration_job, :failed, batched_migration: failed_migration, batch_size: 10, min_value: 6, max_value: 15, attempts: 3)
   end
 
   before do
@@ -56,7 +56,13 @@ RSpec.describe "Admin > Admin sees background migrations" do
   context 'when there are failed migrations' do
     before do
       allow_next_instance_of(Gitlab::BackgroundMigration::BatchingStrategies::PrimaryKeyBatchingStrategy) do |batch_class|
-        allow(batch_class).to receive(:next_batch).with(anything, anything, batch_min_value: 6, batch_size: 5).and_return([6, 10])
+        allow(batch_class).to receive(:next_batch).with(
+          anything,
+          anything,
+          batch_min_value: 6,
+          batch_size: 5,
+          job_arguments: failed_migration.job_arguments
+        ).and_return([6, 10])
       end
     end
 
@@ -68,7 +74,7 @@ RSpec.describe "Admin > Admin sees background migrations" do
         tab.click
 
         expect(page).to have_current_path(admin_background_migrations_path(tab: 'failed'))
-        expect(tab[:class]).to include('gl-tab-nav-item-active', 'gl-tab-nav-item-active-indigo')
+        expect(tab[:class]).to include('gl-tab-nav-item-active')
 
         expect(page).to have_selector('tbody tr', count: 1)
 
@@ -93,7 +99,7 @@ RSpec.describe "Admin > Admin sees background migrations" do
       tab.click
 
       expect(page).to have_current_path(admin_background_migrations_path(tab: 'finished'))
-      expect(tab[:class]).to include('gl-tab-nav-item-active', 'gl-tab-nav-item-active-indigo')
+      expect(tab[:class]).to include('gl-tab-nav-item-active')
 
       expect(page).to have_selector('tbody tr', count: 1)
 

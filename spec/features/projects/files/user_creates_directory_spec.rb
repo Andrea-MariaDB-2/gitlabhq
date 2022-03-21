@@ -42,7 +42,7 @@ RSpec.describe 'Projects > Files > User creates a directory', :js do
       click_button('Create directory')
 
       expect(page).to have_content('A directory with this name already exists')
-      expect(current_path).to eq(project_tree_path(project, 'master'))
+      expect(page).to have_current_path(project_tree_path(project, 'master'), ignore_query: true)
     end
   end
 
@@ -81,7 +81,7 @@ RSpec.describe 'Projects > Files > User creates a directory', :js do
       expect(page).to have_content('From new-feature into master')
       expect(page).to have_content('Add new directory')
 
-      expect(current_path).to eq(project_new_merge_request_path(project))
+      expect(page).to have_current_path(project_new_merge_request_path(project), ignore_query: true)
     end
   end
 
@@ -98,14 +98,16 @@ RSpec.describe 'Projects > Files > User creates a directory', :js do
       expect(page).to have_content(fork_message)
 
       find('.add-to-tree').click
+      wait_for_requests
       click_link('New directory')
       fill_in(:dir_name, with: 'new_directory')
       fill_in(:commit_message, with: 'New commit message', visible: true)
       click_button('Create directory')
 
       fork = user.fork_of(project2.reload)
+      wait_for_requests
 
-      expect(current_path).to eq(project_new_merge_request_path(fork))
+      expect(page).to have_current_path(project_new_merge_request_path(fork), ignore_query: true)
     end
   end
 end

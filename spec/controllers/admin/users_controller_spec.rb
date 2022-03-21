@@ -146,7 +146,7 @@ RSpec.describe Admin::UsersController do
 
       it 'sends the user a rejection email' do
         expect_next_instance_of(NotificationService) do |notification|
-          allow(notification).to receive(:user_admin_rejection).with(user.name, user.notification_email)
+          allow(notification).to receive(:user_admin_rejection).with(user.name, user.notification_email_or_default)
         end
 
         subject
@@ -165,7 +165,7 @@ RSpec.describe Admin::UsersController do
       it 'displays the error' do
         subject
 
-        expect(flash[:alert]).to eq('This user does not have a pending request')
+        expect(flash[:alert]).to eq('User does not have a pending request')
       end
 
       it 'does not email the user' do
@@ -421,16 +421,37 @@ RSpec.describe Admin::UsersController do
   end
 
   describe 'PUT confirm/:id' do
-    let(:user) { create(:user, confirmed_at: nil) }
+    shared_examples_for 'confirms the user' do
+      it 'confirms the user' do
+        put :confirm, params: { id: user.username }
+        user.reload
+        expect(user.confirmed?).to be_truthy
+      end
+    end
+
+    let(:expired_confirmation_sent_at) { Date.today - User.confirm_within - 7.days }
+    let(:extant_confirmation_sent_at) { Date.today }
+
+    let(:user) do
+      create(:user, :unconfirmed).tap do |user|
+        user.update!(confirmation_sent_at: confirmation_sent_at)
+      end
+    end
 
     before do
       request.env["HTTP_REFERER"] = "/"
     end
 
-    it 'confirms user' do
-      put :confirm, params: { id: user.username }
-      user.reload
-      expect(user.confirmed?).to be_truthy
+    context 'when the confirmation period has expired' do
+      let(:confirmation_sent_at) {  expired_confirmation_sent_at }
+
+      it_behaves_like 'confirms the user'
+    end
+
+    context 'when the confirmation period has not expired' do
+      let(:confirmation_sent_at) {  extant_confirmation_sent_at }
+
+      it_behaves_like 'confirms the user'
     end
   end
 
@@ -591,8 +612,8 @@ RSpec.describe Admin::UsersController do
       end
 
       context 'when the new password does not match the password confirmation' do
-        let(:password) { 'some_password' }
-        let(:password_confirmation) { 'not_same_as_password' }
+        let(:password) { Gitlab::Password.test_default }
+        let(:password_confirmation) { "not" + Gitlab::Password.test_default }
 
         it 'shows the edit page again' do
           update_password(user, password, password_confirmation)
@@ -794,6 +815,14 @@ RSpec.describe Admin::UsersController do
 
         expect(flash[:alert]).to eq("You are now impersonating #{user.username}")
       end
+
+      it 'clears token session keys' do
+        session[:github_access_token] = SecureRandom.hex(8)
+
+        post :impersonate, params: { id: user.username }
+
+        expect(session[:github_access_token]).to be_nil
+      end
     end
 
     context "when impersonation is disabled" do
@@ -805,6 +834,21 @@ RSpec.describe Admin::UsersController do
         post :impersonate, params: { id: user.username }
 
         expect(response).to have_gitlab_http_status(:not_found)
+      end
+    end
+
+    context 'when impersonating an admin and attempting to impersonate again' do
+      let(:admin2) { create(:admin) }
+
+      before do
+        post :impersonate, params: { id: admin2.username }
+      end
+
+      it 'does not allow double impersonation', :aggregate_failures do
+        post :impersonate, params: { id: user.username }
+
+        expect(flash[:alert]).to eq(_('You are already impersonating another user'))
+        expect(warden.user).to eq(admin2)
       end
     end
   end

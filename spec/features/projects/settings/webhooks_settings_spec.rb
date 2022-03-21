@@ -86,7 +86,7 @@ RSpec.describe 'Projects > Settings > Webhook Settings' do
         find('.hook-test-button.dropdown').click
         click_link 'Push events'
 
-        expect(current_path).to eq(webhooks_path)
+        expect(page).to have_current_path(webhooks_path, ignore_query: true)
       end
 
       context 'delete existing webhook' do
@@ -115,8 +115,8 @@ RSpec.describe 'Projects > Settings > Webhook Settings' do
         hook_log
         visit edit_project_hook_path(project, hook)
 
-        expect(page).to have_content('Recent Deliveries')
-        expect(page).to have_content(hook_log.url)
+        expect(page).to have_content('Recent events')
+        expect(page).to have_link('View details', href: hook_log.present.details_path)
       end
 
       it 'show hook log details' do
@@ -137,7 +137,7 @@ RSpec.describe 'Projects > Settings > Webhook Settings' do
         click_link 'View details'
         click_link 'Resend Request'
 
-        expect(current_path).to eq(edit_project_hook_path(project, hook))
+        expect(page).to have_current_path(edit_project_hook_path(project, hook), ignore_query: true)
       end
     end
   end

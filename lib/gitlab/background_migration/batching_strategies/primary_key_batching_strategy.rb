@@ -8,7 +8,7 @@ module Gitlab
       # values for the next batch as an array.
       #
       # If no more batches exist in the table, returns nil.
-      class PrimaryKeyBatchingStrategy
+      class PrimaryKeyBatchingStrategy < BaseStrategy
         include Gitlab::Database::DynamicModelHelpers
 
         # Finds and returns the next batch in the table.
@@ -17,8 +17,9 @@ module Gitlab
         # column_name - The column to batch over
         # batch_min_value - The minimum value which the next batch will start at
         # batch_size - The size of the next batch
-        def next_batch(table_name, column_name, batch_min_value:, batch_size:)
-          model_class = define_batchable_model(table_name)
+        # job_arguments - The migration job arguments
+        def next_batch(table_name, column_name, batch_min_value:, batch_size:, job_arguments:)
+          model_class = define_batchable_model(table_name, connection: connection)
 
           quoted_column_name = model_class.connection.quote_column_name(column_name)
           relation = model_class.where("#{quoted_column_name} >= ?", batch_min_value)

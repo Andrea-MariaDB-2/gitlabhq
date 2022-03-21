@@ -6,7 +6,7 @@ RSpec.describe Admin::InstanceReviewController do
   include UsageDataHelpers
 
   let(:admin) { create(:admin) }
-  let(:subscriptions_url) { ::Gitlab::SubscriptionPortal::SUBSCRIPTIONS_URL }
+  let(:subscriptions_instance_review_url) { Gitlab::SubscriptionPortal.subscriptions_instance_review_url }
 
   before do
     sign_in(admin)
@@ -22,7 +22,8 @@ RSpec.describe Admin::InstanceReviewController do
       before do
         stub_application_setting(usage_ping_enabled: true)
         stub_usage_data_connections
-        ::Gitlab::UsageData.data(force_refresh: true)
+        stub_database_flavor_check
+        ::Gitlab::Usage::ServicePingReport.for(output: :all_metrics_values)
         subject
       end
 
@@ -44,7 +45,7 @@ RSpec.describe Admin::InstanceReviewController do
           notes_count: 0
         } }.to_query
 
-        expect(response).to redirect_to("#{subscriptions_url}/instance_review?#{params}")
+        expect(response).to redirect_to("#{subscriptions_instance_review_url}?#{params}")
       end
     end
 
@@ -61,7 +62,7 @@ RSpec.describe Admin::InstanceReviewController do
           version: ::Gitlab::VERSION
         } }.to_query
 
-        expect(response).to redirect_to("#{subscriptions_url}/instance_review?#{params}")
+        expect(response).to redirect_to("#{subscriptions_instance_review_url}?#{params}")
       end
     end
   end

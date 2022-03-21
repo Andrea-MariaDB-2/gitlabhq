@@ -2,7 +2,6 @@
 stage: Create
 group: Editor
 info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
-type: howto
 ---
 
 # GitLab Web Editor **(FREE)**
@@ -118,8 +117,6 @@ There are multiple ways to create a branch from the GitLab web interface.
 
 ### Create a new branch from an issue
 
-> [Introduced](https://gitlab.com/gitlab-org/gitlab-foss/-/merge_requests/2808) in GitLab 8.6.
-
 If your development workflow requires an issue for every merge
 request, you can create a branch directly from the issue to speed the process up.
 The new branch, and later its merge request, are marked as related to this issue.
@@ -175,10 +172,10 @@ request, you can create a new branch upfront.
    ![New branch dropdown](img/web_editor_new_branch_dropdown_v14_1.png)
 
 1. Enter a new **Branch name**.
-1. (Optional) Change the **Create from** field to choose which branch, tag, or
+1. Optional. Change the **Create from** field to choose which branch, tag, or
    commit SHA this new branch originates from. This field autocompletes if you
    start typing an existing branch or tag.
-1. Click **Create branch** to return to the file browser on this new branch.
+1. To return to the file browser on this new branch, select **Create branch**.
 
    ![New branch page](img/web_editor_new_branch_page_v14_1.png)
 
@@ -201,10 +198,10 @@ SHA:
 
 1. Give the tag a name such as `v1.0.0`.
 1. Choose the branch or SHA from which you want to create this new tag.
-1. (Optional) Add a message and release notes. The release notes section supports
+1. Optional. Add a message and release notes. The release notes section supports
    Markdown format.
-1. (Optional) Upload an attachment.
-1. Click **Create tag**, and GitLab redirects you to the tag list page.
+1. Optional. Upload an attachment.
+1. Select **Create tag**. GitLab redirects you to the tag list page.
 
    ![New tag page](img/web_editor_new_tag_page.png)
 

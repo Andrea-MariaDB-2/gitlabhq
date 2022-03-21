@@ -7,9 +7,10 @@ module Banzai
         include Gitlab::Utils::StrongMemoize
         include RequestStoreReferenceCache
 
-        def initialize(filter, context)
+        def initialize(filter, context, result)
           @filter = filter
           @context = context
+          @result = result || {}
         end
 
         def load_reference_cache(nodes)
@@ -28,7 +29,7 @@ module Banzai
           @references_per_parent[parent_type] ||= begin
             refs = Hash.new { |hash, key| hash[key] = Set.new }
 
-            prepare_doc_for_scan(filter.doc).to_enum(:scan, regex).each do
+            prepare_doc_for_scan.to_enum(:scan, regex).each do
               parent_path = if parent_type == :project
                               full_project_path($~[:namespace], $~[:project])
                             else
@@ -166,7 +167,7 @@ module Banzai
 
         private
 
-        attr_accessor :filter, :context
+        attr_accessor :filter, :context, :result
 
         delegate :project, :group, :parent, :parent_type, to: :filter
 
@@ -183,10 +184,12 @@ module Banzai
           Gitlab::SafeRequestStore["banzai_#{parent_type}_refs".to_sym] ||= {}
         end
 
-        def prepare_doc_for_scan(doc)
-          html = doc.to_html
+        def prepare_doc_for_scan
+          filter.requires_unescaping? ? unescape_html_entities(html_content) : html_content
+        end
 
-          filter.requires_unescaping? ? unescape_html_entities(html) : html
+        def html_content
+          result[:rendered_html] ||= filter.doc.to_html
         end
 
         def unescape_html_entities(text)

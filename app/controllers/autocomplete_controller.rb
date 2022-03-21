@@ -1,13 +1,18 @@
 # frozen_string_literal: true
 
 class AutocompleteController < ApplicationController
+  include SearchRateLimitable
+
   skip_before_action :authenticate_user!, only: [:users, :award_emojis, :merge_request_target_branches]
+  before_action :check_search_rate_limit!, only: [:users, :projects]
 
   feature_category :users, [:users, :user]
   feature_category :projects, [:projects]
-  feature_category :issue_tracking, [:award_emojis]
+  feature_category :team_planning, [:award_emojis]
   feature_category :code_review, [:merge_request_target_branches]
   feature_category :continuous_delivery, [:deploy_keys_with_owners]
+
+  urgency :low, [:merge_request_target_branches]
 
   def users
     group = Autocomplete::GroupFinder

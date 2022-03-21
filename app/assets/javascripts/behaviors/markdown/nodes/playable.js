@@ -1,8 +1,4 @@
-/* eslint-disable class-methods-use-this */
-/* eslint-disable @gitlab/require-i18n-strings */
-
-import { defaultMarkdownSerializer } from 'prosemirror-markdown';
-import { Node } from 'tiptap';
+import { defaultMarkdownSerializer } from '~/lib/prosemirror_markdown_serializer';
 
 /**
  * Abstract base class for playable media, like video and audio.
@@ -10,62 +6,51 @@ import { Node } from 'tiptap';
  * the `mediaType` property in their constructors.
  * @abstract
  */
-export default class Playable extends Node {
-  constructor() {
-    super();
-    this.mediaType = '';
-    this.extraElementAttrs = {};
-  }
-
-  get name() {
-    return this.mediaType;
-  }
-
-  get schema() {
-    const attrs = {
-      src: {},
-      alt: {
-        default: null,
-      },
-    };
-
-    const parseDOM = [
+export default ({ mediaType, extraElementAttrs = {} }) => {
+  const attrs = {
+    src: {},
+    alt: {
+      default: null,
+    },
+  };
+  const parseDOM = [
+    {
+      // eslint-disable-next-line @gitlab/require-i18n-strings
+      tag: `.${mediaType}-container`,
+      getAttrs: (el) => ({
+        src: el.querySelector(mediaType).src,
+        alt: el.querySelector(mediaType).dataset.title,
+      }),
+    },
+  ];
+  const toDOM = (node) => [
+    'span',
+    { class: `media-container ${mediaType}-container` },
+    [
+      mediaType,
       {
-        tag: `.${this.mediaType}-container`,
-        getAttrs: (el) => ({
-          src: el.querySelector(this.mediaType).src,
-          alt: el.querySelector(this.mediaType).dataset.title,
-        }),
+        src: node.attrs.src,
+        controls: true,
+        'data-setup': '{}',
+        'data-title': node.attrs.alt,
+        ...extraElementAttrs,
       },
-    ];
+    ],
+    ['a', { href: node.attrs.src }, node.attrs.alt],
+  ];
 
-    const toDOM = (node) => [
-      'span',
-      { class: `media-container ${this.mediaType}-container` },
-      [
-        this.mediaType,
-        {
-          src: node.attrs.src,
-          controls: true,
-          'data-setup': '{}',
-          'data-title': node.attrs.alt,
-          ...this.extraElementAttrs,
-        },
-      ],
-      ['a', { href: node.attrs.src }, node.attrs.alt],
-    ];
-
-    return {
+  return {
+    name: mediaType,
+    schema: {
       attrs,
       group: 'inline',
       inline: true,
       draggable: true,
       parseDOM,
       toDOM,
-    };
-  }
-
-  toMarkdown(state, node) {
-    defaultMarkdownSerializer.nodes.image(state, node);
-  }
-}
+    },
+    toMarkdown(state, node) {
+      defaultMarkdownSerializer.nodes.image(state, node);
+    },
+  };
+};

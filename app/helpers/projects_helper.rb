@@ -20,16 +20,15 @@ module ProjectsHelper
   end
 
   def link_to_member_avatar(author, opts = {})
-    default_opts = { size: 16, lazy_load: false }
+    default_opts = { size: 16 }
     opts = default_opts.merge(opts)
 
     classes = %W[avatar avatar-inline s#{opts[:size]}]
     classes << opts[:avatar_class] if opts[:avatar_class]
 
     avatar = avatar_icon_for_user(author, opts[:size])
-    src = opts[:lazy_load] ? nil : avatar
 
-    image_tag(src, width: opts[:size], class: classes, alt: '', "data-src" => avatar)
+    image_tag(avatar, width: opts[:size], class: classes, alt: '')
   end
 
   def author_content_tag(author, opts = {})
@@ -55,31 +54,37 @@ module ProjectsHelper
     default_opts = { avatar: true, name: true, title: ":name" }
     opts = default_opts.merge(opts)
 
+    return "(deleted)" unless author
+
     data_attrs = {
       user_id: author.id,
       username: author.username,
       name: author.name
     }
 
-    return "(deleted)" unless author
+    inject_classes = ["author-link", opts[:extra_class]]
+
+    if opts[:name]
+      inject_classes.concat(["js-user-link", opts[:mobile_classes]])
+    else
+      inject_classes.append( "has-tooltip" )
+    end
+
+    inject_classes = inject_classes.compact.join(" ")
 
     author_html = []
-
     # Build avatar image tag
     author_html << link_to_member_avatar(author, opts) if opts[:avatar]
-
     # Build name span tag
     author_html << author_content_tag(author, opts) if opts[:name]
-
     author_html << capture(&block) if block
-
     author_html = author_html.join.html_safe
 
     if opts[:name]
-      link_to(author_html, user_path(author), class: "author-link js-user-link #{"#{opts[:extra_class]}" if opts[:extra_class]} #{"#{opts[:mobile_classes]}" if opts[:mobile_classes]}", data: data_attrs).html_safe
+      link_to(author_html, user_path(author), class: inject_classes, data: data_attrs).html_safe
     else
       title = opts[:title].sub(":name", sanitize(author.name))
-      link_to(author_html, user_path(author), class: "author-link has-tooltip", title: title, data: { container: 'body', qa_selector: 'assignee_link' }).html_safe
+      link_to(author_html, user_path(author), class: inject_classes, title: title, data: { container: 'body', qa_selector: 'assignee_link' }).html_safe
     end
   end
 
@@ -121,6 +126,15 @@ module ProjectsHelper
       { project_full_name: project.full_name }
   end
 
+  def remove_fork_project_confirm_json(project, remove_form_id)
+    {
+      remove_form_id: remove_form_id,
+      button_text: _('Remove fork relationship'),
+      confirm_danger_message: remove_fork_project_warning_message(project),
+      phrase: @project.path
+    }
+  end
+
   def visible_fork_source(project)
     project.fork_source if project.fork_source && can?(current_user, :read_project, project.fork_source)
   end
@@ -146,7 +160,7 @@ module ProjectsHelper
   end
 
   def link_to_autodeploy_doc
-    link_to _('About auto deploy'), help_page_path('topics/autodevops/stages.md', anchor: 'auto-deploy'), target: '_blank'
+    link_to _('About auto deploy'), help_page_path('topics/autodevops/stages.md', anchor: 'auto-deploy'), target: '_blank', rel: 'noopener'
   end
 
   def autodeploy_flash_notice(branch_name)
@@ -197,12 +211,26 @@ module ProjectsHelper
     cookies["hide_auto_devops_implicitly_enabled_banner_#{project.id}".to_sym].blank?
   end
 
-  def link_to_set_password
-    if current_user.require_password_creation_for_git?
-      link_to s_('SetPasswordToCloneLink|set a password'), edit_profile_password_path
-    else
-      link_to s_('CreateTokenToCloneLink|create a personal access token'), profile_personal_access_tokens_path
-    end
+  def no_password_message
+    push_pull_link_start = '<a href="%{url}" target="_blank" rel="noopener noreferrer">'.html_safe % { url: help_page_path('gitlab-basics/start-using-git', anchor: 'pull-and-push') }
+    clone_with_https_link_start = '<a href="%{url}" target="_blank" rel="noopener noreferrer">'.html_safe % { url: help_page_path('gitlab-basics/start-using-git', anchor: 'clone-with-https') }
+    set_password_link_start = '<a href="%{url}">'.html_safe % { url: edit_profile_password_path }
+    set_up_pat_link_start = '<a href="%{url}">'.html_safe % { url: profile_personal_access_tokens_path }
+
+    message = if current_user.require_password_creation_for_git?
+                _('Your account is authenticated with SSO or SAML. To %{push_pull_link_start}push and pull%{link_end} over %{protocol} with Git using this account, you must %{set_password_link_start}set a password%{link_end} or %{set_up_pat_link_start}set up a Personal Access Token%{link_end} to use instead of a password. For more information, see %{clone_with_https_link_start}Clone with HTTPS%{link_end}.')
+              else
+                _('Your account is authenticated with SSO or SAML. To %{push_pull_link_start}push and pull%{link_end} over %{protocol} with Git using this account, you must %{set_up_pat_link_start}set up a Personal Access Token%{link_end} to use instead of a password. For more information, see %{clone_with_https_link_start}Clone with HTTPS%{link_end}.')
+              end
+
+    html_escape(message) % {
+      push_pull_link_start: push_pull_link_start,
+      protocol: gitlab_config.protocol.upcase,
+      clone_with_https_link_start: clone_with_https_link_start,
+      set_password_link_start: set_password_link_start,
+      set_up_pat_link_start: set_up_pat_link_start,
+      link_end: '</a>'.html_safe
+    }
   end
 
   # Returns true if any projects are present.
@@ -351,7 +379,7 @@ module ProjectsHelper
   end
 
   def show_terraform_banner?(project)
-    project.repository_languages.with_programming_language('HCL').exists? && project.terraform_states.empty?
+    Feature.enabled?(:show_terraform_banner, type: :ops, default_enabled: true) && project.repository_languages.with_programming_language('HCL').exists? && project.terraform_states.empty?
   end
 
   def project_permissions_panel_data(project)
@@ -377,7 +405,51 @@ module ProjectsHelper
     }
   end
 
+  def project_classes(project)
+    return "project-highlight-puc" if project.warn_about_potentially_unwanted_characters?
+
+    ""
+  end
+
+  # Returns the confirm phrase the user needs to type in order to delete the project
+  #
+  # Thus the phrase should include the namespace to make it very clear to the
+  # user which project is subject to deletion.
+  # Relevant issue: https://gitlab.com/gitlab-org/gitlab/-/issues/343591
+  def delete_confirm_phrase(project)
+    project.path_with_namespace
+  end
+
+  def fork_button_disabled_tooltip(project)
+    return unless current_user
+
+    if !current_user.can?(:fork_project, project)
+      s_("ProjectOverview|You don't have permission to fork this project")
+    elsif !current_user.can?(:create_fork)
+      s_('ProjectOverview|You have reached your project limit')
+    end
+  end
+
+  def import_from_bitbucket_message
+    configure_oauth_import_message('Bitbucket', help_page_path("integration/bitbucket"))
+  end
+
+  def import_from_gitlab_message
+    configure_oauth_import_message('GitLab.com', help_page_path("integration/gitlab"))
+  end
+
   private
+
+  def configure_oauth_import_message(provider, help_url)
+    str = if current_user.admin?
+            'ImportProjects|To enable importing projects from %{provider}, as administrator you need to configure %{link_start}OAuth integration%{link_end}'
+          else
+            'ImportProjects|To enable importing projects from %{provider}, ask your GitLab administrator to configure %{link_start}OAuth integration%{link_end}'
+          end
+
+    link_start = '<a href="%{url}" target="_blank" rel="noopener noreferrer">'.html_safe % { url: help_url }
+    s_(str).html_safe % { provider: provider, link_start: link_start, link_end: '</a>'.html_safe }
+  end
 
   def tab_ability_map
     {
@@ -435,7 +507,7 @@ module ProjectsHelper
 
   def git_user_email
     if current_user
-      current_user.commit_email
+      current_user.commit_email_or_default
     else
       "your@email.com"
     end
@@ -533,6 +605,7 @@ module ProjectsHelper
       metricsDashboardAccessLevel: feature.metrics_dashboard_access_level,
       operationsAccessLevel: feature.operations_access_level,
       showDefaultAwardEmojis: project.show_default_award_emojis?,
+      warnAboutPotentiallyUnwantedCharacters: project.warn_about_potentially_unwanted_characters?,
       securityAndComplianceAccessLevel: project.security_and_compliance_access_level,
       containerRegistryAccessLevel: feature.container_registry_access_level
     }
@@ -584,6 +657,7 @@ module ProjectsHelper
     %w[
       environments
       clusters
+      cluster_agents
       functions
       error_tracking
       alert_management
@@ -609,6 +683,31 @@ module ProjectsHelper
 
   def show_visibility_confirm_modal?(project)
     project.unlink_forks_upon_visibility_decrease_enabled? && project.visibility_level > Gitlab::VisibilityLevel::PRIVATE && project.forks_count > 0
+  end
+
+  def confirm_reduce_visibility_message(project)
+    strong_start = "<strong>".html_safe
+    strong_end = "</strong>".html_safe
+    message = _("You're about to reduce the visibility of the project %{strong_start}%{project_name}%{strong_end}.")
+
+    if project.group
+      message = _("You're about to reduce the visibility of the project %{strong_start}%{project_name}%{strong_end} in %{strong_start}%{group_name}%{strong_end}.")
+    end
+
+    html_escape(message) % { strong_start: strong_start, strong_end: strong_end, project_name: project.name, group_name: project.group ? project.group.name : nil }
+  end
+
+  def visibility_confirm_modal_data(project, target_form_id = nil)
+    {
+      target_form_id: target_form_id,
+      button_testid: 'reduce-project-visibility-button',
+      confirm_button_text: _('Reduce project visibility'),
+      confirm_danger_message: confirm_reduce_visibility_message(project),
+      phrase: project.full_path,
+      additional_information: _('Note: current forks will keep their visibility level.'),
+      html_confirmation_message: true.to_s,
+      show_visibility_confirm_modal: show_visibility_confirm_modal?(project).to_s
+    }
   end
 
   def build_project_breadcrumb_link(project)

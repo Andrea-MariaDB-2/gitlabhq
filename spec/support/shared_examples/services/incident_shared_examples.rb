@@ -13,16 +13,7 @@
 RSpec.shared_examples 'incident issue' do
   it 'has incident as issue type' do
     expect(issue.issue_type).to eq('incident')
-  end
-end
-
-RSpec.shared_examples 'has incident label' do
-  let(:label_properties) { attributes_for(:label, :incident) }
-
-  it 'has exactly one incident label' do
-    expect(issue.labels).to be_one do |label|
-      label.slice(*label_properties.keys).symbolize_keys == label_properties
-    end
+    expect(issue.work_item_type.base_type).to eq('incident')
   end
 end
 
@@ -37,21 +28,15 @@ end
 #
 #   include_examples 'not an incident issue'
 RSpec.shared_examples 'not an incident issue' do
-  let(:label_properties) { attributes_for(:label, :incident) }
-
   it 'has not incident as issue type' do
     expect(issue.issue_type).not_to eq('incident')
-  end
-
-  it 'has not an incident label' do
-    expect(issue.labels).not_to include(have_attributes(label_properties))
+    expect(issue.work_item_type.base_type).not_to eq('incident')
   end
 end
 
 # This shared example is to test the execution of incident management label services
 # For example:
 # - IncidentManagement::CreateIncidentSlaExceededLabelService
-# - IncidentManagement::CreateIncidentLabelService
 
 # It doesn't require any defined variables
 
@@ -85,7 +70,7 @@ RSpec.shared_examples 'incident management label service' do
         expect(execute).to be_success
         expect(execute.payload).to eq(label: label)
         expect(label.title).to eq(title)
-        expect(label.color).to eq(color)
+        expect(label.color).to be_color(color)
         expect(label.description).to eq(description)
       end
     end

@@ -255,11 +255,15 @@ module Gitlab
     end
 
     def container_image_regex
-      @container_image_regex ||= %r{([\w\.-]+\/){0,1}[\w\.-]+}.freeze
+      @container_image_regex ||= %r{([\w\.-]+\/){0,4}[\w\.-]+}.freeze
     end
 
     def container_image_blob_sha_regex
       @container_image_blob_sha_regex ||= %r{[\w+.-]+:?\w+}.freeze
+    end
+
+    def dependency_proxy_route_regex
+      @dependency_proxy_route_regex ||= %r{\A/v2/#{full_namespace_route_regex}/dependency_proxy/containers/#{container_image_regex}/(manifests|blobs)/#{container_image_blob_sha_regex}\z}
     end
 
     private

@@ -4,11 +4,13 @@ require 'spec_helper'
 
 RSpec.describe 'Admin::Users' do
   include Spec::Support::Helpers::Features::AdminUsersHelpers
+  include Spec::Support::Helpers::ModalHelpers
 
   let_it_be(:user, reload: true) { create(:omniauth_user, provider: 'twitter', extern_uid: '123456') }
   let_it_be(:current_user) { create(:admin) }
 
   before do
+    stub_feature_flags(bootstrap_confirmation_modals: false)
     sign_in(current_user)
     gitlab_enable_admin_mode_sign_in(current_user)
   end
@@ -19,7 +21,7 @@ RSpec.describe 'Admin::Users' do
     end
 
     it "is ok" do
-      expect(current_path).to eq(admin_users_path)
+      expect(page).to have_current_path(admin_users_path, ignore_query: true)
     end
 
     it "has users list" do
@@ -130,7 +132,7 @@ RSpec.describe 'Admin::Users' do
       end
 
       it 'searches with respect of sorting' do
-        visit admin_users_path(sort: 'Name')
+        visit admin_users_path(sort: 'name_asc')
 
         fill_in :search_query, with: 'Foo'
         click_button('Search users')
@@ -164,7 +166,7 @@ RSpec.describe 'Admin::Users' do
 
         visit admin_users_path
 
-        page.within('.filter-two-factor-enabled small') do
+        page.within('.filter-two-factor-enabled .gl-tab-counter-badge') do
           expect(page).to have_content('1')
         end
       end
@@ -181,7 +183,7 @@ RSpec.describe 'Admin::Users' do
       it 'counts users who have not enabled 2FA' do
         visit admin_users_path
 
-        page.within('.filter-two-factor-disabled small') do
+        page.within('.filter-two-factor-disabled .gl-tab-counter-badge') do
           expect(page).to have_content('2') # Including admin
         end
       end
@@ -200,7 +202,7 @@ RSpec.describe 'Admin::Users' do
 
         visit admin_users_path
 
-        page.within('.filter-blocked-pending-approval small') do
+        page.within('.filter-blocked-pending-approval .gl-tab-counter-badge') do
           expect(page).to have_content('2')
         end
       end
@@ -293,6 +295,22 @@ RSpec.describe 'Admin::Users' do
       end
     end
 
+    context 'when a user is locked', time_travel_to: '2020-02-25 10:30:45 -0700' do
+      let_it_be(:locked_user) { create(:user, locked_at: DateTime.parse('2020-02-25 10:30:00 -0700')) }
+
+      it "displays `Locked` badge next to user" do
+        expect(page).to have_content("#{locked_user.name} Locked")
+      end
+
+      it 'allows a user to be unlocked from the `User administration dropdown', :js do
+        accept_gl_confirm("Unlock user #{locked_user.name}?", button_text: 'Unlock') do
+          click_action_in_user_dropdown(locked_user.id, 'Unlock')
+        end
+
+        expect(page).not_to have_content("#{locked_user.name} (Locked)")
+      end
+    end
+
     describe 'internal users' do
       context 'when showing a `Ghost User`' do
         let_it_be(:ghost_user) { create(:user, :ghost) }
@@ -320,6 +338,8 @@ RSpec.describe 'Admin::Users' do
       end
 
       it 'displays count of the users authorized groups' do
+        visit admin_users_path
+
         wait_for_requests
 
         expect(page.find("[data-testid='user-group-count-#{current_user.id}']").text).to eq("2")
@@ -461,9 +481,9 @@ RSpec.describe 'Admin::Users' do
       visit projects_admin_user_path(user)
     end
 
-    it 'lists group projects' do
+    it 'lists groups' do
       within(:css, '.gl-mb-3 + .card') do
-        expect(page).to have_content 'Group projects'
+        expect(page).to have_content 'Groups'
         expect(page).to have_link group.name, href: admin_group_path(group)
       end
     end
@@ -556,7 +576,7 @@ RSpec.describe 'Admin::Users' do
         user.reload
         expect(user.name).to eq('Big Bang')
         expect(user.admin?).to be_truthy
-        expect(user.password_expires_at).to be <= Time.now
+        expect(user.password_expires_at).to be <= Time.zone.now
       end
     end
 
@@ -584,8 +604,8 @@ RSpec.describe 'Admin::Users' do
 
   def sort_by(option)
     page.within('.filtered-search-block') do
-      find('.dropdown-menu-toggle').click
-      click_link option
+      find('.gl-new-dropdown').click
+      find('.gl-new-dropdown-item', text: option).click
     end
   end
 end

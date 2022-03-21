@@ -33,25 +33,28 @@ describe('Pipeline editor drawer', () => {
 
   const clickToggleBtn = async () => findToggleBtn().vm.$emit('click');
 
+  const originalObjects = [];
+
+  beforeEach(() => {
+    originalObjects.push(window.gon, window.gl);
+  });
+
   afterEach(() => {
     wrapper.destroy();
     localStorage.clear();
+    [window.gon, window.gl] = originalObjects;
   });
 
-  it('it sets the drawer to be opened by default', async () => {
-    createComponent();
-
-    expect(findDrawerContent().exists()).toBe(false);
-
-    await nextTick();
-
-    expect(findDrawerContent().exists()).toBe(true);
+  describe('default expanded state', () => {
+    it('sets the drawer to be closed by default', async () => {
+      createComponent();
+      expect(findDrawerContent().exists()).toBe(false);
+    });
   });
 
   describe('when the drawer is collapsed', () => {
     beforeEach(async () => {
       createComponent();
-      await clickToggleBtn();
     });
 
     it('shows the left facing arrow icon', () => {
@@ -78,6 +81,7 @@ describe('Pipeline editor drawer', () => {
   describe('when the drawer is expanded', () => {
     beforeEach(async () => {
       createComponent();
+      await clickToggleBtn();
     });
 
     it('shows the right facing arrow icon', () => {

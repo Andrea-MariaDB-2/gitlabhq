@@ -1,8 +1,10 @@
 import { GlIcon } from '@gitlab/ui';
 import { mount } from '@vue/test-utils';
+import { nextTick } from 'vue';
 import { trimText } from 'helpers/text_helper';
 import UsersMockHelper from 'helpers/user_mock_data_helper';
 import Assignee from '~/sidebar/components/assignees/assignees.vue';
+import AssigneeAvatarLink from '~/sidebar/components/assignees/assignee_avatar_link.vue';
 import UsersMock from './mock_data';
 
 describe('Assignee component', () => {
@@ -19,6 +21,7 @@ describe('Assignee component', () => {
     });
   };
 
+  const findAllAvatarLinks = () => wrapper.findAllComponents(AssigneeAvatarLink);
   const findComponentTextNoUsers = () => wrapper.find('[data-testid="no-value"]');
   const findCollapsedChildren = () => wrapper.findAll('.sidebar-collapsed-icon > *');
 
@@ -57,7 +60,7 @@ describe('Assignee component', () => {
       expect(componentTextNoUsers).toContain('assign yourself');
     });
 
-    it('emits the assign-self event when "assign yourself" is clicked', () => {
+    it('emits the assign-self event when "assign yourself" is clicked', async () => {
       createWrapper({
         ...getDefaultProps(),
         editable: true,
@@ -66,9 +69,8 @@ describe('Assignee component', () => {
       jest.spyOn(wrapper.vm, '$emit');
       wrapper.find('[data-testid="assign-yourself"]').trigger('click');
 
-      return wrapper.vm.$nextTick().then(() => {
-        expect(wrapper.emitted('assign-self')).toBeTruthy();
-      });
+      await nextTick();
+      expect(wrapper.emitted('assign-self')).toBeTruthy();
     });
   });
 
@@ -148,7 +150,7 @@ describe('Assignee component', () => {
         editable: true,
       });
 
-      expect(wrapper.findAll('.user-item').length).toBe(users.length);
+      expect(findAllAvatarLinks()).toHaveLength(users.length);
       expect(wrapper.find('.user-list-more').exists()).toBe(false);
     });
 
@@ -178,9 +180,9 @@ describe('Assignee component', () => {
         users,
       });
 
-      const userItems = wrapper.findAll('.user-list .user-item a');
+      const userItems = findAllAvatarLinks();
 
-      expect(userItems.length).toBe(3);
+      expect(userItems).toHaveLength(3);
       expect(userItems.at(0).attributes('title')).toBe(users[2].name);
     });
 

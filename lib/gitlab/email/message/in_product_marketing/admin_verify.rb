@@ -36,6 +36,10 @@ module Gitlab
           def progress
             super(track_name: 'Admin')
           end
+
+          def invite_members?
+            user.can?(:admin_group_member, group)
+          end
         end
       end
     end

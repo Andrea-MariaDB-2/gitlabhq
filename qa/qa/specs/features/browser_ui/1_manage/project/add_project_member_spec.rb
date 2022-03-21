@@ -1,13 +1,9 @@
 # frozen_string_literal: true
 
 module QA
-  RSpec.describe 'Manage', :requires_admin do
+  RSpec.describe 'Manage', :reliable do
     describe 'Add project member' do
-      before do
-        Runtime::Feature.enable(:invite_members_group_modal)
-      end
-
-      it 'user adds project member', testcase: 'https://gitlab.com/gitlab-org/quality/testcases/-/quality/test_cases/1543' do
+      it 'user adds project member', testcase: 'https://gitlab.com/gitlab-org/gitlab/-/quality/test_cases/347887' do
         Flow::Login.sign_in
 
         user = Resource::User.fabricate_or_use(Runtime::Env.gitlab_qa_username_1, Runtime::Env.gitlab_qa_password_1)
@@ -21,7 +17,7 @@ module QA
         Page::Project::Menu.perform(&:click_members)
         Page::Project::Members.perform do |members|
           members.add_member(user.username)
-
+          members.search_member(user.username)
           expect(members).to have_content("@#{user.username}")
         end
       end

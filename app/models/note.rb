@@ -23,12 +23,16 @@ class Note < ApplicationRecord
   include FromUnion
   include Sortable
 
-  cache_markdown_field :note, pipeline: :note, issuable_state_filter_enabled: true
+  cache_markdown_field :note, pipeline: :note, issuable_reference_expansion_enabled: true
 
   redact_field :note
 
-  TYPES_RESTRICTED_BY_ABILITY = {
+  TYPES_RESTRICTED_BY_PROJECT_ABILITY = {
     branch: :download_code
+  }.freeze
+
+  TYPES_RESTRICTED_BY_GROUP_ABILITY = {
+    contact: :read_crm_contact
   }.freeze
 
   # Aliases to make application_helper#edited_time_ago_with_tooltip helper work properly with notes.
@@ -46,7 +50,7 @@ class Note < ApplicationRecord
   attr_accessor :user_visible_reference_count
 
   # Attribute used to store the attributes that have been changed by quick actions.
-  attr_accessor :commands_changes
+  attr_writer :commands_changes
 
   # Attribute used to determine whether keep_around_commits will be skipped for diff notes.
   attr_accessor :skip_keep_around_commits
@@ -114,12 +118,12 @@ class Note < ApplicationRecord
   scope :fresh, -> { order_created_asc.with_order_id_asc }
   scope :updated_after, ->(time) { where('updated_at > ?', time) }
   scope :with_updated_at, ->(time) { where(updated_at: time) }
+  scope :with_discussion_ids, ->(discussion_ids) { where(discussion_id: discussion_ids) }
   scope :with_suggestions, -> { joins(:suggestions) }
-  scope :inc_author_project, -> { includes(:project, :author) }
   scope :inc_author, -> { includes(:author) }
   scope :with_api_entity_associations, -> { preload(:note_diff_file, :author) }
   scope :inc_relations_for_view, -> do
-    includes(:project, { author: :status }, :updated_by, :resolved_by, :award_emoji,
+    includes({ project: :group }, { author: :status }, :updated_by, :resolved_by, :award_emoji,
              { system_note_metadata: :description_version }, :note_diff_file, :diff_note_positions, :suggestions)
   end
 
@@ -150,7 +154,7 @@ class Note < ApplicationRecord
   scope :like_note_or_capitalized_note, ->(text) { where('(note LIKE ? OR note LIKE ?)', text, text.capitalize) }
 
   before_validation :nullify_blank_type, :nullify_blank_line_code
-  after_save :keep_around_commit, if: :for_project_noteable?, unless: :importing?
+  after_save :keep_around_commit, if: :for_project_noteable?, unless: -> { importing? || skip_keep_around_commits }
   after_save :expire_etag_cache, unless: :importing?
   after_save :touch_noteable, unless: :importing?
   after_destroy :expire_etag_cache
@@ -356,8 +360,6 @@ class Note < ApplicationRecord
   end
 
   def noteable_author?(noteable)
-    return false unless ::Feature.enabled?(:show_author_on_note, project)
-
     noteable.author == self.author
   end
 
@@ -567,10 +569,10 @@ class Note < ApplicationRecord
     noteable.user_mentions.where(note: self)
   end
 
-  def system_note_with_references_visible_for?(user)
+  def system_note_visible_for?(user)
     return true unless system?
 
-    (!system_note_with_references? || all_referenced_mentionables_allowed?(user)) && system_note_viewable_by?(user)
+    system_note_viewable_by?(user) && all_referenced_mentionables_allowed?(user)
   end
 
   def parent_user
@@ -583,6 +585,7 @@ class Note < ApplicationRecord
 
   def post_processed_cache_key
     cache_key_items = [cache_key, author&.cache_key]
+    cache_key_items << project.team.human_max_access(author&.id) if author.present?
     cache_key_items << Digest::SHA1.hexdigest(redacted_note_html) if redacted_note_html.present?
 
     cache_key_items.join(':')
@@ -604,15 +607,65 @@ class Note < ApplicationRecord
     })
   end
 
+  def show_outdated_changes?
+    return false unless for_merge_request?
+    return false unless system?
+    return false unless change_position&.line_range
+
+    change_position.line_range["end"] || change_position.line_range["start"]
+  end
+
+  def commands_changes
+    @commands_changes&.slice(
+      :due_date,
+      :label_ids,
+      :remove_label_ids,
+      :add_label_ids,
+      :canonical_issue_id,
+      :clone_with_notes,
+      :confidential,
+      :create_merge_request,
+      :add_contacts,
+      :remove_contacts,
+      :assignee_ids,
+      :milestone_id,
+      :time_estimate,
+      :spend_time,
+      :discussion_locked,
+      :merge,
+      :rebase,
+      :wip_event,
+      :target_branch,
+      :reviewer_ids,
+      :health_status,
+      :promote_to_epic,
+      :weight,
+      :emoji_award,
+      :todo_event,
+      :subscription_event,
+      :state_event,
+      :title,
+      :tag_message,
+      :tag_name
+    )
+  end
+
   private
 
   def system_note_viewable_by?(user)
     return true unless system_note_metadata
 
-    restriction = TYPES_RESTRICTED_BY_ABILITY[system_note_metadata.action.to_sym]
-    return Ability.allowed?(user, restriction, project) if restriction
+    system_note_viewable_by_project_ability?(user) && system_note_viewable_by_group_ability?(user)
+  end
 
-    true
+  def system_note_viewable_by_project_ability?(user)
+    project_restriction = TYPES_RESTRICTED_BY_PROJECT_ABILITY[system_note_metadata.action.to_sym]
+    !project_restriction || Ability.allowed?(user, project_restriction, project)
+  end
+
+  def system_note_viewable_by_group_ability?(user)
+    group_restriction = TYPES_RESTRICTED_BY_GROUP_ABILITY[system_note_metadata.action.to_sym]
+    !group_restriction || Ability.allowed?(user, group_restriction, project&.group)
   end
 
   def keep_around_commit
@@ -638,6 +691,8 @@ class Note < ApplicationRecord
   end
 
   def all_referenced_mentionables_allowed?(user)
+    return true unless system_note_with_references?
+
     if user_visible_reference_count.present? && total_reference_count.present?
       # if they are not equal, then there are private/confidential references as well
       user_visible_reference_count > 0 && user_visible_reference_count == total_reference_count

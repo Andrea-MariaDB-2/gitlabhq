@@ -27,12 +27,11 @@ class Environment < ApplicationRecord
   has_many :alert_management_alerts, class_name: 'AlertManagement::Alert', inverse_of: :environment
 
   has_one :last_deployment, -> { success.distinct_on_environment }, class_name: 'Deployment', inverse_of: :environment
-  has_one :last_deployable, through: :last_deployment, source: 'deployable', source_type: 'CommitStatus'
-  has_one :last_pipeline, through: :last_deployable, source: 'pipeline'
   has_one :last_visible_deployment, -> { visible.distinct_on_environment }, inverse_of: :environment, class_name: 'Deployment'
-  has_one :last_visible_deployable, through: :last_visible_deployment, source: 'deployable', source_type: 'CommitStatus'
-  has_one :last_visible_pipeline, through: :last_visible_deployable, source: 'pipeline'
-  has_one :upcoming_deployment, -> { running.distinct_on_environment }, class_name: 'Deployment', inverse_of: :environment
+  has_one :last_visible_deployable, through: :last_visible_deployment, source: 'deployable', source_type: 'CommitStatus', disable_joins: true
+  has_one :last_visible_pipeline, through: :last_visible_deployable, source: 'pipeline', disable_joins: true
+
+  has_one :upcoming_deployment, -> { upcoming.distinct_on_environment }, class_name: 'Deployment', inverse_of: :environment
   has_one :latest_opened_most_severe_alert, -> { order_severity_with_open_prometheus_alert }, class_name: 'AlertManagement::Alert', inverse_of: :environment
 
   before_validation :generate_slug, if: ->(env) { env.slug.blank? }
@@ -182,6 +181,35 @@ class Environment < ApplicationRecord
     end
   end
 
+  def last_deployable
+    last_deployment&.deployable
+  end
+
+  # NOTE: Below assocation overrides is a workaround for issue https://gitlab.com/gitlab-org/gitlab/-/issues/339908
+  # It helps to avoid cross joins with the CI database.
+  # Caveat: It also overrides and losses the default AR caching mechanism.
+  # Read - https://gitlab.com/gitlab-org/gitlab/-/merge_requests/68870#note_677227727
+
+  # NOTE: Association Preloads does not use the overriden definitions below.
+  # Association Preloads when preloading uses the original definitions from the relationships above.
+  # https://github.com/rails/rails/blob/75ac626c4e21129d8296d4206a1960563cc3d4aa/activerecord/lib/active_record/associations/preloader.rb#L158
+  # But after preloading, when they are called it is using the overriden methods below.
+  # So we are checking for `association_cached?(:association_name)` in the overridden methods and calling `super` which inturn fetches the preloaded values.
+
+  # Overriding association
+  def last_visible_deployable
+    return super if association_cached?(:last_visible_deployable)
+
+    last_visible_deployment&.deployable
+  end
+
+  # Overriding association
+  def last_visible_pipeline
+    return super if association_cached?(:last_visible_pipeline)
+
+    last_visible_deployable&.pipeline
+  end
+
   def clear_prometheus_reactive_cache!(query_name)
     cluster_prometheus_adapter&.clear_prometheus_reactive_cache!(query_name, self)
   end
@@ -207,10 +235,10 @@ class Environment < ApplicationRecord
     self.environment_type = names.many? ? names.first : nil
   end
 
-  def includes_commit?(commit)
+  def includes_commit?(sha)
     return false unless last_deployment
 
-    last_deployment.includes_commit?(commit)
+    last_deployment.includes_commit?(sha)
   end
 
   def last_deployed_at
@@ -232,10 +260,9 @@ class Environment < ApplicationRecord
   end
 
   def cancel_deployment_jobs!
-    jobs = active_deployments.with_deployable
-    jobs.each do |deployment|
-      Gitlab::OptimisticLocking.retry_lock(deployment.deployable, name: 'environment_cancel_deployment_jobs') do |deployable|
-        deployable.cancel! if deployable&.cancelable?
+    active_deployments.builds.each do |build|
+      Gitlab::OptimisticLocking.retry_lock(build, name: 'environment_cancel_deployment_jobs') do |build|
+        build.cancel! if build&.cancelable?
       end
     rescue StandardError => e
       Gitlab::ErrorTracking.track_exception(e, environment_id: id, deployment_id: deployment.id)
@@ -398,6 +425,14 @@ class Environment < ApplicationRecord
     clear_reactive_cache!
   end
 
+  def should_link_to_merge_requests?
+    unfoldered? || production? || staging?
+  end
+
+  def unfoldered?
+    environment_type.nil?
+  end
+
   private
 
   def rollout_status_available?
@@ -426,11 +461,16 @@ class Environment < ApplicationRecord
   # See https://en.wikipedia.org/wiki/Deployment_environment for industry standard deployment environments
   def guess_tier
     case name
-    when %r{dev|review|trunk}i then self.class.tiers[:development]
-    when %r{test|qc}i then self.class.tiers[:testing]
-    when %r{st(a|)g|mod(e|)l|pre|demo}i then self.class.tiers[:staging]
-    when %r{pr(o|)d|live}i then self.class.tiers[:production]
-    else self.class.tiers[:other]
+    when /(dev|review|trunk)/i
+      self.class.tiers[:development]
+    when /(test|tst|int|ac(ce|)pt|qa|qc|control|quality)/i
+      self.class.tiers[:testing]
+    when /(st(a|)g|mod(e|)l|pre|demo)/i
+      self.class.tiers[:staging]
+    when /(pr(o|)d|live)/i
+      self.class.tiers[:production]
+    else
+      self.class.tiers[:other]
     end
   end
 end

@@ -6,8 +6,6 @@ info: To determine the technical writer assigned to the Stage/Group associated w
 
 # Slack slash commands **(FREE SELF)**
 
-> Introduced in GitLab 8.15.
-
 If you want to control and view GitLab content while you're
 working in Slack, you can use Slack slash commands.
 To use Slack slash commands, you must configure both Slack and GitLab.
@@ -31,11 +29,12 @@ are scoped to a project.
    Select **Add Slash Command Integration**.
 1. Complete the rest of the fields in the Slack configuration page using information from the GitLab browser tab.
    In particular, make sure you copy and paste the **URL**.
+
+   ![Slack setup instructions](img/slack_setup.png)
+
 1. On the Slack configuration page, select **Save Integration** and copy the **Token**.
 1. Go back to the GitLab configuration page and paste in the **Token**.
 1. Ensure the **Active** checkbox is selected and select **Save changes**.
-
-![Slack setup instructions](img/slack_setup.png)
 
 ## Slash commands
 

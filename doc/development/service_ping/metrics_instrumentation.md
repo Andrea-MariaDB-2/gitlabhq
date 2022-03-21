@@ -33,6 +33,12 @@ We have built a domain-specific language (DSL) to define the metrics instrumenta
 
 ## Database metrics
 
+- `operation`: Operations for the given `relation`, one of `count`, `distinct_count`.
+- `relation`: `ActiveRecord::Relation` for the objects we want to perform the `operation`.
+- `start`: Specifies the start value of the batch counting, by default is `relation.minimum(:id)`.
+- `finish`: Specifies the end value of the batch counting, by default is `relation.maximum(:id)`.
+- `cache_start_and_finish_as`: Specifies the cache key for `start` and `finish` values and sets up caching them. Use this call when `start` and `finish` are expensive queries that should be reused between different metric calculations.
+
 [Example of a merge request that adds a database metric](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/60022).
 
 ```ruby
@@ -44,6 +50,50 @@ module Gitlab
           operation :count
 
           relation { Board }
+        end
+      end
+    end
+  end
+end
+```
+
+### Ordinary batch counters Example
+
+```ruby
+module Gitlab
+  module Usage
+    module Metrics
+      module Instrumentations
+        class CountIssuesMetric < DatabaseMetric
+          operation :count
+
+          start { Issue.minimum(:id) }
+          finish { Issue.maximum(:id) }
+
+          relation { Issue }
+        end
+      end
+    end
+  end
+end
+```
+
+### Distinct batch counters Example
+
+```ruby
+# frozen_string_literal: true
+
+module Gitlab
+  module Usage
+    module Metrics
+      module Instrumentations
+        class CountUsersAssociatingMilestonesToReleasesMetric < DatabaseMetric
+          operation :distinct_count, column: :author_id
+
+          relation { Release.with_milestones }
+
+          start { Release.minimum(:author_id) }
+          finish { Release.maximum(:author_id) }
         end
       end
     end
@@ -115,13 +165,13 @@ There is support for:
 - [Redis HLL metrics](#redis-hyperloglog-metrics).
 - [Generic metrics](#generic-metrics), which are metrics based on settings or configurations.
 
-Currently, there is no support for:
+There is no support for:
 
 - `add`, `sum`, `histogram` for database metrics.
 
 You can [track the progress to support these](https://gitlab.com/groups/gitlab-org/-/epics/6118).
 
-## Creating a new metric instrumentation class
+## Create a new metric instrumentation class
 
 To create a stub instrumentation for a Service Ping metric, you can use a dedicated [generator](https://gitlab.com/gitlab-org/gitlab/-/blob/master/lib/generators/gitlab/usage_metric_generator.rb):
 

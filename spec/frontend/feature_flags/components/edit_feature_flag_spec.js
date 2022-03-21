@@ -1,9 +1,10 @@
 import { GlToggle, GlAlert } from '@gitlab/ui';
 import { shallowMount } from '@vue/test-utils';
 import MockAdapter from 'axios-mock-adapter';
-import Vue from 'vue';
+import Vue, { nextTick } from 'vue';
 import Vuex from 'vuex';
 import { mockTracking } from 'helpers/tracking_helper';
+import waitForPromises from 'helpers/wait_for_promises';
 import { TEST_HOST } from 'spec/test_constants';
 import EditFeatureFlag from '~/feature_flags/components/edit_feature_flag.vue';
 import Form from '~/feature_flags/components/form.vue';
@@ -11,6 +12,7 @@ import createStore from '~/feature_flags/store/edit';
 import axios from '~/lib/utils/axios_utils';
 
 Vue.use(Vuex);
+
 describe('Edit feature flag form', () => {
   let wrapper;
   let mock;
@@ -20,7 +22,7 @@ describe('Edit feature flag form', () => {
     endpoint: `${TEST_HOST}/feature_flags.json`,
   });
 
-  const factory = (provide = {}) => {
+  const factory = (provide = { searchPath: '/search' }) => {
     if (wrapper) {
       wrapper.destroy();
       wrapper = null;
@@ -31,7 +33,7 @@ describe('Edit feature flag form', () => {
     });
   };
 
-  beforeEach((done) => {
+  beforeEach(() => {
     mock = new MockAdapter(axios);
     mock.onGet(`${TEST_HOST}/feature_flags.json`).replyOnce(200, {
       id: 21,
@@ -45,7 +47,8 @@ describe('Edit feature flag form', () => {
       destroy_path: '/h5bp/html5-boilerplate/-/feature_flags/21',
     });
     factory();
-    setImmediate(() => done());
+
+    return waitForPromises();
   });
 
   afterEach(() => {
@@ -60,17 +63,16 @@ describe('Edit feature flag form', () => {
   });
 
   it('should render the toggle', () => {
-    expect(wrapper.find(GlToggle).exists()).toBe(true);
+    expect(wrapper.findComponent(GlToggle).exists()).toBe(true);
   });
 
   describe('with error', () => {
-    it('should render the error', () => {
+    it('should render the error', async () => {
       store.dispatch('receiveUpdateFeatureFlagError', { message: ['The name is required'] });
-      return wrapper.vm.$nextTick(() => {
-        const warningGlAlert = findWarningGlAlert();
-        expect(warningGlAlert.exists()).toEqual(true);
-        expect(warningGlAlert.text()).toContain('The name is required');
-      });
+      await nextTick();
+      const warningGlAlert = findWarningGlAlert();
+      expect(warningGlAlert.exists()).toEqual(true);
+      expect(warningGlAlert.text()).toContain('The name is required');
     });
   });
 
@@ -80,11 +82,11 @@ describe('Edit feature flag form', () => {
     });
 
     it('should render feature flag form', () => {
-      expect(wrapper.find(Form).exists()).toEqual(true);
+      expect(wrapper.findComponent(Form).exists()).toEqual(true);
     });
 
     it('should track when the toggle is clicked', () => {
-      const toggle = wrapper.find(GlToggle);
+      const toggle = wrapper.findComponent(GlToggle);
       const spy = mockTracking('_category_', toggle.element, jest.spyOn);
 
       toggle.trigger('click');
@@ -95,7 +97,7 @@ describe('Edit feature flag form', () => {
     });
 
     it('should render the toggle with a visually hidden label', () => {
-      expect(wrapper.find(GlToggle).props()).toMatchObject({
+      expect(wrapper.findComponent(GlToggle).props()).toMatchObject({
         label: 'Feature flag status',
         labelPosition: 'hidden',
       });

@@ -2,7 +2,6 @@
 stage: Create
 group: Source Code
 info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
-type: reference, howto
 ---
 
 # File Locking **(FREE)**
@@ -26,30 +25,28 @@ GitLab supports two different modes of file locking:
 
 - [Exclusive file locks](#exclusive-file-locks) for binary files: done **through
   the command line** with Git LFS and `.gitattributes`, it prevents locked
-  files from being modified on any branch. **(FREE)**
+  files from being modified on any branch.
 - [Default branch locks](#default-branch-file-and-directory-locks): done
   **through the GitLab UI**, it prevents locked files and directories being
-  modified on the default branch. **(PREMIUM)**
+  modified on the default branch.
 
 ## Permissions
 
 Locks can be created by any person who has at least
-[Developer role](../permissions.md) in the repository.
+Developer role in the repository.
 
 Only the user who locked the file or directory can edit locked files. Other
 users are prevented from modifying locked files by pushing, merging,
 or any other means, and are shown an error like: `The path '.gitignore' is
 locked by Administrator`.
 
-## Exclusive file locks **(FREE)**
-
-> [Introduced](https://gitlab.com/gitlab-org/gitlab-foss/-/issues/35856) in GitLab 10.5.
+## Exclusive file locks
 
 This process allows you to lock single files or file extensions and it is
 done through the command line. It doesn't require GitLab paid subscriptions.
 
 Git LFS is well known for tracking files to reduce the storage of
-Git repositories, but it can also be user for [locking files](https://github.com/git-lfs/git-lfs/wiki/File-Locking).
+Git repositories, but it can also be used for [locking files](https://github.com/git-lfs/git-lfs/wiki/File-Locking).
 This is the method used for Exclusive File Locks.
 
 ### Install Git LFS
@@ -80,7 +77,7 @@ Check this document to learn more about [using Git LFS](../../topics/git/lfs/ind
 
 ### Configure Exclusive File Locks
 
-You need the [Maintainer role](../permissions.md) to configure
+You need the Maintainer role
 Exclusive File Locks for your project through the command line.
 
 The first thing to do before using File Locking is to tell Git LFS which
@@ -195,7 +192,7 @@ Suggested workflow for shared projects:
 
 ## Default branch file and directory locks **(PREMIUM)**
 
-> [Introduced](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/440) in GitLab Enterprise Edition 8.9. Available in [GitLab Premium](https://about.gitlab.com/pricing/).
+> [Introduced](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/440) in GitLab 8.9.
 
 This process allows you to lock one file at a time through the GitLab UI and
 requires access to [GitLab Premium](https://about.gitlab.com/pricing/)
@@ -212,20 +209,21 @@ requests that modify locked files. Unlock the file to allow changes.
 To lock a file:
 
 1. Open the file or directory in GitLab.
-1. Click the **Lock** button, located near the Web IDE button.
+1. On the top right, above the file, select **Lock**.
+1. On the confirmation dialog box, select **OK**.
 
-   ![Locking file](img/file_lock.png)
+If you do not have permission to lock the file, the button is not enabled.
 
-An **Unlock** button is displayed if the file is already locked, and
-is disabled if you do not have permission to unlock the file.
-
-If you did not lock the file, hovering your cursor over the button shows
-who locked the file.
+To view the user who locked the file (if it was not you), hover over the button.
 
 ### View and remove existing locks
 
-The **Locked Files**, accessed from **Project > Repository** left menu, lists
-all file and directory locks. Locks can be removed by their author, or any user
-with the [Maintainer role](../permissions.md) and above.
+To view and remove file locks:
+
+1. On the top bar, select **Menu > Projects** and find your project.
+1. On the left sidebar, select **Repository > Locked Files**.
 
 This list shows all the files locked either through LFS or GitLab UI.
+
+Locks can be removed by their author, or any user
+with at least the Maintainer role.

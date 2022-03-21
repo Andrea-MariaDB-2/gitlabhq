@@ -101,11 +101,11 @@ understand the GitLab architecture.
 A complete architecture diagram is available in our
 [component diagram](#component-diagram) below.
 
-![Simplified Component Overview](img/architecture_simplified.png)
+![Simplified Component Overview](img/architecture_simplified_v14_9.png)
 
 <!--
-To update this diagram, GitLab team members can edit this source file:
-https://docs.google.com/drawings/d/1fBzAyklyveF-i-2q-OHUIqDkYfjjxC4mq5shwKSZHLs/edit.
+To update this diagram, use and update this source file:
+https://miro.com/app/board/uXjVOH3lzXo=/
  -->
 
 ### Component diagram
@@ -126,7 +126,7 @@ graph LR
   Geo -- TCP 22 --> SSH
   Geo -- TCP 5432 --> PostgreSQL
   Runner{{GitLab Runner}} -- TCP 443 --> HTTP
-  K8sAgent{{GitLab Kubernetes Agent}} -- TCP 443 --> HTTP
+  K8sAgent{{GitLab Agent}} -- TCP 443 --> HTTP
 
   %% GitLab Application Suite
   subgraph GitLab
@@ -151,13 +151,13 @@ graph LR
         NGINX -- TCP 8150 --> GitLabKas
         NGINX --> Registry
         %% inbound from GitLabShell
-        GitLabShell --TCP 8080 -->Puma
+        GitLabShell --> GitLabWorkhorse
 
         %% services
         Puma["Puma (GitLab Rails)"]
         Puma <--> Registry
         GitLabWorkhorse[GitLab Workhorse] <--> Puma
-        GitLabKas[GitLab Kubernetes Agent Server] --> GitLabWorkhorse
+        GitLabKas[GitLab Agent Server] --> GitLabWorkhorse
         GitLabPages[GitLab Pages] --> GitLabWorkhorse
         Mailroom
         Sidekiq
@@ -339,7 +339,7 @@ Component statuses are linked to configuration documentation for each component.
 
 ### Component list
 
-| Component                                             | Description                                                          | [Omnibus GitLab](https://docs.gitlab.com/omnibus/) | [GitLab Environment Toolkit (GET)](https://gitlab.com/gitlab-org/quality/gitlab-environment-toolkit) | [GitLab chart](https://docs.gitlab.com/charts/) | [Minikube Minimal](https://docs.gitlab.com/charts/development/minikube/#deploying-gitlab-with-minimal-settings) | [GitLab.com](https://gitlab.com) | [Source](../install/installation.md) | [GDK](https://gitlab.com/gitlab-org/gitlab-development-kit) |  [CE/EE](https://about.gitlab.com/install/ce-or-ee/)  |
+| Component                                             | Description                                                          | [Omnibus GitLab](https://docs.gitlab.com/omnibus/) | [GitLab Environment Toolkit (GET)](https://gitlab.com/gitlab-org/gitlab-environment-toolkit) | [GitLab chart](https://docs.gitlab.com/charts/) | [minikube Minimal](https://docs.gitlab.com/charts/development/minikube/#deploying-gitlab-with-minimal-settings) | [GitLab.com](https://gitlab.com) | [Source](../install/installation.md) | [GDK](https://gitlab.com/gitlab-org/gitlab-development-kit) |  [CE/EE](https://about.gitlab.com/install/ce-or-ee/)  |
 |-------------------------------------------------------|----------------------------------------------------------------------|:--------------:|:--------------:|:------------:|:----------------:|:----------:|:------:|:---:|:-------:|
 | [Certificate Management](#certificate-management)     | TLS Settings, Let's Encrypt                                          |       ✅       |       ✅        |      ✅       |        ⚙         |     ✅      |   ⚙    |  ⚙  | CE & EE |
 | [Consul](#consul)                                     | Database node discovery, failover                                    |       ⚙       |       ✅         |      ❌       |        ❌         |     ✅      |   ❌    |  ❌  | EE Only |
@@ -348,9 +348,8 @@ Component statuses are linked to configuration documentation for each component.
 | [Gitaly](#gitaly)                                     | Git RPC service for handling all Git calls made by GitLab            |       ✅       |       ✅        |      ✅       |        ✅         |     ✅      |   ⚙    |  ✅  | CE & EE |
 | [GitLab Exporter](#gitlab-exporter)                   | Generates a variety of GitLab metrics                                |       ✅       |       ✅        |      ✅       |        ✅         |     ✅      |   ❌    |  ❌  | CE & EE |
 | [GitLab Geo Node](#gitlab-geo)                        | Geographically distributed GitLab nodes                              |       ⚙        |       ⚙      |        ❌      |        ❌         |     ✅      |   ❌    |  ⚙  | EE Only |
-| [GitLab Kubernetes Agent](#gitlab-kubernetes-agent)   | Integrate Kubernetes clusters in a cloud-native way                  |       ⚙       |       ⚙        |      ⚙       |        ❌         |     ❌      |   ⤓    |  ⚙   | EE Only |
 | [GitLab Pages](#gitlab-pages)                         | Hosts static websites                                                |       ⚙       |       ⚙        |      ❌       |        ❌         |     ✅      |   ⚙    |  ⚙  | CE & EE |
-| [GitLab Kubernetes Agent](#gitlab-kubernetes-agent)   | Integrate Kubernetes clusters in a cloud-native way                  |       ⚙       |       ⚙        |      ⚙       |        ❌         |     ❌      |   ⤓    |  ⚙   | EE Only |
+| [GitLab agent](#gitlab-agent)              | Integrate Kubernetes clusters in a cloud-native way                  |       ⚙       |       ⚙        |      ⚙       |        ❌         |     ❌      |   ⤓    |  ⚙   | EE Only |
 | [GitLab self-monitoring: Alertmanager](#alertmanager) | Deduplicates, groups, and routes alerts from Prometheus              |       ⚙       |       ⚙        |      ✅       |        ⚙         |     ✅      |   ❌    |  ❌  | CE & EE |
 | [GitLab self-monitoring: Grafana](#grafana)           | Metrics dashboard                                                    |       ✅       |       ✅        |      ⚙       |        ⤓         |     ✅      |   ❌    |  ⚙  | CE & EE |
 | [GitLab self-monitoring: Jaeger](#jaeger)             | View traces generated by the GitLab instance                         |       ❌       |       ⚙        |      ⚙       |        ❌         |     ❌      |   ⤓    |  ⚙  | CE & EE |
@@ -500,14 +499,14 @@ Geo is a premium feature built to help speed up the development of distributed t
 
 GitLab Exporter is a process designed in house that allows us to export metrics about GitLab application internals to Prometheus. You can read more [in the project's README](https://gitlab.com/gitlab-org/gitlab-exporter).
 
-#### GitLab Kubernetes Agent
+#### GitLab agent
 
 - [Project page](https://gitlab.com/gitlab-org/cluster-integration/gitlab-agent)
 - Configuration:
   - [Omnibus](https://gitlab.com/gitlab-org/omnibus-gitlab/blob/master/files/gitlab-config-template/gitlab.rb.template)
   - [Charts](https://docs.gitlab.com/charts/charts/gitlab/kas/index.html)
 
-[GitLab Kubernetes Agent](../user/clusters/agent/index.md) is an active in-cluster
+The [GitLab agent](../user/clusters/agent/index.md) is an active in-cluster
 component for solving GitLab and Kubernetes integration tasks in a secure and
 cloud-native way.
 
@@ -529,7 +528,7 @@ You can use it either for personal or business websites, such as portfolios, doc
 
 #### GitLab Runner
 
-- [Project page](https://gitlab.com/gitlab-org/gitlab-runner/blob/master/README.md)
+- [Project page](https://gitlab.com/gitlab-org/gitlab-runner/blob/main/README.md)
 - Configuration:
   - [Omnibus](https://docs.gitlab.com/runner/)
   - [Charts](https://docs.gitlab.com/runner/install/kubernetes.html)
@@ -603,14 +602,14 @@ For monitoring deployed apps, see [Jaeger tracing documentation](../operations/t
 - Layer: Core Service
 - Process: `logrotate`
 
-GitLab is comprised of a large number of services that all log. We started bundling our own Logrotate
-as of GitLab 7.4 to make sure we were logging responsibly. This is just a packaged version of the common open source offering.
+GitLab is comprised of a large number of services that all log. We bundle our own Logrotate
+to make sure we were logging responsibly. This is just a packaged version of the common open source offering.
 
 #### Mattermost
 
 - [Project page](https://github.com/mattermost/mattermost-server/blob/master/README.md)
 - Configuration:
-  - [Omnibus](https://docs.gitlab.com/omnibus/gitlab-mattermost/)
+  - [Omnibus](../integration/mattermost/index.md)
   - [Charts](https://docs.mattermost.com/install/install-mmte-helm-gitlab-helm.html)
 - Layer: Core Service (Processor)
 - GitLab.com: [Mattermost](../user/project/integrations/mattermost.md)
@@ -798,7 +797,7 @@ For monitoring deployed apps, see the [Sentry integration docs](../operations/er
 - Configuration:
   - [Omnibus](https://gitlab.com/gitlab-org/omnibus-gitlab/blob/master/files/gitlab-config-template/gitlab.rb.template)
   - [Charts](https://docs.gitlab.com/charts/charts/gitlab/sidekiq/)
-  - [Minikube Minimal](https://docs.gitlab.com/charts/charts/gitlab/sidekiq/index.html)
+  - [minikube Minimal](https://docs.gitlab.com/charts/charts/gitlab/sidekiq/index.html)
   - [Source](https://gitlab.com/gitlab-org/gitlab/-/blob/master/config/gitlab.yml.example)
   - [GDK](https://gitlab.com/gitlab-org/gitlab/-/blob/master/config/gitlab.yml.example)
 - Layer: Core Service (Processor)
@@ -813,7 +812,7 @@ Starting with GitLab 13.0, Puma is the default web server.
 
 - [Project page](https://gitlab.com/gitlab-org/gitlab/-/blob/master/README.md)
 - Configuration:
-  - [Omnibus](https://docs.gitlab.com/omnibus/settings/puma.html)
+  - [Omnibus](../administration/operations/puma.md)
   - [Charts](https://docs.gitlab.com/charts/charts/gitlab/webservice/)
   - [Source](../install/installation.md#configure-it)
   - [GDK](https://gitlab.com/gitlab-org/gitlab/-/blob/master/config/gitlab.yml.example)
@@ -977,12 +976,12 @@ in Rails, scheduled to run whenever an SSH key is modified by a user.
 instead of keys. In this case, `AuthorizedKeysCommand` is replaced with an
 `AuthorizedPrincipalsCommand`. This extracts a username from the certificate
 without using the Rails internal API, which is used instead of `key_id` in the
-[`/api/internal/allowed`](internal_api.md) call later.
+[`/api/internal/allowed`](internal_api/index.md) call later.
 
 GitLab Shell also has a few operations that do not involve Gitaly, such as
 resetting two-factor authentication codes. These are handled in the same way,
 except there is no round-trip into Gitaly - Rails performs the action as part
-of the [internal API](internal_api.md) call, and GitLab Shell streams the
+of the [internal API](internal_api/index.md) call, and GitLab Shell streams the
 response back to the user directly.
 
 ## System layout

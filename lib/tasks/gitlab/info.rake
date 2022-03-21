@@ -22,8 +22,6 @@ namespace :gitlab do
         proxies = Gitlab::Proxy.detect_proxy.map {|k, v| "#{k}: #{v}"}.join("\n\t\t")
       end
 
-      # check Git version
-      git_version = run_and_match([Gitlab.config.git.bin_path, '--version'], /git version ([\d\.]+)/).to_a
       # check Go version
       go_version = run_and_match(%w(go version), /go version (.+)/).to_a
 
@@ -43,7 +41,6 @@ namespace :gitlab do
       puts "Bundler Version:#{bunder_version || "unknown".color(:red)}"
       puts "Rake Version:\t#{rake_version || "unknown".color(:red)}"
       puts "Redis Version:\t#{redis_version[1] || "unknown".color(:red)}"
-      puts "Git Version:\t#{git_version[1] || "unknown".color(:red)}"
       puts "Sidekiq Version:#{Sidekiq::VERSION}"
       puts "Go Version:\t#{go_version[1] || "unknown".color(:red)}"
 
@@ -68,8 +65,8 @@ namespace :gitlab do
       puts "Version:\t#{Gitlab::VERSION}"
       puts "Revision:\t#{Gitlab.revision}"
       puts "Directory:\t#{Rails.root}"
-      puts "DB Adapter:\t#{Gitlab::Database.main.human_adapter_name}"
-      puts "DB Version:\t#{Gitlab::Database.main.version}"
+      puts "DB Adapter:\t#{ApplicationRecord.database.human_adapter_name}"
+      puts "DB Version:\t#{ApplicationRecord.database.version}"
       puts "URL:\t\t#{Gitlab.config.gitlab.url}"
       puts "HTTP Clone URL:\t#{http_clone_url}"
       puts "SSH Clone URL:\t#{ssh_clone_url}"
@@ -95,7 +92,6 @@ namespace :gitlab do
         end
       end
       puts "GitLab Shell path:\t\t#{Gitlab.config.gitlab_shell.path}"
-      puts "Git:\t\t#{Gitlab.config.git.bin_path}"
     end
   end
 end

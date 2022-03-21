@@ -11,16 +11,16 @@
     %li.js-builds-tab-link
       = link_to builds_project_pipeline_path(@project, @pipeline), data: { target: '#js-tab-builds', action: 'builds', toggle: 'tab' }, class: 'builds-tab' do
         = _('Jobs')
-        %span.badge.badge-pill.gl-badge.badge-muted.sm.js-builds-counter= pipeline.total_size
+        = gl_badge_tag @pipeline.total_size, { size: :sm }, { class: 'js-builds-counter' }
     - if @pipeline.failed_builds.present?
       %li.js-failures-tab-link
         = link_to failures_project_pipeline_path(@project, @pipeline), data: { target: '#js-tab-failures', action: 'failures', toggle: 'tab' }, class: 'failures-tab' do
           = _('Failed Jobs')
-          %span.badge.badge-pill.gl-badge.badge-muted.sm.js-failures-counter= @pipeline.failed_builds.count
+          = gl_badge_tag @pipeline.failed_builds.count, { size: :sm }, { class: 'js-failures-counter' }
     %li.js-tests-tab-link
       = link_to test_report_project_pipeline_path(@project, @pipeline), data: { target: '#js-tab-tests', action: 'test_report', toggle: 'tab' }, class: 'test-tab' do
         = s_('TestReports|Tests')
-        %span.badge.badge-pill.gl-badge.badge-muted.sm.js-test-report-badge-counter= @pipeline.test_report_summary.total[:count]
+        = gl_badge_tag @pipeline.test_report_summary.total[:count], { size: :sm }, { class: 'js-test-report-badge-counter' }
     = render_if_exists "projects/pipelines/tabs_holder", pipeline: @pipeline, project: @project
 
 .tab-content
@@ -29,17 +29,7 @@
 
   #js-tab-builds.tab-pane
     - if stages.present?
-      .table-holder.pipeline-holder
-        %table.table.ci-table.pipeline
-          %thead
-            %tr
-              %th= _('Status')
-              %th= _('Job ID')
-              %th= _('Name')
-              %th
-              %th= _('Coverage')
-              %th
-          = render partial: "projects/stage/stage", collection: stages, as: :stage
+      #js-pipeline-jobs-vue{ data: { full_path: @project.full_path, pipeline_iid: @pipeline.iid } }
 
   - if @pipeline.failed_builds.present?
     #js-tab-failures.build-failures.tab-pane.build-page
@@ -70,10 +60,10 @@
                   = link_to retry_project_job_path(build.project, build, return_to: request.original_url), method: :post, title: _('Retry'), class: 'gl-button btn btn-default btn-icon' do
                     = sprite_icon('repeat', css_class: 'gl-icon')
             - if can?(current_user, :read_build, job)
-              %tr.build-trace-row.responsive-table-border-end
+              %tr.build-log-row.responsive-table-border-end
                 %td
-                %td.responsive-table-cell.build-trace-container{ colspan: 4 }
-                  %pre.build-trace.build-trace-rounded
+                %td.responsive-table-cell.build-log-container{ colspan: 4 }
+                  %pre.build-log.build-log-rounded
                     %code.bash.js-build-output
                       = build_summary(build)
 

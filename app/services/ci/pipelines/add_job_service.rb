@@ -16,19 +16,11 @@ module Ci
       def execute!(job, &block)
         assign_pipeline_attributes(job)
 
-        if Feature.enabled?(:ci_pipeline_add_job_with_lock, pipeline.project, default_enabled: :yaml)
-          in_lock("ci:pipelines:#{pipeline.id}:add-job", ttl: LOCK_TIMEOUT, sleep_sec: LOCK_SLEEP, retries: LOCK_RETRIES) do
-            Ci::Pipeline.transaction do
-              yield(job)
-
-              job.update_older_statuses_retried! if Feature.enabled?(:ci_fix_commit_status_retried, pipeline.project, default_enabled: :yaml)
-            end
-          end
-        else
+        in_lock("ci:pipelines:#{pipeline.id}:add-job", ttl: LOCK_TIMEOUT, sleep_sec: LOCK_SLEEP, retries: LOCK_RETRIES) do
           Ci::Pipeline.transaction do
             yield(job)
 
-            job.update_older_statuses_retried! if Feature.enabled?(:ci_fix_commit_status_retried, pipeline.project, default_enabled: :yaml)
+            job.update_older_statuses_retried!
           end
         end
 
@@ -47,6 +39,12 @@ module Ci
         job.pipeline = pipeline
         job.project = pipeline.project
         job.ref = pipeline.ref
+
+        # update metadata since it might have been lazily initialised before this call
+        # metadata is present on `Ci::Processable`
+        if job.respond_to?(:metadata) && job.metadata
+          job.metadata.project = pipeline.project
+        end
       end
     end
   end

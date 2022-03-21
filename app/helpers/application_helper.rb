@@ -18,6 +18,28 @@ module ApplicationHelper
     end
   end
 
+  def dispensable_render(...)
+    render(...)
+  rescue StandardError => error
+    if Feature.enabled?(:dispensable_render, default_enabled: :yaml)
+      Gitlab::ErrorTracking.track_and_raise_for_dev_exception(error)
+      nil
+    else
+      raise error
+    end
+  end
+
+  def dispensable_render_if_exists(...)
+    render_if_exists(...)
+  rescue StandardError => error
+    if Feature.enabled?(:dispensable_render, default_enabled: :yaml)
+      Gitlab::ErrorTracking.track_and_raise_for_dev_exception(error)
+      nil
+    else
+      raise error
+    end
+  end
+
   def partial_exists?(partial)
     lookup_context.exists?(partial, [], true)
   end
@@ -206,10 +228,6 @@ module ApplicationHelper
     'https://' + promo_host
   end
 
-  def contact_sales_url
-    promo_url + '/sales'
-  end
-
   def support_url
     Gitlab::CurrentSettings.current_application_settings.help_page_support_url.presence || promo_url + '/getting-help/'
   end
@@ -289,6 +307,7 @@ module ApplicationHelper
     class_names << 'environment-logs-page' if current_controller?(:logs)
     class_names << 'with-performance-bar' if performance_bar_enabled?
     class_names << system_message_class
+    class_names << marketing_header_experiment_class
     class_names
   end
 
@@ -399,7 +418,8 @@ module ApplicationHelper
         labels: labels_project_autocomplete_sources_path(object, type: noteable_type, type_id: params[:id]),
         milestones: milestones_project_autocomplete_sources_path(object),
         commands: commands_project_autocomplete_sources_path(object, type: noteable_type, type_id: params[:id]),
-        snippets: snippets_project_autocomplete_sources_path(object)
+        snippets: snippets_project_autocomplete_sources_path(object),
+        contacts: contacts_project_autocomplete_sources_path(object)
       }
     end
   end
@@ -423,6 +443,18 @@ module ApplicationHelper
 
   def appearance
     ::Appearance.current
+  end
+
+  def marketing_header_experiment_class
+    return if current_user
+
+    experiment(:logged_out_marketing_header, actor: nil) do |e|
+      html_class = 'logged-out-marketing-header-candidate'
+      e.candidate { html_class }
+      e.variant(:trial_focused) { html_class }
+      e.control {}
+      e.run
+    end
   end
 end
 

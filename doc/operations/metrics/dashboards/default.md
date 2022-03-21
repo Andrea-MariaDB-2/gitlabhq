@@ -1,10 +1,16 @@
 ---
 stage: Monitor
-group: Monitor
+group: Respond
 info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
 ---
 
-# GitLab-defined metrics dashboards **(FREE)**
+# GitLab-defined metrics dashboards (DEPRECATED) **(FREE)**
+
+> [Deprecated](https://gitlab.com/gitlab-org/gitlab/-/issues/346541) in GitLab 14.7.
+
+WARNING:
+This feature is in its end-of-life process. It is [deprecated](https://gitlab.com/gitlab-org/gitlab/-/issues/346541)
+for use in GitLab 14.7, and is planned for removal in GitLab 15.0.
 
 GitLab provides some dashboards out-of-the-box for any project with
 [Prometheus available](../../../user/project/integrations/prometheus.md). You can
@@ -30,7 +36,7 @@ This dashboard requires Kubernetes v1.14 or higher, due to the
 in Kubernetes 1.14.
 
 This dashboard displays CPU, memory, network and disk metrics for the pods in your
-[connected K8s cluster](../../../user/project/clusters/index.md). It provides a
+[connected Kubernetes cluster](../../../user/infrastructure/clusters/index.md). It provides a
 [variable selector](templating_variables.md#metric_label_values-variable-type)
 at the top of the dashboard to select which pod's metrics to display.
 

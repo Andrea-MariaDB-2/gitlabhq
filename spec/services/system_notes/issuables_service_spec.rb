@@ -14,10 +14,10 @@ RSpec.describe ::SystemNotes::IssuablesService do
 
   let(:service) { described_class.new(noteable: noteable, project: project, author: author) }
 
-  describe '#relate_issue' do
+  describe '#relate_issuable' do
     let(:noteable_ref) { create(:issue) }
 
-    subject { service.relate_issue(noteable_ref) }
+    subject { service.relate_issuable(noteable_ref) }
 
     it_behaves_like 'a system note' do
       let(:action) { 'relate' }
@@ -30,10 +30,10 @@ RSpec.describe ::SystemNotes::IssuablesService do
     end
   end
 
-  describe '#unrelate_issue' do
+  describe '#unrelate_issuable' do
     let(:noteable_ref) { create(:issue) }
 
-    subject { service.unrelate_issue(noteable_ref) }
+    subject { service.unrelate_issuable(noteable_ref) }
 
     it_behaves_like 'a system note' do
       let(:action) { 'unrelate' }
@@ -188,6 +188,54 @@ RSpec.describe ::SystemNotes::IssuablesService do
     end
   end
 
+  describe '#change_issuable_contacts' do
+    subject { service.change_issuable_contacts(1, 1) }
+
+    let_it_be(:noteable) { create(:issue, project: project) }
+
+    it_behaves_like 'a system note' do
+      let(:action) { 'contact' }
+    end
+
+    def build_note(added_count, removed_count)
+      service.change_issuable_contacts(added_count, removed_count).note
+    end
+
+    it 'builds a correct phrase when one contact is added' do
+      expect(build_note(1, 0)).to eq "added 1 contact"
+    end
+
+    it 'builds a correct phrase when one contact is removed' do
+      expect(build_note(0, 1)).to eq "removed 1 contact"
+    end
+
+    it 'builds a correct phrase when one contact is added and one contact is removed' do
+      expect(build_note(1, 1)).to(
+        eq("added 1 contact and removed 1 contact")
+      )
+    end
+
+    it 'builds a correct phrase when three contacts are added and one removed' do
+      expect(build_note(3, 1)).to(
+        eq("added 3 contacts and removed 1 contact")
+      )
+    end
+
+    it 'builds a correct phrase when three contacts are removed and one added' do
+      expect(build_note(1, 3)).to(
+        eq("added 1 contact and removed 3 contacts")
+      )
+    end
+
+    it 'builds a correct phrase when the locale is different' do
+      Gitlab::I18n.with_locale('pt-BR') do
+        expect(build_note(1, 3)).to(
+          eq("added 1 contact and removed 3 contacts")
+        )
+      end
+    end
+  end
+
   describe '#change_status' do
     subject { service.change_status(status, source) }
 
@@ -196,6 +244,42 @@ RSpec.describe ::SystemNotes::IssuablesService do
 
     it 'creates a resource state event' do
       expect { subject }.to change { ResourceStateEvent.count }.by(1)
+    end
+  end
+
+  describe '#request_attention' do
+    subject { service.request_attention(user) }
+
+    let(:user) { create(:user) }
+
+    it_behaves_like 'a system note' do
+      let(:action) { 'attention_requested' }
+    end
+
+    context 'when attention requested' do
+      it_behaves_like 'a note with overridable created_at'
+
+      it 'sets the note text' do
+        expect(subject.note).to eq "requested attention from @#{user.username}"
+      end
+    end
+  end
+
+  describe '#remove_attention_request' do
+    subject { service.remove_attention_request(user) }
+
+    let(:user) { create(:user) }
+
+    it_behaves_like 'a system note' do
+      let(:action) { 'attention_request_removed' }
+    end
+
+    context 'when attention request is removed' do
+      it_behaves_like 'a note with overridable created_at'
+
+      it 'sets the note text' do
+        expect(subject.note).to eq "removed attention request from @#{user.username}"
+      end
     end
   end
 
@@ -274,9 +358,9 @@ RSpec.describe ::SystemNotes::IssuablesService do
   describe '#cross_reference' do
     let(:service) { described_class.new(noteable: noteable, author: author) }
 
-    let(:mentioner) { create(:issue, project: project) }
+    let(:mentioned_in) { create(:issue, project: project) }
 
-    subject { service.cross_reference(mentioner) }
+    subject { service.cross_reference(mentioned_in) }
 
     it_behaves_like 'a system note' do
       let(:action) { 'cross_reference' }
@@ -314,37 +398,54 @@ RSpec.describe ::SystemNotes::IssuablesService do
       describe 'note_body' do
         context 'cross-project' do
           let(:project2) { create(:project, :repository) }
-          let(:mentioner) { create(:issue, project: project2) }
+          let(:mentioned_in) { create(:issue, project: project2) }
 
           context 'from Commit' do
-            let(:mentioner) { project2.repository.commit }
+            let(:mentioned_in) { project2.repository.commit }
 
             it 'references the mentioning commit' do
-              expect(subject.note).to eq "mentioned in commit #{mentioner.to_reference(project)}"
+              expect(subject.note).to eq "mentioned in commit #{mentioned_in.to_reference(project)}"
             end
           end
 
           context 'from non-Commit' do
             it 'references the mentioning object' do
-              expect(subject.note).to eq "mentioned in issue #{mentioner.to_reference(project)}"
+              expect(subject.note).to eq "mentioned in issue #{mentioned_in.to_reference(project)}"
             end
           end
         end
 
         context 'within the same project' do
           context 'from Commit' do
-            let(:mentioner) { project.repository.commit }
+            let(:mentioned_in) { project.repository.commit }
 
             it 'references the mentioning commit' do
-              expect(subject.note).to eq "mentioned in commit #{mentioner.to_reference}"
+              expect(subject.note).to eq "mentioned in commit #{mentioned_in.to_reference}"
             end
           end
 
           context 'from non-Commit' do
             it 'references the mentioning object' do
-              expect(subject.note).to eq "mentioned in issue #{mentioner.to_reference}"
+              expect(subject.note).to eq "mentioned in issue #{mentioned_in.to_reference}"
             end
           end
+        end
+      end
+
+      context 'with external issue' do
+        let(:noteable) { ExternalIssue.new('JIRA-123', project) }
+        let(:mentioned_in) { project.commit }
+
+        it 'queues a background worker' do
+          expect(Integrations::CreateExternalCrossReferenceWorker).to receive(:perform_async).with(
+            project.id,
+            'JIRA-123',
+            'Commit',
+            mentioned_in.id,
+            author.id
+          )
+
+          subject
         end
       end
     end
@@ -699,28 +800,28 @@ RSpec.describe ::SystemNotes::IssuablesService do
   end
 
   describe '#cross_reference_disallowed?' do
-    context 'when mentioner is not a MergeRequest' do
+    context 'when mentioned_in is not a MergeRequest' do
       it 'is falsey' do
-        mentioner = noteable.dup
+        mentioned_in = noteable.dup
 
-        expect(service.cross_reference_disallowed?(mentioner)).to be_falsey
+        expect(service.cross_reference_disallowed?(mentioned_in)).to be_falsey
       end
     end
 
-    context 'when mentioner is a MergeRequest' do
-      let(:mentioner) { create(:merge_request, :simple, source_project: project) }
-      let(:noteable)  { project.commit }
+    context 'when mentioned_in is a MergeRequest' do
+      let(:mentioned_in) { create(:merge_request, :simple, source_project: project) }
+      let(:noteable) { project.commit }
 
       it 'is truthy when noteable is in commits' do
-        expect(mentioner).to receive(:commits).and_return([noteable])
+        expect(mentioned_in).to receive(:commits).and_return([noteable])
 
-        expect(service.cross_reference_disallowed?(mentioner)).to be_truthy
+        expect(service.cross_reference_disallowed?(mentioned_in)).to be_truthy
       end
 
       it 'is falsey when noteable is not in commits' do
-        expect(mentioner).to receive(:commits).and_return([])
+        expect(mentioned_in).to receive(:commits).and_return([])
 
-        expect(service.cross_reference_disallowed?(mentioner)).to be_falsey
+        expect(service.cross_reference_disallowed?(mentioned_in)).to be_falsey
       end
     end
 

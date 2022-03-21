@@ -2,7 +2,8 @@
 
 class InstanceClusterablePresenter < ClusterablePresenter
   extend ::Gitlab::Utils::Override
-  include ActionView::Helpers::UrlHelper
+
+  presents ::Clusters::Instance
 
   def self.fabricate(clusterable, **attributes)
     attributes_with_presenter_class = attributes.merge(presenter_class: InstanceClusterablePresenter)
@@ -37,6 +38,11 @@ class InstanceClusterablePresenter < ClusterablePresenter
     admin_cluster_path(cluster, params)
   end
 
+  override :connect_path
+  def connect_path
+    connect_admin_clusters_path
+  end
+
   override :create_user_clusters_path
   def create_user_clusters_path
     create_user_admin_clusters_path
@@ -69,7 +75,7 @@ class InstanceClusterablePresenter < ClusterablePresenter
 
   override :learn_more_link
   def learn_more_link
-    link_to(s_('ClusterIntegration|Learn more about instance Kubernetes clusters'), help_page_path('user/instance/clusters/index'), target: '_blank', rel: 'noopener noreferrer')
+    ApplicationController.helpers.link_to(s_('ClusterIntegration|Learn more about instance Kubernetes clusters'), help_page_path('user/instance/clusters/index'), target: '_blank', rel: 'noopener noreferrer')
   end
 
   def metrics_dashboard_path(cluster)

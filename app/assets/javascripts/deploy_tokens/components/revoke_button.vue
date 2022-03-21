@@ -17,9 +17,6 @@ export default {
     revokePath: {
       default: '',
     },
-    buttonClass: {
-      default: '',
-    },
   },
   computed: {
     modalId() {
@@ -38,10 +35,9 @@ export default {
   <div>
     <gl-button
       v-gl-modal="modalId"
-      :class="buttonClass"
       category="primary"
       variant="danger"
-      class="float-right"
+      class="gl-float-right"
       data-testid="revoke-button"
       >{{ s__('DeployTokens|Revoke') }}</gl-button
     >
@@ -62,7 +58,7 @@ export default {
       </gl-sprintf>
       {{ s__('DeployTokens|This action cannot be undone.') }}
       <template #modal-footer>
-        <gl-button category="secondary" @click="cancelHandler">{{ s__('Cancel') }}</gl-button>
+        <gl-button category="secondary" @click="cancelHandler">{{ __('Cancel') }}</gl-button>
         <gl-button
           category="primary"
           variant="danger"

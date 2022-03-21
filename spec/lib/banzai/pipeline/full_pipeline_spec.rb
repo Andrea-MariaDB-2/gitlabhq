@@ -31,34 +31,39 @@ RSpec.describe Banzai::Pipeline::FullPipeline do
   describe 'footnotes' do
     let(:project)    { create(:project, :public) }
     let(:html)       { described_class.to_html(footnote_markdown, project: project) }
-    let(:identifier) { html[/.*fnref1-(\d+).*/, 1] }
+    let(:identifier) { html[/.*fnref-1-(\d+).*/, 1] }
     let(:footnote_markdown) do
       <<~EOF
-        first[^1] and second[^second]
+        first[^1] and second[^😄second] and twenty[^_twenty]
         [^1]: one
-        [^second]: two
+        [^😄second]: two
+        [^_twenty]: twenty
       EOF
     end
 
     let(:filtered_footnote) do
-      <<~EOF
-        <p dir="auto">first<sup class="footnote-ref"><a href="#fn1-#{identifier}" id="fnref1-#{identifier}">1</a></sup> and second<sup class="footnote-ref"><a href="#fn2-#{identifier}" id="fnref2-#{identifier}">2</a></sup></p>
-
-        <section class="footnotes"><ol>
-        <li id="fn1-#{identifier}">
-        <p>one <a href="#fnref1-#{identifier}" class="footnote-backref"><gl-emoji title="leftwards arrow with hook" data-name="leftwards_arrow_with_hook" data-unicode-version="1.1">↩</gl-emoji></a></p>
+      <<~EOF.strip_heredoc
+        <p dir="auto">first<sup class="footnote-ref"><a href="#fn-1-#{identifier}" id="fnref-1-#{identifier}" data-footnote-ref>1</a></sup> and second<sup class="footnote-ref"><a href="#fn-%F0%9F%98%84second-#{identifier}" id="fnref-%F0%9F%98%84second-#{identifier}" data-footnote-ref>2</a></sup> and twenty<sup class="footnote-ref"><a href="#fn-_twenty-#{identifier}" id="fnref-_twenty-#{identifier}" data-footnote-ref>3</a></sup></p>
+        <section data-footnotes class="footnotes">
+        <ol>
+        <li id="fn-1-#{identifier}">
+        <p>one <a href="#fnref-1-#{identifier}" data-footnote-backref aria-label="Back to content" class="footnote-backref"><gl-emoji title="leftwards arrow with hook" data-name="leftwards_arrow_with_hook" data-unicode-version="1.1">↩</gl-emoji></a></p>
         </li>
-        <li id="fn2-#{identifier}">
-        <p>two <a href="#fnref2-#{identifier}" class="footnote-backref"><gl-emoji title="leftwards arrow with hook" data-name="leftwards_arrow_with_hook" data-unicode-version="1.1">↩</gl-emoji></a></p>
+        <li id="fn-%F0%9F%98%84second-#{identifier}">
+        <p>two <a href="#fnref-%F0%9F%98%84second-#{identifier}" data-footnote-backref aria-label="Back to content" class="footnote-backref"><gl-emoji title="leftwards arrow with hook" data-name="leftwards_arrow_with_hook" data-unicode-version="1.1">↩</gl-emoji></a></p>
         </li>
-        </ol></section>
+        <li id="fn-_twenty-#{identifier}">
+        <p>twenty <a href="#fnref-_twenty-#{identifier}" data-footnote-backref aria-label="Back to content" class="footnote-backref"><gl-emoji title="leftwards arrow with hook" data-name="leftwards_arrow_with_hook" data-unicode-version="1.1">↩</gl-emoji></a></p>
+        </li>
+        </ol>
+        </section>
       EOF
     end
 
     it 'properly adds the necessary ids and classes' do
       stub_commonmark_sourcepos_disabled
 
-      expect(html.lines.map(&:strip).join("\n")).to eq filtered_footnote
+      expect(html.lines.map(&:strip).join("\n")).to eq filtered_footnote.strip
     end
   end
 

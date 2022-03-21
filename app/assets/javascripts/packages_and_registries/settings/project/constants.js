@@ -32,7 +32,6 @@ export const REMOVE_INFO_TEXT = s__(
 );
 export const EXPIRATION_SCHEDULE_LABEL = s__('ContainerRegistry|Remove tags older than:');
 export const NAME_REGEX_LABEL = s__('ContainerRegistry|Remove tags matching:');
-export const NAME_REGEX_PLACEHOLDER = '.*';
 export const NAME_REGEX_DESCRIPTION = s__(
   'ContainerRegistry|Tags with names that match this regex pattern are removed. %{linkStart}View regex examples.%{linkEnd}',
 );
@@ -73,6 +72,7 @@ export const OLDER_THAN_OPTIONS = [
   { key: 'SEVEN_DAYS', variable: 7, default: false },
   { key: 'FOURTEEN_DAYS', variable: 14, default: false },
   { key: 'THIRTY_DAYS', variable: 30, default: false },
+  { key: 'SIXTY_DAYS', variable: 60, default: false },
   { key: 'NINETY_DAYS', variable: 90, default: true },
 ];
 

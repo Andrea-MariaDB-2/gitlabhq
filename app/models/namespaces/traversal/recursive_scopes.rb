@@ -10,6 +10,29 @@ module Namespaces
           select('id')
         end
 
+        def roots
+          Gitlab::ObjectHierarchy
+            .new(all)
+            .base_and_ancestors
+            .where(namespaces: { parent_id: nil })
+        end
+
+        def self_and_ancestors(include_self: true, upto: nil, hierarchy_order: nil)
+          records = Gitlab::ObjectHierarchy.new(all).base_and_ancestors(upto: upto, hierarchy_order: hierarchy_order)
+
+          if include_self
+            records
+          else
+            records.where.not(id: all.as_ids)
+          end
+        end
+        alias_method :recursive_self_and_ancestors, :self_and_ancestors
+
+        def self_and_ancestor_ids(include_self: true)
+          self_and_ancestors(include_self: include_self).as_ids
+        end
+        alias_method :recursive_self_and_ancestor_ids, :self_and_ancestor_ids
+
         def descendant_ids
           recursive_descendants.as_ids
         end
@@ -30,6 +53,11 @@ module Namespaces
           self_and_descendants(include_self: include_self).as_ids
         end
         alias_method :recursive_self_and_descendant_ids, :self_and_descendant_ids
+
+        def self_and_hierarchy
+          Gitlab::ObjectHierarchy.new(all).all_objects
+        end
+        alias_method :recursive_self_and_hierarchy, :self_and_hierarchy
       end
     end
   end

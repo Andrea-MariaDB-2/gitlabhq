@@ -4,7 +4,7 @@ group: Integrations
 info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
 ---
 
-# Google OAuth 2.0 OmniAuth Provider **(FREE)**
+# Google OAuth 2.0 OmniAuth Provider **(FREE SELF)**
 
 To enable the Google OAuth 2.0 OmniAuth provider you must register your application
 with Google. Google generates a client ID and secret key for you to use.
@@ -41,7 +41,7 @@ In Google's side:
 
 1. You should now be able to see a Client ID and Client secret. Note them down
    or keep this page open as you need them later.
-1. To enable projects to access [Google Kubernetes Engine](../user/project/clusters/index.md), you must also
+1. To enable projects to access [Google Kubernetes Engine](../user/infrastructure/clusters/index.md), you must also
    enable these APIs:
    - Google Kubernetes Engine API
    - Cloud Resource Manager API
@@ -71,7 +71,7 @@ On your GitLab server:
    sudo -u git -H editor config/gitlab.yml
    ```
 
-1. See [Initial OmniAuth Configuration](omniauth.md#initial-omniauth-configuration) for initial settings.
+1. See [Configure initial settings](omniauth.md#configure-initial-settings) for initial settings.
 1. Add the provider configuration:
 
    For Omnibus GitLab:
@@ -79,10 +79,11 @@ On your GitLab server:
    ```ruby
    gitlab_rails['omniauth_providers'] = [
      {
-       "name" => "google_oauth2",
-       "app_id" => "YOUR_APP_ID",
-       "app_secret" => "YOUR_APP_SECRET",
-       "args" => { "access_type" => "offline", "approval_prompt" => '' }
+       name: "google_oauth2",
+       # label: "Provider name", # optional label for login button, defaults to "Google"
+       app_id: "YOUR_APP_ID",
+       app_secret: "YOUR_APP_SECRET",
+       args: { access_type: "offline", approval_prompt: "" }
      }
    ]
    ```
@@ -91,6 +92,7 @@ On your GitLab server:
 
    ```yaml
    - { name: 'google_oauth2',
+       # label: 'Provider name', # optional label for login button, defaults to "Google"
        app_id: 'YOUR_APP_ID',
        app_secret: 'YOUR_APP_SECRET',
        args: { access_type: 'offline', approval_prompt: '' } }

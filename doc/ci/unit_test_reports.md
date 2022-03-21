@@ -1,11 +1,10 @@
 ---
 stage: Verify
-group: Testing
+group: Pipeline Insights
 info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
-type: reference
 ---
 
-# Unit test reports
+# Unit test reports **(FREE)**
 
 > - [Introduced](https://gitlab.com/gitlab-org/gitlab-foss/-/issues/45318) in GitLab 11.2. Requires GitLab Runner 11.2 and above.
 > - [Renamed](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/39737) from JUnit test reports to Unit test reports in GitLab 13.4.
@@ -21,7 +20,7 @@ report on the merge request so that it's easier and faster to identify the
 failure without having to check the entire log. Unit test reports currently
 only support test reports in the JUnit report format.
 
-If you don't use Merge Requests but still want to see the unit test report
+If you don't use merge requests but still want to see the unit test report
 output without searching through job logs, the full
 [Unit test reports](#viewing-unit-test-reports-on-gitlab) are available
 in the pipeline detail view.
@@ -41,7 +40,7 @@ Consider the following workflow:
 ## How it works
 
 First, GitLab Runner uploads all [JUnit report format XML files](https://www.ibm.com/docs/en/adfz/developer-for-zos/14.1.0?topic=formats-junit-xml-format)
-as [artifacts](yaml/index.md#artifactsreportsjunit) to GitLab. Then, when you visit a merge request, GitLab starts
+as [artifacts](yaml/artifacts_reports.md#artifactsreportsjunit) to GitLab. Then, when you visit a merge request, GitLab starts
 comparing the head and base branch's JUnit report format XML files, where:
 
 - The base branch is the target branch (usually the default branch).
@@ -67,17 +66,17 @@ execution time and the error output.
 
 ### Number of recent failures
 
-> - [Introduced in Merge Requests](https://gitlab.com/gitlab-org/gitlab/-/issues/241759) in GitLab 13.7.
+> - [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/241759) in merge requests in GitLab 13.7.
 > - [Feature flag removed](https://gitlab.com/gitlab-org/gitlab/-/issues/268249) in GitLab 13.8.
-> - [Introduced in Test Reports](https://gitlab.com/gitlab-org/gitlab/-/issues/235525) in GitLab 13.9.
+> - [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/235525) in Test Reports in GitLab 13.9.
 
 If a test failed in the project's default branch in the last 14 days, a message like
 `Failed {n} time(s) in {default_branch} in the last 14 days` is displayed for that test.
 
 ## How to set it up
 
-To enable the Unit test reports in merge requests, you need to add
-[`artifacts:reports:junit`](yaml/index.md#artifactsreportsjunit)
+To enable the Unit test reports in merge requests, you must add
+[`artifacts:reports:junit`](yaml/artifacts_reports.md#artifactsreportsjunit)
 in `.gitlab-ci.yml`, and specify the path(s) of the generated test reports.
 The reports must be `.xml` files, otherwise [GitLab returns an Error 500](https://gitlab.com/gitlab-org/gitlab/-/issues/216575).
 
@@ -232,7 +231,7 @@ The [JunitXML.TestLogger](https://www.nuget.org/packages/JunitXml.TestLogger/) N
 package can generate test reports for .Net Framework and .Net Core applications. The following
 example expects a solution in the root folder of the repository, with one or more
 project files in sub-folders. One result file is produced per test project, and each file
-is placed in a new artifacts folder. This example includes optional formatting arguments, which
+is placed in the artifacts folder. This example includes optional formatting arguments, which
 improve the readability of test data in the test widget. A full .Net Core
 [example is available](https://gitlab.com/Siphonophora/dot-net-cicd-test-logging-demo).
 
@@ -290,6 +289,24 @@ javascript:
         - junit.xml
 ```
 
+#### Mocha
+
+The [JUnit Reporter for Mocha](https://github.com/michaelleeallen/mocha-junit-reporter) NPM package can generate test reports for JavaScript
+applications.
+In the following `.gitlab-ci.yml` example, the `javascript` job uses Mocha to generate the test reports:
+
+```yaml
+javascript:
+  stage: test
+  script:
+    - mocha --reporter mocha-junit-reporter --reporter-options mochaFile=junit.xml
+  artifacts:
+    when: always
+    reports:
+      junit:
+        - junit.xml
+```
+
 ### Flutter / Dart example
 
 This example `.gitlab-ci.yml` file uses the [JUnit Report](https://pub.dev/packages/junitreport) package to convert the `flutter test` output into JUnit report XML format:
@@ -328,7 +345,7 @@ phpunit:
 ## Viewing Unit test reports on GitLab
 
 > - [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/24792) in GitLab 12.5 behind a feature flag (`junit_pipeline_view`), disabled by default.
-> - The feature flag was removed and the feature was [made generally available](https://gitlab.com/gitlab-org/gitlab/-/issues/216478) in GitLab 13.3.
+> - [Feature flag removed](https://gitlab.com/gitlab-org/gitlab/-/issues/216478) in GitLab 13.3.
 
 If JUnit report format XML files are generated and uploaded as part of a pipeline, these reports
 can be viewed inside the pipelines details page. The **Tests** tab on this page
@@ -336,7 +353,7 @@ displays a list of test suites and cases reported from the XML file.
 
 ![Test Reports Widget](img/pipelines_junit_test_report_v13_10.png)
 
-You can view all the known test suites and click on each of these to see further
+You can view all the known test suites and select each of these to see further
 details, including the cases that make up the suite.
 
 You can also retrieve the reports via the [GitLab API](../api/pipelines.md#get-a-pipelines-test-report).
@@ -349,17 +366,16 @@ If parsing JUnit report XML results in an error, an indicator is shown next to t
 
 ![Test Reports With Errors](img/pipelines_junit_test_report_with_errors_v13_10.png)
 
-NOTE:
-GitLab.com has a 500,000 [test case parsing limit](../user/gitlab_com/#gitlab-cicd). Self-managed administrators can manage this setting on their instance.
+For test case parsing limits, see [Max test cases per unit test report](../user/gitlab_com/#gitlab-cicd).
 
 GitLab does not parse very [large nodes](https://nokogiri.org/tutorials/parsing_an_html_xml_document.html#parse-options) of JUnit reports. There is [an issue](https://gitlab.com/gitlab-org/gitlab/-/issues/268035) open to make this optional.
 
 ## Viewing JUnit screenshots on GitLab
 
 > - [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/202114) in GitLab 13.0 behind the `:junit_pipeline_screenshots_view` feature flag, disabled by default.
-> - The feature flag was removed and was [made generally available](https://gitlab.com/gitlab-org/gitlab/-/issues/216979) in GitLab 13.12.
+> - [Feature flag removed](https://gitlab.com/gitlab-org/gitlab/-/issues/216979) in GitLab 13.12.
 
-Upload your screenshots as [artifacts](yaml/index.md#artifactsreportsjunit) to GitLab. If JUnit
+Upload your screenshots as [artifacts](yaml/artifacts_reports.md#artifactsreportsjunit) to GitLab. If JUnit
 report format XML files contain an `attachment` tag, GitLab parses the attachment. Note that:
 
 - The `attachment` tag **must** contain the relative path to `$CI_PROJECT_DIR` of the screenshots you uploaded. For

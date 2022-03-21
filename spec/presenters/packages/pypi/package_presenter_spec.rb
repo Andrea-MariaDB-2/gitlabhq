@@ -52,5 +52,13 @@ RSpec.describe ::Packages::Pypi::PackagePresenter do
 
       it_behaves_like 'pypi package presenter'
     end
+
+    context 'with package files pending destruction' do
+      let_it_be(:package_file_pending_destruction) { create(:package_file, :pending_destruction, package: package1, file_name: "package_file_pending_destruction") }
+
+      let(:project_or_group) { project }
+
+      it { is_expected.not_to include(package_file_pending_destruction.file_name)}
+    end
   end
 end

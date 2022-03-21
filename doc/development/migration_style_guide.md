@@ -135,6 +135,7 @@ various database operations, such as:
 - [dropping and renaming columns](avoiding_downtime_in_migrations.md#dropping-columns)
 - [changing column constraints and types](avoiding_downtime_in_migrations.md#changing-column-constraints)
 - [adding and dropping indexes, tables, and foreign keys](avoiding_downtime_in_migrations.md#adding-indexes)
+- [migrating `integer` primary keys to `bigint`](avoiding_downtime_in_migrations.md#migrating-integer-primary-keys-to-bigint)
 
 and explains how to perform them without requiring downtime.
 
@@ -160,6 +161,9 @@ def down
   # comment explaining why changes performed by `up` cannot be reversed.
 end
 ```
+
+Migrations like this are inherently risky and [additional actions](database_review.md#preparation-when-adding-data-migrations)
+are required when preparing the migration for review.
 
 ## Atomicity
 
@@ -219,6 +223,8 @@ In case you need to insert, update, or delete a significant amount of data, you:
 
 ## Migration helpers and versioning
 
+> [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/339115) in GitLab 14.3.
+
 Various helper methods are available for many common patterns in database migrations. Those
 helpers can be found in `Gitlab::Database::MigrationHelpers` and related modules.
 
@@ -240,15 +246,14 @@ class TestMigration < Gitlab::Database::Migration[1.0]
 end
 ```
 
-NOTE:
-It is discouraged to include `Gitlab::Database::MigrationHelpers` directly into a
-migration. Instead, the latest version of `Gitlab::Database::Migration` will expose the latest
+Do not include `Gitlab::Database::MigrationHelpers` directly into a
+migration. Instead, use the latest version of `Gitlab::Database::Migration`, which exposes the latest
 version of migration helpers automatically.
 
-NOTE:
-Migration helpers and versioning are available starting from [14.3](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/68986).
-For merge requests targeting previous stable branches, the old format needs to be used and we continue
-to inherit from `ActiveRecord::Migration[6.1]` instead of `Gitlab::Database::Migration[1.0]` for those.
+Migration helpers and versioning were [introduced](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/68986)
+in GitLab 14.3.
+For merge requests targeting previous stable branches, use the old format and still inherit from
+`ActiveRecord::Migration[6.1]` instead of `Gitlab::Database::Migration[1.0]`.
 
 ## Retry mechanism when acquiring database locks
 
@@ -280,79 +285,87 @@ This problem could cause failed application upgrade processes and even applicati
 stability issues, since the table may be inaccessible for a short period of time.
 
 To increase the reliability and stability of database migrations, the GitLab codebase
-offers a helper method to retry the operations with different `lock_timeout` settings
-and wait time between the attempts. Multiple smaller attempts to acquire the necessary
+offers a method to retry the operations with different `lock_timeout` settings
+and wait time between the attempts. Multiple shorter attempts to acquire the necessary
 lock allow the database to process other statements.
 
-### Examples
+There are two distinct ways to use lock retries:
+
+1. Inside a transactional migration: use `enable_lock_retries!`.
+1. Inside a non-transactional migration: use `with_lock_retries`.
+
+If possible, enable lock-retries for any migration that touches a [high-traffic table](#high-traffic-tables).
+
+### Usage with transactional migrations
+
+Regular migrations execute the full migration in a transaction. We can enable the
+lock-retry methodology by calling `enable_lock_retries!` at the migration level.
+
+This leads to the lock timeout being controlled for this migration. Also, it can lead to retrying the full
+migration if the lock could not be granted within the timeout.
+
+Note that, while this is currently an opt-in setting, we prefer to use lock-retries for all migrations and
+plan to make this the default going forward.
+
+Occasionally a migration may need to acquire multiple locks on different objects.
+To prevent catalog bloat, ask for all those locks explicitly before performing any DDL.
+A better strategy is to split the migration, so that we only need to acquire one lock at the time.
 
 **Removing a column:**
 
 ```ruby
-def up
-  with_lock_retries do
-    remove_column :users, :full_name
-  end
-end
+enable_lock_retries!
 
-def down
-  with_lock_retries do
-    add_column :users, :full_name, :string
-  end
+def change
+  remove_column :users, :full_name, :string
 end
 ```
 
 **Multiple changes on the same table:**
 
-The helper `with_lock_retries` wraps all operations into a single transaction. When you have the lock,
+With the lock-retry methodology enabled, all operations wrap into a single transaction. When you have the lock,
 you should do as much as possible inside the transaction rather than trying to get another lock later.
 Be careful about running long database statements within the block. The acquired locks are kept until the transaction (block) finishes and depending on the lock type, it might block other database operations.
 
 ```ruby
+enable_lock_retries!
+
 def up
-  with_lock_retries do
-    add_column :users, :full_name, :string
-    add_column :users, :bio, :string
-  end
+  add_column :users, :full_name, :string
+  add_column :users, :bio, :string
 end
 
 def down
-  with_lock_retries do
-    remove_column :users, :full_name
-    remove_column :users, :bio
-  end
+  remove_column :users, :full_name
+  remove_column :users, :bio
 end
 ```
 
 **Removing a foreign key:**
 
 ```ruby
+enable_lock_retries!
+
 def up
-  with_lock_retries do
-    remove_foreign_key :issues, :projects
-  end
+  remove_foreign_key :issues, :projects
 end
 
 def down
-  with_lock_retries do
-    add_foreign_key :issues, :projects
-  end
+  add_foreign_key :issues, :projects
 end
 ```
 
 **Changing default value for a column:**
 
 ```ruby
+enable_lock_retries!
+
 def up
-  with_lock_retries do
-    change_column_default :merge_requests, :lock_version, from: nil, to: 0
-  end
+  change_column_default :merge_requests, :lock_version, from: nil, to: 0
 end
 
 def down
-  with_lock_retries do
-    change_column_default :merge_requests, :lock_version, from: 0, to: nil
-  end
+  change_column_default :merge_requests, :lock_version, from: 0, to: nil
 end
 ```
 
@@ -361,25 +374,23 @@ end
 We can wrap the `create_table` method with `with_lock_retries`:
 
 ```ruby
+enable_lock_retries!
+
 def up
-  with_lock_retries do
-    create_table :issues do |t|
-      t.references :project, index: true, null: false, foreign_key: { on_delete: :cascade }
-      t.string :title, limit: 255
-    end
+  create_table :issues do |t|
+    t.references :project, index: true, null: false, foreign_key: { on_delete: :cascade }
+    t.string :title, limit: 255
   end
 end
 
 def down
-  with_lock_retries do
-    drop_table :issues
-  end
+  drop_table :issues
 end
 ```
 
 **Creating a new table when we have two foreign keys:**
 
-Only one foreign key should be created per migration. This is because [the addition of a foreign key constraint requires a `SHARE ROW EXCLUSIVE` lock on the referenced table](https://www.postgresql.org/docs/12/sql-createtable.html#:~:text=The%20addition%20of%20a%20foreign%20key%20constraint%20requires%20a%20SHARE%20ROW%20EXCLUSIVE%20lock%20on%20the%20referenced%20table), and locking multiple tables in the same transaction should be avoided.
+Only one foreign key should be created per transaction. This is because [the addition of a foreign key constraint requires a `SHARE ROW EXCLUSIVE` lock on the referenced table](https://www.postgresql.org/docs/12/sql-createtable.html#:~:text=The%20addition%20of%20a%20foreign%20key%20constraint%20requires%20a%20SHARE%20ROW%20EXCLUSIVE%20lock%20on%20the%20referenced%20table), and locking multiple tables in the same transaction should be avoided.
 
 For this, we need three migrations:
 
@@ -441,16 +452,20 @@ def down
 end
 ```
 
-**Usage with `disable_ddl_transaction!`**
+### Usage with non-transactional migrations (`disable_ddl_transaction!`)
 
-Generally the `with_lock_retries` helper should work with `disable_ddl_transaction!`. A custom RuboCop rule ensures that only allowed methods can be placed within the lock retries block.
+Only when we disable transactional migrations using `disable_ddl_transaction!`, we can use
+the `with_lock_retries` helper to guard an individual sequence of steps. It opens a transaction
+to execute the given block.
+
+A custom RuboCop rule ensures that only allowed methods can be placed within the lock retries block.
 
 ```ruby
 disable_ddl_transaction!
 
 def up
   with_lock_retries do
-    add_column :users, :name, :text
+    add_column :users, :name, :text unless column_exists?(:users, :name)
   end
 
   add_text_limit :users, :name, 255 # Includes constraint validation (full table scan)
@@ -471,7 +486,8 @@ end
 
 ### When to use the helper method
 
-The `with_lock_retries` helper method can be used when you normally use
+You can **only** use the `with_lock_retries` helper method when the execution is not already inside
+an open transaction (using Postgres subtransactions is discouraged). It can be used with
 standard Rails migration helper methods. Calling more than one migration
 helper is not a problem if they're executed on the same table.
 
@@ -571,8 +587,6 @@ class like so:
 
 ```ruby
 class MyMigration < Gitlab::Database::Migration[1.0]
-  include Gitlab::Database::MigrationHelpers
-
   disable_ddl_transaction!
 
   INDEX_NAME = 'index_name'
@@ -616,8 +630,6 @@ be used with a name option. For example:
 
 ```ruby
 class MyMigration < Gitlab::Database::Migration[1.0]
-  include Gitlab::Database::MigrationHelpers
-
   INDEX_NAME = 'index_name'
 
   def up
@@ -760,6 +772,32 @@ to run on a large table, as long as it is only updating a small subset of the
 rows in the table, but do not ignore that without validating on the GitLab.com
 staging environment - or asking someone else to do so for you - beforehand.
 
+## Removing a foreign key constraint
+
+When removing a foreign key constraint, we need to acquire a lock on both tables
+that are related to the foreign key. For tables with heavy write patterns, it's a good
+idea to use `with_lock_retries`, otherwise you might fail to acquire a lock in time.
+You might also run into deadlocks when acquiring a lock, because ordinarily
+the application writes in `parent,child` order. However, removing a foreign
+key acquires the lock in `child,parent` order. To resolve this, you can
+explicitly acquire the lock in `parent,child`, for example:
+
+```ruby
+disable_ddl_transaction!
+
+def up
+  with_lock_retries do
+    execute('lock table ci_pipelines, ci_builds in access exclusive mode')
+
+    remove_foreign_key :ci_builds, to_table: :ci_pipelines, column: :pipeline_id, on_delete: :cascade, name: 'the_fk_name'
+  end
+end
+
+def down
+  add_concurrent_foreign_key :ci_builds, :ci_pipelines, column: :pipeline_id, on_delete: :cascade, name: 'the_fk_name'
+end
+```
+
 ## Dropping a database table
 
 Dropping a database table is uncommon, and the `drop_table` method
@@ -863,7 +901,7 @@ See the [text data type](database/strings_and_the_text_data_type.md) style guide
 ## Timestamp column type
 
 By default, Rails uses the `timestamp` data type that stores timestamp data
-without timezone information. The `timestamp` data type is used by calling
+without time zone information. The `timestamp` data type is used by calling
 either the `add_timestamps` or the `timestamps` method.
 
 Also, Rails converts the `:datetime` data type to the `timestamp` one.
@@ -888,15 +926,15 @@ end
 ```
 
 Instead of using these methods, one should use the following methods to store
-timestamps with timezones:
+timestamps with time zones:
 
 - `add_timestamps_with_timezone`
 - `timestamps_with_timezone`
 - `datetime_with_timezone`
 
 This ensures all timestamps have a time zone specified. This, in turn, means
-existing timestamps don't suddenly use a different timezone when the system's
-timezone changes. It also makes it very clear which timezone was used in the
+existing timestamps don't suddenly use a different time zone when the system's
+time zone changes. It also makes it very clear which time zone was used in the
 first place.
 
 ## Storing JSON in database

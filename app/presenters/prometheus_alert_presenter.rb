@@ -1,9 +1,7 @@
 # frozen_string_literal: true
 
 class PrometheusAlertPresenter < Gitlab::View::Presenter::Delegated
-  include ActionView::Helpers::UrlHelper
-
-  presents :prometheus_alert
+  presents ::PrometheusAlert, as: :prometheus_alert
 
   def humanized_text
     operator_text =

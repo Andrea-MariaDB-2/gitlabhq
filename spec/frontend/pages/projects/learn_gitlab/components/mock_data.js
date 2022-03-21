@@ -35,9 +35,10 @@ export const testActions = {
     svg: 'http://example.com/images/illustration.svg',
   },
   securityScanEnabled: {
-    url: 'http://example.com/',
+    url: 'https://docs.gitlab.com/ee/foobar/',
     completed: false,
     svg: 'http://example.com/images/illustration.svg',
+    openInNewTab: true,
   },
   issueCreated: {
     url: 'http://example.com/',
@@ -56,4 +57,8 @@ export const testSections = {
   plan: {
     svg: 'plan.svg',
   },
+};
+
+export const testProject = {
+  name: 'test-project',
 };

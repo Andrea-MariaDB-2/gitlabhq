@@ -7,6 +7,7 @@ import {
   visibilityLevelDescriptions,
   visibilityOptions,
 } from '~/pages/projects/shared/permissions/constants';
+import ConfirmDanger from '~/vue_shared/components/confirm_danger/confirm_danger.vue';
 
 const defaultProps = {
   currentSettings: {
@@ -27,6 +28,7 @@ const defaultProps = {
     emailsDisabled: false,
     packagesEnabled: true,
     showDefaultAwardEmojis: true,
+    warnAboutPotentiallyUnwantedCharacters: true,
   },
   isGitlabCom: true,
   canDisableEmails: true,
@@ -46,6 +48,8 @@ const defaultProps = {
   packagesAvailable: false,
   packagesHelpPath: '/help/user/packages/index',
   requestCveAvailable: true,
+  confirmationPhrase: 'my-fake-project',
+  showVisibilityConfirmModal: false,
 };
 
 describe('Settings Panel', () => {
@@ -97,8 +101,13 @@ describe('Settings Panel', () => {
   const findEmailSettings = () => wrapper.find({ ref: 'email-settings' });
   const findShowDefaultAwardEmojis = () =>
     wrapper.find('input[name="project[project_setting_attributes][show_default_award_emojis]"]');
+  const findWarnAboutPuc = () =>
+    wrapper.find(
+      'input[name="project[project_setting_attributes][warn_about_potentially_unwanted_characters]"]',
+    );
   const findMetricsVisibilitySettings = () => wrapper.find({ ref: 'metrics-visibility-settings' });
   const findOperationsSettings = () => wrapper.find({ ref: 'operations-settings' });
+  const findConfirmDangerButton = () => wrapper.findComponent(ConfirmDanger);
 
   afterEach(() => {
     wrapper.destroy();
@@ -172,6 +181,44 @@ describe('Settings Panel', () => {
 
       expect(findRequestAccessEnabledInput().exists()).toBe(false);
     });
+
+    it('does not require confirmation if the visibility is reduced', async () => {
+      wrapper = mountComponent({
+        currentSettings: { visibilityLevel: visibilityOptions.INTERNAL },
+      });
+
+      expect(findConfirmDangerButton().exists()).toBe(false);
+
+      await findProjectVisibilityLevelInput().setValue(visibilityOptions.PRIVATE);
+
+      expect(findConfirmDangerButton().exists()).toBe(false);
+    });
+
+    describe('showVisibilityConfirmModal=true', () => {
+      beforeEach(() => {
+        wrapper = mountComponent({
+          currentSettings: { visibilityLevel: visibilityOptions.INTERNAL },
+          showVisibilityConfirmModal: true,
+        });
+      });
+
+      it('will render the confirmation dialog if the visibility is reduced', async () => {
+        expect(findConfirmDangerButton().exists()).toBe(false);
+
+        await findProjectVisibilityLevelInput().setValue(visibilityOptions.PRIVATE);
+
+        expect(findConfirmDangerButton().exists()).toBe(true);
+      });
+
+      it('emits the `confirm` event when the reduce visibility warning is confirmed', async () => {
+        expect(wrapper.emitted('confirm')).toBeUndefined();
+
+        await findProjectVisibilityLevelInput().setValue(visibilityOptions.PRIVATE);
+        await findConfirmDangerButton().vm.$emit('confirm');
+
+        expect(wrapper.emitted('confirm')).toHaveLength(1);
+      });
+    });
   });
 
   describe('Issues settings', () => {
@@ -197,7 +244,7 @@ describe('Settings Panel', () => {
       wrapper = mountComponent({ currentSettings: { visibilityLevel: visibilityOptions.PUBLIC } });
 
       expect(findRepositoryFeatureProjectRow().props('helpText')).toBe(
-        'View and edit files in this project. Non-project members will only have read access.',
+        'View and edit files in this project. Non-project members have only read access.',
       );
     });
   });
@@ -536,6 +583,14 @@ describe('Settings Panel', () => {
       wrapper = mountComponent();
 
       expect(findShowDefaultAwardEmojis().exists()).toBe(true);
+    });
+  });
+
+  describe('Warn about potentially unwanted characters', () => {
+    it('should have a "Warn about Potentially Unwanted Characters" input', () => {
+      wrapper = mountComponent();
+
+      expect(findWarnAboutPuc().exists()).toBe(true);
     });
   });
 

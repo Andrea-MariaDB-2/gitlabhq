@@ -6,6 +6,7 @@ exports[`Upload dropzone component correctly overrides description and drop mess
 >
   <button
     class="card upload-dropzone-card upload-dropzone-border gl-w-full gl-h-full gl-align-items-center gl-justify-content-center gl-p-3"
+    type="button"
   >
     <div
       class="gl-display-flex gl-align-items-center gl-justify-content-center gl-text-center gl-flex-direction-column"
@@ -45,6 +46,7 @@ exports[`Upload dropzone component correctly overrides description and drop mess
     >
       <div
         class="mw-50 gl-text-center"
+        style="display: none;"
       >
         <h3
           class=""
@@ -61,7 +63,6 @@ exports[`Upload dropzone component correctly overrides description and drop mess
        
       <div
         class="mw-50 gl-text-center"
-        style="display: none;"
       >
         <h3
           class=""
@@ -86,6 +87,7 @@ exports[`Upload dropzone component when dragging renders correct template when d
 >
   <button
     class="card upload-dropzone-card upload-dropzone-border gl-w-full gl-h-full gl-align-items-center gl-justify-content-center gl-p-3"
+    type="button"
   >
     <div
       class="gl-display-flex gl-align-items-center gl-justify-content-center gl-text-center gl-flex-direction-column"
@@ -146,7 +148,6 @@ exports[`Upload dropzone component when dragging renders correct template when d
        
       <div
         class="mw-50 gl-text-center"
-        style=""
       >
         <h3
           class=""
@@ -171,6 +172,7 @@ exports[`Upload dropzone component when dragging renders correct template when d
 >
   <button
     class="card upload-dropzone-card upload-dropzone-border gl-w-full gl-h-full gl-align-items-center gl-justify-content-center gl-p-3"
+    type="button"
   >
     <div
       class="gl-display-flex gl-align-items-center gl-justify-content-center gl-text-center gl-flex-direction-column"
@@ -231,7 +233,6 @@ exports[`Upload dropzone component when dragging renders correct template when d
        
       <div
         class="mw-50 gl-text-center"
-        style=""
       >
         <h3
           class=""
@@ -256,6 +257,7 @@ exports[`Upload dropzone component when dragging renders correct template when d
 >
   <button
     class="card upload-dropzone-card upload-dropzone-border gl-w-full gl-h-full gl-align-items-center gl-justify-content-center gl-p-3"
+    type="button"
   >
     <div
       class="gl-display-flex gl-align-items-center gl-justify-content-center gl-text-center gl-flex-direction-column"
@@ -299,6 +301,7 @@ exports[`Upload dropzone component when dragging renders correct template when d
     >
       <div
         class="mw-50 gl-text-center"
+        style=""
       >
         <h3
           class=""
@@ -340,6 +343,7 @@ exports[`Upload dropzone component when dragging renders correct template when d
 >
   <button
     class="card upload-dropzone-card upload-dropzone-border gl-w-full gl-h-full gl-align-items-center gl-justify-content-center gl-p-3"
+    type="button"
   >
     <div
       class="gl-display-flex gl-align-items-center gl-justify-content-center gl-text-center gl-flex-direction-column"
@@ -383,6 +387,7 @@ exports[`Upload dropzone component when dragging renders correct template when d
     >
       <div
         class="mw-50 gl-text-center"
+        style=""
       >
         <h3
           class=""
@@ -424,6 +429,7 @@ exports[`Upload dropzone component when dragging renders correct template when d
 >
   <button
     class="card upload-dropzone-card upload-dropzone-border gl-w-full gl-h-full gl-align-items-center gl-justify-content-center gl-p-3"
+    type="button"
   >
     <div
       class="gl-display-flex gl-align-items-center gl-justify-content-center gl-text-center gl-flex-direction-column"
@@ -467,6 +473,7 @@ exports[`Upload dropzone component when dragging renders correct template when d
     >
       <div
         class="mw-50 gl-text-center"
+        style=""
       >
         <h3
           class=""
@@ -508,6 +515,7 @@ exports[`Upload dropzone component when no slot provided renders default dropzon
 >
   <button
     class="card upload-dropzone-card upload-dropzone-border gl-w-full gl-h-full gl-align-items-center gl-justify-content-center gl-p-3"
+    type="button"
   >
     <div
       class="gl-display-flex gl-align-items-center gl-justify-content-center gl-text-center gl-flex-direction-column"
@@ -551,6 +559,7 @@ exports[`Upload dropzone component when no slot provided renders default dropzon
     >
       <div
         class="mw-50 gl-text-center"
+        style="display: none;"
       >
         <h3
           class=""
@@ -567,7 +576,6 @@ exports[`Upload dropzone component when no slot provided renders default dropzon
        
       <div
         class="mw-50 gl-text-center"
-        style="display: none;"
       >
         <h3
           class=""
@@ -603,6 +611,7 @@ exports[`Upload dropzone component when slot provided renders dropzone with slot
     >
       <div
         class="mw-50 gl-text-center"
+        style="display: none;"
       >
         <h3
           class=""
@@ -619,7 +628,6 @@ exports[`Upload dropzone component when slot provided renders dropzone with slot
        
       <div
         class="mw-50 gl-text-center"
-        style="display: none;"
       >
         <h3
           class=""

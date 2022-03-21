@@ -7,7 +7,10 @@ info: To determine the technical writer assigned to the Stage/Group associated w
 # How to restart GitLab **(FREE SELF)**
 
 Depending on how you installed GitLab, there are different methods to restart
-its service(s).
+its services.
+
+NOTE:
+A short downtime is expected for all methods.
 
 ## Omnibus installations
 
@@ -90,8 +93,8 @@ application that powers Omnibus GitLab, makes sure that all things like director
 permissions, and services are in place and in the same shape that they were
 initially shipped.
 
-It also restarts GitLab components where needed, if any of their
-configuration files have changed.
+It also [restarts GitLab components](#how-to-restart-gitlab)
+where needed, if any of their configuration files have changed.
 
 If you manually edit any files in `/var/opt/gitlab` that are managed by Chef,
 running reconfigure reverts the changes AND restarts the services that
@@ -103,39 +106,15 @@ If you have followed the official installation guide to [install GitLab from
 source](../install/installation.md), run the following command to restart GitLab:
 
 ```shell
+# For systems running systemd
+sudo systemctl restart gitlab.target
+
+# For systems running SysV init
 sudo service gitlab restart
 ```
 
-The output should be similar to this:
-
-```plaintext
-Shutting down GitLab Puma
-Shutting down GitLab Sidekiq
-Shutting down GitLab Workhorse
-Shutting down GitLab MailRoom
-...
-GitLab is not running.
-Starting GitLab Puma
-Starting GitLab Sidekiq
-Starting GitLab Workhorse
-Starting GitLab MailRoom
-...
-The GitLab Puma web server with pid 28059 is running.
-The GitLab Sidekiq job dispatcher with pid 28176 is running.
-The GitLab Workhorse with pid 28122 is running.
-The GitLab MailRoom email processor with pid 28114 is running.
-GitLab and all its components are up and running.
-```
-
 This should restart Puma, Sidekiq, GitLab Workhorse, and [Mailroom](reply_by_email.md)
-(if enabled). The init service file that does all the magic can be found on
-your server in `/etc/init.d/gitlab`.
-
----
-
-If you are using other init systems, like `systemd`, you can check the
-[GitLab Recipes](https://gitlab.com/gitlab-org/gitlab-recipes/tree/master/init) repository for some unofficial services. These are
-**not** officially supported so use them at your own risk.
+(if enabled).
 
 ## Helm chart installations
 

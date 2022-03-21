@@ -1,7 +1,7 @@
 ---
 stage: Verify
 group: Pipeline Authoring
-info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#designated-technical-writers
+info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
 type: reference
 ---
 
@@ -24,7 +24,7 @@ In the `.gitlab-ci.yml` file, you can define:
 
 The scripts are grouped into **jobs**, and jobs run as part of a larger
 **pipeline**. You can group multiple independent jobs into **stages** that run in a defined order.
-The CI/CD configuration needs at least one job that is [not hidden](index.md#hide-jobs).
+The CI/CD configuration needs at least one job that is [not hidden](../jobs/index.md#hide-jobs).
 
 You should organize your jobs in a sequence that suits your application and is in accordance with
 the tests you wish to perform. To [visualize](../pipeline_editor/index.md#visualize-ci-configuration) the process, imagine

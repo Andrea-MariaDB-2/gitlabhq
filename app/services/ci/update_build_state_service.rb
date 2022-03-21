@@ -73,9 +73,11 @@ module Ci
       ::Gitlab::Ci::Trace::Checksum.new(build).then do |checksum|
         unless checksum.valid?
           metrics.increment_trace_operation(operation: :invalid)
+          metrics.increment_error_counter(error_reason: :chunks_invalid_checksum)
 
           if checksum.corrupted?
             metrics.increment_trace_operation(operation: :corrupted)
+            metrics.increment_error_counter(error_reason: :chunks_invalid_size)
           end
 
           next unless log_invalid_chunks?
@@ -214,11 +216,12 @@ module Ci
     end
 
     def chunks_migration_enabled?
-      ::Gitlab::Ci::Features.accept_trace?(build.project)
+      ::Feature.enabled?(:ci_enable_live_trace, build.project) &&
+        ::Feature.enabled?(:ci_accept_trace, build.project, type: :ops, default_enabled: true)
     end
 
     def log_invalid_chunks?
-      ::Gitlab::Ci::Features.log_invalid_trace_chunks?(build.project)
+      ::Feature.enabled?(:ci_trace_log_invalid_chunks, build.project, type: :ops, default_enabled: false)
     end
   end
 end

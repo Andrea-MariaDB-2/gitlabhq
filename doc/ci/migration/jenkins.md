@@ -42,8 +42,8 @@ can be a great resource.
 ## Manage organizational transition
 
 An important part of transitioning from Jenkins to GitLab is the cultural and organizational
-changes that comes with the move, and successfully managing them. There are a few
-things we have found that helps this:
+changes that come with the move, and successfully managing them. There are a few
+things we have found that help this:
 
 - Setting and communicating a clear vision of what your migration goals are helps
   your users understand why the effort is worth it. The value is clear when
@@ -78,7 +78,7 @@ There are some high level differences between the products worth mentioning:
   - on [schedule](../pipelines/schedules.md)
   - from the [GitLab UI](../pipelines/index.md#run-a-pipeline-manually)
   - by [API call](../triggers/index.md)
-  - by [webhook](../triggers/index.md#triggering-a-pipeline-from-a-webhook)
+  - by [webhook](../triggers/index.md#use-a-webhook)
   - by [ChatOps](../chatops/index.md)
 
 - You can control which jobs run in which cases, depending on how they are triggered,
@@ -130,7 +130,7 @@ There are some important differences in the way runners work in comparison to ag
 
 - Runners can be set up as [shared across an instance, be added at the group level, or set up at the project level](../runners/runners_scope.md).
   They self-select jobs from the scopes you've defined automatically.
-- You can also [use tags](../runners/configure_runners.md#use-tags-to-limit-the-number-of-jobs-using-the-runner) for finer control, and
+- You can also [use tags](../runners/configure_runners.md#use-tags-to-control-which-jobs-a-runner-can-run) for finer control, and
   associate runners with specific jobs. For example, you can use a tag for jobs that
   require dedicated, more powerful, or specific hardware.
 - GitLab has [autoscaling for runners](https://docs.gitlab.com/runner/configuration/autoscale.html).
@@ -146,15 +146,15 @@ as well.
 
 Jenkins Pipelines are based on [Groovy](https://groovy-lang.org/), so the pipeline specification is written as code.
 GitLab works a bit differently, we use the more highly structured [YAML](https://yaml.org/) format, which
-places scripting elements inside of `script:` blocks separate from the pipeline specification itself.
+places scripting elements inside of `script` blocks separate from the pipeline specification itself.
 
 This is a strength of GitLab, in that it helps keep the learning curve much simpler to get up and running
 and avoids some of the problem of unconstrained complexity which can make your Jenkinsfile hard to understand
 and manage.
 
 That said, we do of course still value DRY (don't repeat yourself) principles and want to ensure that
-behaviors of your jobs can be codified once and applied as needed. You can use the `extends:` syntax to
-[reuse configuration in your jobs](../yaml/index.md#extends), and `include:` can
+behaviors of your jobs can be codified once and applied as needed. You can use the `extends` syntax to
+[reuse configuration in your jobs](../yaml/index.md#extends), and `include` can
 be used to [reuse pipeline configurations](../yaml/index.md#include) in pipelines
 in different projects:
 
@@ -174,7 +174,7 @@ rspec:
 ## Artifact publishing
 
 Artifacts may work a bit differently than you've used them with Jenkins. In GitLab, any job can define
-a set of artifacts to be saved by using the `artifacts:` keyword. This can be configured to point to a file
+a set of artifacts to be saved by using the `artifacts` keyword. This can be configured to point to a file
 or set of files that can then be persisted from job to job. Read more on our detailed
 [artifacts documentation](../pipelines/job_artifacts.md):
 
@@ -196,7 +196,7 @@ can leverage. You can see the complete list of packaging features in the
 
 Where you may have used plugins to get things like code quality, unit tests, security scanning, and so on working in Jenkins,
 GitLab takes advantage of our connected ecosystem to automatically pull these kinds of results into
-your Merge Requests, pipeline details pages, and other locations. You may find that you actually don't
+your merge requests, pipeline details pages, and other locations. You may find that you actually don't
 need to configure anything to have these appear.
 
 If they aren't working as expected, or if you'd like to see what's available, our [CI feature index](../index.md#gitlab-cicd-features) has the full list
@@ -230,7 +230,7 @@ and is meant to be a mapping of concepts there to concepts in GitLab.
 The agent section is used to define how a pipeline executes. For GitLab, we use [runners](../runners/index.md)
 to provide this capability. You can configure your own runners in Kubernetes or on any host, or take advantage
 of our shared runner fleet (note that the shared runner fleet is only available for GitLab.com users).
-We also support using [tags](../runners/configure_runners.md#use-tags-to-limit-the-number-of-jobs-using-the-runner) to direct different jobs
+We also support using [tags](../runners/configure_runners.md#use-tags-to-control-which-jobs-a-runner-can-run) to direct different jobs
 to different runners (execution agents).
 
 The `agent` section also allows you to define which Docker images should be used for execution, for which we use
@@ -271,7 +271,7 @@ default:
 GitLab CI/CD also lets you define stages, but is a little bit more free-form to configure. The GitLab [`stages` keyword](../yaml/index.md#stages)
 is a top level setting that enumerates the list of stages, but you are not required to nest individual jobs underneath
 the `stages` section. Any job defined in the `.gitlab-ci.yml` can be made a part of any stage through use of the
-[`stage:` keyword](../yaml/index.md#stage).
+[`stage` keyword](../yaml/index.md#stage).
 
 Note that, unless otherwise specified, every pipeline is instantiated with a `build`, `test`, and `deploy` stage
 which are run in that order. Jobs that have no `stage` defined are placed by default in the `test` stage.

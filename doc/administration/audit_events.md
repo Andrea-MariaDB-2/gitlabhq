@@ -9,10 +9,12 @@ info: To determine the technical writer assigned to the Stage/Group associated w
 GitLab offers a way to view the changes made within the GitLab server for owners and administrators
 on a [paid plan](https://about.gitlab.com/pricing/).
 
-GitLab system administrators can also take advantage of the logs located on the
-file system. See [the logs system documentation](logs.md#audit_jsonlog) for more details.
+GitLab system administrators can also view all audit events by accessing the [`audit_json.log` file](logs.md#audit_jsonlog).
 
-You can generate an [Audit report](audit_reports.md) of audit events.
+You can:
+
+- Generate an [audit report](audit_reports.md) of audit events.
+- [Stream audit events](audit_event_streaming.md) to an external endpoint.
 
 ## Overview
 
@@ -28,6 +30,11 @@ permission level, who added a new user, or who removed a user.
 - Track which users have access to a certain group of projects
   in GitLab, and who gave them that permission level.
 
+## Retention policy
+
+There is no retention policy in place for audit events.
+See the [Specify a retention period for audit events](https://gitlab.com/gitlab-org/gitlab/-/issues/8137) for more information.
+
 ## List of events
 
 There are two kinds of events logged:
@@ -37,18 +44,26 @@ There are two kinds of events logged:
 - Instance events scoped to the whole GitLab instance, used by your Compliance team to
   perform formal audits.
 
+NOTE:
+Some events are recorded and available only as [streaming audit events](audit_event_streaming.md).
+
 ### Impersonation data
 
-> [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/536) in [GitLab Premium](https://about.gitlab.com/pricing/) 13.0.
+> [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/536) in GitLab 13.0.
 
 When a user is being [impersonated](../user/admin_area/index.md#user-impersonation), their actions are logged as audit events as usual, with two additional details:
 
-1. Usual audit events include information about the impersonating administrator. These are visible in their respective Audit Event pages depending on their type (Group/Project/User).
-1. Extra audit events are recorded for the start and stop of the administrator's impersonation session. These are visible in the instance Audit Events.
+1. Usual audit events include information about the impersonating administrator. These audit events are visible in their
+   respective audit event pages depending on their type (group, project, or user).
+1. Extra audit events are recorded for the start and stop of the administrator's impersonation session. These audit events
+   are visible in the:
+   - Instance audit events.
+   - Group audit events for all groups the user belongs to (GitLab 14.8 and later). For performance reasons, group audit
+     events are limited to the oldest 20 groups to which you belong.
 
 ![audit events](img/impersonated_audit_events_v13_8.png)
 
-### Group events **(PREMIUM)**
+### Group events
 
 A user with:
 
@@ -70,6 +85,17 @@ From there, you can see the following actions:
 - Group changed visibility.
 - User was added to group and with which [permissions](../user/permissions.md).
 - User sign-in via [Group SAML](../user/group/saml_sso/index.md).
+- [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/8071) in GitLab 14.5, changes to the following
+  [group SAML](../user/group/saml_sso/index.md) configuration:
+  - Enabled status.
+  - Enforcing SSO-only authentication for web activity.
+  - Enforcing SSO-only authentication for Git and Dependency Proxy activity.
+  - Enforcing users to have dedicated group-managed accounts.
+  - Prohibiting outer forks.
+  - Identity provider SSO URL.
+  - Certificate fingerprint.
+  - Default membership role.
+  - SSO-SAML group sync configuration.
 - Permissions changes of a user assigned to a group.
 - Removed user from group.
 - Project repository imported into group.
@@ -83,10 +109,15 @@ From there, you can see the following actions:
 - 2FA enforcement or grace period changed.
 - Roles allowed to create project changed.
 - Group CI/CD variable added, removed, or protected status changed. [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/30857) in GitLab 13.3.
+- Compliance framework created, updated, or deleted. [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/340649) in GitLab 14.5.
+- Event streaming destination created, updated, or deleted. [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/344664) in GitLab 14.6.
+- Instance administrator started or stopped impersonation of a group member. [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/300961) in GitLab 14.8.
+- Group deploy token was successfully created, revoked, or deleted. [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/353452) in GitLab 14.9.
+- Failed attempt to create a group deploy token. [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/353452) in GitLab 14.9.
 
 Group events can also be accessed via the [Group Audit Events API](../api/audit_events.md#group-audit-events)
 
-### Project events **(PREMIUM)**
+### Project events
 
 A user with a Maintainer role (or above) can retrieve project audit events of all users.
 A user with a Developer role is limited to project audit events based on their individual actions.
@@ -113,6 +144,10 @@ From there, you can see the following actions:
 - Release was updated
 - Release milestone associations changed
 - Permission to approve merge requests by committers was updated ([introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/7531) in GitLab 12.9)
+- Permission to approve merge requests by committers was updated.
+  - [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/7531) in GitLab 12.9.
+  - Message for event [changed](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/72623/diffs) in GitLab 14.6.
+
 - Permission to approve merge requests by authors was updated ([introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/7531) in GitLab 12.9)
 - Number of required approvals was updated ([introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/7531) in GitLab 12.9)
 - Added or removed users and groups from project approval groups ([introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/213603) in GitLab 13.2)
@@ -126,14 +161,18 @@ From there, you can see the following actions:
 - User password required for approvals was updated ([introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/336211) in GitLab 14.2)
 - Permission to modify merge requests approval rules in merge requests was updated ([introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/336211) in GitLab 14.2)
 - New approvals requirement when new commits are added to an MR was updated ([introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/336211) in GitLab 14.2)
+- When [strategies for feature flags](../operations/feature_flags.md#feature-flag-strategies) are changed ([introduced](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/68408) in GitLab 14.3)
+- Allowing force push to protected branch changed ([introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/338873) in GitLab 14.3)
+- Code owner approval requirement on merge requests targeting protected branch changed ([introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/338873) in GitLab 14.3)
+- Users and groups allowed to merge and push to protected branch added or removed ([introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/338873) in GitLab 14.3)
+- Project deploy token was successfully created, revoked or deleted ([introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/353451) in GitLab 14.9)
+- Failed attempt to create a project deploy token ([introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/353451) in GitLab 14.9)
 
 Project events can also be accessed via the [Project Audit Events API](../api/audit_events.md#project-audit-events).
 
 Project event queries are limited to a maximum of 30 days.
 
 ### Instance events **(PREMIUM SELF)**
-
-> [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/2336) in [GitLab Premium](https://about.gitlab.com/pricing/) 9.3.
 
 Server-wide audit events introduce the ability to observe user actions across
 the entire instance of your GitLab server, making it easy to understand who
@@ -184,9 +223,16 @@ successful sign-in events:
 After upgrading from GitLab Free to a paid tier, successful sign-in events are the only Audit
 Events visible in Audit Events views until more events are logged.
 
+### "Deleted User" events
+
+Audit events can be created for a user after the user is deleted. The user name associated with the event is set to
+"Deleted User" because the actual user name is unknowable. For example, if a deleted user's access to a project is
+removed automatically due to expiration, the audit event is created for "Deleted User". We are [investigating](https://gitlab.com/gitlab-org/gitlab/-/issues/343933)
+whether this is avoidable.
+
 ### Missing events
 
-Some events are not tracked in Audit Events. See the following
+Some events are not tracked in audit events. See the following
 epics for more detail on which events are not being tracked, and our progress
 on adding these events into GitLab:
 
@@ -194,14 +240,21 @@ on adding these events into GitLab:
 - [Group settings and activity](https://gitlab.com/groups/gitlab-org/-/epics/475)
 - [Instance-level settings and activity](https://gitlab.com/groups/gitlab-org/-/epics/476)
 
-Don't see the event you want in any of the epics linked above? You can use the **Audit Event
-Proposal** issue template to
-[create an issue](https://gitlab.com/gitlab-org/gitlab/-/issues/new?issuable_template=Audit%20Event%20Proposal)
-to request it, or you can [add it yourself](../development/audit_event_guide/).
+Don't see the event you want in any of the epics linked above? You can either:
+
+- Use the **Audit Event Proposal** issue template to
+  [create an issue](https://gitlab.com/gitlab-org/gitlab/-/issues/new?issuable_template=Audit%20Event%20Proposal) to
+  request it.
+- [Add it yourself](../development/audit_event_guide/).
 
 ### Disabled events
 
-#### Repository push
+#### Repository push (DEPRECATED)
+
+> [Deprecated](https://gitlab.com/gitlab-org/gitlab/-/issues/337993) in GitLab 14.3.
+
+WARNING:
+This feature was [deprecated](https://gitlab.com/gitlab-org/gitlab/-/issues/337993) in GitLab 14.3.
 
 The current architecture of audit events is not prepared to receive a very high amount of records.
 It may make the user interface for your project or audit events very busy, and the disk space consumed by the
@@ -236,18 +289,18 @@ The search filters you can see depends on which audit level you are at.
 | Scope (Instance level) | A specific group, project, or user that the action was scoped to. |
 | Date range | Either via the date range buttons or pickers (maximum range of 31 days). Default is from the first day of the month to today's date. |
 
-![audit events](img/audit_log_v13_6.png)
+![audit events](img/audit_events_v14_5.png)
 
 ## Export to CSV **(PREMIUM SELF)**
 
-> - [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/1449) in [GitLab Premium](https://about.gitlab.com/pricing/) 13.4.
-> - [Feature flag removed](https://gitlab.com/gitlab-org/gitlab/-/issues/285441) in [GitLab Premium](https://about.gitlab.com/pricing/) 13.7.
+> - [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/1449) in GitLab 13.4.
+> - [Feature flag removed](https://gitlab.com/gitlab-org/gitlab/-/issues/285441) in GitLab 13.7.
 
 Export to CSV allows customers to export the current filter view of your audit events as a
 CSV file, which stores tabular data in plain text. The data provides a comprehensive view with respect to
 audit events.
 
-To export the Audit Events to CSV:
+To export the audit events to CSV:
 
 1. On the top bar, select **Menu > Admin**.
 1. On the left sidebar, select **Monitoring > Audit Events**.
@@ -280,5 +333,5 @@ The first row contains the headers, which are listed in the following table alon
 
 ### Limitation
 
-The Audit Events CSV file is limited to a maximum of `100,000` events.
+The audit events CSV file is limited to a maximum of `100,000` events.
 The remaining records are truncated when this limit is reached.

@@ -3,9 +3,8 @@ import { GlLoadingIcon, GlIcon, GlSafeHtmlDirective as SafeHtml, GlAlert } from 
 import { GlBreakpointInstance as bp } from '@gitlab/ui/dist/utils';
 import { throttle, isEmpty } from 'lodash';
 import { mapGetters, mapState, mapActions } from 'vuex';
-import CodeQualityWalkthrough from '~/code_quality_walkthrough/components/step.vue';
 import { isScrolledToBottom } from '~/lib/utils/scroll_utils';
-import { sprintf } from '~/locale';
+import { __, sprintf } from '~/locale';
 import CiHeader from '~/vue_shared/components/header_ci_component.vue';
 import delayedJobMixin from '../mixins/delayed_job_mixin';
 import EmptyState from './empty_state.vue';
@@ -33,7 +32,6 @@ export default {
     GlLoadingIcon,
     SharedRunner: () => import('ee_component/jobs/components/shared_runner_limit_block.vue'),
     GlAlert,
-    CodeQualityWalkthrough,
   },
   directives: {
     SafeHtml,
@@ -69,24 +67,19 @@ export default {
       required: false,
       default: null,
     },
-    codeQualityHelpUrl: {
-      type: String,
-      required: false,
-      default: null,
-    },
   },
   computed: {
     ...mapState([
       'isLoading',
       'job',
       'isSidebarOpen',
-      'trace',
-      'isTraceComplete',
-      'traceSize',
-      'isTraceSizeVisible',
+      'jobLog',
+      'isJobLogComplete',
+      'jobLogSize',
+      'isJobLogSizeVisible',
       'isScrollBottomDisabled',
       'isScrollTopDisabled',
-      'isScrolledToBottomBeforeReceivingTrace',
+      'isScrolledToBottomBeforeReceivingJobLog',
       'hasError',
       'selectedStage',
     ]),
@@ -97,7 +90,7 @@ export default {
       'shouldRenderTriggeredLabel',
       'hasEnvironment',
       'shouldRenderSharedRunnerLimitWarning',
-      'hasTrace',
+      'hasJobLog',
       'emptyStateIllustration',
       'isScrollingDown',
       'emptyStateAction',
@@ -123,8 +116,8 @@ export default {
       return this.shouldRenderCalloutMessage && !this.hasUnmetPrerequisitesFailure;
     },
 
-    shouldRenderCodeQualityWalkthrough() {
-      return this.job.status.group === 'failed-with-warnings';
+    itemName() {
+      return sprintf(__('Job %{jobName}'), { jobName: this.job.name });
     },
   },
   watch: {
@@ -152,7 +145,7 @@ export default {
     this.updateSidebar();
   },
   beforeDestroy() {
-    this.stopPollingTrace();
+    this.stopPollingJobLog();
     this.stopPolling();
     window.removeEventListener('resize', this.onResize);
     window.removeEventListener('scroll', this.updateScroll);
@@ -165,7 +158,7 @@ export default {
       'toggleSidebar',
       'scrollBottom',
       'scrollTop',
-      'stopPollingTrace',
+      'stopPollingJobLog',
       'stopPolling',
       'toggleScrollButtons',
       'toggleScrollAnimation',
@@ -205,12 +198,11 @@ export default {
           <div class="build-header top-area">
             <ci-header
               :status="job.status"
-              :item-id="job.id"
               :time="headerTime"
               :user="job.user"
               :has-sidebar-button="true"
               :should-render-triggered-label="shouldRenderTriggeredLabel"
-              :item-name="__('Job')"
+              :item-name="itemName"
               @clickedSidebarButton="toggleSidebar"
             />
           </div>
@@ -222,11 +214,6 @@ export default {
           >
             <div v-safe-html="job.callout_message"></div>
           </gl-alert>
-          <code-quality-walkthrough
-            v-if="shouldRenderCodeQualityWalkthrough"
-            step="troubleshoot_job"
-            :link="codeQualityHelpUrl"
-          />
         </header>
         <!-- EO Header Section -->
 
@@ -268,7 +255,7 @@ export default {
         <div
           v-if="job.archived"
           class="gl-mt-3 gl-py-2 gl-px-3 gl-align-items-center gl-z-index-1 gl-m-auto archived-job"
-          :class="{ 'sticky-top gl-border-bottom-0': hasTrace }"
+          :class="{ 'sticky-top gl-border-bottom-0': hasJobLog }"
           data-testid="archived-job"
         >
           <gl-icon name="lock" class="gl-vertical-align-bottom" />
@@ -276,8 +263,8 @@ export default {
         </div>
         <!-- job log -->
         <div
-          v-if="hasTrace"
-          class="build-trace-container gl-relative"
+          v-if="hasJobLog"
+          class="build-log-container gl-relative"
           :class="{ 'gl-mt-3': !job.archived }"
         >
           <log-top-bar
@@ -286,23 +273,22 @@ export default {
               'sidebar-collapsed': !isSidebarOpen,
               'has-archived-block': job.archived,
             }"
-            :erase-path="job.erase_path"
-            :size="traceSize"
+            :size="jobLogSize"
             :raw-path="job.raw_path"
             :is-scroll-bottom-disabled="isScrollBottomDisabled"
             :is-scroll-top-disabled="isScrollTopDisabled"
-            :is-trace-size-visible="isTraceSizeVisible"
+            :is-job-log-size-visible="isJobLogSizeVisible"
             :is-scrolling-down="isScrollingDown"
             @scrollJobLogTop="scrollTop"
             @scrollJobLogBottom="scrollBottom"
           />
-          <log :trace="trace" :is-complete="isTraceComplete" />
+          <log :job-log="jobLog" :is-complete="isJobLogComplete" />
         </div>
         <!-- EO job log -->
 
         <!-- empty state -->
         <empty-state
-          v-if="!hasTrace"
+          v-if="!hasJobLog"
           :illustration-path="emptyStateIllustration.image"
           :illustration-size-class="emptyStateIllustration.size"
           :title="emptyStateTitle"
@@ -323,6 +309,7 @@ export default {
         'right-sidebar-expanded': isSidebarOpen,
         'right-sidebar-collapsed': !isSidebarOpen,
       }"
+      :erase-path="job.erase_path"
       :artifact-help-url="artifactHelpUrl"
       data-testid="job-sidebar"
     />

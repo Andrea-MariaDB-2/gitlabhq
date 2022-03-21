@@ -47,6 +47,10 @@
     margin-bottom: $gl-spacing-scale-2;
   }
 
+  img {
+    max-width: 100%;
+  }
+
   img:not(.emoji) {
     margin: 0 0 8px;
   }
@@ -62,19 +66,19 @@
     min-width: inherit;
     min-height: inherit;
     background-color: inherit;
-    max-width: 100%;
-  }
-
-  &:not(.md) img:not(.emoji) {
-    border: 1px solid $white-normal;
-    padding: 5px;
-    margin: 5px 0;
-    // Ensure that image does not exceed viewport
-    max-height: calc(100vh - 100px);
   }
 
   details {
     margin-bottom: $gl-padding;
+
+    > *:not(summary) {
+      margin-left: $gl-spacing-scale-5;
+    }
+  }
+
+  summary > * {
+    display: inline-block;
+    margin-bottom: 0;
   }
 
   // Single code lines should wrap
@@ -154,14 +158,12 @@
   }
 
   hr {
-    // Darken 'whitesmoke' a bit to make it more visible in note bodies
-    border-color: darken($gray-normal, 8%);
+    border-color: rgba($black, 0.15);
+
     margin: 10px 0;
   }
 
   table:not(.code) {
-    @extend .table;
-    @extend .table-bordered;
     margin: 16px 0;
     color: $gl-text-color;
     border: 0;
@@ -172,9 +174,11 @@
     tbody {
       background-color: $white;
 
-      td {
-        border-color: $gray-100;
-      }
+    }
+
+    td,
+    th {
+      border: 1px solid $border-color;
     }
 
     tr {
@@ -356,9 +360,17 @@
     padding: 0;
     margin: 0 0 16px;
 
+    // Lists embedded in other lists can be "loose" or "tight"
+    // Remove bottom margin for all lists (default for tight lists)
     ul,
     ol {
       margin-bottom: 0;
+    }
+
+    // Loose lists need bottom margin added back
+    p ~ ol,
+    p ~ ul {
+      margin-bottom: 16px;
     }
   }
 
@@ -411,12 +423,12 @@
       list-style-type: none;
       position: relative;
       min-height: 22px;
-      padding-left: 28px;
-      margin-left: 0 !important;
+      padding-inline-start: 28px;
+      margin-inline-start: 0 !important;
 
       > input.task-list-item-checkbox {
         position: absolute;
-        left: 8px;
+        inset-inline-start: 8px;
         top: 5px;
       }
     }
@@ -478,6 +490,7 @@
     font-size: larger;
   }
 
+  figcaption,
   .small {
     font-size: smaller;
   }
@@ -504,32 +517,26 @@
     -moz-osx-font-smoothing: grayscale;
   }
 
-  .fa-2x,
   .admonitionblock td.icon [class^='fa icon-'] {
     font-size: 2em;
   }
 
-  .fa-exclamation-triangle::before,
   .admonitionblock td.icon .icon-warning::before {
     content: '⚠';
   }
 
-  .fa-exclamation-circle::before,
   .admonitionblock td.icon .icon-important::before {
     content: '❗';
   }
 
-  .fa-lightbulb-o::before,
   .admonitionblock td.icon .icon-tip::before {
     content: '💡';
   }
 
-  .fa-thumb-tack::before,
   .admonitionblock td.icon .icon-note::before {
     content: '📌';
   }
 
-  .fa-fire::before,
   .admonitionblock td.icon .icon-caution::before {
     content: '🔥';
   }
@@ -580,6 +587,8 @@
   .text-justify {
     text-align: justify !important;
   }
+
+  @include email-code-block;
 }
 
 /**
@@ -615,6 +624,7 @@ body {
 
 /** CODE **/
 pre {
+  @include gl-relative;
   font-family: $monospace-font;
   display: block;
   padding: $gl-padding-8 $input-horizontal-padding;
@@ -626,6 +636,11 @@ pre {
   background-color: $gray-light;
   border: 1px solid $gray-100;
   border-radius: $border-radius-small;
+
+  // Select only code elements that will have the copy code button
+  .markdown-code-block & {
+    padding: $input-horizontal-padding;
+  }
 }
 
 code {

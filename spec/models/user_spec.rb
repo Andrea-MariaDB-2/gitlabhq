@@ -6,6 +6,7 @@ RSpec.describe User do
   include ProjectForksHelper
   include TermsHelper
   include ExclusiveLeaseHelpers
+  include LdapHelpers
 
   it_behaves_like 'having unique enum values'
 
@@ -16,7 +17,7 @@ RSpec.describe User do
     it { is_expected.to include_module(Referable) }
     it { is_expected.to include_module(Sortable) }
     it { is_expected.to include_module(TokenAuthenticatable) }
-    it { is_expected.to include_module(BlocksJsonSerialization) }
+    it { is_expected.to include_module(BlocksUnsafeSerialization) }
     it { is_expected.to include_module(AsyncDeviseEmail) }
   end
 
@@ -65,9 +66,6 @@ RSpec.describe User do
     it { is_expected.to delegate_method(:render_whitespace_in_code).to(:user_preference) }
     it { is_expected.to delegate_method(:render_whitespace_in_code=).to(:user_preference).with_arguments(:args) }
 
-    it { is_expected.to delegate_method(:experience_level).to(:user_preference) }
-    it { is_expected.to delegate_method(:experience_level=).to(:user_preference).with_arguments(:args) }
-
     it { is_expected.to delegate_method(:markdown_surround_selection).to(:user_preference) }
     it { is_expected.to delegate_method(:markdown_surround_selection=).to(:user_preference).with_arguments(:args) }
 
@@ -82,7 +80,12 @@ RSpec.describe User do
 
     it { is_expected.to delegate_method(:bio).to(:user_detail).allow_nil }
     it { is_expected.to delegate_method(:bio=).to(:user_detail).with_arguments(:args).allow_nil }
-    it { is_expected.to delegate_method(:bio_html).to(:user_detail).allow_nil }
+
+    it { is_expected.to delegate_method(:registration_objective).to(:user_detail).allow_nil }
+    it { is_expected.to delegate_method(:registration_objective=).to(:user_detail).with_arguments(:args).allow_nil }
+
+    it { is_expected.to delegate_method(:requires_credit_card_verification).to(:user_detail).allow_nil }
+    it { is_expected.to delegate_method(:requires_credit_card_verification=).to(:user_detail).with_arguments(:args).allow_nil }
   end
 
   describe 'associations' do
@@ -99,7 +102,7 @@ RSpec.describe User do
     it { is_expected.to have_many(:group_members) }
     it { is_expected.to have_many(:groups) }
     it { is_expected.to have_many(:keys).dependent(:destroy) }
-    it { is_expected.to have_many(:expired_and_unnotified_keys) }
+    it { is_expected.to have_many(:expired_today_and_unnotified_keys) }
     it { is_expected.to have_many(:deploy_keys).dependent(:nullify) }
     it { is_expected.to have_many(:group_deploy_keys) }
     it { is_expected.to have_many(:events).dependent(:delete_all) }
@@ -110,10 +113,10 @@ RSpec.describe User do
     it { is_expected.to have_many(:spam_logs).dependent(:destroy) }
     it { is_expected.to have_many(:todos) }
     it { is_expected.to have_many(:award_emoji).dependent(:destroy) }
-    it { is_expected.to have_many(:triggers).dependent(:destroy) }
-    it { is_expected.to have_many(:builds).dependent(:nullify) }
-    it { is_expected.to have_many(:pipelines).dependent(:nullify) }
+    it { is_expected.to have_many(:builds) }
+    it { is_expected.to have_many(:pipelines) }
     it { is_expected.to have_many(:chat_names).dependent(:destroy) }
+    it { is_expected.to have_many(:saved_replies).class_name('::Users::SavedReply') }
     it { is_expected.to have_many(:uploads) }
     it { is_expected.to have_many(:reported_abuse_reports).dependent(:destroy).class_name('AbuseReport') }
     it { is_expected.to have_many(:custom_attributes).class_name('UserCustomAttribute') }
@@ -125,8 +128,10 @@ RSpec.describe User do
     it { is_expected.to have_many(:created_custom_emoji).inverse_of(:creator) }
     it { is_expected.to have_many(:in_product_marketing_emails) }
     it { is_expected.to have_many(:timelogs) }
+    it { is_expected.to have_many(:callouts).class_name('Users::Callout') }
+    it { is_expected.to have_many(:group_callouts).class_name('Users::GroupCallout') }
 
-    describe "#user_detail" do
+    describe '#user_detail' do
       it 'does not persist `user_detail` by default' do
         expect(create(:user).user_detail).not_to be_persisted
       end
@@ -163,25 +168,25 @@ RSpec.describe User do
       end
     end
 
-    describe "#abuse_report" do
+    describe '#abuse_report' do
       let(:current_user) { create(:user) }
       let(:other_user) { create(:user) }
 
       it { is_expected.to have_one(:abuse_report) }
 
-      it "refers to the abuse report whose user_id is the current user" do
+      it 'refers to the abuse report whose user_id is the current user' do
         abuse_report = create(:abuse_report, reporter: other_user, user: current_user)
 
         expect(current_user.abuse_report).to eq(abuse_report)
       end
 
-      it "does not refer to the abuse report whose reporter_id is the current user" do
+      it 'does not refer to the abuse report whose reporter_id is the current user' do
         create(:abuse_report, reporter: current_user, user: other_user)
 
         expect(current_user.abuse_report).to be_nil
       end
 
-      it "does not update the user_id of an abuse report when the user is updated" do
+      it 'does not update the user_id of an abuse report when the user is updated' do
         abuse_report = create(:abuse_report, reporter: current_user, user: other_user)
 
         current_user.block
@@ -346,8 +351,9 @@ RSpec.describe User do
 
         it 'falls back to english when I18n.default_locale is not an available language' do
           I18n.default_locale = :kl
+          default_preferred_language = user.send(:default_preferred_language)
 
-          expect(user.preferred_language).to eq 'en'
+          expect(user.preferred_language).to eq default_preferred_language
         end
       end
     end
@@ -377,7 +383,7 @@ RSpec.describe User do
       end
 
       context 'when username is changed' do
-        let(:user) { build_stubbed(:user, username: 'old_path', namespace: build_stubbed(:namespace)) }
+        let(:user) { build_stubbed(:user, username: 'old_path', namespace: build_stubbed(:user_namespace)) }
 
         it 'validates move_dir is allowed for the namespace' do
           expect(user.namespace).to receive(:any_project_has_container_registry_tags?).and_return(true)
@@ -404,7 +410,7 @@ RSpec.describe User do
           user = build(:user, username: "test.#{type}")
 
           expect(user).not_to be_valid
-          expect(user.errors.full_messages).to include('Username ending with MIME type format is not allowed.')
+          expect(user.errors.full_messages).to include('Username ending with a reserved file extension is not allowed.')
           expect(build(:user, username: "test#{type}")).to be_valid
         end
       end
@@ -434,16 +440,16 @@ RSpec.describe User do
       subject { build(:user) }
     end
 
-    it_behaves_like 'an object with RFC3696 compliant email-formatted attributes', :public_email, :notification_email do
+    it_behaves_like 'an object with email-formatted attributes', :public_email, :notification_email do
       subject { create(:user).tap { |user| user.emails << build(:email, email: email_value, confirmed_at: Time.current) } }
     end
 
-    describe '#commit_email' do
+    describe '#commit_email_or_default' do
       subject(:user) { create(:user) }
 
       it 'defaults to the primary email' do
         expect(user.email).to be_present
-        expect(user.commit_email).to eq(user.email)
+        expect(user.commit_email_or_default).to eq(user.email)
       end
 
       it 'defaults to the primary email when the column in the database is null' do
@@ -451,14 +457,18 @@ RSpec.describe User do
 
         found_user = described_class.find_by(id: user.id)
 
-        expect(found_user.commit_email).to eq(user.email)
+        expect(found_user.commit_email_or_default).to eq(user.email)
       end
 
       it 'returns the private commit email when commit_email has _private' do
         user.update_column(:commit_email, Gitlab::PrivateCommitEmail::TOKEN)
 
-        expect(user.commit_email).to eq(user.private_commit_email)
+        expect(user.commit_email_or_default).to eq(user.private_commit_email)
       end
+    end
+
+    describe '#commit_email=' do
+      subject(:user) { create(:user) }
 
       it 'can be set to a confirmed email' do
         confirmed = create(:email, :confirmed, user: user)
@@ -489,6 +499,8 @@ RSpec.describe User do
     end
 
     describe 'email' do
+      let(:expected_error) { _('is not allowed for sign-up. Please use your regular email address. Check with your administrator.') }
+
       context 'when no signup domains allowed' do
         before do
           stub_application_setting(domain_allowlist: [])
@@ -532,7 +544,14 @@ RSpec.describe User do
         it 'rejects example@test.com' do
           user = build(:user, email: "example@test.com")
           expect(user).to be_invalid
-          expect(user.errors.messages[:email].first).to eq(_('domain is not authorized for sign-up.'))
+          expect(user.errors.messages[:email].first).to eq(expected_error)
+        end
+
+        it 'does not allow user to update email to a non-allowlisted domain' do
+          user = create(:user, email: "info@test.example.com")
+
+          expect { user.update!(email: "test@notexample.com") }
+            .to raise_error(StandardError, 'Validation failed: Email is not allowed. Please use your regular email address. Check with your administrator.')
         end
       end
 
@@ -549,13 +568,13 @@ RSpec.describe User do
         it 'rejects info@test.example.com' do
           user = build(:user, email: "info@test.example.com")
           expect(user).to be_invalid
-          expect(user.errors.messages[:email].first).to eq(_('domain is not authorized for sign-up.'))
+          expect(user.errors.messages[:email].first).to eq(expected_error)
         end
 
         it 'rejects example@test.com' do
           user = build(:user, email: "example@test.com")
           expect(user).to be_invalid
-          expect(user.errors.messages[:email].first).to eq(_('domain is not authorized for sign-up.'))
+          expect(user.errors.messages[:email].first).to eq(expected_error)
         end
 
         it 'accepts example@test.com when added by another user' do
@@ -593,12 +612,19 @@ RSpec.describe User do
           it 'rejects info@example.com' do
             user = build(:user, email: 'info@example.com')
             expect(user).not_to be_valid
-            expect(user.errors.messages[:email].first).to eq(_('is not from an allowed domain.'))
+            expect(user.errors.messages[:email].first).to eq(expected_error)
           end
 
           it 'accepts info@example.com when added by another user' do
             user = build(:user, email: 'info@example.com', created_by_id: 1)
             expect(user).to be_valid
+          end
+
+          it 'does not allow user to update email to a denied domain' do
+            user = create(:user, email: 'info@test.com')
+
+            expect { user.update!(email: 'info@example.com') }
+              .to raise_error(StandardError, 'Validation failed: Email is not allowed. Please use your regular email address. Check with your administrator.')
           end
         end
 
@@ -627,7 +653,7 @@ RSpec.describe User do
           it 'rejects info@example.com' do
             user = build(:user, email: 'info@example.com')
             expect(user).not_to be_valid
-            expect(user.errors.messages[:email].first).to eq(_('domain is not authorized for sign-up.'))
+            expect(user.errors.messages[:email].first).to eq(expected_error)
           end
         end
       end
@@ -668,7 +694,14 @@ RSpec.describe User do
             user = build(:user, email: 'info@gitlab.com')
 
             expect(user).not_to be_valid
-            expect(user.errors.messages[:email].first).to eq(_('is not allowed. Try again with a different email address, or contact your GitLab admin.'))
+            expect(user.errors.messages[:email].first).to eq(expected_error)
+          end
+
+          it 'does not allow user to update email to a restricted domain' do
+            user = create(:user, email: 'info@test.com')
+
+            expect { user.update!(email: 'info@gitlab.com') }
+              .to raise_error(StandardError, 'Validation failed: Email is not allowed. Please use your regular email address. Check with your administrator.')
           end
 
           it 'does accept a valid email address' do
@@ -686,10 +719,35 @@ RSpec.describe User do
           end
         end
       end
+
+      context 'when secondary email is same as primary' do
+        let(:user) { create(:user, email: 'user@example.com') }
+
+        it 'lets user change primary email without failing validations' do
+          user.commit_email = user.email
+          user.notification_email = user.email
+          user.public_email = user.email
+          user.save!
+
+          user.email = 'newemail@example.com'
+          user.confirm
+
+          expect(user).to be_valid
+        end
+      end
+
+      context 'when commit_email is changed to _private' do
+        it 'passes user validations' do
+          user = create(:user)
+          user.commit_email = '_private'
+
+          expect(user).to be_valid
+        end
+      end
     end
   end
 
-  describe "scopes" do
+  describe 'scopes' do
     context 'blocked users' do
       let_it_be(:active_user) { create(:user) }
       let_it_be(:blocked_user) { create(:user, :blocked) }
@@ -727,8 +785,8 @@ RSpec.describe User do
       end
     end
 
-    describe ".with_two_factor" do
-      it "returns users with 2fa enabled via OTP" do
+    describe '.with_two_factor' do
+      it 'returns users with 2fa enabled via OTP' do
         user_with_2fa = create(:user, :two_factor_via_otp)
         user_without_2fa = create(:user)
         users_with_two_factor = described_class.with_two_factor.pluck(:id)
@@ -737,8 +795,8 @@ RSpec.describe User do
         expect(users_with_two_factor).not_to include(user_without_2fa.id)
       end
 
-      shared_examples "returns the right users" do |trait|
-        it "returns users with 2fa enabled via hardware token" do
+      shared_examples 'returns the right users' do |trait|
+        it 'returns users with 2fa enabled via hardware token' do
           user_with_2fa = create(:user, trait)
           user_without_2fa = create(:user)
           users_with_two_factor = described_class.with_two_factor.pluck(:id)
@@ -747,7 +805,7 @@ RSpec.describe User do
           expect(users_with_two_factor).not_to include(user_without_2fa.id)
         end
 
-        it "returns users with 2fa enabled via OTP and hardware token" do
+        it 'returns users with 2fa enabled via OTP and hardware token' do
           user_with_2fa = create(:user, :two_factor_via_otp, trait)
           user_without_2fa = create(:user)
           users_with_two_factor = described_class.with_two_factor.pluck(:id)
@@ -765,17 +823,17 @@ RSpec.describe User do
         end
       end
 
-      describe "and U2F" do
+      describe 'and U2F' do
         it_behaves_like "returns the right users", :two_factor_via_u2f
       end
 
-      describe "and WebAuthn" do
+      describe 'and WebAuthn' do
         it_behaves_like "returns the right users", :two_factor_via_webauthn
       end
     end
 
-    describe ".without_two_factor" do
-      it "excludes users with 2fa enabled via OTP" do
+    describe '.without_two_factor' do
+      it 'excludes users with 2fa enabled via OTP' do
         user_with_2fa = create(:user, :two_factor_via_otp)
         user_without_2fa = create(:user)
         users_without_two_factor = described_class.without_two_factor.pluck(:id)
@@ -784,8 +842,8 @@ RSpec.describe User do
         expect(users_without_two_factor).not_to include(user_with_2fa.id)
       end
 
-      describe "and u2f" do
-        it "excludes users with 2fa enabled via U2F" do
+      describe 'and u2f' do
+        it 'excludes users with 2fa enabled via U2F' do
           user_with_2fa = create(:user, :two_factor_via_u2f)
           user_without_2fa = create(:user)
           users_without_two_factor = described_class.without_two_factor.pluck(:id)
@@ -794,7 +852,7 @@ RSpec.describe User do
           expect(users_without_two_factor).not_to include(user_with_2fa.id)
         end
 
-        it "excludes users with 2fa enabled via OTP and U2F" do
+        it 'excludes users with 2fa enabled via OTP and U2F' do
           user_with_2fa = create(:user, :two_factor_via_otp, :two_factor_via_u2f)
           user_without_2fa = create(:user)
           users_without_two_factor = described_class.without_two_factor.pluck(:id)
@@ -804,8 +862,8 @@ RSpec.describe User do
         end
       end
 
-      describe "and webauthn" do
-        it "excludes users with 2fa enabled via WebAuthn" do
+      describe 'and webauthn' do
+        it 'excludes users with 2fa enabled via WebAuthn' do
           user_with_2fa = create(:user, :two_factor_via_webauthn)
           user_without_2fa = create(:user)
           users_without_two_factor = described_class.without_two_factor.pluck(:id)
@@ -814,7 +872,7 @@ RSpec.describe User do
           expect(users_without_two_factor).not_to include(user_with_2fa.id)
         end
 
-        it "excludes users with 2fa enabled via OTP and WebAuthn" do
+        it 'excludes users with 2fa enabled via OTP and WebAuthn' do
           user_with_2fa = create(:user, :two_factor_via_otp, :two_factor_via_webauthn)
           user_without_2fa = create(:user)
           users_without_two_factor = described_class.without_two_factor.pluck(:id)
@@ -1047,7 +1105,17 @@ RSpec.describe User do
     end
   end
 
-  describe "Respond to" do
+  context 'strip attributes' do
+    context 'name' do
+      let(:user) { User.new(name: ' John Smith ') }
+
+      it 'strips whitespaces on validation' do
+        expect { user.valid? }.to change { user.name }.to('John Smith')
+      end
+    end
+  end
+
+  describe 'Respond to' do
     it { is_expected.to respond_to(:admin?) }
     it { is_expected.to respond_to(:name) }
     it { is_expected.to respond_to(:external?) }
@@ -1069,7 +1137,7 @@ RSpec.describe User do
       let(:user)          { create(:user) }
       let(:external_user) { create(:user, external: true) }
 
-      it "sets other properties as well" do
+      it 'sets other properties as well' do
         expect(external_user.can_create_team).to be_falsey
         expect(external_user.can_create_group).to be_falsey
         expect(external_user.projects_limit).to be 0
@@ -1091,7 +1159,7 @@ RSpec.describe User do
   end
 
   describe 'after commit hook' do
-    describe '#update_emails_with_primary_email' do
+    describe 'when the primary email is updated' do
       before do
         @user = create(:user, email: 'primary@example.com').tap do |user|
           user.skip_reconfirmation!
@@ -1100,34 +1168,12 @@ RSpec.describe User do
         @user.reload
       end
 
-      it 'gets called when email updated' do
-        expect(@user).to receive(:update_emails_with_primary_email)
-
-        @user.update!(email: 'new_primary@example.com')
-      end
-
-      it 'adds old primary to secondary emails when secondary is a new email' do
+      it 'keeps old primary to secondary emails when secondary is a new email' do
         @user.update!(email: 'new_primary@example.com')
         @user.reload
 
-        expect(@user.emails.count).to eq 2
-        expect(@user.emails.pluck(:email)).to match_array([@secondary.email, 'primary@example.com'])
-      end
-
-      it 'adds old primary to secondary emails if secondary is becoming a primary' do
-        @user.update!(email: @secondary.email)
-        @user.reload
-
-        expect(@user.emails.count).to eq 1
-        expect(@user.emails.first.email).to eq 'primary@example.com'
-      end
-
-      it 'transfers old confirmation values into new secondary' do
-        @user.update!(email: @secondary.email)
-        @user.reload
-
-        expect(@user.emails.count).to eq 1
-        expect(@user.emails.first.confirmed_at).not_to eq nil
+        expect(@user.emails.count).to eq 3
+        expect(@user.emails.pluck(:email)).to match_array([@secondary.email, 'primary@example.com', 'new_primary@example.com'])
       end
 
       context 'when the first email was unconfirmed and the second email gets confirmed' do
@@ -1146,11 +1192,8 @@ RSpec.describe User do
           expect(user).to be_confirmed
         end
 
-        it 'keeps the unconfirmed email unconfirmed' do
-          email = user.emails.first
-
-          expect(email.email).to eq('should-be-unconfirmed@test.com')
-          expect(email).not_to be_confirmed
+        it 'does not add unconfirmed email to secondary' do
+          expect(user.emails.map(&:email)).not_to include('should-be-unconfirmed@test.com')
         end
 
         it 'has only one email association' do
@@ -1212,7 +1255,7 @@ RSpec.describe User do
           expect(user.email).to eq(confirmed_email)
         end
 
-        it 'moves the old email' do
+        it 'keeps the old email' do
           email = user.reload.emails.first
 
           expect(email.email).to eq(old_confirmed_email)
@@ -1233,53 +1276,57 @@ RSpec.describe User do
       end
     end
 
-    describe '#update_notification_email' do
-      # Regression: https://gitlab.com/gitlab-org/gitlab-foss/issues/22846
-      context 'when changing :email' do
-        let(:user) { create(:user) }
-        let(:new_email) { 'new-email@example.com' }
+    describe 'when changing email' do
+      let(:user) { create(:user) }
+      let(:new_email) { 'new-email@example.com' }
 
+      context 'if notification_email was nil' do
         it 'sets :unconfirmed_email' do
           expect do
             user.tap { |u| u.update!(email: new_email) }.reload
           end.to change(user, :unconfirmed_email).to(new_email)
         end
-        it 'does not change :notification_email' do
+
+        it 'does not change notification_email or notification_email_or_default before email is confirmed' do
+          expect do
+            user.tap { |u| u.update!(email: new_email) }.reload
+          end.not_to change(user, :notification_email_or_default)
+
+          expect(user.notification_email).to be_nil
+        end
+
+        it 'updates notification_email_or_default to the new email once confirmed' do
+          user.update!(email: new_email)
+
+          expect do
+            user.tap(&:confirm).reload
+          end.to change(user, :notification_email_or_default).to eq(new_email)
+
+          expect(user.notification_email).to be_nil
+        end
+      end
+
+      context 'when notification_email is set to a secondary email' do
+        let!(:email_attrs) { attributes_for(:email, :confirmed, user: user) }
+        let(:secondary) { create(:email, :confirmed, email: 'secondary@example.com', user: user) }
+
+        before do
+          user.emails.create!(email_attrs)
+          user.tap { |u| u.update!(notification_email: email_attrs[:email]) }.reload
+        end
+
+        it 'does not change notification_email to email before email is confirmed' do
           expect do
             user.tap { |u| u.update!(email: new_email) }.reload
           end.not_to change(user, :notification_email)
         end
 
-        it 'updates :notification_email to the new email once confirmed' do
+        it 'does not change notification_email to email once confirmed' do
           user.update!(email: new_email)
 
           expect do
             user.tap(&:confirm).reload
-          end.to change(user, :notification_email).to eq(new_email)
-        end
-
-        context 'and :notification_email is set to a secondary email' do
-          let!(:email_attrs) { attributes_for(:email, :confirmed, user: user) }
-          let(:secondary) { create(:email, :confirmed, email: 'secondary@example.com', user: user) }
-
-          before do
-            user.emails.create!(email_attrs)
-            user.tap { |u| u.update!(notification_email: email_attrs[:email]) }.reload
-          end
-
-          it 'does not change :notification_email to :email' do
-            expect do
-              user.tap { |u| u.update!(email: new_email) }.reload
-            end.not_to change(user, :notification_email)
-          end
-
-          it 'does not change :notification_email to :email once confirmed' do
-            user.update!(email: new_email)
-
-            expect do
-              user.tap(&:confirm).reload
-            end.not_to change(user, :notification_email)
-          end
+          end.not_to change(user, :notification_email)
         end
       end
     end
@@ -1376,7 +1423,7 @@ RSpec.describe User do
   end
 
   describe '#update_tracked_fields!', :clean_gitlab_redis_shared_state do
-    let(:request) { OpenStruct.new(remote_ip: "127.0.0.1") }
+    let(:request) { double('request', remote_ip: "127.0.0.1") }
     let(:user) { create(:user) }
 
     it 'writes trackable attributes' do
@@ -1459,19 +1506,244 @@ RSpec.describe User do
   end
 
   describe '#confirm' do
+    let(:expired_confirmation_sent_at) { Date.today - described_class.confirm_within - 7.days }
+    let(:extant_confirmation_sent_at) { Date.today }
+
     before do
       allow_any_instance_of(ApplicationSetting).to receive(:send_user_confirmation_email).and_return(true)
     end
 
-    let(:user) { create(:user, confirmed_at: nil, unconfirmed_email: 'test@gitlab.com') }
-
-    it 'returns unconfirmed' do
-      expect(user.confirmed?).to be_falsey
+    let(:user) do
+      create(:user, :unconfirmed, unconfirmed_email: 'test@gitlab.com').tap do |user|
+        user.update!(confirmation_sent_at: confirmation_sent_at)
+      end
     end
 
-    it 'confirms a user' do
-      user.confirm
-      expect(user.confirmed?).to be_truthy
+    shared_examples_for 'unconfirmed user' do
+      it 'returns unconfirmed' do
+        expect(user.confirmed?).to be_falsey
+      end
+    end
+
+    context 'when the confirmation period has expired' do
+      let(:confirmation_sent_at) {  expired_confirmation_sent_at }
+
+      it_behaves_like 'unconfirmed user'
+
+      it 'does not confirm the user' do
+        user.confirm
+
+        expect(user.confirmed?).to be_falsey
+      end
+
+      it 'does not add the confirmed primary email to emails' do
+        user.confirm
+
+        expect(user.emails.confirmed.map(&:email)).not_to include(user.email)
+      end
+    end
+
+    context 'when the confirmation period has not expired' do
+      let(:confirmation_sent_at) {  extant_confirmation_sent_at }
+
+      it_behaves_like 'unconfirmed user'
+
+      it 'confirms a user' do
+        user.confirm
+        expect(user.confirmed?).to be_truthy
+      end
+
+      it 'adds the confirmed primary email to emails' do
+        expect(user.emails.confirmed.map(&:email)).not_to include(user.email)
+
+        user.confirm
+
+        expect(user.emails.confirmed.map(&:email)).to include(user.email)
+      end
+
+      context 'when the primary email is already included in user.emails' do
+        let(:expired_confirmation_sent_at_for_email) { Date.today - Email.confirm_within - 7.days }
+        let(:extant_confirmation_sent_at_for_email) { Date.today }
+
+        let!(:email) do
+          create(:email, email: user.unconfirmed_email, user: user).tap do |email|
+            email.update!(confirmation_sent_at: confirmation_sent_at_for_email)
+          end
+        end
+
+        context 'when the confirmation period of the email record has expired' do
+          let(:confirmation_sent_at_for_email) { expired_confirmation_sent_at_for_email }
+
+          it 'does not confirm the email record' do
+            user.confirm
+
+            expect(email.reload.confirmed?).to be_falsey
+          end
+        end
+
+        context 'when the confirmation period of the email record has not expired' do
+          let(:confirmation_sent_at_for_email) { extant_confirmation_sent_at_for_email }
+
+          it 'confirms the email record' do
+            user.confirm
+
+            expect(email.reload.confirmed?).to be_truthy
+          end
+        end
+      end
+    end
+  end
+
+  describe 'saving primary email to the emails table' do
+    context 'when calling skip_reconfirmation! while updating the primary email' do
+      let(:user) { create(:user, email: 'primary@example.com') }
+
+      it 'adds the new email to emails' do
+        user.skip_reconfirmation!
+        user.update!(email: 'new_primary@example.com')
+
+        expect(user.email).to eq('new_primary@example.com')
+        expect(user.unconfirmed_email).to be_nil
+        expect(user).to be_confirmed
+        expect(user.emails.pluck(:email)).to include('new_primary@example.com')
+        expect(user.emails.find_by(email: 'new_primary@example.com')).to be_confirmed
+      end
+    end
+
+    context 'when the email is changed but not confirmed' do
+      let(:user) { create(:user, email: 'primary@example.com') }
+
+      it 'does not add the new email to emails yet' do
+        user.update!(email: 'new_primary@example.com')
+
+        expect(user.unconfirmed_email).to eq('new_primary@example.com')
+        expect(user.email).to eq('primary@example.com')
+        expect(user).to be_confirmed
+        expect(user.emails.pluck(:email)).not_to include('new_primary@example.com')
+      end
+    end
+
+    context 'when the user is created as not confirmed' do
+      let(:user) { create(:user, :unconfirmed, email: 'primary@example.com') }
+
+      it 'does not add the email to emails yet' do
+        expect(user).not_to be_confirmed
+        expect(user.emails.pluck(:email)).not_to include('primary@example.com')
+      end
+    end
+
+    context 'when the user is created as confirmed' do
+      let(:user) { create(:user, email: 'primary@example.com', confirmed_at: DateTime.now.utc) }
+
+      it 'adds the email to emails' do
+        expect(user).to be_confirmed
+        expect(user.emails.pluck(:email)).to include('primary@example.com')
+      end
+    end
+
+    context 'when skip_confirmation! is called' do
+      let(:user) { build(:user, :unconfirmed, email: 'primary@example.com') }
+
+      it 'adds the email to emails' do
+        user.skip_confirmation!
+        user.save!
+
+        expect(user).to be_confirmed
+        expect(user.emails.pluck(:email)).to include('primary@example.com')
+      end
+    end
+  end
+
+  describe '#force_confirm' do
+    let(:expired_confirmation_sent_at) { Date.today - described_class.confirm_within - 7.days }
+    let(:extant_confirmation_sent_at) { Date.today }
+
+    let(:user) do
+      create(:user, :unconfirmed, unconfirmed_email: 'test@gitlab.com').tap do |user|
+        user.update!(confirmation_sent_at: confirmation_sent_at)
+      end
+    end
+
+    shared_examples_for 'unconfirmed user' do
+      it 'returns unconfirmed' do
+        expect(user.confirmed?).to be_falsey
+      end
+    end
+
+    shared_examples_for 'confirms the user on force_confirm' do
+      it 'confirms a user' do
+        user.force_confirm
+        expect(user.confirmed?).to be_truthy
+      end
+    end
+
+    shared_examples_for 'adds the confirmed primary email to emails' do
+      it 'adds the confirmed primary email to emails' do
+        expect(user.emails.confirmed.map(&:email)).not_to include(user.email)
+
+        user.force_confirm
+
+        expect(user.emails.confirmed.map(&:email)).to include(user.email)
+      end
+    end
+
+    shared_examples_for 'confirms the email record if the primary email was already present in user.emails' do
+      context 'when the primary email is already included in user.emails' do
+        let(:expired_confirmation_sent_at_for_email) { Date.today - Email.confirm_within - 7.days }
+        let(:extant_confirmation_sent_at_for_email) { Date.today }
+
+        let!(:email) do
+          create(:email, email: user.unconfirmed_email, user: user).tap do |email|
+            email.update!(confirmation_sent_at: confirmation_sent_at_for_email)
+          end
+        end
+
+        shared_examples_for 'confirms the email record' do
+          it 'confirms the email record' do
+            user.force_confirm
+
+            expect(email.reload.confirmed?).to be_truthy
+          end
+        end
+
+        context 'when the confirmation period of the email record has expired' do
+          let(:confirmation_sent_at_for_email) { expired_confirmation_sent_at_for_email }
+
+          it_behaves_like 'confirms the email record'
+        end
+
+        context 'when the confirmation period of the email record has not expired' do
+          let(:confirmation_sent_at_for_email) { extant_confirmation_sent_at_for_email }
+
+          it_behaves_like 'confirms the email record'
+        end
+      end
+    end
+
+    context 'when the confirmation period has expired' do
+      let(:confirmation_sent_at) {  expired_confirmation_sent_at }
+
+      it_behaves_like 'unconfirmed user'
+      it_behaves_like 'confirms the user on force_confirm'
+      it_behaves_like 'adds the confirmed primary email to emails'
+      it_behaves_like 'confirms the email record if the primary email was already present in user.emails'
+    end
+
+    context 'when the confirmation period has not expired' do
+      let(:confirmation_sent_at) {  extant_confirmation_sent_at }
+
+      it_behaves_like 'unconfirmed user'
+      it_behaves_like 'confirms the user on force_confirm'
+      it_behaves_like 'adds the confirmed primary email to emails'
+      it_behaves_like 'confirms the email record if the primary email was already present in user.emails'
+    end
+  end
+
+  context 'if the user is created with confirmed_at set to a time' do
+    let!(:user) { create(:user, email: 'test@gitlab.com', confirmed_at: Time.now.utc) }
+
+    it 'adds the confirmed primary email to emails upon creation' do
+      expect(user.emails.confirmed.map(&:email)).to include(user.email)
     end
   end
 
@@ -1484,10 +1756,10 @@ RSpec.describe User do
   end
 
   describe '#generate_password' do
-    it "does not generate password by default" do
-      user = create(:user, password: 'abcdefghe')
+    it 'does not generate password by default' do
+      user = create(:user, password: Gitlab::Password.test_default)
 
-      expect(user.password).to eq('abcdefghe')
+      expect(user.password).to eq(Gitlab::Password.test_default)
     end
   end
 
@@ -1512,7 +1784,11 @@ RSpec.describe User do
         allow(user).to receive(:update_highest_role)
       end
 
-      expect(SecureRandom).to receive(:hex).and_return('3b8ca303')
+      allow_next_instance_of(Namespaces::UserNamespace) do |namespace|
+        allow(namespace).to receive(:schedule_sync_event_worker)
+      end
+
+      expect(SecureRandom).to receive(:hex).with(no_args).and_return('3b8ca303')
 
       user = create(:user)
 
@@ -1581,6 +1857,69 @@ RSpec.describe User do
 
       expect(static_object_token).not_to be_blank
       expect(user.reload.static_object_token).to eq static_object_token
+    end
+
+    it 'generates an encrypted version of the token' do
+      user = create(:user, static_object_token: nil)
+
+      expect(user[:static_object_token]).to be_nil
+      expect(user[:static_object_token_encrypted]).to be_nil
+
+      user.static_object_token
+
+      expect(user[:static_object_token]).to be_nil
+      expect(user[:static_object_token_encrypted]).to be_present
+    end
+
+    it 'prefers an encoded version of the token' do
+      user = create(:user, static_object_token: nil)
+
+      token = user.static_object_token
+
+      user.update_column(:static_object_token, 'Test')
+
+      expect(user.static_object_token).not_to eq('Test')
+      expect(user.static_object_token).to eq(token)
+    end
+  end
+
+  describe 'enabled_static_object_token' do
+    let_it_be(:static_object_token) { 'ilqx6jm1u945macft4eff0nw' }
+
+    it 'returns incoming email token when supported' do
+      allow(Gitlab::CurrentSettings).to receive(:static_objects_external_storage_enabled?).and_return(true)
+
+      user = create(:user, static_object_token: static_object_token)
+
+      expect(user.enabled_static_object_token).to eq(static_object_token)
+    end
+
+    it 'returns `nil` when not supported' do
+      allow(Gitlab::CurrentSettings).to receive(:static_objects_external_storage_enabled?).and_return(false)
+
+      user = create(:user, static_object_token: static_object_token)
+
+      expect(user.enabled_static_object_token).to be_nil
+    end
+  end
+
+  describe 'enabled_incoming_email_token' do
+    let_it_be(:incoming_email_token) { 'ilqx6jm1u945macft4eff0nw' }
+
+    it 'returns incoming email token when supported' do
+      allow(Gitlab::IncomingEmail).to receive(:supports_issue_creation?).and_return(true)
+
+      user = create(:user, incoming_email_token: incoming_email_token)
+
+      expect(user.enabled_incoming_email_token).to eq(incoming_email_token)
+    end
+
+    it 'returns `nil` when not supported' do
+      allow(Gitlab::IncomingEmail).to receive(:supports_issue_creation?).and_return(false)
+
+      user = create(:user, incoming_email_token: incoming_email_token)
+
+      expect(user.enabled_incoming_email_token).to be_nil
     end
   end
 
@@ -1698,6 +2037,52 @@ RSpec.describe User do
     end
   end
 
+  context 'two_factor_u2f_enabled?' do
+    let_it_be(:user) { create(:user, :two_factor) }
+
+    context 'when webauthn feature flag is enabled' do
+      context 'user has no U2F registration' do
+        it { expect(user.two_factor_u2f_enabled?).to eq(false) }
+      end
+
+      context 'user has existing U2F registration' do
+        it 'returns false' do
+          device = U2F::FakeU2F.new(FFaker::BaconIpsum.characters(5))
+          create(:u2f_registration, name: 'my u2f device',
+                 user: user,
+                 certificate: Base64.strict_encode64(device.cert_raw),
+                 key_handle: U2F.urlsafe_encode64(device.key_handle_raw),
+                 public_key: Base64.strict_encode64(device.origin_public_key_raw))
+
+          expect(user.two_factor_u2f_enabled?).to eq(false)
+        end
+      end
+    end
+
+    context 'when webauthn feature flag is disabled' do
+      before do
+        stub_feature_flags(webauthn: false)
+      end
+
+      context 'user has no U2F registration' do
+        it { expect(user.two_factor_u2f_enabled?).to eq(false) }
+      end
+
+      context 'user has existing U2F registration' do
+        it 'returns true' do
+          device = U2F::FakeU2F.new(FFaker::BaconIpsum.characters(5))
+          create(:u2f_registration, name: 'my u2f device',
+                 user: user,
+                 certificate: Base64.strict_encode64(device.cert_raw),
+                 key_handle: U2F.urlsafe_encode64(device.key_handle_raw),
+                 public_key: Base64.strict_encode64(device.origin_public_key_raw))
+
+          expect(user.two_factor_u2f_enabled?).to eq(true)
+        end
+      end
+    end
+  end
+
   describe 'projects' do
     before do
       @user = create(:user)
@@ -1734,7 +2119,7 @@ RSpec.describe User do
     it { expect(user.authorized_groups).to eq([group]) }
     it { expect(user.owned_groups).to eq([group]) }
     it { expect(user.namespaces).to contain_exactly(user.namespace, group) }
-    it { expect(user.manageable_namespaces).to contain_exactly(user.namespace, group) }
+    it { expect(user.forkable_namespaces).to contain_exactly(user.namespace, group) }
 
     context 'with owned groups only' do
       before do
@@ -1748,9 +2133,12 @@ RSpec.describe User do
     context 'with child groups' do
       let!(:subgroup) { create(:group, parent: group) }
 
-      describe '#manageable_namespaces' do
-        it 'includes all the namespaces the user can manage' do
-          expect(user.manageable_namespaces).to contain_exactly(user.namespace, group, subgroup)
+      describe '#forkable_namespaces' do
+        it 'includes all the namespaces the user can fork into' do
+          developer_group = create(:group, project_creation_level: ::Gitlab::Access::DEVELOPER_MAINTAINER_PROJECT_ACCESS)
+          developer_group.add_developer(user)
+
+          expect(user.forkable_namespaces).to contain_exactly(user.namespace, group, subgroup, developer_group)
         end
       end
 
@@ -1828,15 +2216,31 @@ RSpec.describe User do
     end
 
     context 'when user has running CI pipelines' do
-      let(:service) { double }
       let(:pipelines) { build_list(:ci_pipeline, 3, :running) }
 
-      it 'aborts all running pipelines and related jobs' do
-        expect(user).to receive(:pipelines).and_return(pipelines)
-        expect(Ci::DropPipelineService).to receive(:new).and_return(service)
-        expect(service).to receive(:execute_async_for_all).with(pipelines, :user_blocked, user)
+      it 'drops all running pipelines and related jobs' do
+        drop_service = double
+        disable_service = double
 
-        user.block
+        expect(user).to receive(:pipelines).and_return(pipelines)
+        expect(Ci::DropPipelineService).to receive(:new).and_return(drop_service)
+        expect(drop_service).to receive(:execute_async_for_all).with(pipelines, :user_blocked, user)
+
+        expect(Ci::DisableUserPipelineSchedulesService).to receive(:new).and_return(disable_service)
+        expect(disable_service).to receive(:execute).with(user)
+
+        user.block!
+      end
+
+      it 'does not drop running pipelines if the transaction rolls back' do
+        expect(Ci::DropPipelineService).not_to receive(:new)
+        expect(Ci::DisableUserPipelineSchedulesService).not_to receive(:new)
+
+        User.transaction do
+          user.block
+
+          raise ActiveRecord::Rollback
+        end
       end
     end
 
@@ -1852,28 +2256,41 @@ RSpec.describe User do
   describe 'deactivating a user' do
     let(:user) { create(:user, name: 'John Smith') }
 
-    context "an active user" do
-      it "can be deactivated" do
+    context 'an active user' do
+      it 'can be deactivated' do
         user.deactivate
 
         expect(user.deactivated?).to be_truthy
       end
 
-      it 'sends deactivated user an email' do
-        expect_next_instance_of(NotificationService) do |notification|
-          allow(notification).to receive(:user_deactivated).with(user.name, user.notification_email)
+      context 'when user deactivation emails are disabled' do
+        before do
+          stub_application_setting(user_deactivation_emails_enabled: false)
         end
+        it 'does not send deactivated user an email' do
+          expect(NotificationService).not_to receive(:new)
 
-        user.deactivate
+          user.deactivate
+        end
+      end
+
+      context 'when user deactivation emails are enabled' do
+        it 'sends deactivated user an email' do
+          expect_next_instance_of(NotificationService) do |notification|
+            allow(notification).to receive(:user_deactivated).with(user.name, user.notification_email_or_default)
+          end
+
+          user.deactivate
+        end
       end
     end
 
-    context "a user who is blocked" do
+    context 'a user who is blocked' do
       before do
         user.block
       end
 
-      it "cannot be deactivated" do
+      it 'cannot be deactivated' do
         user.deactivate
 
         expect(user.reload.deactivated?).to be_falsy
@@ -2040,7 +2457,7 @@ RSpec.describe User do
     describe 'with defaults' do
       let(:user) { described_class.new }
 
-      it "applies defaults to user" do
+      it 'applies defaults to user' do
         expect(user.projects_limit).to eq(Gitlab.config.gitlab.default_projects_limit)
         expect(user.can_create_group).to eq(Gitlab.config.gitlab.default_can_create_group)
         expect(user.theme_id).to eq(Gitlab.config.gitlab.default_theme)
@@ -2052,7 +2469,7 @@ RSpec.describe User do
     describe 'with default overrides' do
       let(:user) { described_class.new(projects_limit: 123, can_create_group: false, can_create_team: true) }
 
-      it "applies defaults to user" do
+      it 'applies defaults to user' do
         expect(user.projects_limit).to eq(123)
         expect(user.can_create_group).to be_falsey
         expect(user.theme_id).to eq(1)
@@ -2071,7 +2488,7 @@ RSpec.describe User do
         stub_application_setting(user_default_external: true)
       end
 
-      it "creates external user by default" do
+      it 'creates external user by default' do
         user = create(:user)
 
         expect(user.external).to be_truthy
@@ -2080,7 +2497,7 @@ RSpec.describe User do
       end
 
       describe 'with default overrides' do
-        it "creates a non-external user" do
+        it 'creates a non-external user' do
           user = create(:user, external: false)
 
           expect(user.external).to be_falsey
@@ -2096,7 +2513,7 @@ RSpec.describe User do
       }
 
       protocol_and_expectation.each do |protocol, expected|
-        it "has correct require_ssh_key?" do
+        it 'has correct require_ssh_key?' do
           stub_application_setting(enabled_git_access_protocol: protocol)
           user = build(:user)
 
@@ -2167,7 +2584,7 @@ RSpec.describe User do
       end
 
       context 'primary email not confirmed' do
-        let(:user) { create(:user, confirmed_at: nil) }
+        let(:user) { create(:user, :unconfirmed) }
         let!(:email) { create(:email, :confirmed, user: user, email: 'foo@example.com') }
 
         it 'finds user respecting the confirmed flag' do
@@ -2182,7 +2599,7 @@ RSpec.describe User do
     end
 
     it 'returns nil when user is not confirmed' do
-      user = create(:user, email: 'foo@example.com', confirmed_at: nil)
+      user = create(:user, :unconfirmed, email: 'foo@example.com')
 
       expect(described_class.find_by_any_email(user.email, confirmed: false)).to eq(user)
       expect(described_class.find_by_any_email(user.email, confirmed: true)).to be_nil
@@ -2226,6 +2643,12 @@ RSpec.describe User do
 
   describe '.search' do
     let_it_be(:user) { create(:user, name: 'user', username: 'usern', email: 'email@example.com') }
+    let_it_be(:public_email) do
+      create(:email, :confirmed, user: user, email: 'publicemail@example.com').tap do |email|
+        user.update!(public_email: email.email)
+      end
+    end
+
     let_it_be(:user2) { create(:user, name: 'user name', username: 'username', email: 'someemail@example.com') }
     let_it_be(:user3) { create(:user, name: 'us', username: 'se', email: 'foo@example.com') }
     let_it_be(:email) { create(:email, user: user, email: 'alias@example.com') }
@@ -2250,33 +2673,40 @@ RSpec.describe User do
       it 'returns users with a exact matching name shorter than 3 chars regardless of the casing' do
         expect(described_class.search(user3.name.upcase)).to eq([user3])
       end
+
+      context 'when use_minimum_char_limit is false' do
+        it 'returns users with a partially matching name' do
+          expect(described_class.search('u', use_minimum_char_limit: false)).to eq([user3, user, user2])
+        end
+      end
     end
 
     describe 'email matching' do
-      it 'returns users with a matching Email' do
-        expect(described_class.search(user.email)).to eq([user])
+      it 'returns users with a matching public email' do
+        expect(described_class.search(user.public_email)).to match_array([user])
       end
 
-      it 'does not return users with a partially matching Email' do
-        expect(described_class.search(user.email[1...-1])).to be_empty
+      it 'does not return users with a partially matching public email' do
+        expect(described_class.search(user.public_email[1...-1])).to be_empty
       end
 
-      it 'returns users with a matching Email regardless of the casing' do
-        expect(described_class.search(user2.email.upcase)).to eq([user2])
-      end
-    end
-
-    describe 'secondary email matching' do
-      it 'returns users with a matching secondary email' do
-        expect(described_class.search(email.email)).to include(email.user)
+      it 'returns users with a matching public email regardless of the casing' do
+        expect(described_class.search(user.public_email.upcase)).to match_array([user])
       end
 
-      it 'does not return users with a matching part of secondary email' do
-        expect(described_class.search(email.email[1...-1])).to be_empty
+      it 'does not return users with a matching private email' do
+        expect(described_class.search(user.email)).to be_empty
+        expect(described_class.search(email.email)).to be_empty
       end
 
-      it 'returns users with a matching secondary email regardless of the casing' do
-        expect(described_class.search(email.email.upcase)).to include(email.user)
+      context 'with private emails search' do
+        it 'returns users with matching private email' do
+          expect(described_class.search(user.email, with_private_emails: true)).to match_array([user])
+        end
+
+        it 'returns users with matching private secondary email' do
+          expect(described_class.search(email.email, with_private_emails: true)).to match_array([user])
+        end
       end
     end
 
@@ -2308,6 +2738,12 @@ RSpec.describe User do
       it 'returns users with a exact matching username shorter than 3 chars regardless of the casing' do
         expect(described_class.search(user3.username.upcase)).to eq([user3])
       end
+
+      context 'when use_minimum_char_limit is false' do
+        it 'returns users with a partially matching username' do
+          expect(described_class.search('se', use_minimum_char_limit: false)).to eq([user3, user, user2])
+        end
+      end
     end
 
     it 'returns no matches for an empty string' do
@@ -2319,119 +2755,9 @@ RSpec.describe User do
     end
   end
 
-  describe '.search_without_secondary_emails' do
-    let_it_be(:user) { create(:user, name: 'John Doe', username: 'john.doe', email: 'someone.1@example.com' ) }
-    let_it_be(:another_user) { create(:user, name: 'Albert Smith', username: 'albert.smith', email: 'another.2@example.com' ) }
-    let_it_be(:email) { create(:email, user: another_user, email: 'alias@example.com') }
-
-    it 'returns users with a matching name' do
-      expect(described_class.search_without_secondary_emails(user.name)).to eq([user])
-    end
-
-    it 'returns users with a partially matching name' do
-      expect(described_class.search_without_secondary_emails(user.name[0..2])).to eq([user])
-    end
-
-    it 'returns users with a matching name regardless of the casing' do
-      expect(described_class.search_without_secondary_emails(user.name.upcase)).to eq([user])
-    end
-
-    it 'returns users with a matching email' do
-      expect(described_class.search_without_secondary_emails(user.email)).to eq([user])
-    end
-
-    it 'does not return users with a partially matching email' do
-      expect(described_class.search_without_secondary_emails(user.email[1...-1])).to be_empty
-    end
-
-    it 'returns users with a matching email regardless of the casing' do
-      expect(described_class.search_without_secondary_emails(user.email.upcase)).to eq([user])
-    end
-
-    it 'returns users with a matching username' do
-      expect(described_class.search_without_secondary_emails(user.username)).to eq([user])
-    end
-
-    it 'returns users with a partially matching username' do
-      expect(described_class.search_without_secondary_emails(user.username[0..2])).to eq([user])
-    end
-
-    it 'returns users with a matching username regardless of the casing' do
-      expect(described_class.search_without_secondary_emails(user.username.upcase)).to eq([user])
-    end
-
-    it 'does not return users with a matching whole secondary email' do
-      expect(described_class.search_without_secondary_emails(email.email)).not_to include(email.user)
-    end
-
-    it 'does not return users with a matching part of secondary email' do
-      expect(described_class.search_without_secondary_emails(email.email[1...-1])).to be_empty
-    end
-
-    it 'returns no matches for an empty string' do
-      expect(described_class.search_without_secondary_emails('')).to be_empty
-    end
-
-    it 'returns no matches for nil' do
-      expect(described_class.search_without_secondary_emails(nil)).to be_empty
-    end
-  end
-
-  describe '.search_with_secondary_emails' do
-    let_it_be(:user) { create(:user, name: 'John Doe', username: 'john.doe', email: 'someone.1@example.com' ) }
-    let_it_be(:another_user) { create(:user, name: 'Albert Smith', username: 'albert.smith', email: 'another.2@example.com' ) }
-    let_it_be(:email) { create(:email, user: another_user, email: 'alias@example.com') }
-
-    it 'returns users with a matching name' do
-      expect(described_class.search_with_secondary_emails(user.name)).to eq([user])
-    end
-
-    it 'returns users with a partially matching name' do
-      expect(described_class.search_with_secondary_emails(user.name[0..2])).to eq([user])
-    end
-
-    it 'returns users with a matching name regardless of the casing' do
-      expect(described_class.search_with_secondary_emails(user.name.upcase)).to eq([user])
-    end
-
-    it 'returns users with a matching email' do
-      expect(described_class.search_with_secondary_emails(user.email)).to eq([user])
-    end
-
-    it 'does not return users with a partially matching email' do
-      expect(described_class.search_with_secondary_emails(user.email[1...-1])).to be_empty
-    end
-
-    it 'returns users with a matching email regardless of the casing' do
-      expect(described_class.search_with_secondary_emails(user.email.upcase)).to eq([user])
-    end
-
-    it 'returns users with a matching username' do
-      expect(described_class.search_with_secondary_emails(user.username)).to eq([user])
-    end
-
-    it 'returns users with a partially matching username' do
-      expect(described_class.search_with_secondary_emails(user.username[0..2])).to eq([user])
-    end
-
-    it 'returns users with a matching username regardless of the casing' do
-      expect(described_class.search_with_secondary_emails(user.username.upcase)).to eq([user])
-    end
-
-    it 'returns users with a matching whole secondary email' do
-      expect(described_class.search_with_secondary_emails(email.email)).to eq([email.user])
-    end
-
-    it 'does not return users with a matching part of secondary email' do
-      expect(described_class.search_with_secondary_emails(email.email[1...-1])).to be_empty
-    end
-
-    it 'returns no matches for an empty string' do
-      expect(described_class.search_with_secondary_emails('')).to be_empty
-    end
-
-    it 'returns no matches for nil' do
-      expect(described_class.search_with_secondary_emails(nil)).to be_empty
+  describe '.user_search_minimum_char_limit' do
+    it 'returns true' do
+      expect(described_class.user_search_minimum_char_limit).to be(true)
     end
   end
 
@@ -2499,7 +2825,7 @@ RSpec.describe User do
   end
 
   describe '.find_by_full_path' do
-    let!(:user) { create(:user) }
+    let!(:user) { create(:user, namespace: create(:user_namespace)) }
 
     context 'with a route matching the given path' do
       let!(:route) { user.namespace.route }
@@ -2512,58 +2838,58 @@ RSpec.describe User do
         expect(described_class.find_by_full_path(route.path.upcase)).to eq(user)
         expect(described_class.find_by_full_path(route.path.downcase)).to eq(user)
       end
-    end
 
-    context 'with a redirect route matching the given path' do
-      let!(:redirect_route) { user.namespace.redirect_routes.create!(path: 'foo') }
+      context 'with a redirect route matching the given path' do
+        let!(:redirect_route) { user.namespace.redirect_routes.create!(path: 'foo') }
 
-      context 'without the follow_redirects option' do
-        it 'returns nil' do
-          expect(described_class.find_by_full_path(redirect_route.path)).to eq(nil)
+        context 'without the follow_redirects option' do
+          it 'returns nil' do
+            expect(described_class.find_by_full_path(redirect_route.path)).to eq(nil)
+          end
+        end
+
+        context 'with the follow_redirects option set to true' do
+          it 'returns the user' do
+            expect(described_class.find_by_full_path(redirect_route.path, follow_redirects: true)).to eq(user)
+          end
+
+          it 'is case-insensitive' do
+            expect(described_class.find_by_full_path(redirect_route.path.upcase, follow_redirects: true)).to eq(user)
+            expect(described_class.find_by_full_path(redirect_route.path.downcase, follow_redirects: true)).to eq(user)
+          end
         end
       end
 
-      context 'with the follow_redirects option set to true' do
-        it 'returns the user' do
-          expect(described_class.find_by_full_path(redirect_route.path, follow_redirects: true)).to eq(user)
+      context 'without a route or a redirect route matching the given path' do
+        context 'without the follow_redirects option' do
+          it 'returns nil' do
+            expect(described_class.find_by_full_path('unknown')).to eq(nil)
+          end
         end
-
-        it 'is case-insensitive' do
-          expect(described_class.find_by_full_path(redirect_route.path.upcase, follow_redirects: true)).to eq(user)
-          expect(described_class.find_by_full_path(redirect_route.path.downcase, follow_redirects: true)).to eq(user)
-        end
-      end
-    end
-
-    context 'without a route or a redirect route matching the given path' do
-      context 'without the follow_redirects option' do
-        it 'returns nil' do
-          expect(described_class.find_by_full_path('unknown')).to eq(nil)
-        end
-      end
-      context 'with the follow_redirects option set to true' do
-        it 'returns nil' do
-          expect(described_class.find_by_full_path('unknown', follow_redirects: true)).to eq(nil)
-        end
-      end
-    end
-
-    context 'with a group route matching the given path' do
-      let!(:group) { create(:group, path: 'group_path') }
-
-      context 'when the group namespace has an owner_id (legacy data)' do
-        before do
-          group.update!(owner_id: user.id)
-        end
-
-        it 'returns nil' do
-          expect(described_class.find_by_full_path('group_path')).to eq(nil)
+        context 'with the follow_redirects option set to true' do
+          it 'returns nil' do
+            expect(described_class.find_by_full_path('unknown', follow_redirects: true)).to eq(nil)
+          end
         end
       end
 
-      context 'when the group namespace does not have an owner_id' do
-        it 'returns nil' do
-          expect(described_class.find_by_full_path('group_path')).to eq(nil)
+      context 'with a group route matching the given path' do
+        let!(:group) { create(:group, path: 'group_path') }
+
+        context 'when the group namespace has an owner_id (legacy data)' do
+          before do
+            group.update!(owner_id: user.id)
+          end
+
+          it 'returns nil' do
+            expect(described_class.find_by_full_path('group_path')).to eq(nil)
+          end
+        end
+
+        context 'when the group namespace does not have an owner_id' do
+          it 'returns nil' do
+            expect(described_class.find_by_full_path('group_path')).to eq(nil)
+          end
         end
       end
     end
@@ -2572,7 +2898,7 @@ RSpec.describe User do
   describe 'all_ssh_keys' do
     it { is_expected.to have_many(:keys).dependent(:destroy) }
 
-    it "has all ssh keys" do
+    it 'has all ssh keys' do
       user = create :user
       key = create :key, key: "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQD33bWLBxu48Sev9Fert1yzEO4WGcWglWF7K/AwblIUFselOt/QdOL9DSjpQGxLagO1s9wl53STIO8qGS4Ms0EJZyIXOEFMjFJ5xmjSy+S37By4sG7SsltQEHMxtbtFOaW5LV2wCrX+rUsRNqLMamZjgjcPO0/EgGCXIGMAYW4O7cwGZdXWYIhQ1Vwy+CsVMDdPkPgBXqK7nR/ey8KMs8ho5fMNgB5hBw/AL9fNGhRw3QTD6Q12Nkhl4VZES2EsZqlpNnJttnPdp847DUsT6yuLRlfiQfz5Cn9ysHFdXObMN5VYIiPFwHeYCZp1X2S4fDZooRE8uOLTfxWHPXwrhqSH", user_id: user.id
 
@@ -2608,10 +2934,10 @@ RSpec.describe User do
     end
   end
 
-  describe "#clear_avatar_caches" do
+  describe '#clear_avatar_caches' do
     let(:user) { create(:user) }
 
-    it "clears the avatar cache when saving" do
+    it 'clears the avatar cache when saving' do
       allow(user).to receive(:avatar_changed?).and_return(true)
 
       expect(Gitlab::AvatarCache).to receive(:delete_by_email).with(*user.verified_emails)
@@ -2824,7 +3150,7 @@ RSpec.describe User do
 
     describe '#ldap_identity' do
       it 'returns ldap identity' do
-        user = create :omniauth_user
+        user = create(:omniauth_user, :ldap)
 
         expect(user.ldap_identity.provider).not_to be_empty
       end
@@ -3059,15 +3385,15 @@ RSpec.describe User do
     end
   end
 
-  describe '#notification_email' do
+  describe '#notification_email_or_default' do
     let(:email) { 'gonzo@muppets.com' }
 
     context 'when the column in the database is null' do
       subject { create(:user, email: email, notification_email: nil) }
 
       it 'defaults to the primary email' do
-        expect(subject.read_attribute(:notification_email)).to be nil
-        expect(subject.notification_email).to eq(email)
+        expect(subject.notification_email).to be nil
+        expect(subject.notification_email_or_default).to eq(email)
       end
     end
   end
@@ -3137,7 +3463,7 @@ RSpec.describe User do
     end
   end
 
-  describe "#last_active_at" do
+  describe '#last_active_at' do
     let(:last_activity_on) { 5.days.ago.to_date }
     let(:current_sign_in_at) { 8.days.ago }
 
@@ -3175,7 +3501,7 @@ RSpec.describe User do
     end
   end
 
-  describe "#can_be_deactivated?" do
+  describe '#can_be_deactivated?' do
     let(:activity) { {} }
     let(:user) { create(:user, name: 'John Smith', **activity) }
     let(:day_within_minium_inactive_days_threshold) { User::MINIMUM_INACTIVE_DAYS.pred.days.ago }
@@ -3193,7 +3519,7 @@ RSpec.describe User do
       end
     end
 
-    context "a user who is not active" do
+    context 'a user who is not active' do
       before do
         user.block
       end
@@ -3234,31 +3560,38 @@ RSpec.describe User do
     end
   end
 
-  describe "#contributed_projects" do
+  describe '#contributed_projects' do
     subject { create(:user) }
 
     let!(:project1) { create(:project) }
     let!(:project2) { fork_project(project3) }
     let!(:project3) { create(:project) }
+    let!(:project_aimed_for_deletion) { create(:project, marked_for_deletion_at: 2.days.ago, pending_delete: false) }
     let!(:merge_request) { create(:merge_request, source_project: project2, target_project: project3, author: subject) }
     let!(:push_event) { create(:push_event, project: project1, author: subject) }
     let!(:merge_event) { create(:event, :created, project: project3, target: merge_request, author: subject) }
+    let!(:merge_event_2) { create(:event, :created, project: project_aimed_for_deletion, target: merge_request, author: subject) }
 
     before do
       project1.add_maintainer(subject)
       project2.add_maintainer(subject)
+      project_aimed_for_deletion.add_maintainer(subject)
     end
 
-    it "includes IDs for projects the user has pushed to" do
+    it 'includes IDs for projects the user has pushed to' do
       expect(subject.contributed_projects).to include(project1)
     end
 
-    it "includes IDs for projects the user has had merge requests merged into" do
+    it 'includes IDs for projects the user has had merge requests merged into' do
       expect(subject.contributed_projects).to include(project3)
     end
 
     it "doesn't include IDs for unrelated projects" do
       expect(subject.contributed_projects).not_to include(project2)
+    end
+
+    it "doesn't include projects aimed for deletion" do
+      expect(subject.contributed_projects).not_to include(project_aimed_for_deletion)
     end
   end
 
@@ -3347,7 +3680,7 @@ RSpec.describe User do
     end
   end
 
-  describe "#recent_push" do
+  describe '#recent_push' do
     let(:user) { build(:user) }
     let(:project) { build(:project) }
     let(:event) { build(:push_event) }
@@ -3414,19 +3747,7 @@ RSpec.describe User do
 
     subject { user.membership_groups }
 
-    shared_examples 'returns groups where the user is a member' do
-      specify { is_expected.to contain_exactly(parent_group, child_group) }
-    end
-
-    it_behaves_like 'returns groups where the user is a member'
-
-    context 'when feature flag :linear_user_membership_groups is disabled' do
-      before do
-        stub_feature_flags(linear_user_membership_groups: false)
-      end
-
-      it_behaves_like 'returns groups where the user is a member'
-    end
+    specify { is_expected.to contain_exactly(parent_group, child_group) }
   end
 
   describe '#authorizations_for_projects' do
@@ -3457,7 +3778,7 @@ RSpec.describe User do
 
     context 'with min_access_level' do
       let!(:user) { create(:user) }
-      let!(:project) { create(:project, :private, namespace: user.namespace) }
+      let!(:project) { create(:project, :private, group: create(:group)) }
 
       before do
         project.add_developer(user)
@@ -3511,7 +3832,7 @@ RSpec.describe User do
       expect(user.authorized_projects).to include(project)
     end
 
-    it "includes personal projects user has been given access to" do
+    it 'includes personal projects user has been given access to' do
       user1   = create(:user)
       user2   = create(:user)
       project = create(:project, :private, namespace: user1.namespace)
@@ -3521,7 +3842,7 @@ RSpec.describe User do
       expect(user2.authorized_projects).to include(project)
     end
 
-    it "includes projects of groups user has been added to" do
+    it 'includes projects of groups user has been added to' do
       group   = create(:group)
       project = create(:project, group: group)
       user    = create(:user)
@@ -3531,7 +3852,7 @@ RSpec.describe User do
       expect(user.authorized_projects).to include(project)
     end
 
-    it "does not include projects of groups user has been removed from" do
+    it 'does not include projects of groups user has been removed from', :sidekiq_inline do
       group   = create(:group)
       project = create(:project, group: group)
       user    = create(:user)
@@ -3556,7 +3877,7 @@ RSpec.describe User do
       expect(user.authorized_projects).to include(project)
     end
 
-    it "does not include destroyed projects user had access to" do
+    it 'does not include destroyed projects user had access to' do
       user1   = create(:user)
       user2   = create(:user)
       project = create(:project, :private, namespace: user1.namespace)
@@ -3570,7 +3891,7 @@ RSpec.describe User do
       expect(user2.authorized_projects).not_to include(project)
     end
 
-    it "does not include projects of destroyed groups user had access to" do
+    it 'does not include projects of destroyed groups user had access to' do
       group   = create(:group)
       project = create(:project, namespace: group)
       user    = create(:user)
@@ -3623,7 +3944,7 @@ RSpec.describe User do
     end
   end
 
-  describe '#ci_owned_runners' do
+  shared_context '#ci_owned_runners' do
     let(:user) { create(:user) }
 
     shared_examples :nested_groups_owner do
@@ -3634,6 +3955,11 @@ RSpec.describe User do
 
         it 'loads all the runners in the tree of groups' do
           expect(user.ci_owned_runners).to contain_exactly(runner, group_runner)
+        end
+
+        it 'returns true for owns_runner?' do
+          expect(user.owns_runner?(runner)).to eq(true)
+          expect(user.owns_runner?(group_runner)).to eq(true)
         end
       end
     end
@@ -3647,6 +3973,10 @@ RSpec.describe User do
         it 'loads the runners in the group' do
           expect(user.ci_owned_runners).to contain_exactly(group_runner)
         end
+
+        it 'returns true for owns_runner?' do
+          expect(user.owns_runner?(group_runner)).to eq(true)
+        end
       end
     end
 
@@ -3654,6 +3984,10 @@ RSpec.describe User do
       context 'when the user is the owner of a project' do
         it 'loads the runner belonging to the project' do
           expect(user.ci_owned_runners).to contain_exactly(runner)
+        end
+
+        it 'returns true for owns_runner?' do
+          expect(user.owns_runner?(runner)).to eq(true)
         end
       end
     end
@@ -3667,6 +4001,10 @@ RSpec.describe User do
         it 'loads the runners of the project' do
           expect(user.ci_owned_runners).to contain_exactly(project_runner)
         end
+
+        it 'returns true for owns_runner?' do
+          expect(user.owns_runner?(project_runner)).to eq(true)
+        end
       end
 
       context 'when the user is a developer' do
@@ -3676,6 +4014,10 @@ RSpec.describe User do
 
         it 'does not load any runner' do
           expect(user.ci_owned_runners).to be_empty
+        end
+
+        it 'returns false for owns_runner?' do
+          expect(user.owns_runner?(project_runner)).to eq(false)
         end
       end
 
@@ -3687,6 +4029,10 @@ RSpec.describe User do
         it 'does not load any runner' do
           expect(user.ci_owned_runners).to be_empty
         end
+
+        it 'returns false for owns_runner?' do
+          expect(user.owns_runner?(project_runner)).to eq(false)
+        end
       end
 
       context 'when the user is a guest' do
@@ -3696,6 +4042,10 @@ RSpec.describe User do
 
         it 'does not load any runner' do
           expect(user.ci_owned_runners).to be_empty
+        end
+
+        it 'returns false for owns_runner?' do
+          expect(user.owns_runner?(project_runner)).to eq(false)
         end
       end
     end
@@ -3709,6 +4059,10 @@ RSpec.describe User do
         it 'does not load the runners of the group' do
           expect(user.ci_owned_runners).to be_empty
         end
+
+        it 'returns false for owns_runner?' do
+          expect(user.owns_runner?(runner)).to eq(false)
+        end
       end
 
       context 'when the user is a developer' do
@@ -3718,6 +4072,10 @@ RSpec.describe User do
 
         it 'does not load any runner' do
           expect(user.ci_owned_runners).to be_empty
+        end
+
+        it 'returns false for owns_runner?' do
+          expect(user.owns_runner?(runner)).to eq(false)
         end
       end
 
@@ -3729,6 +4087,10 @@ RSpec.describe User do
         it 'does not load any runner' do
           expect(user.ci_owned_runners).to be_empty
         end
+
+        it 'returns false for owns_runner?' do
+          expect(user.owns_runner?(runner)).to eq(false)
+        end
       end
 
       context 'when the user is a guest' do
@@ -3739,6 +4101,10 @@ RSpec.describe User do
         it 'does not load any runner' do
           expect(user.ci_owned_runners).to be_empty
         end
+
+        it 'returns false for owns_runner?' do
+          expect(user.owns_runner?(runner)).to eq(false)
+        end
       end
     end
 
@@ -3746,10 +4112,14 @@ RSpec.describe User do
       it 'does not load any runner' do
         expect(user.ci_owned_runners).to be_empty
       end
+
+      it 'returns false for owns_runner?' do
+        expect(user.owns_runner?(create(:ci_runner))).to eq(false)
+      end
     end
 
     context 'with runner in a personal project' do
-      let!(:namespace) { create(:namespace, owner: user) }
+      let!(:namespace) { create(:user_namespace, owner: user) }
       let!(:project) { create(:project, namespace: namespace) }
       let!(:runner) { create(:ci_runner, :project, projects: [project]) }
 
@@ -3817,7 +4187,7 @@ RSpec.describe User do
     end
 
     context 'with personal project runner in an owned group in an owned namespace and a group runner in that group' do
-      let!(:namespace) { create(:namespace, owner: user) }
+      let!(:namespace) { create(:user_namespace, owner: user) }
       let!(:group) { create(:group) }
       let!(:group_runner) { create(:ci_runner, :group, groups: [group]) }
       let!(:project) { create(:project, namespace: namespace, group: group) }
@@ -3831,7 +4201,7 @@ RSpec.describe User do
     end
 
     context 'with personal project runner in an owned namespace, an owned group, a subgroup and a group runner in that subgroup' do
-      let!(:namespace) { create(:namespace, owner: user) }
+      let!(:namespace) { create(:user_namespace, owner: user) }
       let!(:group) { create(:group) }
       let!(:subgroup) { create(:group, parent: group) }
       let!(:group_runner) { create(:ci_runner, :group, groups: [subgroup]) }
@@ -3879,6 +4249,18 @@ RSpec.describe User do
 
       it_behaves_like :group_member
     end
+  end
+
+  it_behaves_like '#ci_owned_runners'
+
+  context 'when FF ci_owned_runners_cross_joins_fix is disabled' do
+    before do
+      skip_if_multiple_databases_are_setup
+
+      stub_feature_flags(ci_owned_runners_cross_joins_fix: false)
+    end
+
+    it_behaves_like '#ci_owned_runners'
   end
 
   describe '#projects_with_reporter_access_limited_to' do
@@ -4049,6 +4431,23 @@ RSpec.describe User do
     end
   end
 
+  describe '#remove_project_authorizations' do
+    let_it_be(:project1) { create(:project) }
+    let_it_be(:project2) { create(:project) }
+    let_it_be(:project3) { create(:project) }
+    let_it_be(:user) { create(:user) }
+
+    it 'removes the project authorizations of the user, in specified projects' do
+      create(:project_authorization, user: user, project: project1)
+      create(:project_authorization, user: user, project: project2)
+      create(:project_authorization, user: user, project: project3)
+
+      user.remove_project_authorizations([project1.id, project2.id])
+
+      expect(user.project_authorizations.pluck(:project_id)).to match_array([project3.id])
+    end
+  end
+
   describe '#access_level=' do
     let(:user) { build(:user) }
 
@@ -4074,7 +4473,7 @@ RSpec.describe User do
       expect(user.admin).to be true
     end
 
-    it "accepts string values in addition to symbols" do
+    it 'accepts string values in addition to symbols' do
       user.access_level = 'admin'
 
       expect(user.access_level).to eq(:admin)
@@ -4155,7 +4554,7 @@ RSpec.describe User do
       expect(ghost.user_type).to eq 'ghost'
     end
 
-    it "does not create a second ghost user if one is already present" do
+    it 'does not create a second ghost user if one is already present' do
       expect do
         described_class.ghost
         described_class.ghost
@@ -4164,7 +4563,7 @@ RSpec.describe User do
     end
 
     context "when a regular user exists with the username 'ghost'" do
-      it "creates a ghost user with a non-conflicting username" do
+      it 'creates a ghost user with a non-conflicting username' do
         create(:user, username: 'ghost')
         ghost = described_class.ghost
 
@@ -4174,7 +4573,7 @@ RSpec.describe User do
     end
 
     context "when a regular user exists with the email 'ghost@example.com'" do
-      it "creates a ghost user with a non-conflicting email" do
+      it 'creates a ghost user with a non-conflicting email' do
         create(:user, email: 'ghost@example.com')
         ghost = described_class.ghost
 
@@ -4374,10 +4773,25 @@ RSpec.describe User do
 
       expect(cache_mock).to receive(:delete).with(['users', user.id, 'assigned_open_merge_requests_count'])
       expect(cache_mock).to receive(:delete).with(['users', user.id, 'review_requested_open_merge_requests_count'])
+      expect(cache_mock).to receive(:delete).with(['users', user.id, 'attention_requested_open_merge_requests_count'])
 
       allow(Rails).to receive(:cache).and_return(cache_mock)
 
       user.invalidate_merge_request_cache_counts
+    end
+  end
+
+  describe '#invalidate_attention_requested_count' do
+    let(:user) { build_stubbed(:user) }
+
+    it 'invalidates cache for issue counter' do
+      cache_mock = double
+
+      expect(cache_mock).to receive(:delete).with(['users', user.id, 'attention_requested_open_merge_requests_count'])
+
+      allow(Rails).to receive(:cache).and_return(cache_mock)
+
+      user.invalidate_attention_requested_count
     end
   end
 
@@ -4467,6 +4881,20 @@ RSpec.describe User do
     end
   end
 
+  describe '#attention_requested_open_merge_requests_count' do
+    it 'returns number of open merge requests from non-archived projects' do
+      user    = create(:user)
+      project = create(:project, :public)
+      archived_project = create(:project, :public, :archived)
+
+      create(:merge_request, source_project: project, author: user, reviewers: [user])
+      create(:merge_request, :closed, source_project: project, author: user, reviewers: [user])
+      create(:merge_request, source_project: archived_project, author: user, reviewers: [user])
+
+      expect(user.attention_requested_open_merge_requests_count(force: true)).to eq 1
+    end
+  end
+
   describe '#assigned_open_issues_count' do
     it 'returns number of open issues from non-archived projects' do
       user    = create(:user)
@@ -4513,6 +4941,7 @@ RSpec.describe User do
         user.save!
 
         expect(user.namespace).not_to be_nil
+        expect(user.namespace).to be_kind_of(Namespaces::UserNamespace)
       end
 
       it 'creates the namespace setting' do
@@ -4654,7 +5083,7 @@ RSpec.describe User do
       it { is_expected.to be true }
     end
 
-    context 'when email and username aren\'t changed' do
+    context "when email and username aren't changed" do
       before do
         user.name = 'new_name'
       end
@@ -4965,26 +5394,26 @@ RSpec.describe User do
 
     subject { user.required_terms_not_accepted? }
 
-    context "when terms are not enforced" do
+    context 'when terms are not enforced' do
       it { is_expected.to be_falsey }
     end
 
-    context "when terms are enforced" do
+    context 'when terms are enforced' do
       before do
         enforce_terms
       end
 
-      it "is not accepted by the user" do
+      it 'is not accepted by the user' do
         expect(subject).to be_truthy
       end
 
-      it "is accepted by the user" do
+      it 'is accepted by the user' do
         accept_terms(user)
 
         expect(subject).to be_falsey
       end
 
-      it "auto accepts the term for project bots" do
+      it 'auto accepts the term for project bots' do
         expect(project_bot.required_terms_not_accepted?).to be_falsey
       end
     end
@@ -5261,7 +5690,7 @@ RSpec.describe User do
       let(:group) { nil }
 
       it 'returns global notification email' do
-        is_expected.to eq(user.notification_email)
+        is_expected.to eq(user.notification_email_or_default)
       end
     end
 
@@ -5269,7 +5698,7 @@ RSpec.describe User do
       it 'returns global notification email' do
         create(:notification_setting, user: user, source: group, notification_email: '')
 
-        is_expected.to eq(user.notification_email)
+        is_expected.to eq(user.notification_email_or_default)
       end
     end
 
@@ -5315,43 +5744,11 @@ RSpec.describe User do
   end
 
   describe '#password_expired_if_applicable?' do
-    let(:user) { build(:user, password_expires_at: password_expires_at, password_automatically_set: set_automatically?) }
+    let(:user) { build(:user, password_expires_at: password_expires_at) }
 
     subject { user.password_expired_if_applicable? }
 
-    context 'when user is not ldap user' do
-      context 'when user has password set automatically' do
-        let(:set_automatically?) { true }
-
-        context 'when password_expires_at is not set' do
-          let(:password_expires_at) {}
-
-          it 'returns false' do
-            is_expected.to be_falsey
-          end
-        end
-
-        context 'when password_expires_at is in the past' do
-          let(:password_expires_at) { 1.minute.ago }
-
-          it 'returns true' do
-            is_expected.to be_truthy
-          end
-        end
-
-        context 'when password_expires_at is in the future' do
-          let(:password_expires_at) { 1.minute.from_now }
-
-          it 'returns false' do
-            is_expected.to be_falsey
-          end
-        end
-      end
-    end
-
-    context 'when user has password not set automatically' do
-      let(:set_automatically?) { false }
-
+    shared_examples 'password expired not applicable' do
       context 'when password_expires_at is not set' do
         let(:password_expires_at) {}
 
@@ -5377,59 +5774,89 @@ RSpec.describe User do
       end
     end
 
-    context 'when user is ldap user' do
-      let(:user) { build(:user, password_expires_at: password_expires_at) }
+    context 'with a regular user' do
+      context 'when password_expires_at is not set' do
+        let(:password_expires_at) {}
 
+        it 'returns false' do
+          is_expected.to be_falsey
+        end
+      end
+
+      context 'when password_expires_at is in the past' do
+        let(:password_expires_at) { 1.minute.ago }
+
+        it 'returns true' do
+          is_expected.to be_truthy
+        end
+      end
+
+      context 'when password_expires_at is in the future' do
+        let(:password_expires_at) { 1.minute.from_now }
+
+        it 'returns false' do
+          is_expected.to be_falsey
+        end
+      end
+    end
+
+    context 'when user is a bot' do
       before do
-        allow(user).to receive(:ldap_user?).and_return(true)
+        allow(user).to receive(:bot?).and_return(true)
       end
 
-      context 'when password_expires_at is not set' do
-        let(:password_expires_at) {}
+      it_behaves_like 'password expired not applicable'
+    end
+
+    context 'when password_automatically_set is true' do
+      let(:user) { create(:omniauth_user, provider: 'ldap')}
+
+      it_behaves_like 'password expired not applicable'
+    end
+
+    context 'when allow_password_authentication is false' do
+      before do
+        allow(user).to receive(:allow_password_authentication?).and_return(false)
+      end
+
+      it_behaves_like 'password expired not applicable'
+    end
+  end
+
+  describe '#can_log_in_with_non_expired_password?' do
+    let(:user) { build(:user) }
+
+    subject { user.can_log_in_with_non_expired_password? }
+
+    context 'when user can log in' do
+      it 'returns true' do
+        is_expected.to be_truthy
+      end
+
+      context 'when user with expired password' do
+        before do
+          user.password_expires_at = 2.minutes.ago
+        end
 
         it 'returns false' do
           is_expected.to be_falsey
         end
-      end
 
-      context 'when password_expires_at is in the past' do
-        let(:password_expires_at) { 1.minute.ago }
+        context 'when password expiration is not applicable' do
+          context 'when ldap user' do
+            let(:user) { build(:omniauth_user, provider: 'ldap') }
 
-        it 'returns false' do
-          is_expected.to be_falsey
-        end
-      end
-
-      context 'when password_expires_at is in the future' do
-        let(:password_expires_at) { 1.minute.from_now }
-
-        it 'returns false' do
-          is_expected.to be_falsey
+            it 'returns true' do
+              is_expected.to be_truthy
+            end
+          end
         end
       end
     end
 
-    context 'when user is a project bot' do
-      let(:user) { build(:user, :project_bot, password_expires_at: password_expires_at) }
-
-      context 'when password_expires_at is not set' do
-        let(:password_expires_at) {}
-
-        it 'returns false' do
-          is_expected.to be_falsey
-        end
-      end
-
-      context 'when password_expires_at is in the past' do
-        let(:password_expires_at) { 1.minute.ago }
-
-        it 'returns false' do
-          is_expected.to be_falsey
-        end
-      end
-
-      context 'when password_expires_at is in the future' do
-        let(:password_expires_at) { 1.minute.from_now }
+    context 'when user cannot log in' do
+      context 'when user is blocked' do
+        let(:user) { build(:user, :blocked) }
 
         it 'returns false' do
           is_expected.to be_falsey
@@ -5470,23 +5897,18 @@ RSpec.describe User do
   end
 
   describe '#dismissed_callout?' do
-    subject(:user) { create(:user) }
-
-    let(:feature_name) { UserCallout.feature_names.each_key.first }
+    let_it_be(:user, refind: true) { create(:user) }
+    let_it_be(:feature_name) { Users::Callout.feature_names.each_key.first }
 
     context 'when no callout dismissal record exists' do
       it 'returns false when no ignore_dismissal_earlier_than provided' do
         expect(user.dismissed_callout?(feature_name: feature_name)).to eq false
       end
-
-      it 'returns false when ignore_dismissal_earlier_than provided' do
-        expect(user.dismissed_callout?(feature_name: feature_name, ignore_dismissal_earlier_than: 3.months.ago)).to eq false
-      end
     end
 
     context 'when dismissed callout exists' do
-      before do
-        create(:user_callout, user: user, feature_name: feature_name, dismissed_at: 4.months.ago)
+      before_all do
+        create(:callout, user: user, feature_name: feature_name, dismissed_at: 4.months.ago)
       end
 
       it 'returns true when no ignore_dismissal_earlier_than provided' do
@@ -5503,17 +5925,147 @@ RSpec.describe User do
     end
   end
 
+  describe '#find_or_initialize_callout' do
+    let_it_be(:user, refind: true) { create(:user) }
+    let_it_be(:feature_name) { Users::Callout.feature_names.each_key.first }
+
+    subject(:find_or_initialize_callout) { user.find_or_initialize_callout(feature_name) }
+
+    context 'when callout exists' do
+      let!(:callout) { create(:callout, user: user, feature_name: feature_name) }
+
+      it 'returns existing callout' do
+        expect(find_or_initialize_callout).to eq(callout)
+      end
+    end
+
+    context 'when callout does not exist' do
+      context 'when feature name is valid' do
+        it 'initializes a new callout' do
+          expect(find_or_initialize_callout).to be_a_new(Users::Callout)
+        end
+
+        it 'is valid' do
+          expect(find_or_initialize_callout).to be_valid
+        end
+      end
+
+      context 'when feature name is not valid' do
+        let(:feature_name) { 'notvalid' }
+
+        it 'initializes a new callout' do
+          expect(find_or_initialize_callout).to be_a_new(Users::Callout)
+        end
+
+        it 'is not valid' do
+          expect(find_or_initialize_callout).not_to be_valid
+        end
+      end
+    end
+  end
+
+  describe '#dismissed_callout_for_group?' do
+    let_it_be(:user, refind: true) { create(:user) }
+    let_it_be(:group) { create(:group) }
+    let_it_be(:feature_name) { Users::GroupCallout.feature_names.each_key.first }
+
+    context 'when no callout dismissal record exists' do
+      it 'returns false when no ignore_dismissal_earlier_than provided' do
+        expect(user.dismissed_callout_for_group?(feature_name: feature_name, group: group)).to eq false
+      end
+    end
+
+    context 'when dismissed callout exists' do
+      before_all do
+        create(:group_callout,
+               user: user,
+               group_id: group.id,
+               feature_name: feature_name,
+               dismissed_at: 4.months.ago)
+      end
+
+      it 'returns true when no ignore_dismissal_earlier_than provided' do
+        expect(user.dismissed_callout_for_group?(feature_name: feature_name, group: group)).to eq true
+      end
+
+      it 'returns true when ignore_dismissal_earlier_than is earlier than dismissed_at' do
+        expect(user.dismissed_callout_for_group?(feature_name: feature_name, group: group, ignore_dismissal_earlier_than: 6.months.ago)).to eq true
+      end
+
+      it 'returns false when ignore_dismissal_earlier_than is later than dismissed_at' do
+        expect(user.dismissed_callout_for_group?(feature_name: feature_name, group: group, ignore_dismissal_earlier_than: 3.months.ago)).to eq false
+      end
+    end
+  end
+
+  describe '#find_or_initialize_group_callout' do
+    let_it_be(:user, refind: true) { create(:user) }
+    let_it_be(:group) { create(:group) }
+    let_it_be(:feature_name) { Users::GroupCallout.feature_names.each_key.first }
+
+    subject(:callout_with_source) do
+      user.find_or_initialize_group_callout(feature_name, group.id)
+    end
+
+    context 'when callout exists' do
+      let!(:callout) do
+        create(:group_callout, user: user, feature_name: feature_name, group_id: group.id)
+      end
+
+      it 'returns existing callout' do
+        expect(callout_with_source).to eq(callout)
+      end
+    end
+
+    context 'when callout does not exist' do
+      context 'when feature name is valid' do
+        it 'initializes a new callout' do
+          expect(callout_with_source).to be_a_new(Users::GroupCallout)
+        end
+
+        it 'is valid' do
+          expect(callout_with_source).to be_valid
+        end
+      end
+
+      context 'when feature name is not valid' do
+        let(:feature_name) { 'notvalid' }
+
+        it 'initializes a new callout' do
+          expect(callout_with_source).to be_a_new(Users::GroupCallout)
+        end
+
+        it 'is not valid' do
+          expect(callout_with_source).not_to be_valid
+        end
+      end
+    end
+  end
+
   describe '#hook_attrs' do
-    it 'includes id, name, username, avatar_url, and email' do
-      user = create(:user)
-      user_attributes = {
+    let(:user) { create(:user) }
+    let(:user_attributes) do
+      {
         id: user.id,
         name: user.name,
         username: user.username,
-        avatar_url: user.avatar_url(only_path: false),
-        email: user.email
+        avatar_url: user.avatar_url(only_path: false)
       }
-      expect(user.hook_attrs).to eq(user_attributes)
+    end
+
+    context 'with a public email' do
+      it 'includes id, name, username, avatar_url, and email' do
+        user.public_email = "hello@hello.com"
+        user_attributes[:email] = user.public_email
+        expect(user.hook_attrs).to eq(user_attributes)
+      end
+    end
+
+    context 'without a public email' do
+      it "does not include email if user's email is private" do
+        user_attributes[:email] = "[REDACTED]"
+        expect(user.hook_attrs).to eq(user_attributes)
+      end
     end
   end
 
@@ -5629,7 +6181,7 @@ RSpec.describe User do
   end
 
   describe '#active_for_authentication?' do
-    subject { user.active_for_authentication? }
+    subject(:active_for_authentication?) { user.active_for_authentication? }
 
     let(:user) { create(:user) }
 
@@ -5639,6 +6191,14 @@ RSpec.describe User do
       end
 
       it { is_expected.to be false }
+
+      it 'does not check if LDAP is allowed' do
+        stub_ldap_setting(enabled: true)
+
+        expect(Gitlab::Auth::Ldap::Access).not_to receive(:allowed?)
+
+        active_for_authentication?
+      end
     end
 
     context 'when user is a ghost user' do
@@ -5647,6 +6207,28 @@ RSpec.describe User do
       end
 
       it { is_expected.to be false }
+    end
+
+    context 'when user is ldap_blocked' do
+      before do
+        user.ldap_block
+      end
+
+      it 'rechecks if LDAP is allowed when LDAP is enabled' do
+        stub_ldap_setting(enabled: true)
+
+        expect(Gitlab::Auth::Ldap::Access).to receive(:allowed?)
+
+        active_for_authentication?
+      end
+
+      it 'does not check if LDAP is allowed when LDAP is not enabled' do
+        stub_ldap_setting(enabled: false)
+
+        expect(Gitlab::Auth::Ldap::Access).not_to receive(:allowed?)
+
+        active_for_authentication?
+      end
     end
 
     context 'based on user type' do
@@ -5823,7 +6405,7 @@ RSpec.describe User do
     subject { user.confirmation_required_on_sign_in? }
 
     context 'when user is confirmed' do
-      let(:user) { build_stubbed(:user) }
+      let(:user) { create(:user) }
 
       it 'is falsey' do
         expect(user.confirmed?).to be_truthy
@@ -5862,59 +6444,6 @@ RSpec.describe User do
           end
         end
       end
-    end
-  end
-
-  describe '#find_or_initialize_callout' do
-    subject(:find_or_initialize_callout) { user.find_or_initialize_callout(feature_name) }
-
-    let(:user) { create(:user) }
-    let(:feature_name) { UserCallout.feature_names.each_key.first }
-
-    context 'when callout exists' do
-      let!(:callout) { create(:user_callout, user: user, feature_name: feature_name) }
-
-      it 'returns existing callout' do
-        expect(find_or_initialize_callout).to eq(callout)
-      end
-    end
-
-    context 'when callout does not exist' do
-      context 'when feature name is valid' do
-        it 'initializes a new callout' do
-          expect(find_or_initialize_callout).to be_a_new(UserCallout)
-        end
-
-        it 'is valid' do
-          expect(find_or_initialize_callout).to be_valid
-        end
-      end
-
-      context 'when feature name is not valid' do
-        let(:feature_name) { 'notvalid' }
-
-        it 'initializes a new callout' do
-          expect(find_or_initialize_callout).to be_a_new(UserCallout)
-        end
-
-        it 'is not valid' do
-          expect(find_or_initialize_callout).not_to be_valid
-        end
-      end
-    end
-  end
-
-  describe '#default_dashboard?' do
-    it 'is the default dashboard' do
-      user = build(:user)
-
-      expect(user.default_dashboard?).to be true
-    end
-
-    it 'is not the default dashboard' do
-      user = build(:user, dashboard: 'stars')
-
-      expect(user.default_dashboard?).to be false
     end
   end
 
@@ -5985,7 +6514,7 @@ RSpec.describe User do
       it 'does nothing' do
         expect(subject).not_to receive(:save)
         subject.unset_secondary_emails_matching_deleted_email!(deleted_email)
-        expect(subject.read_attribute(:commit_email)).to eq commit_email
+        expect(subject.commit_email).to eq commit_email
       end
     end
 
@@ -5995,7 +6524,7 @@ RSpec.describe User do
       it 'un-sets the secondary email' do
         expect(subject).to receive(:save)
         subject.unset_secondary_emails_matching_deleted_email!(deleted_email)
-        expect(subject.read_attribute(:commit_email)).to be nil
+        expect(subject.commit_email).to be nil
       end
     end
   end
@@ -6030,18 +6559,77 @@ RSpec.describe User do
 
     subject { user.send(:groups_with_developer_maintainer_project_access) }
 
-    shared_examples 'groups_with_developer_maintainer_project_access examples' do
-      specify { is_expected.to contain_exactly(developer_group2) }
+    specify { is_expected.to contain_exactly(developer_group2) }
+  end
+
+  describe '.get_ids_by_ids_or_usernames' do
+    let(:user_name) { 'user_name' }
+    let!(:user) { create(:user, username: user_name) }
+    let(:user_id) { user.id }
+
+    it 'returns the id of each record matching username' do
+      expect(described_class.get_ids_by_ids_or_usernames(nil, [user_name])).to match_array([user_id])
     end
 
-    it_behaves_like 'groups_with_developer_maintainer_project_access examples'
-
-    context 'when feature flag :linear_user_groups_with_developer_maintainer_project_access is disabled' do
-      before do
-        stub_feature_flags(linear_user_groups_with_developer_maintainer_project_access: false)
-      end
-
-      it_behaves_like 'groups_with_developer_maintainer_project_access examples'
+    it 'returns the id of each record matching user id' do
+      expect(described_class.get_ids_by_ids_or_usernames([user_id], nil)).to match_array([user_id])
     end
+
+    it 'return the id for all records matching either user id or user name' do
+      new_user_id = create(:user).id
+
+      expect(described_class.get_ids_by_ids_or_usernames([new_user_id], [user_name])).to match_array([user_id, new_user_id])
+    end
+  end
+
+  describe '.by_ids_or_usernames' do
+    let(:user_name) { 'user_name' }
+    let!(:user) { create(:user, username: user_name) }
+    let(:user_id) { user.id }
+
+    it 'returns matching records based on username' do
+      expect(described_class.by_ids_or_usernames(nil, [user_name])).to match_array([user])
+    end
+
+    it 'returns matching records based on id' do
+      expect(described_class.by_ids_or_usernames([user_id], nil)).to match_array([user])
+    end
+
+    it 'returns matching records based on both username and id' do
+      new_user = create(:user)
+
+      expect(described_class.by_ids_or_usernames([new_user.id], [user_name])).to match_array([user, new_user])
+    end
+  end
+
+  describe 'user_project' do
+    it 'returns users project matched by username and public visibility' do
+      user = create(:user)
+      public_project = create(:project, :public, path: user.username, namespace: user.namespace)
+      create(:project, namespace: user.namespace)
+
+      expect(user.user_project).to eq(public_project)
+    end
+  end
+
+  describe 'user_readme' do
+    it 'returns readme from user project' do
+      user = create(:user)
+      create(:project, :repository, :public, path: user.username, namespace: user.namespace)
+
+      expect(user.user_readme.name).to eq('README.md')
+      expect(user.user_readme.data).to include('testme')
+    end
+
+    it 'returns nil if project is private' do
+      user = create(:user)
+      create(:project, :repository, :private, path: user.username, namespace: user.namespace)
+
+      expect(user.user_readme).to be(nil)
+    end
+  end
+
+  it_behaves_like 'it has loose foreign keys' do
+    let(:factory_name) { :user }
   end
 end

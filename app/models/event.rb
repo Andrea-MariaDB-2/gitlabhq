@@ -130,10 +130,11 @@ class Event < ApplicationRecord
 
     # Update Gitlab::ContributionsCalendar#activity_dates if this changes
     def contributions
-      where("action = ? OR (target_type IN (?) AND action IN (?)) OR (target_type = ? AND action = ?)",
-            actions[:pushed],
-            %w(MergeRequest Issue), [actions[:created], actions[:closed], actions[:merged]],
-            "Note", actions[:commented])
+      where(
+        'action IN (?) OR (target_type IN (?) AND action IN (?))',
+        [actions[:pushed], actions[:commented]],
+        %w(MergeRequest Issue), [actions[:created], actions[:closed], actions[:merged]]
+      )
     end
 
     def limit_recent(limit = 20, offset = nil)
@@ -353,7 +354,7 @@ class Event < ApplicationRecord
     # hence we add the extra WHERE clause for last_activity_at.
     Project.unscoped.where(id: project_id)
       .where('last_activity_at <= ?', RESET_PROJECT_ACTIVITY_INTERVAL.ago)
-      .update_all(last_activity_at: created_at)
+      .touch_all(:last_activity_at, time: created_at) # rubocop: disable Rails/SkipsModelValidations
   end
 
   def authored_by?(user)
@@ -429,7 +430,7 @@ class Event < ApplicationRecord
   def set_last_repository_updated_at
     Project.unscoped.where(id: project_id)
       .where("last_repository_updated_at < ? OR last_repository_updated_at IS NULL", REPOSITORY_UPDATED_AT_INTERVAL.ago)
-      .update_all(last_repository_updated_at: created_at)
+      .touch_all(:last_repository_updated_at, time: created_at) # rubocop: disable Rails/SkipsModelValidations
   end
 
   def design_action_names

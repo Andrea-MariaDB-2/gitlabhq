@@ -13,12 +13,14 @@ RSpec.describe GitlabSchema.types['MergeRequest'] do
 
   specify { expect(described_class.interfaces).to include(Types::CurrentUserTodos) }
 
+  specify { expect(described_class.interfaces).to include(Types::TodoableInterface) }
+
   it 'has the expected fields' do
     expected_fields = %w[
       notes discussions user_permissions id iid title title_html description
       description_html state created_at updated_at source_project target_project
       project project_id source_project_id target_project_id source_branch
-      target_branch work_in_progress draft merge_when_pipeline_succeeds diff_head_sha
+      target_branch draft merge_when_pipeline_succeeds diff_head_sha
       merge_commit_sha user_notes_count user_discussions_count should_remove_source_branch
       diff_refs diff_stats diff_stats_summary
       force_remove_source_branch
@@ -33,7 +35,7 @@ RSpec.describe GitlabSchema.types['MergeRequest'] do
       total_time_spent human_time_estimate human_total_time_spent reference author merged_at
       commit_count current_user_todos conflicts auto_merge_enabled approved_by source_branch_protected
       default_merge_commit_message_with_description squash_on_merge available_auto_merge_strategies
-      has_ci mergeable commits_without_merge_commits squash security_auto_fix default_squash_commit_message
+      has_ci mergeable commits committers commits_without_merge_commits squash security_auto_fix default_squash_commit_message
       auto_merge_strategy merge_user
     ]
 
@@ -130,6 +132,30 @@ RSpec.describe GitlabSchema.types['MergeRequest'] do
 
           expect(value).to eq(merge_request.public_merge_status.upcase)
         end
+      end
+    end
+  end
+
+  describe '#merge_user' do
+    let_it_be(:project) { create(:project, :public) }
+
+    context 'when MR is merged' do
+      let(:merge_request) { create(:merge_request, :with_merged_metrics, target_project: project, source_project: project) }
+
+      it 'is not nil' do
+        value = resolve_field(:merge_user, merge_request)
+
+        expect(value).not_to be_nil
+      end
+    end
+
+    context 'when MR is set to merge when pipeline succeeds' do
+      let(:merge_request) { create(:merge_request, :merge_when_pipeline_succeeds, target_project: project, source_project: project) }
+
+      it 'is not nil' do
+        value = resolve_field(:merge_user, merge_request)
+
+        expect(value).not_to be_nil
       end
     end
   end

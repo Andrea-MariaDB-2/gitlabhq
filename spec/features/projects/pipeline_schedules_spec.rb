@@ -11,6 +11,7 @@ RSpec.describe 'Pipeline Schedules', :js do
 
   context 'logged in as maintainer' do
     before do
+      stub_feature_flags(bootstrap_confirmation_modals: false)
       project.add_maintainer(user)
       gitlab_sign_in(user)
     end
@@ -41,7 +42,7 @@ RSpec.describe 'Pipeline Schedules', :js do
           click_link 'Take ownership'
           page.within('.pipeline-schedule-table-row') do
             expect(page).not_to have_content('No owner')
-            expect(page).to have_link('John Doe')
+            expect(page).to have_link('Sidney Jones')
           end
         end
 
@@ -134,8 +135,8 @@ RSpec.describe 'Pipeline Schedules', :js do
         end
 
         it 'shows the pipeline schedule with default ref' do
-          page.within('.js-target-branch-dropdown') do
-            expect(first('.dropdown-toggle-text').text).to eq('master')
+          page.within('[data-testid="schedule-target-ref"]') do
+            expect(first('.gl-new-dropdown-button-text').text).to eq('master')
           end
         end
       end
@@ -147,8 +148,8 @@ RSpec.describe 'Pipeline Schedules', :js do
         end
 
         it 'shows the pipeline schedule with default ref' do
-          page.within('.js-target-branch-dropdown') do
-            expect(first('.dropdown-toggle-text').text).to eq('master')
+          page.within('[data-testid="schedule-target-ref"]') do
+            expect(first('.gl-new-dropdown-button-text').text).to eq('master')
           end
         end
       end
@@ -292,8 +293,8 @@ RSpec.describe 'Pipeline Schedules', :js do
   end
 
   def select_target_branch
-    find('.js-target-branch-dropdown').click
-    click_link 'master'
+    find('[data-testid="schedule-target-ref"] .dropdown-toggle').click
+    click_button 'master'
   end
 
   def save_pipeline_schedule

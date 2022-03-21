@@ -25,6 +25,7 @@ describe('Shortcuts', () => {
 
     jest.spyOn(document.querySelector('.js-new-note-form .js-md-preview-button'), 'focus');
     jest.spyOn(document.querySelector('.edit-note .js-md-preview-button'), 'focus');
+    jest.spyOn(document.querySelector('#search'), 'focus');
 
     new Shortcuts(); // eslint-disable-line no-new
   });
@@ -70,8 +71,7 @@ describe('Shortcuts', () => {
           const mdShortcuts = $(this).data('md-shortcuts');
 
           // jQuery.map() automatically unwraps arrays, so we
-          // have to double wrap the array to counteract this:
-          // https://stackoverflow.com/a/4875669/1063392
+          // have to double wrap the array to counteract this
           return mdShortcuts ? [mdShortcuts] : undefined;
         })
         .get();
@@ -110,6 +110,14 @@ describe('Shortcuts', () => {
 
         expect(mockMousetrap.unbind.mock.calls).toEqual(expectedCalls);
       });
+    });
+  });
+
+  describe('focusSearch', () => {
+    it('focuses the search bar', () => {
+      Shortcuts.focusSearch(createEvent('KeyboardEvent'));
+
+      expect(document.querySelector('#search').focus).toHaveBeenCalled();
     });
   });
 });

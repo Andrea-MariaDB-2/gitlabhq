@@ -5,17 +5,24 @@ group: Configure
 info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
 ---
 
-# Group-level Kubernetes clusters **(FREE)**
+# Group-level Kubernetes clusters (certificate-based) (DEPRECATED) **(FREE)**
 
-> [Introduced](https://gitlab.com/gitlab-org/gitlab-foss/-/issues/34758) in GitLab 11.6.
+> - [Introduced](https://gitlab.com/gitlab-org/gitlab-foss/-/issues/34758) in GitLab 11.6.
+> - [Deprecated](https://gitlab.com/groups/gitlab-org/configure/-/epics/8) in GitLab 14.5.
+
+WARNING:
+This feature was [deprecated](https://gitlab.com/groups/gitlab-org/configure/-/epics/8) in GitLab 14.5. To connect clusters to GitLab,
+use the [GitLab agent](../../clusters/agent/index.md).
 
 Similar to [project-level](../../project/clusters/index.md) and
 [instance-level](../../instance/clusters/index.md) Kubernetes clusters,
 group-level Kubernetes clusters allow you to connect a Kubernetes cluster to
 your group, enabling you to use the same cluster across multiple projects.
 
-To view your group level Kubernetes clusters, navigate to your project and select
-**Kubernetes** from the left-hand menu.
+To view your group-level Kubernetes clusters:
+
+1. On the top bar, select **Menu > Groups** and find your group.
+1. On the left sidebar, select **Kubernetes**.
 
 ## Cluster management project
 
@@ -26,7 +33,7 @@ installation, such as an Ingress controller.
 ## RBAC compatibility
 
 > - [Introduced](https://gitlab.com/gitlab-org/gitlab-foss/-/issues/29398) in GitLab 11.4.
-> - [Project namespace restriction](https://gitlab.com/gitlab-org/gitlab-foss/-/issues/51716) was introduced in GitLab 11.5.
+> - Project namespace restriction was [introduced](https://gitlab.com/gitlab-org/gitlab-foss/-/issues/51716) in GitLab 11.5.
 
 For each project under a group with a Kubernetes cluster, GitLab creates a restricted
 service account with [`edit` privileges](https://kubernetes.io/docs/reference/access-authn-authz/rbac/#user-facing-roles)
@@ -42,7 +49,7 @@ to the project, provided the cluster is not disabled.
 
 ## Multiple Kubernetes clusters
 
-> - [Introduced](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/35094) in GitLab Free 13.2.
+> [Introduced](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/35094) in GitLab 13.2.
 
 You can associate more than one Kubernetes cluster to your group, and maintain different clusters
 for different environments, such as development, staging, and production.
@@ -58,7 +65,7 @@ differentiate the new cluster from your other clusters.
 
 You can choose to allow GitLab to manage your cluster for you. If GitLab manages
 your cluster, resources for your projects are automatically created. See the
-[Access controls](../../project/clusters/add_remove_clusters.md#access-controls)
+[Access controls](../../project/clusters/cluster_access.md)
 section for details on which resources GitLab creates for you.
 
 For clusters not managed by GitLab, project-specific resources aren't created
@@ -82,10 +89,11 @@ your cluster, which can cause deployment jobs to fail.
 
 To clear the cache:
 
-1. Navigate to your group's **Kubernetes** page,
-   and select your cluster.
-1. Expand the **Advanced settings** section.
-1. Click **Clear cluster cache**.
+1. On the top bar, select **Menu > Groups** and find your group.
+1. On the left sidebar, select **Kubernetes**.
+1. Select your cluster.
+1. Expand **Advanced settings**.
+1. Select **Clear cluster cache**.
 
 ## Base domain
 
@@ -169,7 +177,7 @@ documentation for project-level clusters.
 ## More information
 
 For information on integrating GitLab and Kubernetes, see
-[Kubernetes clusters](../../project/clusters/index.md).
+[Kubernetes clusters](../../infrastructure/clusters/index.md).
 
 <!-- ## Troubleshooting
 

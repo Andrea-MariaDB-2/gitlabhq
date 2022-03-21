@@ -21,8 +21,8 @@ RSpec.describe "Gitlab::Experiment", :js do
       allow_next_instance_of(Admin::AbuseReportsController) do |instance|
         allow(instance).to receive(:index).and_wrap_original do |original|
           instance.experiment(:null_hypothesis, user: instance.current_user) do |e|
-            e.use { original.call }
-            e.try { original.call }
+            e.control { original.call }
+            e.candidate { original.call }
           end
         end
       end
@@ -31,9 +31,10 @@ RSpec.describe "Gitlab::Experiment", :js do
 
       expect(page).to have_content('Abuse Reports')
 
-      published_experiments = page.evaluate_script('window.gon.experiment')
+      published_experiments = page.evaluate_script('window.gl.experiments')
       expect(published_experiments).to include({
         'null_hypothesis' => {
+          'excluded' => false,
           'experiment' => 'null_hypothesis',
           'key' => anything,
           'variant' => 'candidate'

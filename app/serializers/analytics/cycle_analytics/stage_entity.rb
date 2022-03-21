@@ -3,6 +3,10 @@
 module Analytics
   module CycleAnalytics
     class StageEntity < Grape::Entity
+      include ActionView::Context
+      include LabelsHelper
+      include ActionView::Helpers::TagHelper
+
       expose :title
       expose :hidden
       expose :legend
@@ -43,10 +47,21 @@ module Analytics
         html_description(object.end_event)
       end
 
+      # Avoid including ActionView::Helpers::UrlHelper
+      def link_to(*args)
+        ActionController::Base.helpers.link_to(*args)
+      end
+
       private
 
       def html_description(event)
-        Banzai::Renderer.render(event.markdown_description, { group: object.group, project: nil })
+        options = {}
+        if event.label_based?
+          label = event.label.present(issuable_subject: event.label.subject)
+          options[:label_html] = render_label(label, link: '', small: true, tooltip: true)
+        end
+
+        content_tag(:p) { event.html_description(options).html_safe }
       end
     end
   end

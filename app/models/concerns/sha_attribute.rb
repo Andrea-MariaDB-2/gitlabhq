@@ -3,11 +3,14 @@
 module ShaAttribute
   extend ActiveSupport::Concern
 
+  # Needed for the database method
+  include DatabaseReflection
+
   class_methods do
     def sha_attribute(name)
       return if ENV['STATIC_VERIFICATION']
 
-      validate_binary_column_exists!(name) if Rails.env.development?
+      validate_binary_column_exists!(name) if Rails.env.development? || Rails.env.test?
 
       attribute(name, Gitlab::Database::ShaAttribute.new)
     end
@@ -32,7 +35,7 @@ module ShaAttribute
     end
 
     def database_exists?
-      Gitlab::Database.main.exists?
+      database.exists?
     end
   end
 end

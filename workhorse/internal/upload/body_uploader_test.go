@@ -11,12 +11,12 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dgrijalva/jwt-go"
+	"github.com/golang-jwt/jwt/v4"
 	"github.com/stretchr/testify/require"
 
 	"gitlab.com/gitlab-org/gitlab/workhorse/internal/api"
-	"gitlab.com/gitlab-org/gitlab/workhorse/internal/filestore"
 	"gitlab.com/gitlab-org/gitlab/workhorse/internal/testhelper"
+	"gitlab.com/gitlab-org/gitlab/workhorse/internal/upload/destination"
 )
 
 const (
@@ -24,7 +24,7 @@ const (
 	fileLen     = len(fileContent)
 )
 
-func TestBodyUploader(t *testing.T) {
+func TestRequestBody(t *testing.T) {
 	testhelper.ConfigureSecret()
 
 	body := strings.NewReader(fileContent)
@@ -38,7 +38,7 @@ func TestBodyUploader(t *testing.T) {
 	require.Equal(t, fileContent, string(uploadEcho))
 }
 
-func TestBodyUploaderCustomPreparer(t *testing.T) {
+func TestRequestBodyCustomPreparer(t *testing.T) {
 	body := strings.NewReader(fileContent)
 
 	resp := testUpload(&rails{}, &alwaysLocalPreparer{}, echoProxy(t, fileLen), body)
@@ -49,7 +49,7 @@ func TestBodyUploaderCustomPreparer(t *testing.T) {
 	require.Equal(t, fileContent, string(uploadEcho))
 }
 
-func TestBodyUploaderCustomVerifier(t *testing.T) {
+func TestRequestBodyCustomVerifier(t *testing.T) {
 	body := strings.NewReader(fileContent)
 	verifier := &mockVerifier{}
 
@@ -62,11 +62,11 @@ func TestBodyUploaderCustomVerifier(t *testing.T) {
 	require.True(t, verifier.invoked, "Verifier.Verify not invoked")
 }
 
-func TestBodyUploaderAuthorizationFailure(t *testing.T) {
+func TestRequestBodyAuthorizationFailure(t *testing.T) {
 	testNoProxyInvocation(t, http.StatusUnauthorized, &rails{unauthorized: true}, &alwaysLocalPreparer{})
 }
 
-func TestBodyUploaderErrors(t *testing.T) {
+func TestRequestBodyErrors(t *testing.T) {
 	tests := []struct {
 		name     string
 		preparer *alwaysLocalPreparer
@@ -95,7 +95,7 @@ func testUpload(auth PreAuthorizer, preparer Preparer, proxy http.Handler, body 
 	req := httptest.NewRequest("POST", "http://example.com/upload", body)
 	w := httptest.NewRecorder()
 
-	BodyUploader(auth, proxy, preparer).ServeHTTP(w, req)
+	RequestBody(auth, proxy, preparer).ServeHTTP(w, req)
 
 	return w.Result()
 }
@@ -169,8 +169,8 @@ type alwaysLocalPreparer struct {
 	prepareError error
 }
 
-func (a *alwaysLocalPreparer) Prepare(_ *api.Response) (*filestore.SaveFileOpts, Verifier, error) {
-	opts, err := filestore.GetOpts(&api.Response{TempPath: os.TempDir()})
+func (a *alwaysLocalPreparer) Prepare(_ *api.Response) (*destination.UploadOpts, Verifier, error) {
+	opts, err := destination.GetOpts(&api.Response{TempPath: os.TempDir()})
 	if err != nil {
 		return nil, nil, err
 	}
@@ -180,7 +180,7 @@ func (a *alwaysLocalPreparer) Prepare(_ *api.Response) (*filestore.SaveFileOpts,
 
 type alwaysFailsVerifier struct{}
 
-func (alwaysFailsVerifier) Verify(handler *filestore.FileHandler) error {
+func (alwaysFailsVerifier) Verify(handler *destination.FileHandler) error {
 	return fmt.Errorf("Verification failed")
 }
 
@@ -188,7 +188,7 @@ type mockVerifier struct {
 	invoked bool
 }
 
-func (m *mockVerifier) Verify(handler *filestore.FileHandler) error {
+func (m *mockVerifier) Verify(handler *destination.FileHandler) error {
 	m.invoked = true
 
 	return nil

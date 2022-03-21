@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 class ClusterablePresenter < Gitlab::View::Presenter::Delegated
-  presents :clusterable
+  presents ::Project, ::Group, ::Clusters::Instance, as: :clusterable
 
   def self.fabricate(clusterable, **attributes)
     presenter_class = "#{clusterable.class.name}ClusterablePresenter".constantize
@@ -16,6 +16,10 @@ class ClusterablePresenter < Gitlab::View::Presenter::Delegated
     can?(current_user, :add_cluster, clusterable)
   end
 
+  def can_admin_cluster?
+    can?(current_user, :admin_cluster, clusterable)
+  end
+
   def can_create_cluster?
     can?(current_user, :create_cluster, clusterable)
   end
@@ -26,6 +30,10 @@ class ClusterablePresenter < Gitlab::View::Presenter::Delegated
 
   def new_path(options = {})
     new_polymorphic_path([clusterable, :cluster], options)
+  end
+
+  def connect_path
+    polymorphic_path([clusterable, :clusters], action: :connect)
   end
 
   def authorize_aws_role_path

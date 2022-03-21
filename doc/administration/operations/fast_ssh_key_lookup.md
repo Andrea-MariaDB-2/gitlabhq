@@ -26,17 +26,14 @@ indexed lookup in the GitLab database. This page describes how to enable the fas
 lookup of authorized SSH keys.
 
 WARNING:
-OpenSSH version 6.9+ is required because
-`AuthorizedKeysCommand` must be able to accept a fingerprint. These
-instructions break installations that use older versions of OpenSSH, such as
-those included with CentOS 6 as of September 2017. If you want to use this
-feature for CentOS 6, follow [the instructions on how to build and install a custom OpenSSH package](#compiling-a-custom-version-of-openssh-for-centos-6) before continuing.
+OpenSSH version 6.9+ is required because `AuthorizedKeysCommand` must be
+able to accept a fingerprint. Check the version of OpenSSH on your server with `sshd -V`.
 
 ## Fast lookup is required for Geo **(PREMIUM)**
 
 By default, GitLab manages an `authorized_keys` file that is located in the
 `git` user's home directory. For most installations, this will be located under
-`/var/opt/gitlab/.ssh/authorized_keys`, but you can use the following command to locate the `authorized_keys` on your system.:
+`/var/opt/gitlab/.ssh/authorized_keys`, but you can use the following command to locate the `authorized_keys` on your system:
 
 ```shell
 getent passwd git | cut -d: -f6 | awk '{print $1"/.ssh/authorized_keys"}'
@@ -80,9 +77,13 @@ sudo service sshd reload
 ```
 
 Confirm that SSH is working by commenting out your user's key in the `authorized_keys`
-file (start the line with a `#` to comment it), and attempting to pull a repository.
+file (start the line with a `#` to comment it), and from your local machine, attempt to pull a repository or run:
 
-A successful pull would mean that GitLab was able to find the key in the database,
+```shell
+ssh -T git@gitlab.example.com
+```
+
+A successful pull or [welcome message](../../ssh/index.md#verify-that-you-can-connect) would mean that GitLab was able to find the key in the database,
 since it is not present in the file anymore.
 
 NOTE:
@@ -104,12 +105,12 @@ In the case of lookup failures (which are common), the `authorized_keys`
 file is still scanned. So Git SSH performance would still be slow for many
 users as long as a large file exists.
 
-To disable any more writes to the `authorized_keys` file:
+To disable writes to the `authorized_keys` file:
 
 1. On the top bar, select **Menu > Admin**.
 1. On the left sidebar, select **Settings > Network**.
 1. Expand **Performance optimization**.
-1. Clear the **Write to "authorized_keys" file** checkbox.
+1. Clear the **Use authorized_keys file to authenticate SSH keys** checkbox.
 1. Select **Save changes**.
 
 Again, confirm that SSH is working by removing your user's SSH key in the UI,
@@ -117,111 +118,58 @@ adding a new one, and attempting to pull a repository.
 
 Then you can backup and delete your `authorized_keys` file for best performance.
 The current users' keys are already present in the database, so there is no need for migration
-or for asking users to re-add their keys.
+or for users to re-add their keys.
 
 ## How to go back to using the `authorized_keys` file
 
 This is a brief overview. Please refer to the above instructions for more context.
 
-1. [Rebuild the `authorized_keys` file](../raketasks/maintenance.md#rebuild-authorized_keys-file)
-1. Enable writes to the `authorized_keys` file in Application Settings
+1. [Rebuild the `authorized_keys` file](../raketasks/maintenance.md#rebuild-authorized_keys-file).
+1. Enable writes to the `authorized_keys` file.
+   1. On the top bar, select **Menu > Admin**.
+   1. On the left sidebar, select **Settings > Network**.
+   1. Expand **Performance optimization**.
+   1. Select the **Use authorized_keys file to authenticate SSH keys** checkbox.
 1. Remove the `AuthorizedKeysCommand` lines from `/etc/ssh/sshd_config` or from `/assets/sshd_config` if you are using Omnibus Docker.
-1. Reload `sshd`: `sudo service sshd reload`
+1. Reload `sshd`: `sudo service sshd reload`.
 
-## Compiling a custom version of OpenSSH for CentOS 6
+## Use `gitlab-sshd` instead of OpenSSH
 
-Building a custom version of OpenSSH is not necessary for Ubuntu 16.04 users,
-since Ubuntu 16.04 ships with OpenSSH 7.2.
+> [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/299109) in GitLab 14.5.
 
-It is also unnecessary for CentOS 7.4 users, as that version ships with
-OpenSSH 7.4. If you are using CentOS 7.0 - 7.3, we strongly recommend that you
-upgrade to CentOS 7.4 instead of following this procedure. This should be as
-simple as running `yum update`.
+WARNING:
+`gitlab-sshd` is in [**Alpha**](../../policy/alpha-beta-support.md#alpha-features).
+It is not ready for production use.
 
-CentOS 6 users must build their own OpenSSH package to enable SSH lookups via
-the database. The following instructions can be used to build OpenSSH 7.5:
+`gitlab-sshd` is [a standalone SSH server](https://gitlab.com/gitlab-org/gitlab-shell/-/tree/main/internal/sshd)
+ written in Go. It is provided as a part of `gitlab-shell` package. It has a lower memory
+ use as a OpenSSH alternative and supports
+ [group access restriction by IP address](../../user/group/index.md) for applications
+ running behind the proxy.
 
-1. First, download the package and install the required packages:
+If you are considering switching from OpenSSH to `gitlab-sshd`, consider these concerns:
 
-   ```shell
-   sudo su -
-   cd /tmp
-   curl --remote-name "https://cdn.openbsd.org/pub/OpenBSD/OpenSSH/portable/openssh-7.5p1.tar.gz"
-   tar xzvf openssh-7.5p1.tar.gz
-   yum install rpm-build gcc make wget openssl-devel krb5-devel pam-devel libX11-devel xmkmf libXt-devel
+- The `gitlab-sshd` component is only available for
+  [Cloud Native Helm Charts](https://docs.gitlab.com/charts/) deployments.
+- `gitlab-sshd` supports the PROXY protocol. It can run behind proxy servers that rely
+  on it, such as HAProxy.
+- `gitlab-sshd` does not share a SSH port with the system administrator's OpenSSH,
+  and requires a bind to port 22.
+- `gitlab-sshd` **does not** support SSH certificates.
+
+To switch from OpenSSH to `gitlab-sshd`:
+
+1. Set the `gitlab-shell` charts `sshDaemon` option to
+   [`gitlab-sshd`](https://docs.gitlab.com/charts/charts/gitlab/gitlab-shell/index.html#installation-command-line-options).
+   For example:
+
+   ```yaml
+   gitlab:
+     gitlab-shell:
+       sshDaemon: gitlab-sshd
    ```
 
-1. Prepare the build by copying files to the right place:
-
-   ```shell
-   mkdir -p /root/rpmbuild/{SOURCES,SPECS}
-   cp ./openssh-7.5p1/contrib/redhat/openssh.spec /root/rpmbuild/SPECS/
-   cp openssh-7.5p1.tar.gz /root/rpmbuild/SOURCES/
-   cd /root/rpmbuild/SPECS
-   ```
-
-1. Next, set the spec settings properly:
-
-   ```shell
-   sed -i -e "s/%define no_gnome_askpass 0/%define no_gnome_askpass 1/g" openssh.spec
-   sed -i -e "s/%define no_x11_askpass 0/%define no_x11_askpass 1/g" openssh.spec
-   sed -i -e "s/BuildPreReq/BuildRequires/g" openssh.spec
-   ```
-
-1. Build the RPMs:
-
-   ```shell
-   rpmbuild -bb openssh.spec
-   ```
-
-1. Ensure the RPMs were built:
-
-   ```shell
-   ls -al /root/rpmbuild/RPMS/x86_64/
-   ```
-
-   You should see something as the following:
-
-   ```plaintext
-   total 1324
-   drwxr-xr-x. 2 root root   4096 Jun 20 19:37 .
-   drwxr-xr-x. 3 root root     19 Jun 20 19:37 ..
-   -rw-r--r--. 1 root root 470828 Jun 20 19:37 openssh-7.5p1-1.x86_64.rpm
-   -rw-r--r--. 1 root root 490716 Jun 20 19:37 openssh-clients-7.5p1-1.x86_64.rpm
-   -rw-r--r--. 1 root root  17020 Jun 20 19:37 openssh-debuginfo-7.5p1-1.x86_64.rpm
-   -rw-r--r--. 1 root root 367516 Jun 20 19:37 openssh-server-7.5p1-1.x86_64.rpm
-   ```
-
-1. Install the packages. OpenSSH packages replace `/etc/pam.d/sshd`
-   with their own versions, which may prevent users from logging in, so be sure
-   that the file is backed up and restored after installation:
-
-   ```shell
-   timestamp=$(date +%s)
-   cp /etc/pam.d/sshd pam-ssh-conf-$timestamp
-   rpm -Uvh /root/rpmbuild/RPMS/x86_64/*.rpm
-   yes | cp pam-ssh-conf-$timestamp /etc/pam.d/sshd
-   ```
-
-1. Verify the installed version. In another window, attempt to sign in to the
-   server:
-
-   ```shell
-   ssh -v <your-centos-machine>
-   ```
-
-   You should see a line that reads: "debug1: Remote protocol version 2.0, remote software version OpenSSH_7.5"
-
-   If not, you may need to restart `sshd` (for example, `systemctl restart sshd.service`).
-
-1. *IMPORTANT!* Open a new SSH session to your server before exiting to make
-   sure everything is working! If you need to downgrade, simple install the
-   older package:
-
-   ```shell
-   # Only run this if you run into a problem logging in
-   yum downgrade openssh-server openssh openssh-clients
-   ```
+1. Perform a Helm upgrade.
 
 ## SELinux support and limitations
 
@@ -230,3 +178,22 @@ GitLab supports `authorized_keys` database lookups with [SELinux](https://en.wik
 Because the SELinux policy is static, GitLab doesn't support the ability to change
 internal webserver ports at the moment. Administrators would have to create a special `.te`
 file for the environment, since it isn't generated dynamically.
+
+## Troubleshooting
+
+If your SSH traffic is [slow](https://github.com/linux-pam/linux-pam/issues/270)
+or causing high CPU load, be sure to check the size of `/var/log/btmp`, and ensure it is rotated on a regular basis or after reaching a certain size.
+If this file is very large, GitLab SSH fast lookup can cause the bottleneck to be hit more frequently, thus decreasing performance even further.
+If you are able to, you may consider disabling [`UsePAM` in your `sshd_config`](https://linux.die.net/man/5/sshd_config) to avoid reading `/var/log/btmp` altogether.
+
+Running `strace` and `lsof` on a running `sshd: git` process can return useful debugging information. To get an `strace` on an in-progress Git over SSH connection for IP `x.x.x.x`, run:
+
+```plaintext
+sudo strace -s 10000 -p $(sudo netstat -tp | grep x.x.x.x | egrep 'ssh.*: git' | sed -e 's/.*ESTABLISHED *//' -e 's#/.*##')
+```
+
+Or get an `lsof` for a running Git over SSH process:
+
+```plaintext
+sudo lsof -p $(sudo netstat -tp | egrep 'ssh.*: git' | head -1 | sed -e 's/.*ESTABLISHED *//' -e 's#/.*##')
+```

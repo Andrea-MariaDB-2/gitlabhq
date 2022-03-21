@@ -1,48 +1,40 @@
 import Vue from 'vue';
 import VueApollo from 'vue-apollo';
-import createDefaultClient from '~/lib/graphql';
 import { parseBoolean } from '../lib/utils/common_utils';
-import Translate from '../vue_shared/translate';
-import environmentsComponent from './components/environments_app.vue';
+import { apolloProvider } from './graphql/client';
+import EnvironmentsApp from './components/environments_app.vue';
 
-Vue.use(Translate);
 Vue.use(VueApollo);
 
-const apolloProvider = new VueApollo({
-  defaultClient: createDefaultClient({}, { assumeImmutableResults: true }),
-});
+export default (el) => {
+  if (el) {
+    const {
+      canCreateEnvironment,
+      endpoint,
+      newEnvironmentPath,
+      helpPagePath,
+      projectPath,
+      defaultBranchName,
+      projectId,
+    } = el.dataset;
 
-export default () => {
-  const el = document.getElementById('environments-list-view');
-  return new Vue({
-    el,
-    components: {
-      environmentsComponent,
-    },
-    apolloProvider,
-    provide: {
-      projectPath: el.dataset.projectPath,
-      defaultBranchName: el.dataset.defaultBranchName,
-    },
-    data() {
-      const environmentsData = el.dataset;
+    return new Vue({
+      el,
+      apolloProvider: apolloProvider(endpoint),
+      provide: {
+        projectPath,
+        defaultBranchName,
+        endpoint,
+        newEnvironmentPath,
+        helpPagePath,
+        projectId,
+        canCreateEnvironment: parseBoolean(canCreateEnvironment),
+      },
+      render(h) {
+        return h(EnvironmentsApp);
+      },
+    });
+  }
 
-      return {
-        endpoint: environmentsData.environmentsDataEndpoint,
-        newEnvironmentPath: environmentsData.newEnvironmentPath,
-        helpPagePath: environmentsData.helpPagePath,
-        canCreateEnvironment: parseBoolean(environmentsData.canCreateEnvironment),
-      };
-    },
-    render(createElement) {
-      return createElement('environments-component', {
-        props: {
-          endpoint: this.endpoint,
-          newEnvironmentPath: this.newEnvironmentPath,
-          helpPagePath: this.helpPagePath,
-          canCreateEnvironment: this.canCreateEnvironment,
-        },
-      });
-    },
-  });
+  return null;
 };

@@ -29,6 +29,7 @@ module Gitlab
             project_id: project.id,
             author_id: author_id,
             note: note_body,
+            discussion_id: note.discussion_id,
             system: false,
             created_at: note.created_at,
             updated_at: note.updated_at
@@ -37,7 +38,7 @@ module Gitlab
           # We're using bulk_insert here so we can bypass any validations and
           # callbacks. Running these would result in a lot of unnecessary SQL
           # queries being executed when importing large projects.
-          Gitlab::Database.main.bulk_insert(Note.table_name, [attributes]) # rubocop:disable Gitlab/BulkInsert
+          ApplicationRecord.legacy_bulk_insert(Note.table_name, [attributes]) # rubocop:disable Gitlab/BulkInsert
         rescue ActiveRecord::InvalidForeignKey
           # It's possible the project and the issue have been deleted since
           # scheduling this job. In this case we'll just skip creating the note.

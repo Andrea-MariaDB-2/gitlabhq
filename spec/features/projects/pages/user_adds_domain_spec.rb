@@ -14,6 +14,8 @@ RSpec.describe 'User adds pages domain', :js do
     project.add_maintainer(user)
 
     sign_in(user)
+
+    stub_feature_flags(bootstrap_confirmation_modals: false)
   end
 
   context 'when pages are exposed on external HTTP address', :http_pages_enabled do
@@ -93,7 +95,7 @@ RSpec.describe 'User adds pages domain', :js do
 
       fill_in 'Domain', with: 'my.test.domain.com'
 
-      find('.js-auto-ssl-toggle-container .project-feature-toggle').click
+      find('.js-auto-ssl-toggle-container .js-project-feature-toggle').click
 
       fill_in 'Certificate (PEM)', with: certificate_pem
       fill_in 'Key (PEM)', with: certificate_key
@@ -175,11 +177,11 @@ RSpec.describe 'User adds pages domain', :js do
         expect(domain.key).to be_nil
       end
 
-      it 'shows the DNS CNAME record' do
+      it 'shows the DNS ALIAS record' do
         visit project_pages_path(project)
 
         within('#content-body') { click_link 'Edit' }
-        expect(page).to have_field :domain_dns, with: "#{domain.domain} CNAME #{domain.project.pages_subdomain}.#{Settings.pages.host}."
+        expect(page).to have_field :domain_dns, with: "#{domain.domain} ALIAS #{domain.project.pages_subdomain}.#{Settings.pages.host}."
       end
     end
   end

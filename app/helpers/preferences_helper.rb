@@ -4,8 +4,8 @@
 module PreferencesHelper
   def layout_choices
     [
-      ['Fixed', :fixed],
-      ['Fluid', :fluid]
+      [s_('Layout|Fixed'), :fixed],
+      [s_('Layout|Fluid'), :fluid]
     ]
   end
 
@@ -40,9 +40,9 @@ module PreferencesHelper
 
   def project_view_choices
     [
-      ['Files and Readme (default)', :files],
-      ['Activity', :activity],
-      ['Readme', :readme]
+      [s_('ProjectView|Files and Readme (default)'), :files],
+      [s_('ProjectView|Activity'), :activity],
+      [s_('ProjectView|Readme'), :readme]
     ]
   end
 
@@ -60,6 +60,10 @@ module PreferencesHelper
 
   def user_application_theme
     @user_application_theme ||= Gitlab::Themes.for_user(current_user).css_class
+  end
+
+  def user_application_dark_mode?
+    user_application_theme == 'gl-dark'
   end
 
   def user_application_theme_css_filename

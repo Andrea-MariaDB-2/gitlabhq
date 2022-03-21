@@ -6,15 +6,10 @@ module Gitlab
       class StreamingSerializer
         include Gitlab::ImportExport::CommandLineUtil
 
-        BATCH_SIZE = 100
-        SMALLER_BATCH_SIZE = 2
+        BATCH_SIZE = 2
 
         def self.batch_size(exportable)
-          if Feature.enabled?(:export_reduce_relation_batch_size, exportable)
-            SMALLER_BATCH_SIZE
-          else
-            BATCH_SIZE
-          end
+          BATCH_SIZE
         end
 
         class Raw < String
@@ -40,6 +35,13 @@ module Gitlab
           end
         end
 
+        def serialize_root(exportable_path = @exportable_path)
+          attributes = exportable.as_json(
+            relations_schema.merge(include: nil, preloads: nil))
+
+          json_writer.write_attributes(exportable_path, attributes)
+        end
+
         def serialize_relation(definition)
           raise ArgumentError, 'definition needs to be Hash' unless definition.is_a?(Hash)
           raise ArgumentError, 'definition needs to have exactly one Hash element' unless definition.one?
@@ -59,12 +61,6 @@ module Gitlab
         private
 
         attr_reader :json_writer, :relations_schema, :exportable
-
-        def serialize_root
-          attributes = exportable.as_json(
-            relations_schema.merge(include: nil, preloads: nil))
-          json_writer.write_attributes(@exportable_path, attributes)
-        end
 
         def serialize_many_relations(key, records, options)
           enumerator = Enumerator.new do |items|
@@ -170,9 +166,6 @@ module Gitlab
         end
 
         def read_from_replica_if_available(&block)
-          return yield unless ::Feature.enabled?(:load_balancing_for_export_workers, type: :development, default_enabled: :yaml)
-          return yield unless ::Gitlab::Database::LoadBalancing.enable?
-
           ::Gitlab::Database::LoadBalancing::Session.current.use_replicas_for_read_queries(&block)
         end
       end

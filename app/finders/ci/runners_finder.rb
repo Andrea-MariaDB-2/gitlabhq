@@ -4,7 +4,7 @@ module Ci
   class RunnersFinder < UnionFinder
     include Gitlab::Allowable
 
-    ALLOWED_SORTS = %w[contacted_asc contacted_desc created_at_asc created_at_desc created_date].freeze
+    ALLOWED_SORTS = %w[contacted_asc contacted_desc created_at_asc created_at_desc created_date token_expires_at_asc token_expires_at_desc].freeze
     DEFAULT_SORT = 'created_at_desc'
 
     def initialize(current_user:, params:)
@@ -15,6 +15,7 @@ module Ci
 
     def execute
       search!
+      filter_by_active!
       filter_by_status!
       filter_by_runner_type!
       filter_by_tag_list!
@@ -46,18 +47,20 @@ module Ci
     end
 
     def group_runners
-      raise Gitlab::Access::AccessDeniedError unless can?(@current_user, :admin_group, @group)
+      raise Gitlab::Access::AccessDeniedError unless can?(@current_user, :read_group_runners, @group)
 
       @runners = case @params[:membership]
                  when :direct
                    Ci::Runner.belonging_to_group(@group.id)
                  when :descendants, nil
-                   # Getting all runners from the group itself and all its descendant groups/projects
-                   descendant_projects = Project.for_group_and_its_subgroups(@group)
-                   Ci::Runner.belonging_to_group_or_project(@group.self_and_descendants, descendant_projects)
+                   Ci::Runner.belonging_to_group_or_project_descendants(@group.id)
                  else
                    raise ArgumentError, 'Invalid membership filter'
                  end
+    end
+
+    def filter_by_active!
+      @runners = @runners.active(@params[:active]) if @params.include?(:active)
     end
 
     def filter_by_status!

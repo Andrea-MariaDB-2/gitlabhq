@@ -54,8 +54,7 @@ export default {
   data() {
     return {
       email: this.initialEmail,
-      // eslint-disable-next-line @gitlab/require-i18n-strings
-      issuableName: this.issuableType === 'issue' ? 'issue' : 'merge request',
+      issuableName: this.issuableType === 'issue' ? __('issue') : __('merge request'),
     };
   },
   computed: {
@@ -66,7 +65,6 @@ export default {
       const body = sprintf(__('Enter the %{name} description'), {
         name: this.issuableName,
       });
-      // eslint-disable-next-line @gitlab/require-i18n-strings
       return `mailto:${this.email}?subject=${subject}&body=${body}`;
     },
   },
@@ -166,7 +164,7 @@ export default {
         </gl-sprintf>
       </p>
       <template #modal-footer>
-        <gl-button category="secondary" @click="cancelHandler">{{ s__('Cancel') }}</gl-button>
+        <gl-button category="secondary" @click="cancelHandler">{{ __('Cancel') }}</gl-button>
       </template>
     </gl-modal>
   </div>

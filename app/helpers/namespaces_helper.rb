@@ -49,13 +49,6 @@ module NamespacesHelper
     end
   end
 
-  def namespaces_options_with_developer_maintainer_access(options = {})
-    selected = options.delete(:selected) || :current_user
-    options[:groups] = current_user.manageable_groups_with_routes(include_groups_with_developer_maintainer_access: true)
-
-    namespaces_options(selected, **options)
-  end
-
   def cascading_namespace_settings_popover_data(attribute, group, settings_path_helper)
     locked_by_ancestor = group.namespace_settings.public_send("#{attribute}_locked_by_ancestor?") # rubocop:disable GitlabSecurity/PublicSend
 
@@ -88,6 +81,13 @@ module NamespacesHelper
     group.namespace_settings.public_send(method_name, **args) # rubocop:disable GitlabSecurity/PublicSend
   end
 
+  def namespaces_as_json(selected = :current_user)
+    {
+      group: formatted_namespaces(current_user.manageable_groups_with_routes),
+      user: formatted_namespaces([current_user.namespace])
+    }.to_json
+  end
+
   private
 
   # Many importers create a temporary Group, so use the real
@@ -118,6 +118,17 @@ module NamespacesHelper
     end
 
     [group_label.camelize, elements]
+  end
+
+  def formatted_namespaces(namespaces)
+    namespaces.sort_by(&:human_name).map! do |n|
+      {
+        id: n.id,
+        display_path: n.full_path,
+        human_name: n.human_name,
+        name: n.name
+      }
+    end
   end
 end
 

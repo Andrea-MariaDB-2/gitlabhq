@@ -15,7 +15,6 @@ import { ContentTypeMultipartFormData } from '~/lib/utils/headers';
 import { numberToHumanSize } from '~/lib/utils/number_utils';
 import { visitUrl, joinPaths } from '~/lib/utils/url_utility';
 import { __ } from '~/locale';
-import { trackFileUploadEvent } from '~/projects/upload_file_experiment_tracking';
 import UploadDropzone from '~/vue_shared/components/upload_dropzone/upload_dropzone.vue';
 import {
   SECONDARY_OPTIONS_TEXT,
@@ -25,10 +24,10 @@ import {
 } from '../constants';
 
 const PRIMARY_OPTIONS_TEXT = __('Upload file');
-const MODAL_TITLE = __('Upload New File');
+const MODAL_TITLE = __('Upload new file');
 const REMOVE_FILE_TEXT = __('Remove file');
 const NEW_BRANCH_IN_FORK = __(
-  'A new branch will be created in your fork and a new merge request will be started.',
+  'GitLab will create a branch in your fork and start a merge request.',
 );
 const ERROR_MESSAGE = __('Error uploading file. Please try again.');
 
@@ -137,6 +136,9 @@ export default {
     },
   },
   methods: {
+    show() {
+      this.$refs[this.modalId].show();
+    },
     setFile(file) {
       this.file = file;
 
@@ -165,9 +167,6 @@ export default {
         },
       })
         .then((response) => {
-          if (!this.replacePath) {
-            trackFileUploadEvent('click_upload_modal_form_submit');
-          }
           visitUrl(response.data.filePath);
         })
         .catch(() => {
@@ -210,6 +209,7 @@ export default {
 <template>
   <gl-form>
     <gl-modal
+      :ref="modalId"
       :modal-id="modalId"
       :title="modalTitle"
       :action-primary="primaryOptions"
@@ -220,6 +220,7 @@ export default {
         class="gl-h-200! gl-mb-4"
         single-file-selection
         :valid-file-mimetypes="$options.validFileMimetypes"
+        :is-file-valid="() => true"
         @change="setFile"
       >
         <div

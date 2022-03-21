@@ -1,6 +1,6 @@
 <script>
-/* eslint-disable vue/no-v-html */
 import $ from 'jquery';
+import { GlSafeHtmlDirective } from '@gitlab/ui';
 import { escape } from 'lodash';
 import { mapActions, mapGetters, mapState } from 'vuex';
 
@@ -19,6 +19,9 @@ export default {
     noteAttachment,
     noteForm,
     Suggestions,
+  },
+  directives: {
+    SafeHtml: GlSafeHtmlDirective,
   },
   mixins: [autosave],
   props: {
@@ -52,7 +55,7 @@ export default {
     },
   },
   computed: {
-    ...mapGetters(['getDiscussion', 'suggestionsCount']),
+    ...mapGetters(['getDiscussion', 'suggestionsCount', 'getSuggestionsFilePaths']),
     ...mapGetters('diffs', ['suggestionCommitMessage']),
     discussion() {
       if (!this.note.isDraft) return {};
@@ -75,9 +78,10 @@ export default {
       // Please see this issue comment for why these
       //  are hard-coded to 1:
       //  https://gitlab.com/gitlab-org/gitlab/-/issues/291027#note_468308022
-      const suggestionsCount = 1;
-      const filesCount = 1;
-      const filePaths = this.file ? [this.file.file_path] : [];
+      const suggestionsCount = this.batchSuggestionsInfo.length || 1;
+      const batchFilePaths = this.getSuggestionsFilePaths();
+      const filePaths = batchFilePaths.length ? batchFilePaths : [this.file.file_path];
+      const filesCount = filePaths.length;
       const suggestion = this.suggestionCommitMessage({
         file_paths: filePaths.join(', '),
         suggestions_count: suggestionsCount,
@@ -132,8 +136,8 @@ export default {
         message,
       }).then(callback);
     },
-    applySuggestionBatch({ flashContainer }) {
-      return this.submitSuggestionBatch({ flashContainer });
+    applySuggestionBatch({ message, flashContainer }) {
+      return this.submitSuggestionBatch({ message, flashContainer });
     },
     addSuggestionToBatch(suggestionId) {
       const { discussion_id: discussionId, id: noteId } = this.note;
@@ -143,6 +147,9 @@ export default {
     removeSuggestionFromBatch(suggestionId) {
       this.removeSuggestionInfoFromBatch(suggestionId);
     },
+  },
+  safeHtmlConfig: {
+    ADD_TAGS: ['use', 'gl-emoji', 'copy-code'],
   },
 };
 </script>
@@ -163,7 +170,7 @@ export default {
       @addToBatch="addSuggestionToBatch"
       @removeFromBatch="removeSuggestionFromBatch"
     />
-    <div v-else class="note-text md" v-html="note.note_html"></div>
+    <div v-else v-safe-html:[$options.safeHtmlConfig]="note.note_html" class="note-text md"></div>
     <note-form
       v-if="isEditing"
       ref="noteForm"

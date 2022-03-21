@@ -9,6 +9,8 @@ class Projects::Analytics::CycleAnalytics::SummaryController < Projects::Applica
 
   before_action :authorize_read_cycle_analytics!
 
+  urgency :low
+
   def show
     render json: project_level.summary
   end
@@ -20,7 +22,7 @@ class Projects::Analytics::CycleAnalytics::SummaryController < Projects::Applica
   end
 
   def allowed_params
-    params.permit(:created_after, :created_before)
+    request_params.to_data_collector_params
   end
 end
 

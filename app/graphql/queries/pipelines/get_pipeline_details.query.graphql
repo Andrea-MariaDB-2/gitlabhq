@@ -1,3 +1,18 @@
+fragment CiNeeds on JobNeedUnion {
+  ...CiBuildNeedFields
+  ...CiJobNeedFields
+}
+
+fragment CiBuildNeedFields on CiBuildNeed {
+  id
+  name
+}
+
+fragment CiJobNeedFields on CiJob {
+  id
+  name
+}
+
 fragment LinkedPipelineData on Pipeline {
   __typename
   id
@@ -5,16 +20,19 @@ fragment LinkedPipelineData on Pipeline {
   path
   status: detailedStatus {
     __typename
+    id
     group
     label
     icon
   }
   sourceJob {
     __typename
+    id
     name
   }
   project {
     __typename
+    id
     name
     fullPath
   }
@@ -23,6 +41,7 @@ fragment LinkedPipelineData on Pipeline {
 query getPipelineDetails($projectPath: ID!, $iid: ID!) {
   project(fullPath: $projectPath) {
     __typename
+    id
     pipeline(iid: $iid) {
       __typename
       id
@@ -45,11 +64,14 @@ query getPipelineDetails($projectPath: ID!, $iid: ID!) {
         __typename
         nodes {
           __typename
+          id
           name
           status: detailedStatus {
             __typename
+            id
             action {
               __typename
+              id
               icon
               path
               title
@@ -59,8 +81,10 @@ query getPipelineDetails($projectPath: ID!, $iid: ID!) {
             __typename
             nodes {
               __typename
+              id
               status: detailedStatus {
                 __typename
+                id
                 label
                 group
                 icon
@@ -71,24 +95,35 @@ query getPipelineDetails($projectPath: ID!, $iid: ID!) {
                 __typename
                 nodes {
                   __typename
+                  id
                   name
                   scheduledAt
                   needs {
                     __typename
                     nodes {
                       __typename
+                      id
                       name
+                    }
+                  }
+                  previousStageJobsOrNeeds {
+                    __typename
+                    nodes {
+                      ...CiNeeds
                     }
                   }
                   status: detailedStatus {
                     __typename
+                    id
                     icon
                     tooltip
                     hasDetails
                     detailsPath
                     group
+                    label
                     action {
                       __typename
+                      id
                       buttonTitle
                       icon
                       path

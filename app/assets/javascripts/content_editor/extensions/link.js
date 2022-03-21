@@ -1,9 +1,6 @@
 import { markInputRule } from '@tiptap/core';
 import { Link } from '@tiptap/extension-link';
 
-export const markdownLinkSyntaxInputRuleRegExp = /(?:^|\s)\[([\w|\s|-]+)\]\((?<href>.+?)\)$/gm;
-export const urlSyntaxRegExp = /(?:^|\s)(?<href>(?:https?:\/\/|www\.)[\S]+)(?:\s|\n)$/gim;
-
 const extractHrefFromMatch = (match) => {
   return { href: match.groups.href };
 };
@@ -21,14 +18,28 @@ export const extractHrefFromMarkdownLink = (match) => {
 };
 
 export default Link.extend({
-  defaultOptions: {
-    ...Link.options,
-    openOnClick: false,
+  addOptions() {
+    return {
+      ...this.parent?.(),
+      openOnClick: false,
+    };
   },
+
   addInputRules() {
+    const markdownLinkSyntaxInputRuleRegExp = /(?:^|\s)\[([\w|\s|-]+)\]\((?<href>.+?)\)$/gm;
+    const urlSyntaxRegExp = /(?:^|\s)(?<href>(?:https?:\/\/|www\.)[\S]+)(?:\s|\n)$/gim;
+
     return [
-      markInputRule(markdownLinkSyntaxInputRuleRegExp, this.type, extractHrefFromMarkdownLink),
-      markInputRule(urlSyntaxRegExp, this.type, extractHrefFromMatch),
+      markInputRule({
+        find: markdownLinkSyntaxInputRuleRegExp,
+        type: this.type,
+        getAttributes: extractHrefFromMarkdownLink,
+      }),
+      markInputRule({
+        find: urlSyntaxRegExp,
+        type: this.type,
+        getAttributes: extractHrefFromMatch,
+      }),
     ];
   },
   addAttributes() {
@@ -36,27 +47,15 @@ export default Link.extend({
       ...this.parent?.(),
       href: {
         default: null,
-        parseHTML: (element) => {
-          return {
-            href: element.getAttribute('href'),
-          };
-        },
+        parseHTML: (element) => element.getAttribute('href'),
       },
       title: {
         title: null,
-        parseHTML: (element) => {
-          return {
-            title: element.getAttribute('title'),
-          };
-        },
+        parseHTML: (element) => element.getAttribute('title'),
       },
       canonicalSrc: {
         default: null,
-        parseHTML: (element) => {
-          return {
-            canonicalSrc: element.dataset.canonicalSrc,
-          };
-        },
+        parseHTML: (element) => element.dataset.canonicalSrc,
       },
     };
   },

@@ -1,18 +1,16 @@
-import Cookies from 'js-cookie';
+import { getCookie } from '~/lib/utils/common_utils';
 import { getParameterValues } from '~/lib/utils/url_utility';
 import { INLINE_DIFF_VIEW_TYPE, DIFF_VIEW_COOKIE_NAME } from '../../constants';
 
-import { fileByFile } from '../../utils/preferences';
-
 const getViewTypeFromQueryString = () => getParameterValues('view')[0];
 
-const viewTypeFromCookie = Cookies.get(DIFF_VIEW_COOKIE_NAME);
+const viewTypeFromCookie = getCookie(DIFF_VIEW_COOKIE_NAME);
 const defaultViewType = INLINE_DIFF_VIEW_TYPE;
 
 export default () => ({
   isLoading: true,
   isTreeLoaded: false,
-  isBatchLoading: false,
+  batchLoadingState: null,
   retrievingBatches: false,
   addedLines: null,
   removedLines: null,
@@ -23,6 +21,7 @@ export default () => ({
   startVersion: null, // Null unless a target diff is selected for comparison that is not the "base" diff
   diffFiles: [],
   coverageFiles: {},
+  coverageLoaded: false,
   mergeRequestDiffs: [],
   mergeRequestDiff: null,
   diffViewType: getViewTypeFromQueryString() || viewTypeFromCookie || defaultViewType,
@@ -36,7 +35,7 @@ export default () => ({
   highlightedRow: null,
   renderTreeList: true,
   showWhitespace: true,
-  viewDiffsFileByFile: fileByFile(),
+  viewDiffsFileByFile: false,
   fileFinderVisible: false,
   dismissEndpoint: '',
   showSuggestPopover: true,

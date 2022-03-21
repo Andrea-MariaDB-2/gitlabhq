@@ -6,9 +6,11 @@ RSpec.describe ::Packages::Conan::PackagePresenter do
   let_it_be(:user) { create(:user) }
   let_it_be(:package) { create(:conan_package) }
   let_it_be(:project) { package.project }
+  let_it_be(:package_file_pending_destruction) { create(:package_file, :pending_destruction, package: package) }
   let_it_be(:conan_package_reference) { '123456789'}
 
   let(:params) { { package_scope: :instance } }
+  let(:presenter) { described_class.new(package, user, project, params) }
 
   shared_examples 'no existing package' do
     context 'when package does not exist' do
@@ -21,7 +23,7 @@ RSpec.describe ::Packages::Conan::PackagePresenter do
   shared_examples 'conan_file_metadatum is not found' do
     context 'when no conan_file_metadatum exists' do
       before do
-        package.package_files.each do |file|
+        package.installable_package_files.each do |file|
           file.conan_file_metadatum.delete
           file.reload
         end
@@ -32,7 +34,7 @@ RSpec.describe ::Packages::Conan::PackagePresenter do
   end
 
   describe '#recipe_urls' do
-    subject { described_class.new(package, user, project, params).recipe_urls }
+    subject { presenter.recipe_urls }
 
     it_behaves_like 'no existing package'
     it_behaves_like 'conan_file_metadatum is not found'
@@ -71,7 +73,9 @@ RSpec.describe ::Packages::Conan::PackagePresenter do
   end
 
   describe '#recipe_snapshot' do
-    subject { described_class.new(package, user, project).recipe_snapshot }
+    let(:params) { {} }
+
+    subject { presenter.recipe_snapshot }
 
     it_behaves_like 'no existing package'
     it_behaves_like 'conan_file_metadatum is not found'
@@ -180,12 +184,9 @@ RSpec.describe ::Packages::Conan::PackagePresenter do
 
   describe '#package_snapshot' do
     let(:reference) { conan_package_reference }
+    let(:params) { { conan_package_reference: reference } }
 
-    subject do
-      described_class.new(
-        package, user, project, conan_package_reference: reference
-      ).package_snapshot
-    end
+    subject { presenter.package_snapshot }
 
     it_behaves_like 'no existing package'
     it_behaves_like 'conan_file_metadatum is not found'

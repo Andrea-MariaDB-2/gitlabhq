@@ -628,10 +628,30 @@ RSpec.describe TodoService do
         stub_feature_flags(multiple_todos: true)
       end
 
-      it 'creates a todo even if user already has a pending todo' do
+      it 'creates a MENTIONED todo even if user already has a pending MENTIONED todo' do
         create(:todo, :mentioned, user: member, project: project, target: issue, author: author)
 
         expect { service.update_issue(issue, author) }.to change(member.todos, :count)
+      end
+
+      it 'creates a DIRECTLY_ADDRESSED todo even if user already has a pending DIRECTLY_ADDRESSED todo' do
+        create(:todo, :directly_addressed, user: member, project: project, target: issue, author: author)
+
+        issue.update!(description: "#{member.to_reference}, what do you think?")
+
+        expect { service.update_issue(issue, author) }.to change(member.todos, :count)
+      end
+
+      it 'creates an ASSIGNED todo even if user already has a pending MARKED todo' do
+        create(:todo, :marked, user: john_doe, project: project, target: assigned_issue, author: author)
+
+        expect { service.reassigned_assignable(assigned_issue, author) }.to change(john_doe.todos, :count)
+      end
+
+      it 'does not create an ASSIGNED todo if user already has an ASSIGNED todo' do
+        create(:todo, :assigned, user: john_doe, project: project, target: assigned_issue, author: author)
+
+        expect { service.reassigned_assignable(assigned_issue, author) }.not_to change(john_doe.todos, :count)
       end
 
       it 'creates multiple todos if a user is assigned and mentioned in a new issue' do
@@ -1215,6 +1235,17 @@ RSpec.describe TodoService do
       service.create_request_review_todo(target, author, reviewer)
 
       should_create_todo(user: reviewer, target: target, action: Todo::REVIEW_REQUESTED)
+    end
+  end
+
+  describe '#create_attention_requested_todo' do
+    let(:target) { create(:merge_request, author: author, source_project: project) }
+    let(:user) { create(:user) }
+
+    it 'creates a todo for user' do
+      service.create_attention_requested_todo(target, author, user)
+
+      should_create_todo(user: user, target: target, action: Todo::ATTENTION_REQUESTED)
     end
   end
 

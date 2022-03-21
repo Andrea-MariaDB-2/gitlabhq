@@ -11,8 +11,11 @@ RSpec.describe Banzai::Filter::SyntaxHighlightFilter do
       # after Markdown rendering.
       result = filter(%{<pre lang="#{lang}"><code>&lt;script&gt;alert(1)&lt;/script&gt;</code></pre>})
 
-      expect(result.to_html).not_to include("<script>alert(1)</script>")
-      expect(result.to_html).to include("alert(1)")
+      # `(1)` symbols are wrapped by lexer tags.
+      expect(result.to_html).not_to match(%r{<script>alert.*<\/script>})
+
+      # `<>` stands for lexer tags like <span ...>, not &lt;s above.
+      expect(result.to_html).to match(%r{alert(<.*>)?\((<.*>)?1(<.*>)?\)})
     end
   end
 
@@ -20,7 +23,7 @@ RSpec.describe Banzai::Filter::SyntaxHighlightFilter do
     it "highlights as plaintext" do
       result = filter('<pre><code>def fun end</code></pre>')
 
-      expect(result.to_html).to eq('<pre class="code highlight js-syntax-highlight language-plaintext" lang="plaintext" v-pre="true"><code><span id="LC1" class="line" lang="plaintext">def fun end</span></code></pre>')
+      expect(result.to_html.delete("\n")).to eq('<div class="gl-relative markdown-code-block js-markdown-code"><pre class="code highlight js-syntax-highlight language-plaintext" lang="plaintext" v-pre="true"><code><span id="LC1" class="line" lang="plaintext">def fun end</span></code></pre><copy-code></copy-code></div>')
     end
 
     include_examples "XSS prevention", ""
@@ -34,11 +37,19 @@ RSpec.describe Banzai::Filter::SyntaxHighlightFilter do
     end
   end
 
+  context "when <pre> contains multiple <code> tags" do
+    it "ignores the block" do
+      result = filter('<pre><code>one</code> and <code>two</code></pre>')
+
+      expect(result.to_html).to eq('<pre><code>one</code> and <code>two</code></pre>')
+    end
+  end
+
   context "when a valid language is specified" do
     it "highlights as that language" do
-      result = filter('<pre><code lang="ruby">def fun end</code></pre>')
+      result = filter('<pre lang="ruby"><code>def fun end</code></pre>')
 
-      expect(result.to_html).to eq('<pre class="code highlight js-syntax-highlight language-ruby" lang="ruby" v-pre="true"><code><span id="LC1" class="line" lang="ruby"><span class="k">def</span> <span class="nf">fun</span> <span class="k">end</span></span></code></pre>')
+      expect(result.to_html.delete("\n")).to eq('<div class="gl-relative markdown-code-block js-markdown-code"><pre class="code highlight js-syntax-highlight language-ruby" lang="ruby" v-pre="true"><code><span id="LC1" class="line" lang="ruby"><span class="k">def</span> <span class="nf">fun</span> <span class="k">end</span></span></code></pre><copy-code></copy-code></div>')
     end
 
     include_examples "XSS prevention", "ruby"
@@ -46,24 +57,24 @@ RSpec.describe Banzai::Filter::SyntaxHighlightFilter do
 
   context "when an invalid language is specified" do
     it "highlights as plaintext" do
-      result = filter('<pre><code lang="gnuplot">This is a test</code></pre>')
+      result = filter('<pre lang="gnuplot"><code>This is a test</code></pre>')
 
-      expect(result.to_html).to eq('<pre class="code highlight js-syntax-highlight language-plaintext" lang="plaintext" v-pre="true"><code><span id="LC1" class="line" lang="plaintext">This is a test</span></code></pre>')
+      expect(result.to_html.delete("\n")).to eq('<div class="gl-relative markdown-code-block js-markdown-code"><pre class="code highlight js-syntax-highlight language-plaintext" lang="plaintext" v-pre="true"><code><span id="LC1" class="line" lang="plaintext">This is a test</span></code></pre><copy-code></copy-code></div>')
     end
 
     include_examples "XSS prevention", "gnuplot"
   end
 
   context "languages that should be passed through" do
-    let(:delimiter) { described_class::PARAMS_DELIMITER }
+    let(:delimiter) { described_class::LANG_PARAMS_DELIMITER }
     let(:data_attr) { described_class::LANG_PARAMS_ATTR }
 
     %w(math mermaid plantuml suggestion).each do |lang|
       context "when #{lang} is specified" do
         it "highlights as plaintext but with the correct language attribute and class" do
-          result = filter(%{<pre><code lang="#{lang}">This is a test</code></pre>})
+          result = filter(%{<pre lang="#{lang}"><code>This is a test</code></pre>})
 
-          expect(result.to_html).to eq(%{<pre class="code highlight js-syntax-highlight language-#{lang}" lang="#{lang}" v-pre="true"><code><span id="LC1" class="line" lang="#{lang}">This is a test</span></code></pre>})
+          expect(result.to_html.delete("\n")).to eq(%{<div class="gl-relative markdown-code-block js-markdown-code"><pre class="code highlight js-syntax-highlight language-#{lang}" lang="#{lang}" v-pre="true"><code><span id="LC1" class="line" lang="#{lang}">This is a test</span></code></pre><copy-code></copy-code></div>})
         end
 
         include_examples "XSS prevention", lang
@@ -71,18 +82,21 @@ RSpec.describe Banzai::Filter::SyntaxHighlightFilter do
 
       context "when #{lang} has extra params" do
         let(:lang_params) { 'foo-bar-kux' }
+        let(:xss_lang) { "#{lang} data-meta=\"foo-bar-kux\"&lt;script&gt;alert(1)&lt;/script&gt;" }
 
         it "includes data-lang-params tag with extra information" do
-          result = filter(%{<pre><code lang="#{lang}#{delimiter}#{lang_params}">This is a test</code></pre>})
+          result = filter(%{<pre lang="#{lang}" data-meta="#{lang_params}"><code>This is a test</code></pre>})
 
-          expect(result.to_html).to eq(%{<pre class="code highlight js-syntax-highlight language-#{lang}" lang="#{lang}" #{data_attr}="#{lang_params}" v-pre="true"><code><span id="LC1" class="line" lang="#{lang}">This is a test</span></code></pre>})
+          expect(result.to_html.delete("\n")).to eq(%{<div class="gl-relative markdown-code-block js-markdown-code"><pre class="code highlight js-syntax-highlight language-#{lang}" lang="#{lang}" #{data_attr}="#{lang_params}" v-pre="true"><code><span id="LC1" class="line" lang="#{lang}">This is a test</span></code></pre><copy-code></copy-code></div>})
         end
 
         include_examples "XSS prevention", lang
+
         include_examples "XSS prevention",
-          "#{lang}#{described_class::PARAMS_DELIMITER}&lt;script&gt;alert(1)&lt;/script&gt;"
+                         "#{lang} data-meta=\"foo-bar-kux\"&lt;script&gt;alert(1)&lt;/script&gt;"
+
         include_examples "XSS prevention",
-          "#{lang}#{described_class::PARAMS_DELIMITER}<script>alert(1)</script>"
+          "#{lang} data-meta=\"foo-bar-kux\"<script>alert(1)</script>"
       end
     end
 
@@ -90,11 +104,33 @@ RSpec.describe Banzai::Filter::SyntaxHighlightFilter do
       let(:lang) { 'suggestion' }
       let(:lang_params) { '-1+10' }
 
-      it "delimits on the first appearance" do
-        result = filter(%{<pre><code lang="#{lang}#{delimiter}#{lang_params}#{delimiter}more-things">This is a test</code></pre>})
-
-        expect(result.to_html).to eq(%{<pre class="code highlight js-syntax-highlight language-#{lang}" lang="#{lang}" #{data_attr}="#{lang_params}#{delimiter}more-things" v-pre="true"><code><span id="LC1" class="line" lang="#{lang}">This is a test</span></code></pre>})
+      let(:expected_result) do
+        %{<div class="gl-relative markdown-code-block js-markdown-code"><pre class="code highlight js-syntax-highlight language-#{lang}" lang="#{lang}" #{data_attr}="#{lang_params} more-things" v-pre="true"><code><span id="LC1" class="line" lang="#{lang}">This is a test</span></code></pre><copy-code></copy-code></div>}
       end
+
+      context 'when delimiter is space' do
+        it 'delimits on the first appearance' do
+          result = filter(%{<pre lang="#{lang}" data-meta="#{lang_params} more-things"><code>This is a test</code></pre>})
+
+          expect(result.to_html.delete("\n")).to eq(expected_result)
+        end
+      end
+
+      context 'when delimiter is colon' do
+        it 'delimits on the first appearance' do
+          result = filter(%{<pre lang="#{lang}#{delimiter}#{lang_params} more-things"><code>This is a test</code></pre>})
+
+          expect(result.to_html.delete("\n")).to eq(expected_result)
+        end
+      end
+    end
+  end
+
+  context "when sourcepos metadata is available" do
+    it "includes it in the highlighted code block" do
+      result = filter('<pre data-sourcepos="1:1-3:3"><code lang="plaintext">This is a test</code></pre>')
+
+      expect(result.to_html.delete("\n")).to eq('<div class="gl-relative markdown-code-block js-markdown-code"><pre data-sourcepos="1:1-3:3" class="code highlight js-syntax-highlight language-plaintext" lang="plaintext" v-pre="true"><code><span id="LC1" class="line" lang="plaintext">This is a test</span></code></pre><copy-code></copy-code></div>')
     end
   end
 
@@ -106,9 +142,9 @@ RSpec.describe Banzai::Filter::SyntaxHighlightFilter do
     end
 
     it "highlights as plaintext" do
-      result = filter('<pre><code lang="ruby">This is a test</code></pre>')
+      result = filter('<pre lang="ruby"><code>This is a test</code></pre>')
 
-      expect(result.to_html).to eq('<pre class="code highlight js-syntax-highlight" lang="" v-pre="true"><code><span id="LC1" class="line" lang="">This is a test</span></code></pre>')
+      expect(result.to_html.delete("\n")).to eq('<div class="gl-relative markdown-code-block js-markdown-code"><pre class="code highlight js-syntax-highlight" lang="" v-pre="true"><code><span id="LC1" class="line" lang="">This is a test</span></code></pre><copy-code></copy-code></div>')
     end
 
     include_examples "XSS prevention", "ruby"

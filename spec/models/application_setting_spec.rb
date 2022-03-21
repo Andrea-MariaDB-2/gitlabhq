@@ -7,6 +7,8 @@ RSpec.describe ApplicationSetting do
 
   subject(:setting) { described_class.create_from_defaults }
 
+  it_behaves_like 'sanitizable', :application_setting, %i[default_branch_name]
+
   it { include(CacheableAttributes) }
   it { include(ApplicationSettingImplementation) }
   it { expect(described_class.current_without_cache).to eq(described_class.last) }
@@ -74,6 +76,26 @@ RSpec.describe ApplicationSetting do
     it { is_expected.to validate_numericality_of(:container_registry_delete_tags_service_timeout).only_integer.is_greater_than_or_equal_to(0) }
     it { is_expected.to validate_numericality_of(:container_registry_cleanup_tags_service_max_list_size).only_integer.is_greater_than_or_equal_to(0) }
     it { is_expected.to validate_numericality_of(:container_registry_expiration_policies_worker_capacity).only_integer.is_greater_than_or_equal_to(0) }
+    it { is_expected.to allow_value(true).for(:container_registry_expiration_policies_caching) }
+    it { is_expected.to allow_value(false).for(:container_registry_expiration_policies_caching) }
+
+    it { is_expected.to validate_numericality_of(:container_registry_import_max_tags_count).only_integer.is_greater_than_or_equal_to(0) }
+    it { is_expected.to validate_numericality_of(:container_registry_import_max_retries).only_integer.is_greater_than_or_equal_to(0) }
+    it { is_expected.to validate_numericality_of(:container_registry_import_start_max_retries).only_integer.is_greater_than_or_equal_to(0) }
+    it { is_expected.to validate_numericality_of(:container_registry_import_max_step_duration).only_integer.is_greater_than_or_equal_to(0) }
+    it { is_expected.not_to allow_value(nil).for(:container_registry_import_max_tags_count) }
+    it { is_expected.not_to allow_value(nil).for(:container_registry_import_max_retries) }
+    it { is_expected.not_to allow_value(nil).for(:container_registry_import_start_max_retries) }
+    it { is_expected.not_to allow_value(nil).for(:container_registry_import_max_step_duration) }
+
+    it { is_expected.to validate_presence_of(:container_registry_import_target_plan) }
+    it { is_expected.to validate_presence_of(:container_registry_import_created_before) }
+
+    it { is_expected.to validate_numericality_of(:dependency_proxy_ttl_group_policy_worker_capacity).only_integer.is_greater_than_or_equal_to(0) }
+    it { is_expected.not_to allow_value(nil).for(:dependency_proxy_ttl_group_policy_worker_capacity) }
+
+    it { is_expected.to validate_numericality_of(:packages_cleanup_package_file_worker_capacity).only_integer.is_greater_than_or_equal_to(0) }
+    it { is_expected.not_to allow_value(nil).for(:packages_cleanup_package_file_worker_capacity) }
 
     it { is_expected.to validate_numericality_of(:snippet_size_limit).only_integer.is_greater_than(0) }
     it { is_expected.to validate_numericality_of(:wiki_page_max_content_bytes).only_integer.is_greater_than_or_equal_to(1024) }
@@ -88,6 +110,9 @@ RSpec.describe ApplicationSetting do
       is_expected.to validate_numericality_of(:max_pages_size).only_integer.is_greater_than_or_equal_to(0)
                        .is_less_than(::Gitlab::Pages::MAX_SIZE / 1.megabyte)
     end
+
+    it { is_expected.to validate_presence_of(:jobs_per_stage_page_size) }
+    it { is_expected.to validate_numericality_of(:jobs_per_stage_page_size).only_integer.is_greater_than_or_equal_to(0) }
 
     it { is_expected.not_to allow_value(7).for(:minimum_password_length) }
     it { is_expected.not_to allow_value(129).for(:minimum_password_length) }
@@ -118,11 +143,13 @@ RSpec.describe ApplicationSetting do
     it { is_expected.not_to allow_value('default' => 101).for(:repository_storages_weighted).with_message("value for 'default' must be between 0 and 100") }
     it { is_expected.not_to allow_value('default' => 100, shouldntexist: 50).for(:repository_storages_weighted).with_message("can't include: shouldntexist") }
 
-    it { is_expected.to allow_value(400).for(:notes_create_limit) }
-    it { is_expected.not_to allow_value('two').for(:notes_create_limit) }
-    it { is_expected.not_to allow_value(nil).for(:notes_create_limit) }
-    it { is_expected.not_to allow_value(5.5).for(:notes_create_limit) }
-    it { is_expected.not_to allow_value(-2).for(:notes_create_limit) }
+    %i[notes_create_limit search_rate_limit search_rate_limit_unauthenticated users_get_by_id_limit].each do |setting|
+      it { is_expected.to allow_value(400).for(setting) }
+      it { is_expected.not_to allow_value('two').for(setting) }
+      it { is_expected.not_to allow_value(nil).for(setting) }
+      it { is_expected.not_to allow_value(5.5).for(setting) }
+      it { is_expected.not_to allow_value(-2).for(setting) }
+    end
 
     def many_usernames(num = 100)
       Array.new(num) { |i| "username#{i}" }
@@ -132,6 +159,11 @@ RSpec.describe ApplicationSetting do
     it { is_expected.not_to allow_value(many_usernames(101)).for(:notes_create_limit_allowlist) }
     it { is_expected.not_to allow_value(nil).for(:notes_create_limit_allowlist) }
     it { is_expected.to allow_value([]).for(:notes_create_limit_allowlist) }
+
+    it { is_expected.to allow_value(many_usernames(100)).for(:users_get_by_id_limit_allowlist) }
+    it { is_expected.not_to allow_value(many_usernames(101)).for(:users_get_by_id_limit_allowlist) }
+    it { is_expected.not_to allow_value(nil).for(:users_get_by_id_limit_allowlist) }
+    it { is_expected.to allow_value([]).for(:users_get_by_id_limit_allowlist) }
 
     it { is_expected.to allow_value('all_tiers').for(:whats_new_variant) }
     it { is_expected.to allow_value('current_tier').for(:whats_new_variant) }
@@ -239,6 +271,7 @@ RSpec.describe ApplicationSetting do
         end
 
         it { is_expected.to allow_value('grpc://example.org/spam_check').for(:spam_check_endpoint_url) }
+        it { is_expected.to allow_value('tls://example.org/spam_check').for(:spam_check_endpoint_url) }
         it { is_expected.not_to allow_value('https://example.org/spam_check').for(:spam_check_endpoint_url) }
         it { is_expected.not_to allow_value('nonsense').for(:spam_check_endpoint_url) }
         it { is_expected.not_to allow_value(nil).for(:spam_check_endpoint_url) }
@@ -251,6 +284,7 @@ RSpec.describe ApplicationSetting do
         end
 
         it { is_expected.to allow_value('grpc://example.org/spam_check').for(:spam_check_endpoint_url) }
+        it { is_expected.to allow_value('tls://example.org/spam_check').for(:spam_check_endpoint_url) }
         it { is_expected.not_to allow_value('https://example.org/spam_check').for(:spam_check_endpoint_url) }
         it { is_expected.not_to allow_value('nonsense').for(:spam_check_endpoint_url) }
         it { is_expected.to allow_value(nil).for(:spam_check_endpoint_url) }
@@ -479,7 +513,7 @@ RSpec.describe ApplicationSetting do
 
     context 'key restrictions' do
       it 'supports all key types' do
-        expect(described_class::SUPPORTED_KEY_TYPES).to contain_exactly(:rsa, :dsa, :ecdsa, :ed25519)
+        expect(described_class::SUPPORTED_KEY_TYPES).to eq(Gitlab::SSHPublicKey.supported_types)
       end
 
       it 'does not allow all key types to be disabled' do
@@ -925,6 +959,8 @@ RSpec.describe ApplicationSetting do
     context 'throttle_* settings' do
       where(:throttle_setting) do
         %i[
+          throttle_unauthenticated_api_requests_per_period
+          throttle_unauthenticated_api_period_in_seconds
           throttle_unauthenticated_requests_per_period
           throttle_unauthenticated_period_in_seconds
           throttle_authenticated_api_requests_per_period
@@ -939,6 +975,10 @@ RSpec.describe ApplicationSetting do
           throttle_unauthenticated_files_api_period_in_seconds
           throttle_authenticated_files_api_requests_per_period
           throttle_authenticated_files_api_period_in_seconds
+          throttle_unauthenticated_deprecated_api_requests_per_period
+          throttle_unauthenticated_deprecated_api_period_in_seconds
+          throttle_authenticated_deprecated_api_requests_per_period
+          throttle_authenticated_deprecated_api_period_in_seconds
           throttle_authenticated_git_lfs_requests_per_period
           throttle_authenticated_git_lfs_period_in_seconds
         ]
@@ -951,6 +991,20 @@ RSpec.describe ApplicationSetting do
         it { is_expected.not_to allow_value('three').for(throttle_setting) }
         it { is_expected.not_to allow_value(nil).for(throttle_setting) }
       end
+    end
+
+    context 'sidekiq job limiter settings' do
+      it 'has the right defaults', :aggregate_failures do
+        expect(setting.sidekiq_job_limiter_mode).to eq('compress')
+        expect(setting.sidekiq_job_limiter_compression_threshold_bytes)
+          .to eq(Gitlab::SidekiqMiddleware::SizeLimiter::Validator::DEFAULT_COMPRESSION_THRESHOLD_BYTES)
+        expect(setting.sidekiq_job_limiter_limit_bytes)
+          .to eq(Gitlab::SidekiqMiddleware::SizeLimiter::Validator::DEFAULT_SIZE_LIMIT)
+      end
+
+      it { is_expected.to allow_value('track').for(:sidekiq_job_limiter_mode) }
+      it { is_expected.to validate_numericality_of(:sidekiq_job_limiter_compression_threshold_bytes).only_integer.is_greater_than_or_equal_to(0) }
+      it { is_expected.to validate_numericality_of(:sidekiq_job_limiter_limit_bytes).only_integer.is_greater_than_or_equal_to(0) }
     end
   end
 
@@ -1209,6 +1263,47 @@ RSpec.describe ApplicationSetting do
       expect(subject.kroki_formats_blockdiag).to eq(true)
       expect(subject.kroki_formats_bpmn).to eq(false)
       expect(subject.kroki_formats_excalidraw).to eq(true)
+    end
+  end
+
+  describe '#static_objects_external_storage_auth_token=', :aggregate_failures do
+    subject { setting.static_objects_external_storage_auth_token = token }
+
+    let(:token) { 'Test' }
+
+    it 'stores an encrypted version of the token' do
+      subject
+
+      expect(setting[:static_objects_external_storage_auth_token]).to be_nil
+      expect(setting[:static_objects_external_storage_auth_token_encrypted]).to be_present
+      expect(setting.static_objects_external_storage_auth_token).to eq('Test')
+    end
+
+    context 'when token is empty' do
+      let(:token) { '' }
+
+      it 'removes an encrypted version of the token' do
+        subject
+
+        expect(setting[:static_objects_external_storage_auth_token]).to be_nil
+        expect(setting[:static_objects_external_storage_auth_token_encrypted]).to be_nil
+        expect(setting.static_objects_external_storage_auth_token).to be_nil
+      end
+    end
+
+    context 'with plaintext token only' do
+      let(:token) { '' }
+
+      it 'ignores the plaintext token' do
+        subject
+
+        ApplicationSetting.update_all(static_objects_external_storage_auth_token: 'Test')
+
+        setting.reload
+        expect(setting[:static_objects_external_storage_auth_token]).to be_nil
+        expect(setting[:static_objects_external_storage_auth_token_encrypted]).to be_nil
+        expect(setting.static_objects_external_storage_auth_token).to be_nil
+      end
     end
   end
 end

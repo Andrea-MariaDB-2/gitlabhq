@@ -1,13 +1,10 @@
 ---
 stage: Create
 group: Source Code
-info: "To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments"
-type: reference, howto
+info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
 ---
 
 # Protected tags **(FREE)**
-
-> [Introduced](https://gitlab.com/gitlab-org/gitlab-foss/-/merge_requests/10356) in GitLab 9.1.
 
 Protected tags:
 
@@ -25,23 +22,23 @@ This feature evolved out of [protected branches](protected_branches.md)
 
 By default:
 
-- To create tags, you must have the [Maintainer role](../permissions.md).
+- To create tags, you must have the Maintainer role.
 - No one can update or delete tags.
 
 ## Configuring protected tags
 
-To protect a tag, you need to have at least the [Maintainer role](../permissions.md).
+To protect a tag, you must have at least the Maintainer role.
 
 1. Go to the project's **Settings > Repository**.
 
-1. From the **Tag** dropdown menu, select the tag you want to protect or type and click **Create wildcard**. In the screenshot below, we chose to protect all tags matching `v*`:
+1. From the **Tag** dropdown list, select the tag you want to protect or type and click **Create wildcard**. In the screenshot below, we chose to protect all tags matching `v*`:
 
    ![Protected tags page](img/protected_tags_page_v12_3.png)
 
-1. From the **Allowed to create** dropdown, select users with permission to create
-   matching tags, and click **Protect**:
+1. From the **Allowed to create** dropdown list, select users with permission to create
+   matching tags, and select **Protect**:
 
-   ![Allowed to create tags dropdown](img/protected_tags_permissions_dropdown_v12_3.png)
+   ![Allowed to create tags dropdown list](img/protected_tags_permissions_dropdown_v12_3.png)
 
 1. After done, the protected tag displays in the **Protected tags** list:
 
@@ -64,10 +61,30 @@ Two different wildcards can potentially match the same tag. For example,
 In that case, if _any_ of these protected tags have a setting like
 **Allowed to create**, then `production-stable` also inherit this setting.
 
-If you click on a protected tag's name, GitLab displays a list of
+If you select a protected tag's name, GitLab displays a list of
 all matching tags:
 
 ![Protected tag matches](img/protected_tag_matches.png)
+
+## Prevent tag creation with the same name as branches
+
+A tag and a branch with identical names can contain different commits. If your
+tags and branches use the same names, users running `git checkout`
+commands might check out the _tag_ `qa` when they instead meant to check out
+the _branch_ `qa`.
+
+To prevent this problem:
+
+1. Identify the branch names you do not want used as tags.
+1. As described in [Configuring protected tags](#configuring-protected-tags),
+   create a protected tag:
+
+   - For the **Name**, provide a name, such as `stable`. You can also create a wildcard
+     like `stable-*` to match multiple names, like `stable-v1` and `stable-v2`.
+   - For **Allowed to Create**, select **No one**.
+   - Select **Protect**.
+
+Users can still create branches, but not tags, with the protected names.
 
 <!-- ## Troubleshooting
 

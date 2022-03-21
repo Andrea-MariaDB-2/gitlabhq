@@ -1,20 +1,39 @@
+import { GlBadge, GlLink, GlIcon, GlButton, GlDropdown } from '@gitlab/ui';
 import { mount } from '@vue/test-utils';
 import MockAdapter from 'axios-mock-adapter';
 import Vue, { nextTick } from 'vue';
 import VueApollo from 'vue-apollo';
+import * as Sentry from '@sentry/browser';
 import createMockApollo from 'helpers/mock_apollo_helper';
+import waitForPromises from 'helpers/wait_for_promises';
 import { securityReportMergeRequestDownloadPathsQueryResponse } from 'jest/vue_shared/security_reports/mock_data';
+import api from '~/api';
 import axios from '~/lib/utils/axios_utils';
+import Poll from '~/lib/utils/poll';
 import { setFaviconOverlay } from '~/lib/utils/favicon';
 import notify from '~/lib/utils/notify';
 import SmartInterval from '~/smart_interval';
+import {
+  registerExtension,
+  registeredExtensions,
+} from '~/vue_merge_request_widget/components/extensions';
 import { SUCCESS } from '~/vue_merge_request_widget/components/deployment/constants';
 import eventHub from '~/vue_merge_request_widget/event_hub';
 import MrWidgetOptions from '~/vue_merge_request_widget/mr_widget_options.vue';
 import { stateKey } from '~/vue_merge_request_widget/stores/state_maps';
+import StatusIcon from '~/vue_merge_request_widget/components/extensions/status_icon.vue';
 import securityReportMergeRequestDownloadPathsQuery from '~/vue_shared/security_reports/graphql/queries/security_report_merge_request_download_paths.query.graphql';
 import { faviconDataUrl, overlayDataUrl } from '../lib/utils/mock_data';
 import mockData from './mock_data';
+import {
+  workingExtension,
+  collapsedDataErrorExtension,
+  fullDataErrorExtension,
+  pollingExtension,
+  pollingErrorExtension,
+} from './test_extensions';
+
+jest.mock('~/api.js');
 
 jest.mock('~/smart_interval');
 
@@ -533,7 +552,7 @@ describe('MrWidgetOptions', () => {
         nextTick(() => {
           const tooltip = wrapper.find('[data-testid="question-o-icon"]');
 
-          expect(wrapper.text()).toContain('The source branch will be deleted');
+          expect(wrapper.text()).toContain('Deletes the source branch');
           expect(tooltip.attributes('title')).toBe(
             'A user with write access to the source branch selected this option',
           );
@@ -549,7 +568,7 @@ describe('MrWidgetOptions', () => {
 
         nextTick(() => {
           expect(wrapper.text()).toContain('The source branch has been deleted');
-          expect(wrapper.text()).not.toContain('The source branch will be deleted');
+          expect(wrapper.text()).not.toContain('Deletes the source branch');
 
           done();
         });
@@ -877,6 +896,183 @@ describe('MrWidgetOptions', () => {
 
         expect(findSuggestPipeline().exists()).toBe(false);
       });
+    });
+  });
+
+  describe('mock extension', () => {
+    let pollRequest;
+
+    beforeEach(() => {
+      pollRequest = jest.spyOn(Poll.prototype, 'makeRequest');
+
+      registerExtension(workingExtension);
+
+      createComponent();
+    });
+
+    afterEach(() => {
+      pollRequest.mockRestore();
+
+      registeredExtensions.extensions = [];
+    });
+
+    it('renders collapsed data', async () => {
+      await waitForPromises();
+
+      expect(wrapper.text()).toContain('Test extension summary count: 1');
+    });
+
+    it('triggers trackRedisHllUserEvent API call', async () => {
+      await waitForPromises();
+
+      wrapper
+        .find('[data-testid="widget-extension"] [data-testid="toggle-button"]')
+        .trigger('click');
+
+      await nextTick();
+
+      expect(api.trackRedisHllUserEvent).toHaveBeenCalledWith('test_expand_event');
+    });
+
+    it('renders full data', async () => {
+      await waitForPromises();
+
+      wrapper
+        .find('[data-testid="widget-extension"] [data-testid="toggle-button"]')
+        .trigger('click');
+
+      await nextTick();
+
+      expect(
+        wrapper.find('[data-testid="widget-extension-top-level"]').find(GlDropdown).exists(),
+      ).toBe(false);
+
+      await nextTick();
+
+      const collapsedSection = wrapper.find('[data-testid="widget-extension-collapsed-section"]');
+      expect(collapsedSection.exists()).toBe(true);
+      expect(collapsedSection.text()).toContain('Hello world');
+
+      // Renders icon in the row
+      expect(collapsedSection.find(GlIcon).exists()).toBe(true);
+      expect(collapsedSection.find(GlIcon).props('name')).toBe('status-failed');
+
+      // Renders badge in the row
+      expect(collapsedSection.find(GlBadge).exists()).toBe(true);
+      expect(collapsedSection.find(GlBadge).text()).toBe('Closed');
+
+      // Renders a link in the row
+      expect(collapsedSection.find(GlLink).exists()).toBe(true);
+      expect(collapsedSection.find(GlLink).text()).toBe('GitLab.com');
+
+      expect(collapsedSection.find(GlButton).exists()).toBe(true);
+      expect(collapsedSection.find(GlButton).text()).toBe('Full report');
+    });
+
+    it('extension polling is not called if enablePolling flag is not passed', () => {
+      // called one time due to parent component polling (mount)
+      expect(pollRequest).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('mock polling extension', () => {
+    let pollRequest;
+    let pollStop;
+
+    beforeEach(() => {
+      pollRequest = jest.spyOn(Poll.prototype, 'makeRequest');
+      pollStop = jest.spyOn(Poll.prototype, 'stop');
+    });
+
+    afterEach(() => {
+      pollRequest.mockRestore();
+      pollStop.mockRestore();
+
+      registeredExtensions.extensions = [];
+    });
+
+    describe('success', () => {
+      beforeEach(() => {
+        registerExtension(pollingExtension);
+
+        createComponent();
+      });
+
+      it('does not make additional requests after poll is successful', () => {
+        // called two times due to parent component polling (mount) and extension polling
+        expect(pollRequest).toHaveBeenCalledTimes(2);
+        expect(pollStop).toHaveBeenCalledTimes(1);
+      });
+    });
+
+    describe('error', () => {
+      let captureException;
+
+      beforeEach(() => {
+        captureException = jest.spyOn(Sentry, 'captureException');
+
+        registerExtension(pollingErrorExtension);
+
+        createComponent();
+      });
+
+      it('does not make additional requests after poll has failed', () => {
+        // called two times due to parent component polling (mount) and extension polling
+        expect(pollRequest).toHaveBeenCalledTimes(2);
+        expect(pollStop).toHaveBeenCalledTimes(1);
+      });
+
+      it('captures sentry error and displays error when poll has failed', () => {
+        expect(captureException).toHaveBeenCalledTimes(1);
+        expect(captureException).toHaveBeenCalledWith(new Error('Fetch error'));
+        expect(wrapper.findComponent(StatusIcon).props('iconName')).toBe('failed');
+      });
+    });
+  });
+
+  describe('mock extension errors', () => {
+    let captureException;
+
+    const itHandlesTheException = () => {
+      expect(captureException).toHaveBeenCalledTimes(1);
+      expect(captureException).toHaveBeenCalledWith(new Error('Fetch error'));
+      expect(wrapper.findComponent(StatusIcon).props('iconName')).toBe('failed');
+    };
+
+    beforeEach(() => {
+      captureException = jest.spyOn(Sentry, 'captureException');
+    });
+
+    afterEach(() => {
+      registeredExtensions.extensions = [];
+      captureException = null;
+    });
+
+    it('handles collapsed data fetch errors', async () => {
+      registerExtension(collapsedDataErrorExtension);
+      createComponent();
+      await waitForPromises();
+
+      expect(
+        wrapper.find('[data-testid="widget-extension"] [data-testid="toggle-button"]').exists(),
+      ).toBe(false);
+      itHandlesTheException();
+    });
+
+    it('handles full data fetch errors', async () => {
+      registerExtension(fullDataErrorExtension);
+      createComponent();
+      await waitForPromises();
+
+      expect(wrapper.findComponent(StatusIcon).props('iconName')).not.toBe('error');
+      wrapper
+        .find('[data-testid="widget-extension"] [data-testid="toggle-button"]')
+        .trigger('click');
+
+      await nextTick();
+      await waitForPromises();
+
+      itHandlesTheException();
     });
   });
 });

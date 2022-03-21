@@ -18,8 +18,14 @@ module Types
       field :iid, GraphQL::Types::String, null: false,
             description: 'Internal ID of the pipeline.'
 
-      field :sha, GraphQL::Types::String, null: false,
-            description: "SHA of the pipeline's commit."
+      field :sha, GraphQL::Types::String, null: true,
+            method: :sha,
+            description: "SHA of the pipeline's commit." do
+        argument :format,
+                 type: Types::ShaFormatEnum,
+                 required: false,
+                 description: 'Format of the SHA.'
+      end
 
       field :before_sha, GraphQL::Types::String, null: true,
             description: 'Base SHA of the source branch.'
@@ -45,7 +51,7 @@ module Types
       field :queued_duration, Types::DurationType, null: true,
             description: 'How long the pipeline was queued before starting.'
 
-      field :coverage, GraphQL::FLOAT_TYPE, null: true,
+      field :coverage, GraphQL::Types::Float, null: true,
             description: 'Coverage percentage.'
 
       field :created_at, Types::TimeType, null: false,
@@ -66,7 +72,7 @@ module Types
       field :stages,
             type: Types::Ci::StageType.connection_type,
             null: true,
-            authorize: :read_commit_status,
+            authorize: :read_build,
             description: 'Stages of the pipeline.',
             extras: [:lookahead],
             resolver: Resolvers::Ci::PipelineStagesResolver
@@ -89,14 +95,14 @@ module Types
       field :jobs,
             ::Types::Ci::JobType.connection_type,
             null: true,
-            authorize: :read_commit_status,
+            authorize: :read_build,
             description: 'Jobs belonging to the pipeline.',
             resolver: ::Resolvers::Ci::JobsResolver
 
       field :job,
             type: ::Types::Ci::JobType,
             null: true,
-            authorize: :read_commit_status,
+            authorize: :read_build,
             description: 'Specific job in this pipeline, either by name or ID.' do
         argument :id,
                  type: ::Types::GlobalIDType[::CommitStatus],
@@ -108,10 +114,15 @@ module Types
                  description: 'Name of the job.'
       end
 
+      field :job_artifacts,
+            null: true,
+            description: 'Job artifacts of the pipeline.',
+            resolver: ::Resolvers::Ci::PipelineJobArtifactsResolver
+
       field :source_job,
             type: Types::Ci::JobType,
             null: true,
-            authorize: :read_commit_status,
+            authorize: :read_build,
             description: 'Job where pipeline was triggered from.'
 
       field :downstream, Types::Ci::PipelineType.connection_type, null: true,
@@ -124,6 +135,10 @@ module Types
 
       field :path, GraphQL::Types::String, null: true,
             description: "Relative path to the pipeline's page."
+
+      field :commit, Types::CommitType, null: true,
+            description: "Git commit of the pipeline.",
+            calls_gitaly: true
 
       field :commit_path, GraphQL::Types::String, null: true,
             description: 'Path to the commit that triggered the pipeline.'
@@ -153,6 +168,13 @@ module Types
       field :ref, GraphQL::Types::String, null: true,
             description: 'Reference to the branch from which the pipeline was triggered.'
 
+      field :ref_path, GraphQL::Types::String, null: true,
+            description: 'Reference path to the branch from which the pipeline was triggered.',
+            method: :source_ref_path
+
+      field :warning_messages, [Types::Ci::PipelineMessageType], null: true,
+            description: 'Pipeline warning messages.'
+
       def detailed_status
         object.detailed_status(current_user)
       end
@@ -178,6 +200,12 @@ module Types
         else
           pipeline.statuses.by_name(name)
         end.take # rubocop: disable CodeReuse/ActiveRecord
+      end
+
+      def sha(format: Types::ShaFormatEnum.enum[:long])
+        return pipeline.short_sha if format == Types::ShaFormatEnum.enum[:short]
+
+        pipeline.sha
       end
 
       alias_method :pipeline, :object

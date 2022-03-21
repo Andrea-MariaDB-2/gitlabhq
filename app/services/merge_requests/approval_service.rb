@@ -11,9 +11,11 @@ module MergeRequests
 
       reset_approvals_cache(merge_request)
       create_event(merge_request)
+      stream_audit_event(merge_request)
       create_approval_note(merge_request)
       mark_pending_todos_as_done(merge_request)
       execute_approval_hooks(merge_request, current_user)
+      remove_attention_requested(merge_request)
       merge_request_activity_counter.track_approve_mr_action(user: current_user)
 
       success
@@ -35,7 +37,7 @@ module MergeRequests
     end
 
     def save_approval(approval)
-      Approval.safe_ensure_unique do # rubocop:disable Performance/ActiveRecordSubtransactionMethods
+      Approval.safe_ensure_unique do
         approval.save
       end
     end
@@ -50,6 +52,10 @@ module MergeRequests
 
     def create_event(merge_request)
       event_service.approve_mr(merge_request, current_user)
+    end
+
+    def stream_audit_event(merge_request)
+      # Defined in EE
     end
   end
 end

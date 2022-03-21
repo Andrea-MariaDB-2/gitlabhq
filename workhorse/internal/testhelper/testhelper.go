@@ -14,12 +14,16 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dgrijalva/jwt-go"
+	"github.com/golang-jwt/jwt/v4"
 	"github.com/stretchr/testify/require"
 
 	"gitlab.com/gitlab-org/labkit/log"
 
 	"gitlab.com/gitlab-org/gitlab/workhorse/internal/secret"
+)
+
+const (
+	geoProxyEndpointPath = "/api/v4/geo/proxy"
 )
 
 func ConfigureSecret() {
@@ -50,7 +54,20 @@ func RequireResponseHeader(t *testing.T, w interface{}, header string, expected 
 	require.Equal(t, expected, actual, "values for HTTP header %s", header)
 }
 
+// TestServerWithHandler skips Geo API polling for a proxy URL by default,
+// use TestServerWithHandlerWithGeoPolling if you need to explicitly
+// handle Geo API polling request as well.
 func TestServerWithHandler(url *regexp.Regexp, handler http.HandlerFunc) *httptest.Server {
+	return TestServerWithHandlerWithGeoPolling(url, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == geoProxyEndpointPath {
+			return
+		}
+
+		handler(w, r)
+	}))
+}
+
+func TestServerWithHandlerWithGeoPolling(url *regexp.Regexp, handler http.HandlerFunc) *httptest.Server {
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		logEntry := log.WithFields(log.Fields{
 			"method": r.Method,
@@ -149,4 +166,17 @@ func Retry(t testing.TB, timeout time.Duration, fn func() error) {
 		}
 	}
 	t.Fatalf("test timeout after %v; last error: %v", timeout, err)
+}
+
+func SetupStaticFileHelper(t *testing.T, fpath, content, directory string) string {
+	cwd, err := os.Getwd()
+	require.NoError(t, err, "get working directory")
+
+	absDocumentRoot := path.Join(cwd, directory)
+	require.NoError(t, os.MkdirAll(path.Join(absDocumentRoot, path.Dir(fpath)), 0755), "create document root")
+
+	staticFile := path.Join(absDocumentRoot, fpath)
+	require.NoError(t, ioutil.WriteFile(staticFile, []byte(content), 0666), "write file content")
+
+	return absDocumentRoot
 }

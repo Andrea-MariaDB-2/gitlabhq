@@ -1,41 +1,37 @@
 ---
 stage: Create
 group: Editor
-info: "To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments"
-type: reference, how-to
+info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
 ---
 
 # Web IDE **(FREE)**
 
-> - [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/4539) in [GitLab Ultimate](https://about.gitlab.com/pricing/) 10.4.
-> - [Moved](https://gitlab.com/gitlab-org/gitlab-foss/-/issues/44157) to GitLab Free in 10.7.
-
-The Web Integrated Development Environment (IDE) editor makes it faster and easier to contribute changes to your
-projects by providing an advanced editor with commit staging.
+The Web Integrated Development Environment (IDE) editor streamlines the process
+to contribute changes to your projects, by providing an advanced editor with
+commit staging.
 
 ## Open the Web IDE
 
-You can open the Web IDE when viewing a file, from the repository file list,
+Use the <kbd>.</kbd> [keyboard shortcut](../../shortcuts.md) to open the Web IDE.
+You can also open the Web IDE when viewing a file, from the repository file list,
 and from merge requests:
 
 - *When viewing a file, or the repository file list* -
-  1. In the upper right corner of the page, select **Edit in Web IDE** if it is visible.
-  1. If **Edit in Web IDE** is not visible:
+  1. In the upper right corner of the page, select **Open in Web IDE** if it is visible.
+  1. If **Open in Web IDE** is not visible:
      1. Select the **(angle-down)** next to **Edit** or **Gitpod**, depending on your configuration.
-     1. Select **Edit in Web IDE** from the list to display it as the editing option.
-     1. Select **Edit in Web IDE** to open the editor.
+     1. Select **Open in Web IDE** from the list to display it as the editing option.
+     1. Select **Open in Web IDE** to open the editor.
 - *When viewing a merge request* -
   1. Go to your merge request, and select the **Overview** tab.
-  1. Scroll to the widgets area, after the merge request description.
-  1. Select **Edit in Web IDE** if it is visible.
-  1. If **Edit in Web IDE** is not visible:
+  1. Scroll to the widgets section, after the merge request description.
+  1. Select **Open in Web IDE** if it is visible.
+  1. If **Open in Web IDE** is not visible:
      1. Select the **(angle-down)** next to **Open in Gitpod**.
      1. Select **Open in Web IDE** from the list to display it as the editing option.
      1. Select **Open in Web IDE** to open the editor.
 
 ## File finder
-
-> [Introduced](https://gitlab.com/gitlab-org/gitlab-foss/-/merge_requests/18323) in [GitLab Free](https://about.gitlab.com/pricing/) 10.8.
 
 The file finder allows you to quickly open files in the current branch by
 searching for fragments of the file path. The file finder is launched using the keyboard shortcut
@@ -100,12 +96,13 @@ same core features for highlighting and linking to particular lines in the edite
 
 ## Schema based validation
 
-> - Support for validation based on predefined schemas [introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/218472) in GitLab 13.2.
-> - It was deployed behind a feature flag, disabled by default.
-> - It's enabled on GitLab.com.
-> - It cannot be enabled or disabled per-project.
-> - For GitLab self-managed instances, GitLab administrators can opt to [enable it](#enable-or-disable-validation-based-on-predefined-schemas).
-> - Support for validation based on custom schemas [introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/226982) in [GitLab Premium](https://about.gitlab.com/pricing/) 13.4.
+> [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/218472) validation based on predefined schemas in GitLab 13.2 [with a flag](../../../administration/feature_flags.md) named `schema_linting`. Disabled by default.
+
+FLAG:
+On self-managed GitLab, by default this feature is not available. To make it available for your entire instance, ask an administrator to [enable the feature flag](../../../administration/feature_flags.md) named `schema_linting`.
+This feature cannot be enabled or disabled per-project.
+On GitLab.com, this feature is available.
+You should not use this feature for production environments.
 
 The Web IDE provides validation support for certain JSON and YAML files using schemas
 based on the [JSON Schema Store](https://www.schemastore.org/json/).
@@ -115,28 +112,9 @@ based on the [JSON Schema Store](https://www.schemastore.org/json/).
 The Web IDE has validation for certain files built in. This feature is only supported for
 the `*.gitlab-ci.yml` files.
 
-#### Enable or disable validation based on predefined schemas **(FREE SELF)**
-
-Validation based on predefined schemas is under development and not ready for production use. It is
-deployed behind a feature flag that is **disabled by default** for self-managed instances,
-[GitLab administrators with access to the GitLab Rails console](../../../administration/feature_flags.md)
-can enable it for your instance.
-
-To enable it:
-
-```ruby
-Feature.enable(:schema_linting)
-```
-
-To disable it:
-
-```ruby
-Feature.disable(:schema_linting)
-```
-
 ### Custom schemas **(PREMIUM)**
 
-> [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/226982) in [GitLab Premium](https://about.gitlab.com/pricing/) 13.4.
+> [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/226982) in GitLab 13.4.
 
 The Web IDE also allows you to define custom schemas for certain JSON/YAML files in your project.
 You can do so by defining a `schemas` entry in the `.gitlab/.gitlab-webide.yml` file inside the
@@ -167,7 +145,7 @@ Each schema entry supports two properties:
 
 ## Configure the Web IDE
 
-> [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/23352) in [GitLab Free](https://about.gitlab.com/pricing/) 13.1.
+> [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/23352) in GitLab 13.1.
 
 The Web IDE supports configuration of certain editor settings by using
 [`.editorconfig` files](https://editorconfig.org/). When opening a file, the
@@ -186,12 +164,10 @@ The Web IDE currently supports the following `.editorconfig` settings:
 
 ## Commit changes
 
-> - [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/4539) in [GitLab Ultimate](https://about.gitlab.com/pricing/) 10.4.
-> - [Moved](https://gitlab.com/gitlab-org/gitlab-foss/-/issues/44157) to GitLab Free in 10.7.
-> - From [GitLab 12.7 onward](https://gitlab.com/gitlab-org/gitlab/-/issues/33441), files were automatically staged.
-> - From [GitLab 12.9 onward](https://gitlab.com/gitlab-org/gitlab/-/issues/196609), support for staging files was removed to prevent loss of unstaged data. All your current changes necessarily have to be committed or discarded.
+> - [Starting](https://gitlab.com/gitlab-org/gitlab/-/issues/33441) with GitLab 12.7, files are automatically staged.
+> - In GitLab 12.9, support for staging files was [removed](https://gitlab.com/gitlab-org/gitlab/-/issues/196609) to prevent loss of unstaged data. All of your current changes must be committed or discarded.
 
-After making your changes, click the **Commit** button on the bottom-left to
+After making your changes, select **Commit** on the bottom-left to
 review the list of changed files.
 
 After you have finalized your changes, you can add a commit message, commit the
@@ -199,8 +175,8 @@ changes and directly create a merge request. In case you don't have write
 access to the selected branch, you see a warning, but can still create
 a new branch and start a merge request.
 
-To discard a change in a particular file, click the **Discard changes** button on that
-file in the changes tab. To discard all the changes, click the trash icon on the
+To discard a change in a particular file, select **Discard changes** on that
+file in the changes tab. To discard all the changes, select the trash icon on the
 top-right corner of the changes sidebar.
 
 ![Commit changes](img/commit_changes_v13_11.png)
@@ -215,8 +191,6 @@ shows you a preview of the merge request diff if you commit your changes.
 
 ## View CI job logs
 
-> [Introduced](https://gitlab.com/gitlab-org/gitlab-foss/-/merge_requests/19279) in [GitLab Free](https://about.gitlab.com/pricing/) 11.0.
-
 You can use the Web IDE to quickly fix failing tests by opening
 the branch or merge request in the Web IDE and opening the logs of the failed
 job. You can access the status of all jobs for the most recent pipeline and job
@@ -228,31 +202,26 @@ left.
 
 ## Switching merge requests
 
-> [Introduced](https://gitlab.com/gitlab-org/gitlab-foss/-/merge_requests/19318) in [GitLab Free](https://about.gitlab.com/pricing/) 11.0.
-
 To switch between your authored and assigned merge requests, click the
-dropdown in the top of the sidebar to open a list of merge requests. You need to commit or discard all your changes before switching to a different merge
+dropdown in the top of the sidebar to open a list of merge requests. You must commit or discard all your changes before switching to a different merge
 request.
 
 ## Switching branches
 
-> [Introduced](https://gitlab.com/gitlab-org/gitlab-foss/-/merge_requests/20850) in [GitLab Free](https://about.gitlab.com/pricing/) 11.2.
-
 To switch between branches of the current project repository, click the dropdown
 in the top of the sidebar to open a list of branches.
-You need to commit or discard all your changes before switching to a
+You must commit or discard all your changes before switching to a
 different branch.
 
 ## Markdown editing
 
-> - Markdown preview [introduced](https://gitlab.com/gitlab-org/gitlab-foss/-/merge_requests/18059) in [GitLab Free](https://about.gitlab.com/pricing/) 10.7.
-> - Support for pasting images [introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/22822) in [GitLab Free](https://about.gitlab.com/pricing/) 13.1.
-> - Side-by-side Markdown preview [introduced](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/68274) in [GitLab Free](https://about.gitlab.com/pricing/) 14.3
+> - Support for pasting images [introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/22822) in GitLab 13.1.
+> - Side-by-side Markdown preview [introduced](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/68274) in GitLab 14.3.
 
 To edit Markdown files in the Web IDE:
 
 1. Go to your repository, and navigate to the Markdown page you want to edit.
-1. Select **Edit in Web IDE**, and GitLab loads the page in a tab in the editor.
+1. Select **Open in Web IDE**, and GitLab loads the page in a tab in the editor.
 1. Make your changes to the file. GitLab supports [GitLab Flavored Markdown](../../markdown.md#gitlab-flavored-markdown).
 1. When your changes are complete, select **Commit** in the left sidebar.
 1. Add a commit message, select the branch you want to commit to, and select **Commit**.
@@ -272,8 +241,7 @@ There are two ways to preview Markdown content in the Web IDE:
 
 ## Live Preview
 
-> - [Introduced](https://gitlab.com/gitlab-org/gitlab-foss/-/merge_requests/19764) in [GitLab Free](https://about.gitlab.com/pricing/) 11.2.
-> - [Renamed](https://gitlab.com/gitlab-org/gitlab/-/issues/213853) from _Client Side Evaluation_ to _Live Preview_ in GitLab 13.0.
+> [Renamed](https://gitlab.com/gitlab-org/gitlab/-/issues/213853) from _Client Side Evaluation_ to _Live Preview_ in GitLab 13.0.
 
 You can use the Web IDE to preview JavaScript projects right in the browser.
 This feature uses CodeSandbox to compile and bundle the JavaScript used to
@@ -294,7 +262,7 @@ Live Preview is enabled for all projects on GitLab.com. If you are an administra
 of a self-managed GitLab instance, and you want to enable Live Preview:
 
 1. On the top bar, select **Menu > Admin**.
-1. In the left sidebar, select **Settings > General**.
+1. On the left sidebar, select **Settings > General**.
 1. Scroll to **Web IDE** and select **Expand**:
    ![Administrator Live Preview setting](img/admin_live_preview_v13_0.png)
 1. Select **Enable Live Preview** and select **Save changes**.
@@ -318,13 +286,12 @@ An example `package.json`:
 
 ## Interactive Web Terminals for the Web IDE
 
-> - [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/5426) in [GitLab Ultimate](https://about.gitlab.com/pricing/) 11.6.
-> - [Moved](https://gitlab.com/gitlab-org/gitlab/-/issues/211685) to GitLab Free in 13.1.
+> [Moved](https://gitlab.com/gitlab-org/gitlab/-/issues/211685) from GitLab Ultimate to GitLab Free in 13.1.
 
 WARNING:
-Interactive Web Terminals for the Web IDE is currently in **Beta**.
+Interactive Web Terminals for the Web IDE is currently in [**Beta**](../../../policy/alpha-beta-support.md#beta-features).
 GitLab.com shared runners [do not yet support Interactive Web Terminals](https://gitlab.com/gitlab-org/gitlab/-/issues/24674),
-so you would need to use your own private runner to make use of this feature.
+so you must use your own private runner to make use of this feature.
 
 [Interactive Web Terminals](../../../ci/interactive_web_terminal/index.md)
 give the project [Maintainers](../../permissions.md#project-members-permissions)
@@ -333,15 +300,15 @@ GitLab, including through the Web IDE.
 
 ### Runner configuration
 
-Some things need to be configured in the runner for the interactive web terminal
+Some things must be configured in the runner for the interactive web terminal
 to work:
 
 - The runner needs to have
   [`[session_server]` configured properly](https://docs.gitlab.com/runner/configuration/advanced-configuration.html#the-session_server-section).
   This section requires at least a `session_timeout` value (which defaults to 1800
   seconds) and a `listen_address` value. If `advertise_address` is not defined, `listen_address` is used.
-- If you are using a reverse proxy with your GitLab instance, web terminals need to be
-  [enabled](../../../administration/integration/terminal.md#enabling-and-disabling-terminal-support). **(ULTIMATE SELF)**
+- If you are using a reverse proxy with your GitLab instance, web terminals must be
+  [enabled](../../../administration/integration/terminal.md#enabling-and-disabling-terminal-support).
 
 If you have the terminal open and the job has finished with its tasks, the
 terminal blocks the job from finishing for the duration configured in
@@ -355,7 +322,7 @@ The [File Sync](#file-syncing-to-web-terminal) feature is supported on Kubernete
 
 ### Web IDE configuration file
 
-In order to enable the Web IDE terminals you need to create the file
+To enable the Web IDE terminals you must create the file
 `.gitlab/.gitlab-webide.yml` inside the repository's root. This
 file is fairly similar to the [CI configuration file](../../../ci/yaml/index.md)
 syntax but with some restrictions:
@@ -424,8 +391,8 @@ click **Restart Terminal** to start a new terminal session.
 
 ### File syncing to web terminal
 
-> - [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/5276) in [GitLab Ultimate](https://about.gitlab.com/pricing/) 12.0.
-> - [Moved](https://gitlab.com/gitlab-org/gitlab/-/issues/211686) to GitLab Free in 13.1.
+> - [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/5276) in GitLab 12.0.
+> - [Moved](https://gitlab.com/gitlab-org/gitlab/-/issues/211686) from GitLab Ultimate to GitLab Free in 13.1.
 
 File changes in the Web IDE can be synced to a running web terminal.
 This enables users to test their code changes in a preconfigured terminal
@@ -456,7 +423,7 @@ terminal:
 ```
 
 - The `webide-file-sync` executable must start **after** the project
-  directory is available. This is why we need to add `sleep 5` to the `command`.
+  directory is available. This is why we must add `sleep 5` to the `command`.
   See [this issue](https://gitlab.com/gitlab-org/webide-file-sync/-/issues/7) for
   more information.
 - `$CI_PROJECT_DIR` is a
@@ -473,7 +440,7 @@ when:
 
 - <kbd>Control</kbd> + <kbd>S</kbd> (or <kbd>Command</kbd> + <kbd>S</kbd> on Mac)
   is pressed while editing a file.
-- Anything outside the file editor is clicked after editing a file.
+- You select any area outside the file editor after editing a file.
 - A file or folder is created, deleted, or renamed.
 
 ### Limitations

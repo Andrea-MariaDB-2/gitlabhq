@@ -4,7 +4,7 @@ require 'spec_helper'
 
 RSpec.describe 'Projects > Files > User browses LFS files' do
   let(:project) { create(:project, :repository) }
-  let(:user) { project.owner }
+  let(:user) { project.first_owner }
 
   before do
     sign_in(user)
@@ -35,7 +35,7 @@ RSpec.describe 'Projects > Files > User browses LFS files' do
       expect(page).to have_content 'version https://git-lfs.github.com/spec/v1'
       expect(page).to have_content 'oid sha256:91eff75a492a3ed0dfcb544d7f31326bc4014c8551849c192fd1e48d4dd2c897'
       expect(page).to have_content 'size 1575078'
-      expect(page).not_to have_content 'Download (1.5 MB)'
+      expect(page).not_to have_content 'Download (1.50 MiB)'
     end
   end
 
@@ -56,7 +56,7 @@ RSpec.describe 'Projects > Files > User browses LFS files' do
       click_link('lfs')
       click_link('lfs_object.iso')
 
-      expect(page).to have_content('Download (1.5 MB)')
+      expect(page).to have_content('Download (1.50 MiB)')
       expect(page).not_to have_content('version https://git-lfs.github.com/spec/v1')
       expect(page).not_to have_content('oid sha256:91eff75a492a3ed0dfcb544d7f31326bc4014c8551849c192fd1e48d4dd2c897')
       expect(page).not_to have_content('size 1575078')
@@ -72,24 +72,7 @@ RSpec.describe 'Projects > Files > User browses LFS files' do
         expect(page).not_to have_content('Blame')
 
         expect(page).not_to have_selector(:link_or_button, text: /^Edit$/)
-        expect(page).to have_selector(:link_or_button, 'Edit in Web IDE')
-      end
-    end
-
-    context 'when feature flag :consolidated_edit_button is off' do
-      before do
-        stub_feature_flags(consolidated_edit_button: false)
-
-        click_link('files')
-        click_link('lfs')
-        click_link('lfs_object.iso')
-      end
-
-      it 'does not show single file edit link' do
-        page.within('.content') do
-          expect(page).to have_selector(:link_or_button, 'Web IDE')
-          expect(page).not_to have_selector(:link_or_button, 'Edit')
-        end
+        expect(page).to have_selector(:link_or_button, 'Open in Web IDE')
       end
     end
   end

@@ -1,6 +1,6 @@
 // For tabbed navigation links, scrolling tabs, etc. For all top/main navigation,
 // please check nav.scss
-.nav-links:not(.quick-links) {
+.nav-links {
   display: flex;
   padding: 0;
   margin: 0;
@@ -18,7 +18,6 @@
       line-height: 28px;
       color: $gl-text-color-secondary;
       border: 0;
-      border-bottom: 2px solid transparent;
       white-space: nowrap;
 
       &:hover,
@@ -26,7 +25,7 @@
       &:focus {
         text-decoration: none;
         color: $black;
-        border-bottom: 2px solid $gray-darkest;
+        box-shadow: inset 0 -2px 0 0 $gray-darkest;
       }
     }
 
@@ -40,9 +39,11 @@
     a.active {
       color: $black;
       font-weight: $gl-font-weight-bold;
+      box-shadow: inset 0 -2px 0 0 var(--gl-theme-accent, $theme-indigo-500);
 
       .badge.badge-pill {
         color: $black;
+        font-weight: $gl-font-weight-bold;
       }
     }
 
@@ -126,14 +127,6 @@
     input {
       display: inline-block;
       position: relative;
-
-      &:not[type='checkbox'] {
-        /* Medium devices (desktops, 992px and up) */
-        @include media-breakpoint-up(md) { width: 200px; }
-
-        /* Large devices (large desktops, 1200px and up) */
-        @include media-breakpoint-up(lg) { width: 250px; }
-      }
     }
 
     @include media-breakpoint-up(md) {

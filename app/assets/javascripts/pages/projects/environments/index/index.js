@@ -1,3 +1,5 @@
-import initEnvironments from '~/environments/';
+import initEnvironments from '~/environments/index';
 
-initEnvironments();
+const el = document.getElementById('environments-table');
+
+initEnvironments(el);

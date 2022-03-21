@@ -3,10 +3,38 @@
 require 'spec_helper'
 
 RSpec.describe Feature, stub_feature_flags: false do
+  include StubVersion
+
   before do
     # reset Flipper AR-engine
     Feature.reset
     skip_feature_flags_yaml_validation
+  end
+
+  describe '.feature_flags_available?' do
+    it 'returns false on connection error' do
+      expect(ActiveRecord::Base.connection).to receive(:active?).and_raise(PG::ConnectionBad) # rubocop:disable Database/MultipleDatabases
+
+      expect(described_class.feature_flags_available?).to eq(false)
+    end
+
+    it 'returns false when connection is not active' do
+      expect(ActiveRecord::Base.connection).to receive(:active?).and_return(false) # rubocop:disable Database/MultipleDatabases
+
+      expect(described_class.feature_flags_available?).to eq(false)
+    end
+
+    it 'returns false when the flipper table does not exist' do
+      expect(Feature::FlipperFeature).to receive(:table_exists?).and_return(false)
+
+      expect(described_class.feature_flags_available?).to eq(false)
+    end
+
+    it 'returns false on NoDatabaseError' do
+      expect(Feature::FlipperFeature).to receive(:table_exists?).and_raise(ActiveRecord::NoDatabaseError)
+
+      expect(described_class.feature_flags_available?).to eq(false)
+    end
   end
 
   describe '.get' do
@@ -102,12 +130,14 @@ RSpec.describe Feature, stub_feature_flags: false do
 
   describe '.flipper' do
     context 'when request store is inactive' do
-      it 'memoizes the Flipper instance' do
+      it 'memoizes the Flipper instance but does not not enable Flipper memoization' do
         expect(Flipper).to receive(:new).once.and_call_original
 
         2.times do
-          described_class.send(:flipper)
+          described_class.flipper
         end
+
+        expect(described_class.flipper.adapter.memoizing?).to eq(false)
       end
     end
 
@@ -115,14 +145,20 @@ RSpec.describe Feature, stub_feature_flags: false do
       it 'memoizes the Flipper instance' do
         expect(Flipper).to receive(:new).once.and_call_original
 
-        described_class.send(:flipper)
+        described_class.flipper
         described_class.instance_variable_set(:@flipper, nil)
-        described_class.send(:flipper)
+        described_class.flipper
+
+        expect(described_class.flipper.adapter.memoizing?).to eq(true)
       end
     end
   end
 
   describe '.enabled?' do
+    before do
+      allow(Feature).to receive(:log_feature_flag_states?).and_return(false)
+    end
+
     it 'returns false for undefined feature' do
       expect(described_class.enabled?(:some_random_feature_flag)).to be_falsey
     end
@@ -175,6 +211,35 @@ RSpec.describe Feature, stub_feature_flags: false do
       expect(described_class.enabled?(:a_feature, default_enabled: fake_default)).to eq(fake_default)
     end
 
+    context 'logging is enabled', :request_store do
+      before do
+        allow(Feature).to receive(:log_feature_flag_states?).and_call_original
+
+        definition = Feature::Definition.new("development/enabled_feature_flag.yml",
+                                                         name: :enabled_feature_flag,
+                                                         type: 'development',
+                                                         log_state_changes: true,
+                                                         default_enabled: false)
+
+        allow(Feature::Definition).to receive(:definitions) do
+          { definition.key => definition }
+        end
+
+        described_class.enable(:feature_flag_state_logs)
+        described_class.enable(:enabled_feature_flag)
+        described_class.enabled?(:enabled_feature_flag)
+      end
+
+      it 'does not log feature_flag_state_logs' do
+        expect(described_class.logged_states).not_to have_key("feature_flag_state_logs")
+      end
+
+      it 'logs other feature flags' do
+        expect(described_class.logged_states).to have_key(:enabled_feature_flag)
+        expect(described_class.logged_states[:enabled_feature_flag]).to be_truthy
+      end
+    end
+
     context 'cached feature flag', :request_store do
       let(:flag) { :some_feature_flag }
 
@@ -192,7 +257,7 @@ RSpec.describe Feature, stub_feature_flags: false do
       end
 
       it 'caches the status in L2 cache after 2 minutes' do
-        Timecop.travel 2.minutes do
+        travel_to 2.minutes.from_now do
           expect do
             expect(described_class.send(:l1_cache_backend)).to receive(:fetch).once.and_call_original
             expect(described_class.send(:l2_cache_backend)).to receive(:fetch).once.and_call_original
@@ -202,7 +267,7 @@ RSpec.describe Feature, stub_feature_flags: false do
       end
 
       it 'fetches the status after an hour' do
-        Timecop.travel 61.minutes do
+        travel_to 61.minutes.from_now do
           expect do
             expect(described_class.send(:l1_cache_backend)).to receive(:fetch).once.and_call_original
             expect(described_class.send(:l2_cache_backend)).to receive(:fetch).once.and_call_original
@@ -310,7 +375,7 @@ RSpec.describe Feature, stub_feature_flags: false do
 
             context 'when database exists' do
               before do
-                allow(Gitlab::Database.main).to receive(:exists?).and_return(true)
+                allow(ApplicationRecord.database).to receive(:exists?).and_return(true)
               end
 
               it 'checks the persisted status and returns false' do
@@ -322,7 +387,7 @@ RSpec.describe Feature, stub_feature_flags: false do
 
             context 'when database does not exist' do
               before do
-                allow(Gitlab::Database.main).to receive(:exists?).and_return(false)
+                allow(ApplicationRecord.database).to receive(:exists?).and_return(false)
               end
 
               it 'returns false without checking the status in the database' do
@@ -487,6 +552,86 @@ RSpec.describe Feature, stub_feature_flags: false do
     end
   end
 
+  describe '.log_feature_flag_states?' do
+    let(:log_state_changes) { false }
+    let(:milestone) { "0.0" }
+    let(:flag_name) { :some_flag }
+    let(:definition) do
+      Feature::Definition.new("development/#{flag_name}.yml",
+                              name: flag_name,
+                              type: 'development',
+                              milestone: milestone,
+                              log_state_changes: log_state_changes,
+                              default_enabled: false)
+    end
+
+    before do
+      Feature.enable(:feature_flag_state_logs)
+      Feature.enable(:some_flag)
+
+      allow(Feature).to receive(:log_feature_flag_states?).and_return(false)
+      allow(Feature).to receive(:log_feature_flag_states?).with(:feature_flag_state_logs).and_call_original
+      allow(Feature).to receive(:log_feature_flag_states?).with(:some_flag).and_call_original
+
+      allow(Feature::Definition).to receive(:definitions) do
+        { definition.key => definition }
+      end
+    end
+
+    subject { described_class.log_feature_flag_states?(flag_name) }
+
+    context 'when flag is feature_flag_state_logs' do
+      let(:milestone) { "14.6" }
+      let(:flag_name) { :feature_flag_state_logs }
+      let(:log_state_changes) { true }
+
+      it { is_expected.to be_falsey }
+    end
+
+    context 'when flag is old' do
+      it { is_expected.to be_falsey }
+    end
+
+    context 'when flag is old while log_state_changes is not present ' do
+      let(:definition) do
+        Feature::Definition.new("development/#{flag_name}.yml",
+                                name: flag_name,
+                                type: 'development',
+                                milestone: milestone,
+                                default_enabled: false)
+      end
+
+      it { is_expected.to be_falsey }
+    end
+
+    context 'when flag is old but log_state_changes is true' do
+      let(:log_state_changes) { true }
+
+      it { is_expected.to be_truthy }
+    end
+
+    context 'when flag is new and not feature_flag_state_logs' do
+      let(:milestone) { "14.6" }
+
+      before do
+        stub_version('14.5.123', 'deadbeef')
+      end
+
+      it { is_expected.to be_truthy }
+    end
+
+    context 'when milestone is nil' do
+      let(:definition) do
+        Feature::Definition.new("development/#{flag_name}.yml",
+                                name: flag_name,
+                                type: 'development',
+                                default_enabled: false)
+      end
+
+      it { is_expected.to be_falsey }
+    end
+  end
+
   context 'caching with stale reads from the database', :use_clean_rails_redis_caching, :request_store, :aggregate_failures do
     let(:actor) { stub_feature_flag_gate('CustomActor:5') }
     let(:another_actor) { stub_feature_flag_gate('CustomActor:10') }
@@ -583,13 +728,13 @@ RSpec.describe Feature, stub_feature_flags: false do
     describe '#targets' do
       let(:project) { create(:project) }
       let(:group) { create(:group) }
-      let(:user_name) { project.owner.username }
+      let(:user_name) { project.first_owner.username }
 
       subject { described_class.new(user: user_name, project: project.full_path, group: group.full_path) }
 
       it 'returns all found targets' do
         expect(subject.targets).to be_an(Array)
-        expect(subject.targets).to eq([project.owner, project, group])
+        expect(subject.targets).to eq([project.first_owner, project, group])
       end
     end
   end

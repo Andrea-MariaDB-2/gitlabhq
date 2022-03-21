@@ -1,11 +1,9 @@
 # frozen_string_literal: true
 
-class InProductGuidanceEnvironmentsWebideExperiment < ApplicationExperiment # rubocop:disable Gitlab/NamespacedClass
-  exclude :has_environments?
+class InProductGuidanceEnvironmentsWebideExperiment < ApplicationExperiment
+  control { false }
 
-  def control_behavior
-    false
-  end
+  exclude :has_environments?
 
   private
 

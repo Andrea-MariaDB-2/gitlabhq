@@ -5,11 +5,13 @@ require 'spec_helper'
 RSpec.describe 'merge requests discussions' do
   # Further tests can be found at merge_requests_controller_spec.rb
   describe 'GET /:namespace/:project/-/merge_requests/:iid/discussions' do
-    let(:project) { create(:project, :repository) }
-    let(:user) { project.owner }
+    let(:project) { create(:project, :repository, :public) }
+    let(:owner) { project.first_owner }
+    let(:user) { create(:user) }
     let(:merge_request) { create(:merge_request_with_diffs, target_project: project, source_project: project) }
 
     before do
+      project.add_maintainer(owner)
       project.add_developer(user)
       login_as(user)
     end
@@ -59,6 +61,7 @@ RSpec.describe 'merge requests discussions' do
       let!(:first_note) { create(:diff_note_on_merge_request, author: author, noteable: merge_request, project: project, note: "reference: #{reference.to_reference}") }
       let!(:second_note) { create(:diff_note_on_merge_request, in_reply_to: first_note, noteable: merge_request, project: project) }
       let!(:award_emoji) { create(:award_emoji, awardable: first_note) }
+      let!(:author_membership) { project.add_maintainer(author) }
 
       before do
         # Make a request to cache the discussions
@@ -229,9 +232,19 @@ RSpec.describe 'merge requests discussions' do
         end
       end
 
-      context 'when merge_request_discussion_cache is disabled' do
+      context 'when author role changes' do
         before do
-          stub_feature_flags(merge_request_discussion_cache: false)
+          Members::UpdateService.new(owner, access_level: Gitlab::Access::GUEST).execute(author_membership)
+        end
+
+        it_behaves_like 'cache miss' do
+          let(:changed_notes) { [first_note, second_note] }
+        end
+      end
+
+      context 'when current_user role changes' do
+        before do
+          Members::UpdateService.new(owner, access_level: Gitlab::Access::GUEST).execute(project.member(user))
         end
 
         it_behaves_like 'cache miss' do

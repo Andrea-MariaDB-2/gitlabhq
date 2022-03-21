@@ -10,7 +10,30 @@ export const mockIntegrationProps = {
   },
   jiraIssuesProps: {},
   triggerEvents: [],
+  sections: [],
   fields: [],
   type: '',
   inheritFromId: 25,
+  integrationLevel: 'project',
+};
+
+export const mockJiraIssueTypes = [
+  { id: '1', name: 'issue', description: 'issue' },
+  { id: '2', name: 'bug', description: 'bug' },
+  { id: '3', name: 'epic', description: 'epic' },
+];
+
+export const mockField = {
+  help: 'The URL of the project',
+  name: 'project_url',
+  placeholder: 'https://jira.example.com',
+  title: 'Project URL',
+  type: 'text',
+  value: '1',
+};
+
+export const mockSectionConnection = {
+  type: 'connection',
+  title: 'Connection details',
+  description: 'Learn more on how to configure this integration.',
 };

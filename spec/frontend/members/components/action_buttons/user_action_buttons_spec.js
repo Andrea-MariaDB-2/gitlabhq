@@ -2,6 +2,7 @@ import { shallowMount } from '@vue/test-utils';
 import LeaveButton from '~/members/components/action_buttons/leave_button.vue';
 import RemoveMemberButton from '~/members/components/action_buttons/remove_member_button.vue';
 import UserActionButtons from '~/members/components/action_buttons/user_action_buttons.vue';
+import { parseUserDeletionObstacles } from '~/vue_shared/components/user_deletion_obstacles/utils';
 import { member, orphanedMember } from '../../mock_data';
 
 describe('UserActionButtons', () => {
@@ -12,6 +13,7 @@ describe('UserActionButtons', () => {
       propsData: {
         member,
         isCurrentUser: false,
+        isInvitedUser: false,
         ...propsData,
       },
     });
@@ -41,13 +43,15 @@ describe('UserActionButtons', () => {
         memberId: member.id,
         memberType: 'GroupMember',
         message: `Are you sure you want to remove ${member.user.name} from "${member.source.fullName}"?`,
-        title: 'Remove member',
+        title: null,
         isAccessRequest: false,
         isInvite: false,
-        icon: 'remove',
-        oncallSchedules: {
+        icon: '',
+        buttonCategory: 'secondary',
+        buttonText: 'Remove member',
+        userDeletionObstacles: {
           name: member.user.name,
-          schedules: member.user.oncallSchedules,
+          obstacles: parseUserDeletionObstacles(member.user),
         },
       });
     });
@@ -127,5 +131,31 @@ describe('UserActionButtons', () => {
     it('sets member type correctly', () => {
       expect(findRemoveMemberButton().props().memberType).toBe('ProjectMember');
     });
+  });
+
+  describe('isInvitedUser', () => {
+    it.each`
+      isInvitedUser | icon        | buttonText         | buttonCategory
+      ${true}       | ${'remove'} | ${null}            | ${'primary'}
+      ${false}      | ${''}       | ${'Remove member'} | ${'secondary'}
+    `(
+      'passes the correct props to remove-member-button when isInvitedUser is $isInvitedUser',
+      ({ isInvitedUser, icon, buttonText, buttonCategory }) => {
+        createComponent({
+          isInvitedUser,
+          permissions: {
+            canRemove: true,
+          },
+        });
+
+        expect(findRemoveMemberButton().props()).toEqual(
+          expect.objectContaining({
+            icon,
+            buttonText,
+            buttonCategory,
+          }),
+        );
+      },
+    );
   });
 });

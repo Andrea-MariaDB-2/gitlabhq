@@ -6,7 +6,9 @@ class Projects::BadgesController < Projects::ApplicationController
   before_action :no_cache_headers, only: [:pipeline, :coverage]
   before_action :authorize_read_build!, only: [:pipeline, :coverage]
 
-  feature_category :continuous_integration
+  feature_category :continuous_integration, [:index, :pipeline]
+  feature_category :code_testing, [:coverage]
+  feature_category :release_orchestration, [:release]
 
   def pipeline
     pipeline_status = Gitlab::Ci::Badge::Pipeline::Status
@@ -24,10 +26,24 @@ class Projects::BadgesController < Projects::ApplicationController
       .new(project, params[:ref], opts: {
         job: params[:job],
         key_text: params[:key_text],
-        key_width: params[:key_width]
+        key_width: params[:key_width],
+        min_good: params[:min_good],
+        min_acceptable: params[:min_acceptable],
+        min_medium: params[:min_medium]
       })
 
     render_badge coverage_report
+  end
+
+  def release
+    latest_release = Gitlab::Ci::Badge::Release::LatestRelease
+      .new(project, current_user, opts: {
+        key_text: params[:key_text],
+        key_width: params[:key_width],
+        order_by: params[:order_by]
+      })
+
+    render_badge latest_release
   end
 
   private

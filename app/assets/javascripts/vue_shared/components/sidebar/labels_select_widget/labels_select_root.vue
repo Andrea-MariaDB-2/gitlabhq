@@ -1,41 +1,42 @@
 <script>
-import Vue from 'vue';
-import Vuex, { mapState, mapActions, mapGetters } from 'vuex';
-import { isInViewport } from '~/lib/utils/common_utils';
+import { debounce } from 'lodash';
+import { MutationOperationMode, getIdFromGraphQLId } from '~/graphql_shared/utils';
+import createFlash from '~/flash';
+import { IssuableType } from '~/issues/constants';
 import { __ } from '~/locale';
 import SidebarEditableItem from '~/sidebar/components/sidebar_editable_item.vue';
-import { DropdownVariant } from './constants';
-import DropdownButton from './dropdown_button.vue';
+import { issuableLabelsQueries } from '~/sidebar/constants';
+import { DEBOUNCE_DROPDOWN_DELAY, DropdownVariant } from './constants';
 import DropdownContents from './dropdown_contents.vue';
 import DropdownValue from './dropdown_value.vue';
-import DropdownValueCollapsed from './dropdown_value_collapsed.vue';
-import issueLabelsQuery from './graphql/issue_labels.query.graphql';
-import labelsSelectModule from './store';
-
-Vue.use(Vuex);
+import {
+  isDropdownVariantSidebar,
+  isDropdownVariantStandalone,
+  isDropdownVariantEmbedded,
+} from './utils';
 
 export default {
-  store: new Vuex.Store(labelsSelectModule()),
   components: {
     DropdownValue,
-    DropdownButton,
     DropdownContents,
-    DropdownValueCollapsed,
     SidebarEditableItem,
   },
-  inject: ['iid', 'projectPath'],
-  props: {
-    allowLabelRemove: {
-      type: Boolean,
-      required: false,
-      default: false,
-    },
+  inject: {
     allowLabelEdit: {
-      type: Boolean,
-      required: false,
       default: false,
     },
-    allowLabelCreate: {
+  },
+  props: {
+    iid: {
+      type: String,
+      required: false,
+      default: '',
+    },
+    fullPath: {
+      type: String,
+      required: true,
+    },
+    allowLabelRemove: {
       type: Boolean,
       required: false,
       default: false,
@@ -45,35 +46,10 @@ export default {
       required: false,
       default: false,
     },
-    allowScopedLabels: {
-      type: Boolean,
-      required: false,
-      default: false,
-    },
     variant: {
       type: String,
       required: false,
       default: DropdownVariant.Sidebar,
-    },
-    selectedLabels: {
-      type: Array,
-      required: false,
-      default: () => [],
-    },
-    labelsSelectInProgress: {
-      type: Boolean,
-      required: false,
-      default: false,
-    },
-    labelsFetchPath: {
-      type: String,
-      required: false,
-      default: '',
-    },
-    labelsManagePath: {
-      type: String,
-      required: false,
-      default: '',
     },
     labelsFilterBasePath: {
       type: String,
@@ -110,127 +86,229 @@ export default {
       required: false,
       default: __('Manage group labels'),
     },
-    isEditing: {
-      type: Boolean,
-      required: false,
-      default: false,
+    issuableType: {
+      type: String,
+      required: true,
+    },
+    workspaceType: {
+      type: String,
+      required: true,
+    },
+    attrWorkspacePath: {
+      type: String,
+      required: true,
+    },
+    labelCreateType: {
+      type: String,
+      required: true,
     },
   },
   data() {
     return {
       contentIsOnViewport: true,
-      issueLabels: [],
+      issuableLabels: [],
+      labelsSelectInProgress: false,
+      oldIid: null,
+      sidebarExpandedOnClick: false,
     };
   },
+  computed: {
+    isLoading() {
+      return this.labelsSelectInProgress || this.$apollo.queries.issuableLabels.loading;
+    },
+    issuableLabelIds() {
+      return this.issuableLabels.map((label) => label.id);
+    },
+  },
   apollo: {
-    issueLabels: {
-      query: issueLabelsQuery,
+    issuableLabels: {
+      query() {
+        return issuableLabelsQueries[this.issuableType].issuableQuery;
+      },
+      skip() {
+        return !isDropdownVariantSidebar(this.variant);
+      },
       variables() {
         return {
           iid: this.iid,
-          fullPath: this.projectPath,
+          fullPath: this.fullPath,
         };
       },
       update(data) {
         return data.workspace?.issuable?.labels.nodes || [];
       },
+      error() {
+        createFlash({ message: __('Error fetching labels.') });
+      },
     },
-  },
-  computed: {
-    ...mapState(['showDropdownContents']),
-    ...mapGetters([
-      'isDropdownVariantSidebar',
-      'isDropdownVariantStandalone',
-      'isDropdownVariantEmbedded',
-    ]),
   },
   watch: {
-    selectedLabels(selectedLabels) {
-      this.setInitialState({
-        selectedLabels,
-      });
-    },
-    showDropdownContents(showDropdownContents) {
-      this.setContentIsOnViewport(showDropdownContents);
-    },
-    isEditing(newVal) {
-      if (newVal) {
-        this.toggleDropdownContents();
-      }
+    iid(_, oldVal) {
+      this.oldIid = oldVal;
     },
   },
   mounted() {
-    this.setInitialState({
-      variant: this.variant,
-      allowLabelRemove: this.allowLabelRemove,
-      allowLabelEdit: this.allowLabelEdit,
-      allowLabelCreate: this.allowLabelCreate,
-      allowMultiselect: this.allowMultiselect,
-      allowScopedLabels: this.allowScopedLabels,
-      dropdownButtonText: this.dropdownButtonText,
-      selectedLabels: this.selectedLabels,
-      labelsFetchPath: this.labelsFetchPath,
-      labelsManagePath: this.labelsManagePath,
-      labelsFilterBasePath: this.labelsFilterBasePath,
-      labelsFilterParam: this.labelsFilterParam,
-      labelsListTitle: this.labelsListTitle,
-      footerCreateLabelTitle: this.footerCreateLabelTitle,
-      footerManageLabelTitle: this.footerManageLabelTitle,
-    });
+    document.addEventListener('toggleSidebarRevealLabelsDropdown', this.handleCollapsedValueClick);
+  },
+  beforeDestroy() {
+    document.removeEventListener(
+      'toggleSidebarRevealLabelsDropdown',
+      this.handleCollapsedValueClick,
+    );
   },
   methods: {
-    ...mapActions(['setInitialState']),
     handleDropdownClose(labels) {
-      if (labels.length) this.$emit('updateSelectedLabels', labels);
-      this.$emit('onDropdownClose');
+      if (this.iid !== '') {
+        this.updateSelectedLabels(this.getUpdateVariables(labels));
+      } else {
+        this.$emit('updateSelectedLabels', { labels });
+      }
+
+      this.collapseEditableItem();
     },
-    collapseDropdown() {
-      this.$refs.editable.collapse();
+    collapseEditableItem() {
+      this.$refs.editable?.collapse();
+      if (this.sidebarExpandedOnClick) {
+        this.sidebarExpandedOnClick = false;
+        this.$emit('toggleCollapse');
+      }
     },
     handleCollapsedValueClick() {
+      this.sidebarExpandedOnClick = true;
       this.$emit('toggleCollapse');
+      debounce(() => {
+        this.$refs.editable.toggle();
+        this.$refs.dropdownContents.showDropdown();
+      }, DEBOUNCE_DROPDOWN_DELAY)();
     },
-    setContentIsOnViewport() {
-      this.$nextTick(() => {
-        if (this.$refs.dropdownContents) {
-          this.contentIsOnViewport = isInViewport(this.$refs.dropdownContents.$el);
-        }
-      });
+    getUpdateVariables(labels) {
+      let labelIds = [];
+
+      labelIds = labels.map(({ id }) => id);
+      const currentIid = this.oldIid || this.iid;
+
+      const updateVariables = {
+        iid: currentIid,
+        projectPath: this.fullPath,
+        labelIds,
+      };
+
+      switch (this.issuableType) {
+        case IssuableType.Issue:
+          return updateVariables;
+        case IssuableType.MergeRequest:
+          return {
+            ...updateVariables,
+            operationMode: MutationOperationMode.Replace,
+          };
+        case IssuableType.Epic:
+          return {
+            iid: currentIid,
+            groupPath: this.fullPath,
+            addLabelIds: labelIds.map((id) => getIdFromGraphQLId(id)),
+            removeLabelIds: this.issuableLabelIds
+              .filter((id) => !labelIds.includes(id))
+              .map((id) => getIdFromGraphQLId(id)),
+          };
+        default:
+          return {};
+      }
     },
+    updateSelectedLabels(inputVariables) {
+      this.labelsSelectInProgress = true;
+
+      this.$apollo
+        .mutate({
+          mutation: issuableLabelsQueries[this.issuableType].mutation,
+          variables: { input: inputVariables },
+        })
+        .then(({ data }) => {
+          if (data.updateIssuableLabels?.errors?.length) {
+            throw new Error();
+          }
+
+          this.$emit('updateSelectedLabels', {
+            id: data.updateIssuableLabels?.issuable?.id,
+            labels: data.updateIssuableLabels?.issuable?.labels?.nodes,
+          });
+        })
+        .catch((error) =>
+          createFlash({
+            message: __('An error occurred while updating labels.'),
+            captureError: true,
+            error,
+          }),
+        )
+        .finally(() => {
+          this.labelsSelectInProgress = false;
+        });
+    },
+    getRemoveVariables(labelId) {
+      const removeVariables = {
+        iid: this.iid,
+        projectPath: this.fullPath,
+      };
+
+      switch (this.issuableType) {
+        case IssuableType.Issue:
+          return {
+            ...removeVariables,
+            removeLabelIds: [labelId],
+          };
+        case IssuableType.MergeRequest:
+          return {
+            ...removeVariables,
+            labelIds: [labelId],
+            operationMode: MutationOperationMode.Remove,
+          };
+        case IssuableType.Epic:
+          return {
+            iid: this.iid,
+            removeLabelIds: [getIdFromGraphQLId(labelId)],
+            groupPath: this.fullPath,
+          };
+        default:
+          return {};
+      }
+    },
+    handleLabelRemove(labelId) {
+      this.updateSelectedLabels(this.getRemoveVariables(labelId));
+      this.$emit('onLabelRemove', labelId);
+    },
+    isDropdownVariantSidebar,
+    isDropdownVariantStandalone,
+    isDropdownVariantEmbedded,
   },
 };
 </script>
 
 <template>
   <div
-    class="labels-select-wrapper position-relative"
+    class="labels-select-wrapper gl-relative"
     :class="{
-      'is-standalone': isDropdownVariantStandalone,
-      'is-embedded': isDropdownVariantEmbedded,
+      'is-standalone': isDropdownVariantStandalone(variant),
+      'is-embedded': isDropdownVariantEmbedded(variant),
     }"
+    data-testid="sidebar-labels"
+    data-qa-selector="labels_block"
   >
-    <template v-if="isDropdownVariantSidebar">
-      <dropdown-value-collapsed
-        ref="dropdownButtonCollapsed"
-        :labels="issueLabels"
-        @onValueClick="handleCollapsedValueClick"
-      />
+    <template v-if="isDropdownVariantSidebar(variant)">
       <sidebar-editable-item
         ref="editable"
         :title="__('Labels')"
-        :loading="labelsSelectInProgress"
-        @open="setContentIsOnViewport"
-        @close="contentIsOnViewport = true"
+        :loading="isLoading"
+        :can-edit="allowLabelEdit"
+        @open="oldIid = null"
       >
         <template #collapsed>
           <dropdown-value
             :disable-labels="labelsSelectInProgress"
-            :selected-labels="issueLabels"
+            :selected-labels="issuableLabels"
             :allow-label-remove="allowLabelRemove"
-            :allow-scoped-labels="allowScopedLabels"
             :labels-filter-base-path="labelsFilterBasePath"
             :labels-filter-param="labelsFilterParam"
-            @onLabelRemove="$emit('onLabelRemove', $event)"
+            @onLabelRemove="handleLabelRemove"
+            @onCollapsedValueClick="handleCollapsedValueClick"
           >
             <slot></slot>
           </dropdown-value>
@@ -238,32 +316,52 @@ export default {
         <template #default="{ edit }">
           <dropdown-value
             :disable-labels="labelsSelectInProgress"
-            :selected-labels="issueLabels"
+            :selected-labels="issuableLabels"
             :allow-label-remove="allowLabelRemove"
-            :allow-scoped-labels="allowScopedLabels"
             :labels-filter-base-path="labelsFilterBasePath"
             :labels-filter-param="labelsFilterParam"
             class="gl-mb-2"
-            @onLabelRemove="$emit('onLabelRemove', $event)"
+            @onLabelRemove="handleLabelRemove"
           >
             <slot></slot>
           </dropdown-value>
-          <dropdown-button />
           <dropdown-contents
-            v-if="edit"
             ref="dropdownContents"
+            :dropdown-button-text="dropdownButtonText"
             :allow-multiselect="allowMultiselect"
             :labels-list-title="labelsListTitle"
             :footer-create-label-title="footerCreateLabelTitle"
             :footer-manage-label-title="footerManageLabelTitle"
-            :render-on-top="!contentIsOnViewport"
             :labels-create-title="labelsCreateTitle"
-            :selected-labels="selectedLabels"
-            @closeDropdown="collapseDropdown"
+            :selected-labels="issuableLabels"
+            :variant="variant"
+            :is-visible="edit"
+            :full-path="fullPath"
+            :workspace-type="workspaceType"
+            :attr-workspace-path="attrWorkspacePath"
+            :label-create-type="labelCreateType"
             @setLabels="handleDropdownClose"
+            @closeDropdown="collapseEditableItem"
           />
         </template>
       </sidebar-editable-item>
     </template>
+    <dropdown-contents
+      v-else
+      ref="dropdownContents"
+      :allow-multiselect="allowMultiselect"
+      :dropdown-button-text="dropdownButtonText"
+      :labels-list-title="labelsListTitle"
+      :footer-create-label-title="footerCreateLabelTitle"
+      :footer-manage-label-title="footerManageLabelTitle"
+      :labels-create-title="labelsCreateTitle"
+      :selected-labels="issuableLabels"
+      :variant="variant"
+      :full-path="fullPath"
+      :workspace-type="workspaceType"
+      :attr-workspace-path="attrWorkspacePath"
+      :label-create-type="labelCreateType"
+      @setLabels="handleDropdownClose"
+    />
   </div>
 </template>

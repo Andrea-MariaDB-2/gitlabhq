@@ -31,10 +31,6 @@ class ProjectHook < WebHook
     _('Webhooks')
   end
 
-  def web_hooks_disable_failed?
-    Feature.enabled?(:web_hooks_disable_failed, project)
-  end
-
   override :rate_limit
   def rate_limit
     project.actual_limits.limit_for(:web_hook_calls)
@@ -43,6 +39,18 @@ class ProjectHook < WebHook
   override :application_context
   def application_context
     super.merge(project: project)
+  end
+
+  override :parent
+  def parent
+    project
+  end
+
+  private
+
+  override :web_hooks_disable_failed?
+  def web_hooks_disable_failed?
+    Feature.enabled?(:web_hooks_disable_failed, project)
   end
 end
 

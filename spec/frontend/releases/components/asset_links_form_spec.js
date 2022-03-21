@@ -1,15 +1,13 @@
-import { mount, createLocalVue } from '@vue/test-utils';
+import { mount } from '@vue/test-utils';
+import Vue from 'vue';
 import Vuex from 'vuex';
-import { getJSONFixture } from 'helpers/fixtures';
+import originalRelease from 'test_fixtures/api/releases/release.json';
 import * as commonUtils from '~/lib/utils/common_utils';
 import { ENTER_KEY } from '~/lib/utils/keys';
 import AssetLinksForm from '~/releases/components/asset_links_form.vue';
 import { ASSET_LINK_TYPE, DEFAULT_ASSET_LINK_TYPE } from '~/releases/constants';
 
-const localVue = createLocalVue();
-localVue.use(Vuex);
-
-const originalRelease = getJSONFixture('api/releases/release.json');
+Vue.use(Vuex);
 
 describe('Release edit component', () => {
   let wrapper;
@@ -54,7 +52,6 @@ describe('Release edit component', () => {
     });
 
     wrapper = mount(AssetLinksForm, {
-      localVue,
       store,
     });
   };
@@ -259,9 +256,7 @@ describe('Release edit component', () => {
         },
       });
 
-      expect(findUrlValidationMessage().text()).toBe(
-        'This URL is already used for another link; duplicate URLs are not allowed',
-      );
+      expect(findUrlValidationMessage().text()).toBe('This URL already exists.');
     });
 
     it('shows a validation error message when a URL has a bad format', () => {

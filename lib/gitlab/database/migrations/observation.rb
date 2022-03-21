@@ -1,3 +1,4 @@
+# rubocop:disable Naming/FileName
 # frozen_string_literal: true
 
 module Gitlab
@@ -9,8 +10,11 @@ module Gitlab
         :walltime,
         :success,
         :total_database_size_change,
-        :query_statistics
+        :query_statistics,
+        keyword_init: true
       )
     end
   end
 end
+
+# rubocop:enable Naming/FileName

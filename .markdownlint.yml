@@ -1,31 +1,34 @@
 ---
 # Base Markdownlint configuration
 # Extended Markdownlint configuration in doc/.markdownlint/
-"default": true
-"first-header-h1": true
-"header-style":
-  "style": "atx"
-"ul-style":
-  "style": "dash"
-"no-trailing-spaces": false
-"line-length": false
-"no-duplicate-header":
-  "allow_different_nesting": true
-"no-trailing-punctuation":
-  "punctuation": ".,;:!。，；：！？"
-"ol-prefix":
-  "style": "one"
-"no-inline-html": false
-"hr-style":
-  "style": "---"
-"no-emphasis-as-heading": false
-"first-line-h1": false
-"code-block-style":
-  "style": "fenced"
-"proper-names":
-  "names": [
+default: true
+first-header-h1: true
+header-style:
+  style: "atx"
+ul-style:
+  style: "dash"
+no-trailing-spaces: false
+line-length: false
+no-duplicate-header:
+  allow_different_nesting: true
+no-trailing-punctuation:
+  punctuation: ".,;:!。，；：！？"
+ol-prefix:
+  style: "one"
+no-inline-html: false
+hr-style:
+  style: "---"
+no-emphasis-as-heading: false
+first-line-h1: false
+code-block-style:
+  style: "fenced"
+emphasis-style: false
+strong-style: false
+proper-names:
+  names: [
     "Akismet",
     "Alertmanager",
+    "AlmaLinux",
     "API",
     "Asana",
     "Auth0",
@@ -91,7 +94,7 @@
     "markdownlint",
     "Mattermost",
     "Microsoft",
-    "Minikube",
+    "minikube",
     "MinIO",
     "ModSecurity",
     "NGINX Ingress",
@@ -103,6 +106,7 @@
     "OpenID",
     "OpenShift",
     "PgBouncer",
+    "Postfix",
     "PostgreSQL",
     "Praefect",
     "Prometheus",
@@ -117,6 +121,7 @@
     "runit",
     "Salesforce",
     "SAML",
+    "Sendmail",
     "Sentry",
     "Sidekiq",
     "Shibboleth",
@@ -136,7 +141,9 @@
     "unicorn-worker-killer",
     "URL",
     "WebdriverIO",
+    "Workload Identity Pool",
+    "Workload Identity Provider",
     "YAML",
     "YouTrack"
   ]
-  "code_blocks": false
+  code_blocks: false

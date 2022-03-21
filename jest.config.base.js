@@ -51,9 +51,11 @@ module.exports = (path, options = {}) => {
     '^shared_queries(/.*)$': '<rootDir>/app/graphql/queries$1',
     '^ee_else_ce(/.*)$': '<rootDir>/app/assets/javascripts$1',
     '^jh_else_ce(/.*)$': '<rootDir>/app/assets/javascripts$1',
+    '^any_else_ce(/.*)$': '<rootDir>/app/assets/javascripts$1',
     '^helpers(/.*)$': '<rootDir>/spec/frontend/__helpers__$1',
     '^vendor(/.*)$': '<rootDir>/vendor/assets/javascripts$1',
     [TEST_FIXTURES_PATTERN]: '<rootDir>/tmp/tests/frontend/fixtures$1',
+    '^test_fixtures_static(/.*)$': '<rootDir>/spec/frontend/fixtures/static$1',
     '\\.(jpg|jpeg|png|svg|css)$': '<rootDir>/spec/frontend/__mocks__/file_mock.js',
     'emojis(/.*).json': '<rootDir>/fixtures/emojis$1.json',
     '^spec/test_constants$': '<rootDir>/spec/frontend/__helpers__/test_constants',
@@ -71,6 +73,8 @@ module.exports = (path, options = {}) => {
       '^ee_component(/.*)$': rootDirEE,
       '^ee_else_ce(/.*)$': rootDirEE,
       '^ee_jest/(.*)$': '<rootDir>/ee/spec/frontend/$1',
+      '^any_else_ce(/.*)$': rootDirEE,
+      '^jh_else_ee(/.*)$': rootDirEE,
       [TEST_FIXTURES_PATTERN]: '<rootDir>/tmp/tests/frontend/fixtures-ee$1',
       ...extModuleNameMapperEE,
     });
@@ -83,8 +87,11 @@ module.exports = (path, options = {}) => {
     Object.assign(moduleNameMapper, {
       '^jh(/.*)$': rootDirJH,
       '^jh_component(/.*)$': rootDirJH,
-      '^jh_else_ce(/.*)$': rootDirJH,
       '^jh_jest/(.*)$': '<rootDir>/jh/spec/frontend/$1',
+      // jh path alias https://gitlab.com/gitlab-org/gitlab/-/merge_requests/74305#note_732793956
+      '^jh_else_ce(/.*)$': rootDirJH,
+      '^jh_else_ee(/.*)$': rootDirJH,
+      '^any_else_ce(/.*)$': rootDirJH,
       ...extModuleNameMapperJH,
     });
 
@@ -102,7 +109,7 @@ module.exports = (path, options = {}) => {
   return {
     clearMocks: true,
     testMatch,
-    moduleFileExtensions: ['js', 'json', 'vue'],
+    moduleFileExtensions: ['js', 'json', 'vue', 'gql', 'graphql'],
     moduleNameMapper,
     collectCoverageFrom,
     coverageDirectory: coverageDirectory(),
@@ -112,6 +119,7 @@ module.exports = (path, options = {}) => {
     cacheDirectory: '<rootDir>/tmp/cache/jest',
     modulePathIgnorePatterns: ['<rootDir>/.yarn-cache/'],
     reporters,
+    resolver: './jest_resolver.js',
     setupFilesAfterEnv: [`<rootDir>/${path}/test_setup.js`, 'jest-canvas-mock'],
     restoreMocks: true,
     transform: {
@@ -122,7 +130,7 @@ module.exports = (path, options = {}) => {
       '^.+\\.(md|zip|png)$': 'jest-raw-loader',
     },
     transformIgnorePatterns: [
-      'node_modules/(?!(@gitlab/ui|@gitlab/favicon-overlay|bootstrap-vue|three|monaco-editor|monaco-yaml|fast-mersenne-twister|prosemirror-markdown)/)',
+      'node_modules/(?!(@gitlab/ui|@gitlab/favicon-overlay|bootstrap-vue|three|monaco-editor|monaco-yaml|fast-mersenne-twister|prosemirror-markdown|dateformat|lowlight|fault)/)',
     ],
     timers: 'fake',
     testEnvironment: '<rootDir>/spec/frontend/environment.js',

@@ -2,10 +2,9 @@
 stage: Create
 group: Code Review
 info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
-type: reference, concepts
 ---
 
-# Merge requests versions
+# Merge requests versions **(FREE)**
 
 Every time you push to a branch that is tied to a merge request, a new version
 of merge request diff is created. When you visit a merge request that contains
@@ -39,8 +38,6 @@ changes appears as a system note.
 ![Merge request versions system note](img/versions_system_note.png)
 
 ## Find the merge request that introduced a change
-
-> [Introduced](https://gitlab.com/gitlab-org/gitlab-foss/-/issues/2383) in GitLab 10.5.
 
 When viewing the commit details page, GitLab links to the merge request (or
 merge requests, if it's in more than one) containing that commit.

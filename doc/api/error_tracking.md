@@ -1,6 +1,6 @@
 ---
 stage: Monitor
-group: Monitor
+group: Respond
 info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
 ---
 
@@ -11,7 +11,7 @@ info: To determine the technical writer assigned to the Stage/Group associated w
 ## Error Tracking project settings
 
 The project settings API allows you to retrieve the [Error Tracking](../operations/error_tracking.md)
-settings for a project. Only for project maintainers.
+settings for a project. Only for users with Maintainer role for the project.
 
 ### Get Error Tracking settings
 
@@ -41,7 +41,8 @@ Example response:
 
 ### Enable or disable the Error Tracking project settings
 
-The API allows you to enable or disable the Error Tracking settings for a project. Only for project maintainers.
+The API allows you to enable or disable the Error Tracking settings for a project. Only for users with the
+Maintainer role for the project.
 
 ```plaintext
 PATCH /projects/:id/error_tracking/settings
@@ -51,7 +52,7 @@ PATCH /projects/:id/error_tracking/settings
 | ------------ | ------- | -------- | --------------------- |
 | `id`         | integer | yes      | The ID or [URL-encoded path of the project](index.md#namespaced-path-encoding) owned by the authenticated user. |
 | `active`     | boolean | yes      | Pass `true` to enable the already configured error tracking settings or `false` to disable it. |
-| `integrated` | boolean | no       | Pass `true` to enable the integrated error tracking backend. Available in [GitLab 14.2](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/68260) and later. |
+| `integrated` | boolean | no       | Pass `true` to enable the integrated error tracking backend. [Available in](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/68260) GitLab 14.2 and later. |
 
 ```shell
 curl --header "PRIVATE-TOKEN: <your_access_token>" "https://gitlab.example.com/api/v4/projects/1/error_tracking/settings?active=true"
@@ -73,7 +74,8 @@ Example response:
 
 > [Introduced](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/68384) in GitLab 14.3.
 
-For [integrated error tracking](https://gitlab.com/gitlab-org/gitlab/-/issues/329596) feature that is behind a disabled feature flag. Only for project maintainers.
+For [integrated error tracking](https://gitlab.com/gitlab-org/gitlab/-/issues/329596) feature. Only for users with the
+Maintainer role for the project.
 
 ### List project client keys
 

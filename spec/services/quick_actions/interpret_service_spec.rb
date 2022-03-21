@@ -3,20 +3,22 @@
 require 'spec_helper'
 
 RSpec.describe QuickActions::InterpretService do
-  let_it_be(:public_project) { create(:project, :public) }
+  let_it_be(:group) { create(:group, :crm_enabled) }
+  let_it_be(:public_project) { create(:project, :public, group: group) }
   let_it_be(:repository_project) { create(:project, :repository) }
   let_it_be(:project) { public_project }
   let_it_be(:developer) { create(:user) }
   let_it_be(:developer2) { create(:user) }
   let_it_be(:developer3) { create(:user) }
   let_it_be_with_reload(:issue) { create(:issue, project: project) }
-  let(:milestone) { create(:milestone, project: project, title: '9.10') }
-  let(:commit) { create(:commit, project: project) }
   let_it_be(:inprogress) { create(:label, project: project, title: 'In Progress') }
   let_it_be(:helmchart) { create(:label, project: project, title: 'Helm Chart Registry') }
   let_it_be(:bug) { create(:label, project: project, title: 'Bug') }
 
-  let(:service) { described_class.new(project, developer) }
+  let(:milestone) { create(:milestone, project: project, title: '9.10') }
+  let(:commit) { create(:commit, project: project) }
+
+  subject(:service) { described_class.new(project, developer) }
 
   before_all do
     public_project.add_developer(developer)
@@ -484,6 +486,8 @@ RSpec.describe QuickActions::InterpretService do
     end
 
     shared_examples 'failed command' do |error_msg|
+      let(:match_msg) { error_msg ? eq(error_msg) : be_empty }
+
       it 'populates {} if content contains an unsupported command' do
         _, updates, _ = service.execute(content, issuable)
 
@@ -493,11 +497,7 @@ RSpec.describe QuickActions::InterpretService do
       it "returns #{error_msg || 'an empty'} message" do
         _, _, message = service.execute(content, issuable)
 
-        if error_msg
-          expect(message).to eq(error_msg)
-        else
-          expect(message).to be_empty
-        end
+        expect(message).to match_msg
       end
     end
 
@@ -624,6 +624,18 @@ RSpec.describe QuickActions::InterpretService do
       end
     end
 
+    shared_examples 'approve command unavailable' do
+      it 'is not part of the available commands' do
+        expect(service.available_commands(issuable)).not_to include(a_hash_including(name: :approve))
+      end
+    end
+
+    shared_examples 'unapprove command unavailable' do
+      it 'is not part of the available commands' do
+        expect(service.available_commands(issuable)).not_to include(a_hash_including(name: :unapprove))
+      end
+    end
+
     shared_examples 'shrug command' do
       it 'appends ¯\_(ツ)_/¯ to the comment' do
         new_content, _, _ = service.execute(content, issuable)
@@ -670,6 +682,20 @@ RSpec.describe QuickActions::InterpretService do
 
         expect(message).to eq("Assigned #{developer.to_reference}.")
       end
+
+      context 'when the user has a private profile' do
+        let(:user) { create(:user, :private_profile) }
+        let(:content) { "/assign #{user.to_reference}" }
+
+        it 'assigns to the user' do
+          issuable.project.add_developer(user)
+
+          _, updates, message = service.execute(content, issuable)
+
+          expect(updates).to eq(assignee_ids: [user.id])
+          expect(message).to eq("Assigned #{user.to_reference}.")
+        end
+      end
     end
 
     shared_examples 'assign_reviewer command' do
@@ -687,6 +713,27 @@ RSpec.describe QuickActions::InterpretService do
 
         expect(updates).to eq(reviewer_ids: [])
         expect(message).to eq("Removed reviewer #{developer.to_reference}.")
+      end
+    end
+
+    shared_examples 'attention command' do
+      it 'updates reviewers attention status' do
+        _, _, message = service.execute(content, issuable)
+
+        expect(message).to eq("Requested attention from #{developer.to_reference}.")
+
+        reviewer.reload
+
+        expect(reviewer).to be_attention_requested
+      end
+    end
+
+    shared_examples 'remove attention command' do
+      it 'updates reviewers attention status' do
+        _, _, message = service.execute(content, issuable)
+
+        expect(message).to eq("Removed attention from #{developer.to_reference}.")
+        expect(reviewer).not_to be_attention_requested
       end
     end
 
@@ -712,6 +759,7 @@ RSpec.describe QuickActions::InterpretService do
 
     context 'merge command' do
       let(:service) { described_class.new(project, developer, { merge_request_diff_head_sha: merge_request.diff_head_sha }) }
+      let(:merge_request) { create(:merge_request, source_project: repository_project) }
 
       it_behaves_like 'merge immediately command' do
         let(:content) { '/merge' }
@@ -742,7 +790,7 @@ RSpec.describe QuickActions::InterpretService do
       context 'can not be merged when sha does not match' do
         let(:service) { described_class.new(project, developer, { merge_request_diff_head_sha: 'othersha' }) }
 
-        it_behaves_like 'failed command', 'Could not apply merge command.' do
+        it_behaves_like 'failed command', 'Branch has been updated since the merge was requested.' do
           let(:content) { "/merge" }
           let(:issuable) { merge_request }
         end
@@ -752,10 +800,9 @@ RSpec.describe QuickActions::InterpretService do
         let(:project) { repository_project }
         let(:service) { described_class.new(project, developer, {}) }
 
-        it 'precheck passes and returns merge command' do
-          _, updates, _ = service.execute('/merge', merge_request)
-
-          expect(updates).to eq(merge: nil)
+        it_behaves_like 'failed command', 'Merge request diff sha parameter is required for the merge quick action.' do
+          let(:content) { "/merge" }
+          let(:issuable) { merge_request }
         end
       end
 
@@ -874,9 +921,10 @@ RSpec.describe QuickActions::InterpretService do
       end
     end
 
-    it_behaves_like 'failed command', "Failed to assign a user because no user was found." do
+    it_behaves_like 'failed command', 'a parse error' do
       let(:content) { '/assign @abcd1234' }
       let(:issuable) { issue }
+      let(:match_msg) { eq "Could not apply assign command. Failed to find users for '@abcd1234'." }
     end
 
     it_behaves_like 'failed command', "Failed to assign a user because no user was found." do
@@ -937,10 +985,20 @@ RSpec.describe QuickActions::InterpretService do
         it_behaves_like 'assign_reviewer command'
       end
 
+      context 'with @all' do
+        let(:content) { "/assign_reviewer @all" }
+
+        it_behaves_like 'failed command', 'a parse error' do
+          let(:match_msg) { eq "Could not apply assign_reviewer command. Failed to find users for '@all'." }
+        end
+      end
+
       context 'with an incorrect user' do
         let(:content) { '/assign_reviewer @abcd1234' }
 
-        it_behaves_like 'failed command', "Failed to assign a reviewer because no user was found."
+        it_behaves_like 'failed command', 'a parse error' do
+          let(:match_msg) { eq "Could not apply assign_reviewer command. Failed to find users for '@abcd1234'." }
+        end
       end
 
       context 'with the "reviewer" alias' do
@@ -958,13 +1016,15 @@ RSpec.describe QuickActions::InterpretService do
       context 'with no user' do
         let(:content) { '/assign_reviewer' }
 
-        it_behaves_like 'failed command', "Failed to assign a reviewer because no user was found."
+        it_behaves_like 'failed command', "Failed to assign a reviewer because no user was specified."
       end
 
-      context 'includes only the user reference with extra text' do
-        let(:content) { "/assign_reviewer @#{developer.username} do it!" }
+      context 'with extra text' do
+        let(:content) { "/assign_reviewer #{developer.to_reference} do it!" }
 
-        it_behaves_like 'assign_reviewer command'
+        it_behaves_like 'failed command', 'a parse error' do
+          let(:match_msg) { eq "Could not apply assign_reviewer command. Failed to find users for 'do' and 'it!'." }
+        end
       end
     end
 
@@ -1314,14 +1374,25 @@ RSpec.describe QuickActions::InterpretService do
       let(:issuable) { issue }
     end
 
-    it_behaves_like 'confidential command' do
-      let(:content) { '/confidential' }
-      let(:issuable) { issue }
-    end
+    context '/confidential' do
+      it_behaves_like 'confidential command' do
+        let(:content) { '/confidential' }
+        let(:issuable) { issue }
+      end
 
-    it_behaves_like 'confidential command' do
-      let(:content) { '/confidential' }
-      let(:issuable) { create(:incident, project: project) }
+      it_behaves_like 'confidential command' do
+        let(:content) { '/confidential' }
+        let(:issuable) { create(:incident, project: project) }
+      end
+
+      context 'when non-member is creating a new issue' do
+        let(:service) { described_class.new(project, create(:user)) }
+
+        it_behaves_like 'confidential command' do
+          let(:content) { '/confidential' }
+          let(:issuable) { build(:issue, project: project) }
+        end
+      end
     end
 
     it_behaves_like 'lock command' do
@@ -1923,6 +1994,21 @@ RSpec.describe QuickActions::InterpretService do
           it_behaves_like 'relate command'
         end
 
+        context 'when quick action target is unpersisted' do
+          let(:issue) { build(:issue, project: project) }
+          let(:other_issue) { create(:issue, project: project) }
+          let(:issues_related) { [other_issue] }
+          let(:content) { "/relate #{other_issue.to_reference}" }
+
+          it 'relates the issues after the issue is persisted' do
+            service.execute(content, issue)
+
+            issue.save!
+
+            expect(IssueLink.where(source: issue).map(&:target)).to match_array(issues_related)
+          end
+        end
+
         context 'empty relate command' do
           let(:issues_related) { [] }
           let(:content) { '/relate' }
@@ -2135,6 +2221,187 @@ RSpec.describe QuickActions::InterpretService do
         end
       end
     end
+
+    context 'approve command' do
+      let(:merge_request) { create(:merge_request, source_project: project) }
+      let(:content) { '/approve' }
+
+      it 'approves the current merge request' do
+        service.execute(content, merge_request)
+
+        expect(merge_request.approved_by_users).to eq([developer])
+      end
+
+      context "when the user can't approve" do
+        before do
+          project.team.truncate
+          project.add_guest(developer)
+        end
+
+        it 'does not approve the MR' do
+          service.execute(content, merge_request)
+
+          expect(merge_request.approved_by_users).to be_empty
+        end
+      end
+
+      it_behaves_like 'approve command unavailable' do
+        let(:issuable) { issue }
+      end
+    end
+
+    context 'unapprove command' do
+      let!(:merge_request) { create(:merge_request, source_project: project) }
+      let(:content) { '/unapprove' }
+
+      before do
+        service.execute('/approve', merge_request)
+      end
+
+      it 'unapproves the current merge request' do
+        service.execute(content, merge_request)
+
+        expect(merge_request.approved_by_users).to be_empty
+      end
+
+      context "when the user can't unapprove" do
+        before do
+          project.team.truncate
+          project.add_guest(developer)
+        end
+
+        it 'does not unapprove the MR' do
+          service.execute(content, merge_request)
+
+          expect(merge_request.approved_by_users).to eq([developer])
+        end
+
+        it_behaves_like 'unapprove command unavailable' do
+          let(:issuable) { issue }
+        end
+      end
+    end
+
+    context 'crm_contact commands' do
+      let_it_be(:new_contact) { create(:contact, group: group) }
+      let_it_be(:existing_contact) { create(:contact, group: group) }
+
+      let(:add_command) { service.execute("/add_contacts #{new_contact.email}", issue) }
+      let(:remove_command) { service.execute("/remove_contacts #{existing_contact.email}", issue) }
+
+      before do
+        issue.project.group.add_developer(developer)
+        create(:issue_customer_relations_contact, issue: issue, contact: existing_contact)
+      end
+
+      context 'with feature flag disabled' do
+        before do
+          stub_feature_flags(customer_relations: false)
+        end
+
+        it 'add_contacts command does not add the contact' do
+          _, updates, _ = add_command
+
+          expect(updates).to be_empty
+        end
+
+        it 'remove_contacts command does not remove the contact' do
+          _, updates, _ = remove_command
+
+          expect(updates).to be_empty
+        end
+      end
+
+      it 'add_contacts command adds the contact' do
+        _, updates, message = add_command
+
+        expect(updates).to eq(add_contacts: [new_contact.email])
+        expect(message).to eq('One or more contacts were successfully added.')
+      end
+
+      it 'remove_contacts command removes the contact' do
+        _, updates, message = remove_command
+
+        expect(updates).to eq(remove_contacts: [existing_contact.email])
+        expect(message).to eq('One or more contacts were successfully removed.')
+      end
+    end
+
+    describe 'attention command' do
+      let(:issuable) { create(:merge_request, reviewers: [developer], source_project: project) }
+      let(:reviewer) { issuable.merge_request_reviewers.find_by(user_id: developer.id) }
+      let(:content) { "/attention @#{developer.username}" }
+
+      context 'with one user' do
+        before do
+          reviewer.update!(state: :reviewed)
+        end
+
+        it_behaves_like 'attention command'
+      end
+
+      context 'with no user' do
+        let(:content) { "/attention" }
+
+        it_behaves_like 'failed command', 'Failed to request attention because no user was found.'
+      end
+
+      context 'with incorrect permissions' do
+        let(:service) { described_class.new(project, create(:user)) }
+
+        it_behaves_like 'failed command', 'Could not apply attention command.'
+      end
+
+      context 'with feature flag disabled' do
+        before do
+          stub_feature_flags(mr_attention_requests: false)
+        end
+
+        it_behaves_like 'failed command', 'Could not apply attention command.'
+      end
+
+      context 'with an issue instead of a merge request' do
+        let(:issuable) { issue }
+
+        it_behaves_like 'failed command', 'Could not apply attention command.'
+      end
+    end
+
+    describe 'remove attention command' do
+      let(:issuable) { create(:merge_request, reviewers: [developer], source_project: project) }
+      let(:reviewer) { issuable.merge_request_reviewers.find_by(user_id: developer.id) }
+      let(:content) { "/remove_attention @#{developer.username}" }
+
+      context 'with one user' do
+        it_behaves_like 'remove attention command'
+      end
+
+      context 'with no user' do
+        let(:content) { "/remove_attention" }
+
+        it_behaves_like 'failed command', 'Failed to remove attention because no user was found.'
+      end
+
+      context 'with incorrect permissions' do
+        let(:service) { described_class.new(project, create(:user)) }
+
+        it_behaves_like 'failed command', 'Could not apply remove_attention command.'
+      end
+
+      context 'with feature flag disabled' do
+        before do
+          stub_feature_flags(mr_attention_requests: false)
+        end
+
+        it_behaves_like 'failed command', 'Could not apply remove_attention command.'
+      end
+
+      context 'with an issue instead of a merge request' do
+        let(:issuable) { issue }
+
+        it_behaves_like 'failed command', 'Could not apply remove_attention command.'
+      end
+    end
   end
 
   describe '#explain' do
@@ -2173,12 +2440,42 @@ RSpec.describe QuickActions::InterpretService do
     end
 
     describe 'assign command' do
-      let(:content) { "/assign @#{developer.username} do it!" }
+      shared_examples 'assigns developer' do
+        it 'tells us we will assign the developer' do
+          _, explanations = service.explain(content, merge_request)
 
-      it 'includes only the user reference' do
-        _, explanations = service.explain(content, merge_request)
+          expect(explanations).to eq(["Assigns @#{developer.username}."])
+        end
+      end
 
-        expect(explanations).to eq(["Assigns @#{developer.username}."])
+      context 'when using a reference' do
+        let(:content) { "/assign @#{developer.username}" }
+
+        include_examples 'assigns developer'
+      end
+
+      context 'when using a bare username' do
+        let(:content) { "/assign #{developer.username}" }
+
+        include_examples 'assigns developer'
+      end
+
+      context 'when using me' do
+        let(:content) { "/assign me" }
+
+        include_examples 'assigns developer'
+      end
+
+      context 'when there are unparseable arguments' do
+        let(:arg) { "#{developer.username} to this issue" }
+        let(:content) { "/assign #{arg}" }
+
+        it 'tells us why we cannot do that' do
+          _, explanations = service.explain(content, merge_request)
+
+          expect(explanations)
+            .to contain_exactly "Problem with assign command: Failed to find users for 'to', 'this', and 'issue'."
+        end
       end
     end
 
@@ -2452,6 +2749,73 @@ RSpec.describe QuickActions::InterpretService do
         service.execute(content, issue)
 
         expect(service.commands_executed_count).to eq(3)
+      end
+    end
+
+    describe 'crm commands' do
+      let(:add_contacts) { '/add_contacts' }
+      let(:remove_contacts) { '/remove_contacts' }
+
+      before_all do
+        group.add_developer(developer)
+      end
+
+      context 'when group has no contacts' do
+        it '/add_contacts is not available' do
+          _, explanations = service.explain(add_contacts, issue)
+
+          expect(explanations).to be_empty
+        end
+
+        it '/remove_contacts is not available' do
+          _, explanations = service.explain(remove_contacts, issue)
+
+          expect(explanations).to be_empty
+        end
+      end
+
+      context 'when group has contacts' do
+        let!(:contact) { create(:contact, group: group) }
+
+        it '/add_contacts is available' do
+          _, explanations = service.explain(add_contacts, issue)
+
+          expect(explanations).to contain_exactly("Add customer relation contact(s).")
+        end
+
+        it '/remove_contacts is available' do
+          _, explanations = service.explain(remove_contacts, issue)
+
+          expect(explanations).to contain_exactly("Remove customer relation contact(s).")
+        end
+      end
+    end
+  end
+
+  describe '#available_commands' do
+    context 'when Guest is creating a new issue' do
+      let_it_be(:guest) { create(:user) }
+
+      let(:issue) { build(:issue, project: public_project) }
+      let(:service) { described_class.new(project, guest) }
+
+      before_all do
+        public_project.add_guest(guest)
+      end
+
+      it 'includes commands to set metadata' do
+        # milestone action is only available when project has a milestone
+        milestone
+
+        available_commands = service.available_commands(issue)
+
+        expect(available_commands).to include(
+          a_hash_including(name: :label),
+          a_hash_including(name: :milestone),
+          a_hash_including(name: :copy_metadata),
+          a_hash_including(name: :assign),
+          a_hash_including(name: :due)
+        )
       end
     end
   end

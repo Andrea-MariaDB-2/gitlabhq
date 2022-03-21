@@ -20,7 +20,6 @@ Rails.application.routes.draw do
   get 'favicon.png', to: favicon_redirect
   get 'favicon.ico', to: favicon_redirect
 
-  draw :sherlock
   draw :development
 
   use_doorkeeper do
@@ -33,7 +32,7 @@ Rails.application.routes.draw do
 
   # This prefixless path is required because Jira gets confused if we set it up with a path
   # More information: https://gitlab.com/gitlab-org/gitlab/issues/6752
-  scope path: '/login/oauth', controller: 'oauth/jira/authorizations', as: :oauth_jira do
+  scope path: '/login/oauth', controller: 'oauth/jira_dvcs/authorizations', as: :oauth_jira_dvcs do
     get :authorize, action: :new
     get :callback
     post :access_token
@@ -43,12 +42,15 @@ Rails.application.routes.draw do
 
   draw :oauth
 
-  use_doorkeeper_openid_connect
+  use_doorkeeper_openid_connect do
+    controllers discovery: 'jwks'
+  end
+
   # Add OPTIONS method for CORS preflight requests
   match '/oauth/userinfo' => 'doorkeeper/openid_connect/userinfo#show', via: :options
-  match '/oauth/discovery/keys' => 'doorkeeper/openid_connect/discovery#keys', via: :options
-  match '/.well-known/openid-configuration' => 'doorkeeper/openid_connect/discovery#provider', via: :options
-  match '/.well-known/webfinger' => 'doorkeeper/openid_connect/discovery#webfinger', via: :options
+  match '/oauth/discovery/keys' => 'jwks#keys', via: :options
+  match '/.well-known/openid-configuration' => 'jwks#provider', via: :options
+  match '/.well-known/webfinger' => 'jwks#webfinger', via: :options
 
   match '/oauth/token' => 'oauth/tokens#create', via: :options
   match '/oauth/revoke' => 'oauth/tokens#revoke', via: :options
@@ -63,11 +65,16 @@ Rails.application.routes.draw do
       end
     end
 
-    resource :experience_level, only: [:show, :update]
-
     Gitlab.ee do
       resources :groups, only: [:new, :create]
       resources :projects, only: [:new, :create]
+      resources :groups_projects, only: [:new, :create] do
+        collection do
+          post :import
+          put :exit
+        end
+      end
+      draw :verification
     end
   end
 
@@ -102,6 +109,9 @@ Rails.application.routes.draw do
       get '/autocomplete/project_routes' => 'autocomplete#project_routes'
       get '/autocomplete/namespace_routes' => 'autocomplete#namespace_routes'
     end
+
+    # sandbox
+    get '/sandbox/mermaid' => 'sandbox#mermaid'
 
     get '/whats_new' => 'whats_new#index'
 
@@ -140,9 +150,6 @@ Rails.application.routes.draw do
 
     get 'acme-challenge/' => 'acme_challenges#show'
 
-    # UserCallouts
-    resources :user_callouts, only: [:create]
-
     scope :ide, as: :ide, format: false do
       get '/', to: 'ide#index'
       get '/project', to: 'ide#index'
@@ -160,15 +167,12 @@ Rails.application.routes.draw do
       end
     end
 
-    resource :projects
-
     draw :operations
     draw :jira_connect
 
     Gitlab.ee do
       draw :security
       draw :smartcard
-      draw :username
       draw :trial
       draw :trial_registration
       draw :country
@@ -184,7 +188,7 @@ Rails.application.routes.draw do
     end
 
     Gitlab.jh do
-      draw :province
+      draw :global_jh
     end
 
     if ENV['GITLAB_CHAOS_SECRET'] || Rails.env.development? || Rails.env.test?
@@ -221,6 +225,7 @@ Rails.application.routes.draw do
 
     draw :snippets
     draw :profile
+    draw :members
 
     # Product analytics collector
     match '/collector/i', to: ProductAnalytics::CollectorApp.new, via: :all
@@ -230,6 +235,7 @@ Rails.application.routes.draw do
   concern :clusterable do
     resources :clusters, only: [:index, :new, :show, :update, :destroy] do
       collection do
+        get  :connect
         post :create_user
         post :create_gcp
         post :create_aws
@@ -264,7 +270,7 @@ Rails.application.routes.draw do
 
   resources :projects, only: [:index, :new, :create]
 
-  get '/projects/:id' => 'projects#resolve'
+  get '/projects/:id' => 'projects/redirect#redirect_from_id'
 
   draw :git_http
   draw :api

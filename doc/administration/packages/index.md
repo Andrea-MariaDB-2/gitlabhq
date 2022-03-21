@@ -14,22 +14,17 @@ The Packages feature allows GitLab to act as a repository for the following:
 
 The Package Registry supports the following formats:
 
-<div class="row">
-<div class="col-md-9">
-<table align="left" style="width:50%">
-<tr style="background:#dfdfdf"><th>Package type</th><th>GitLab version</th></tr>
-<tr><td><a href="https://docs.gitlab.com/ee/user/packages/composer_repository/index.html">Composer</a></td><td>13.2+</td></tr>
-<tr><td><a href="https://docs.gitlab.com/ee/user/packages/conan_repository/index.html">Conan</a></td><td>12.6+</td></tr>
-<tr><td><a href="https://docs.gitlab.com/ee/user/packages/go_proxy/index.html">Go</a></td><td>13.1+</td></tr>
-<tr><td><a href="https://docs.gitlab.com/ee/user/packages/maven_repository/index.html">Maven</a></td><td>11.3+</td></tr>
-<tr><td><a href="https://docs.gitlab.com/ee/user/packages/npm_registry/index.html">npm</a></td><td>11.7+</td></tr>
-<tr><td><a href="https://docs.gitlab.com/ee/user/packages/nuget_repository/index.html">NuGet</a></td><td>12.8+</td></tr>
-<tr><td><a href="https://docs.gitlab.com/ee/user/packages/pypi_repository/index.html">PyPI</a></td><td>12.10+</td></tr>
-<tr><td><a href="https://docs.gitlab.com/ee/user/packages/generic_packages/index.html">Generic packages</a></td><td>13.5+</td></tr>
-<tr><td><a href="https://docs.gitlab.com/ee/user/packages/helm_repository/index.html">Helm Charts</a></td><td>14.1+</td></tr>
-</table>
-</div>
-</div>
+| Package type                                                      | GitLab version |
+|-------------------------------------------------------------------|----------------|
+| [Composer](../../user/packages/composer_repository/index.md)      | 13.2+          |
+| [Conan](../../user/packages/conan_repository/index.md)            | 12.6+          |
+| [Go](../../user/packages/go_proxy/index.md)                       | 13.1+          |
+| [Maven](../../user/packages/maven_repository/index.md)            | 11.3+          |
+| [npm](../../user/packages/npm_registry/index.md)                  | 11.7+          |
+| [NuGet](../../user/packages/nuget_repository/index.md)            | 12.8+          |
+| [PyPI](../../user/packages/pypi_repository/index.md)              | 12.10+         |
+| [Generic packages](../../user/packages/generic_packages/index.md) | 13.5+          |
+| [Helm Charts](../../user/packages/helm_repository/index.md)       | 14.1+          |
 
 ## Accepting contributions
 
@@ -73,7 +68,7 @@ To enable the Packages feature:
    gitlab_rails['packages_enabled'] = true
    ```
 
-1. Save the file and [reconfigure GitLab](../restart_gitlab.md#omnibus-gitlab-reconfigure "How to reconfigure Omnibus GitLab") for the changes to take effect.
+1. Save the file and [reconfigure GitLab](../restart_gitlab.md#omnibus-gitlab-reconfigure) for the changes to take effect.
 
 **Installations from source**
 
@@ -85,7 +80,7 @@ To enable the Packages feature:
      enabled: true
    ```
 
-1. [Restart GitLab](../restart_gitlab.md#omnibus-gitlab-reconfigure "How to reconfigure Omnibus GitLab") for the changes to take effect.
+1. [Restart GitLab](../restart_gitlab.md#omnibus-gitlab-reconfigure) for the changes to take effect.
 
 **Helm Chart installations**
 
@@ -97,7 +92,7 @@ To enable the Packages feature:
      enabled: true
    ```
 
-1. [Restart GitLab](../restart_gitlab.md#helm-chart-installations "How to reconfigure Helm GitLab") for the changes to take effect.
+1. [Restart GitLab](../restart_gitlab.md#helm-chart-installations) for the changes to take effect.
 
 ## Rate limits
 
@@ -223,8 +218,8 @@ We recommend using the [consolidated object storage settings](../object_storage.
 
 ### Migrating local packages to object storage
 
-After [configuring the object storage](#using-object-storage), you may use the
-following task to migrate existing packages from the local storage to the remote one.
+After [configuring the object storage](#using-object-storage), use the following task to
+migrate existing packages from the local storage to the remote storage.
 The processing is done in a background worker and requires **no downtime**.
 
 For Omnibus GitLab:
@@ -239,11 +234,13 @@ For installations from source:
 RAILS_ENV=production sudo -u git -H bundle exec rake gitlab:packages:migrate
 ```
 
-You can optionally track progress and verify that all packages migrated successfully.
+You can optionally track progress and verify that all packages migrated successfully using the
+[PostgreSQL console](https://docs.gitlab.com/omnibus/settings/database.html#connecting-to-the-bundled-postgresql-database):
 
-From the [PostgreSQL console](https://docs.gitlab.com/omnibus/settings/database.html#connecting-to-the-bundled-postgresql-database)
-(`sudo gitlab-psql -d gitlabhq_production` for Omnibus GitLab), verify that `objectstg` below (where
-`file_store=2`) has the count of all packages:
+- `sudo gitlab-rails dbconsole` for Omnibus GitLab instances.
+- `sudo -u git -H psql -d gitlabhq_production` for source-installed instances.
+
+Verify `objectstg` below (where `file_store = '2'`) has count of all packages:
 
 ```shell
 gitlabhq_production=# SELECT count(*) AS total, sum(case when file_store = '1' then 1 else 0 end) AS filesystem, sum(case when file_store = '2' then 1 else 0 end) AS objectstg FROM packages_package_files;
@@ -251,4 +248,10 @@ gitlabhq_production=# SELECT count(*) AS total, sum(case when file_store = '1' t
 total | filesystem | objectstg
 ------+------------+-----------
  34   |          0 |        34
+```
+
+Verify that there are no files on disk in the `packages` folder:
+
+```shell
+sudo find /var/opt/gitlab/gitlab-rails/shared/packages -type f | grep -v tmp | wc -l
 ```

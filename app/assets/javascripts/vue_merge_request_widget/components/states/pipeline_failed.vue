@@ -1,6 +1,7 @@
 <script>
 import { GlLink, GlSprintf } from '@gitlab/ui';
 import { helpPagePath } from '~/helpers/help_page_helper';
+import glFeatureFlagMixin from '~/vue_shared/mixins/gl_feature_flags_mixin';
 import { s__ } from '~/locale';
 import statusIcon from '../mr_widget_status_icon.vue';
 
@@ -11,6 +12,7 @@ export default {
     GlSprintf,
     statusIcon,
   },
+  mixins: [glFeatureFlagMixin()],
   computed: {
     troubleshootingDocsPath() {
       return helpPagePath('ci/troubleshooting', { anchor: 'merge-request-status-messages' });
@@ -18,7 +20,7 @@ export default {
   },
   i18n: {
     failedMessage: s__(
-      `mrWidget|The pipeline for this merge request did not complete. Push a new commit to fix the failure, or check the %{linkStart}troubleshooting documentation%{linkEnd} to see other possible actions.`,
+      `mrWidget|Merge blocked: pipeline must succeed. Push a commit that fixes the failure, or %{linkStart}learn about other solutions.%{linkEnd}`,
     ),
   },
 };
@@ -28,7 +30,7 @@ export default {
   <div class="mr-widget-body media">
     <status-icon :show-disabled-button="true" status="warning" />
     <div class="media-body space-children">
-      <span class="bold">
+      <span :class="{ 'gl-ml-0! gl-text-body!': glFeatures.restructuredMrWidget }" class="bold">
         <gl-sprintf :message="$options.i18n.failedMessage">
           <template #link="{ content }">
             <gl-link :href="troubleshootingDocsPath" target="_blank">

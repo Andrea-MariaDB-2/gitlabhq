@@ -5,6 +5,12 @@ import { insertText } from '~/lib/utils/common_utils';
 
 const LINK_TAG_PATTERN = '[{text}](url)';
 
+// at the start of a line, find any amount of whitespace followed by
+// a bullet point character (*+-) and an optional checkbox ([ ] [x])
+// OR a number with a . after it and an optional checkbox ([ ] [x])
+// followed by one or more whitespace characters
+const LIST_LINE_HEAD_PATTERN = /^(?<indent>\s*)(?<leader>((?<isUl>[*+-])|(?<isOl>\d+\.))( \[([x ])\])?\s)(?<content>.)?/;
+
 function selectedText(text, textarea) {
   return text.substring(textarea.selectionStart, textarea.selectionEnd);
 }
@@ -13,13 +19,31 @@ function addBlockTags(blockTag, selected) {
   return `${blockTag}\n${selected}\n${blockTag}`;
 }
 
-function lineBefore(text, textarea) {
-  const split = text.substring(0, textarea.selectionStart).trim().split('\n');
+function lineBefore(text, textarea, trimNewlines = true) {
+  let split = text.substring(0, textarea.selectionStart);
+
+  if (trimNewlines) {
+    split = split.trim();
+  }
+
+  split = split.split('\n');
+
   return split[split.length - 1];
 }
 
-function lineAfter(text, textarea) {
-  return text.substring(textarea.selectionEnd).trim().split('\n')[0];
+function lineAfter(text, textarea, trimNewlines = true) {
+  let split = text.substring(textarea.selectionEnd);
+
+  if (trimNewlines) {
+    split = split.trim();
+  } else {
+    // remove possible leading newline to get at the real line
+    split = split.replace(/^\n/, '');
+  }
+
+  split = split.split('\n');
+
+  return split[0];
 }
 
 function convertMonacoSelectionToAceFormat(sel) {
@@ -233,7 +257,7 @@ export function insertMarkdownText({
     }
   } else if (tag.indexOf(textPlaceholder) > -1) {
     textToInsert = tag.replace(textPlaceholder, () =>
-      selected.replace(/\\n/g, '\n').replace('%br', '\\n'),
+      selected.replace(/\\n/g, '\n').replace(/%br/g, '\\n'),
     );
   } else {
     textToInsert = String(startChar) + tag + selected + (wrap ? tag : '');
@@ -284,9 +308,9 @@ function updateText({ textArea, tag, cursorOffset, blockTag, wrap, select, tagCo
 }
 
 /* eslint-disable @gitlab/require-i18n-strings */
-export function keypressNoteText(e) {
+function handleSurroundSelectedText(e, textArea) {
   if (!gon.markdown_surround_selection) return;
-  if (this.selectionStart === this.selectionEnd) return;
+  if (textArea.selectionStart === textArea.selectionEnd) return;
 
   const keys = {
     '*': '**{text}**', // wraps with bold character
@@ -306,7 +330,7 @@ export function keypressNoteText(e) {
 
     updateText({
       tag,
-      textArea: this,
+      textArea,
       blockTag: '',
       wrap: true,
       select: '',
@@ -315,6 +339,79 @@ export function keypressNoteText(e) {
   }
 }
 /* eslint-enable @gitlab/require-i18n-strings */
+
+/**
+ * Returns the content for a new line following a list item.
+ *
+ * @param {Object} result - regex match of the current line
+ * @param {Object?} nextLineResult - regex match of the next line
+ * @returns string with the new list item
+ */
+function continueOlText(result, nextLineResult) {
+  const { indent, leader } = result.groups;
+  const { indent: nextIndent, isOl: nextIsOl } = nextLineResult?.groups ?? {};
+
+  const [numStr, postfix = ''] = leader.split('.');
+
+  const incrementBy = nextIsOl && nextIndent === indent ? 0 : 1;
+  const num = parseInt(numStr, 10) + incrementBy;
+
+  return `${indent}${num}.${postfix}`;
+}
+
+function handleContinueList(e, textArea) {
+  if (!gon.features?.markdownContinueLists) return;
+  if (!(e.key === 'Enter')) return;
+  if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+  if (textArea.selectionStart !== textArea.selectionEnd) return;
+
+  const currentLine = lineBefore(textArea.value, textArea, false);
+  const result = currentLine.match(LIST_LINE_HEAD_PATTERN);
+
+  if (result) {
+    const { leader, indent, content, isOl } = result.groups;
+    const prevLineEmpty = !content;
+
+    if (prevLineEmpty) {
+      // erase previous empty list item - select the text and allow the
+      // natural line feed erase the text
+      textArea.selectionStart = textArea.selectionStart - result[0].length;
+      return;
+    }
+
+    let itemToInsert;
+
+    if (isOl) {
+      const nextLine = lineAfter(textArea.value, textArea, false);
+      const nextLineResult = nextLine.match(LIST_LINE_HEAD_PATTERN);
+
+      itemToInsert = continueOlText(result, nextLineResult);
+    } else {
+      // isUl
+      itemToInsert = `${indent}${leader}`;
+    }
+
+    e.preventDefault();
+
+    updateText({
+      tag: itemToInsert,
+      textArea,
+      blockTag: '',
+      wrap: false,
+      select: '',
+      tagContent: '',
+    });
+  }
+}
+
+export function keypressNoteText(e) {
+  const textArea = this;
+
+  if ($(textArea).atwho?.('isSelecting')) return;
+
+  handleContinueList(e, textArea);
+  handleSurroundSelectedText(e, textArea);
+}
 
 export function updateTextForToolbarBtn($toolbarBtn) {
   return updateText({

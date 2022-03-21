@@ -1,11 +1,19 @@
-import { shallowMount } from '@vue/test-utils';
-import Vue from 'vue';
+import { createLocalVue, shallowMount } from '@vue/test-utils';
+import { nextTick } from 'vue';
+import { GlSprintf } from '@gitlab/ui';
+import VueApollo from 'vue-apollo';
+import produce from 'immer';
+import readyToMergeResponse from 'test_fixtures/graphql/merge_requests/states/ready_to_merge.query.graphql.json';
+import waitForPromises from 'helpers/wait_for_promises';
+import createMockApollo from 'helpers/mock_apollo_helper';
+import readyToMergeQuery from 'ee_else_ce/vue_merge_request_widget/queries/states/ready_to_merge.query.graphql';
 import simplePoll from '~/lib/utils/simple_poll';
 import CommitEdit from '~/vue_merge_request_widget/components/states/commit_edit.vue';
 import CommitMessageDropdown from '~/vue_merge_request_widget/components/states/commit_message_dropdown.vue';
 import CommitsHeader from '~/vue_merge_request_widget/components/states/commits_header.vue';
 import ReadyToMerge from '~/vue_merge_request_widget/components/states/ready_to_merge.vue';
 import SquashBeforeMerge from '~/vue_merge_request_widget/components/states/squash_before_merge.vue';
+import MergeFailedPipelineConfirmationDialog from '~/vue_merge_request_widget/components/states/merge_failed_pipeline_confirmation_dialog.vue';
 import { MWPS_MERGE_STRATEGY } from '~/vue_merge_request_widget/constants';
 import eventHub from '~/vue_merge_request_widget/event_hub';
 
@@ -16,9 +24,11 @@ jest.mock('~/commons/nav/user_merge_requests', () => ({
   refreshUserMergeRequestCounts: jest.fn(),
 }));
 
-const commitMessage = 'This is the commit message';
-const squashCommitMessage = 'This is the squash commit message';
-const commitMessageWithDescription = 'This is the commit message description';
+const commitMessage = readyToMergeResponse.data.project.mergeRequest.defaultMergeCommitMessage;
+const squashCommitMessage =
+  readyToMergeResponse.data.project.mergeRequest.defaultSquashCommitMessage;
+const commitMessageWithDescription =
+  readyToMergeResponse.data.project.mergeRequest.defaultMergeCommitMessageWithDescription;
 const createTestMr = (customConfig) => {
   const mr = {
     isPipelineActive: false,
@@ -39,12 +49,16 @@ const createTestMr = (customConfig) => {
     commitMessage,
     squashCommitMessage,
     commitMessageWithDescription,
+    defaultMergeCommitMessage: commitMessage,
+    defaultSquashCommitMessage: squashCommitMessage,
     shouldRemoveSourceBranch: true,
     canRemoveSourceBranch: false,
     targetBranch: 'main',
     preferredAutoMergeStrategy: MWPS_MERGE_STRATEGY,
     availableAutoMergeStrategies: [MWPS_MERGE_STRATEGY],
     mergeImmediatelyDocsPath: 'path/to/merge/immediately/docs',
+    transitionStateMachine: (transition) => eventHub.$emit('StateMachineValueChanged', transition),
+    translateStateToMachine: () => this.transitionStateMachine(),
   };
 
   Object.assign(mr, customConfig.mr);
@@ -56,10 +70,25 @@ const createTestService = () => ({
   merge: jest.fn(),
   poll: jest.fn().mockResolvedValue(),
 });
+const localVue = createLocalVue();
+localVue.use(VueApollo);
 
 let wrapper;
+let readyToMergeResponseSpy;
+
+const findMergeButton = () => wrapper.find('[data-testid="merge-button"]');
+const findPipelineFailedConfirmModal = () =>
+  wrapper.findComponent(MergeFailedPipelineConfirmationDialog);
+
+const createReadyToMergeResponse = (customMr) => {
+  return produce(readyToMergeResponse, (draft) => {
+    Object.assign(draft.data.project.mergeRequest, customMr);
+  });
+};
+
 const createComponent = (customConfig = {}, mergeRequestWidgetGraphql = false) => {
   wrapper = shallowMount(ReadyToMerge, {
+    localVue,
     propsData: {
       mr: createTestMr(customConfig),
       service: createTestService(),
@@ -72,10 +101,29 @@ const createComponent = (customConfig = {}, mergeRequestWidgetGraphql = false) =
     stubs: {
       CommitEdit,
     },
+    apolloProvider: createMockApollo([[readyToMergeQuery, readyToMergeResponseSpy]]),
   });
 };
 
+const findCheckboxElement = () => wrapper.find(SquashBeforeMerge);
+const findCommitsHeaderElement = () => wrapper.find(CommitsHeader);
+const findCommitEditElements = () => wrapper.findAll(CommitEdit);
+const findCommitDropdownElement = () => wrapper.find(CommitMessageDropdown);
+const findFirstCommitEditLabel = () => findCommitEditElements().at(0).props('label');
+const findTipLink = () => wrapper.find(GlSprintf);
+const findCommitEditWithInputId = (inputId) =>
+  findCommitEditElements().wrappers.find((x) => x.props('inputId') === inputId);
+const findMergeCommitMessage = () => findCommitEditWithInputId('merge-message-edit').props('value');
+const findSquashCommitMessage = () =>
+  findCommitEditWithInputId('squash-message-edit').props('value');
+
+const triggerApprovalUpdated = () => eventHub.$emit('ApprovalUpdated');
+
 describe('ReadyToMerge', () => {
+  beforeEach(() => {
+    readyToMergeResponseSpy = jest.fn().mockResolvedValueOnce(readyToMergeResponse);
+  });
+
   afterEach(() => {
     wrapper.destroy();
   });
@@ -129,33 +177,13 @@ describe('ReadyToMerge', () => {
       });
     });
 
-    describe('mergeButtonVariant', () => {
+    describe('Merge Button Variant', () => {
       it('defaults to confirm class', () => {
         createComponent({
           mr: { availableAutoMergeStrategies: [] },
         });
 
-        expect(wrapper.vm.mergeButtonVariant).toEqual('confirm');
-      });
-
-      it('returns confirm class for success status', () => {
-        createComponent({
-          mr: { availableAutoMergeStrategies: [], pipeline: true },
-        });
-
-        expect(wrapper.vm.mergeButtonVariant).toEqual('confirm');
-      });
-
-      it('returns confirm class for pending status', () => {
-        createComponent();
-
-        expect(wrapper.vm.mergeButtonVariant).toEqual('confirm');
-      });
-
-      it('returns danger class for failed status', () => {
-        createComponent({ mr: { hasCI: true } });
-
-        expect(wrapper.vm.mergeButtonVariant).toEqual('danger');
+        expect(findMergeButton().attributes('variant')).toBe('confirm');
       });
     });
 
@@ -189,9 +217,11 @@ describe('ReadyToMerge', () => {
       it('should return "Merge in progress"', async () => {
         createComponent();
 
+        // setData usage is discouraged. See https://gitlab.com/groups/gitlab-org/-/epics/7330 for details
+        // eslint-disable-next-line no-restricted-syntax
         wrapper.setData({ isMergingImmediately: true });
 
-        await Vue.nextTick();
+        await nextTick();
 
         expect(wrapper.vm.mergeButtonText).toEqual('Merge in progress');
       });
@@ -257,9 +287,11 @@ describe('ReadyToMerge', () => {
       it('should return true when the vm instance is making request', async () => {
         createComponent({ mr: { isMergeAllowed: true } });
 
+        // setData usage is discouraged. See https://gitlab.com/groups/gitlab-org/-/epics/7330 for details
+        // eslint-disable-next-line no-restricted-syntax
         wrapper.setData({ isMakingRequest: true });
 
-        await Vue.nextTick();
+        await nextTick();
 
         expect(wrapper.vm.isMergeButtonDisabled).toBe(true);
       });
@@ -267,114 +299,87 @@ describe('ReadyToMerge', () => {
   });
 
   describe('methods', () => {
-    describe('updateMergeCommitMessage', () => {
-      it('should revert flag and change commitMessage', () => {
-        createComponent();
-
-        wrapper.vm.updateMergeCommitMessage(true);
-
-        expect(wrapper.vm.commitMessage).toEqual(commitMessageWithDescription);
-        wrapper.vm.updateMergeCommitMessage(false);
-
-        expect(wrapper.vm.commitMessage).toEqual(commitMessage);
-      });
-    });
-
     describe('handleMergeButtonClick', () => {
-      const returnPromise = (status) =>
-        new Promise((resolve) => {
-          resolve({
-            data: {
-              status,
-            },
-          });
-        });
+      const response = (status) => ({
+        data: {
+          status,
+        },
+      });
 
-      it('should handle merge when pipeline succeeds', (done) => {
+      it('should handle merge when pipeline succeeds', async () => {
         createComponent();
 
         jest.spyOn(eventHub, '$emit').mockImplementation(() => {});
         jest
           .spyOn(wrapper.vm.service, 'merge')
-          .mockReturnValue(returnPromise('merge_when_pipeline_succeeds'));
+          .mockResolvedValue(response('merge_when_pipeline_succeeds'));
+        // setData usage is discouraged. See https://gitlab.com/groups/gitlab-org/-/epics/7330 for details
+        // eslint-disable-next-line no-restricted-syntax
         wrapper.setData({ removeSourceBranch: false });
 
         wrapper.vm.handleMergeButtonClick(true);
 
-        setImmediate(() => {
-          expect(wrapper.vm.isMakingRequest).toBeTruthy();
-          expect(eventHub.$emit).toHaveBeenCalledWith('MRWidgetUpdateRequested');
+        await waitForPromises();
 
-          const params = wrapper.vm.service.merge.mock.calls[0][0];
-
-          expect(params).toEqual(
-            expect.objectContaining({
-              sha: wrapper.vm.mr.sha,
-              commit_message: wrapper.vm.mr.commitMessage,
-              should_remove_source_branch: false,
-              auto_merge_strategy: 'merge_when_pipeline_succeeds',
-            }),
-          );
-          done();
+        expect(wrapper.vm.isMakingRequest).toBeTruthy();
+        expect(eventHub.$emit).toHaveBeenCalledWith('MRWidgetUpdateRequested');
+        expect(eventHub.$emit).toHaveBeenCalledWith('StateMachineValueChanged', {
+          transition: 'start-auto-merge',
         });
+
+        const params = wrapper.vm.service.merge.mock.calls[0][0];
+
+        expect(params).toEqual(
+          expect.objectContaining({
+            sha: wrapper.vm.mr.sha,
+            commit_message: wrapper.vm.mr.commitMessage,
+            should_remove_source_branch: false,
+            auto_merge_strategy: 'merge_when_pipeline_succeeds',
+          }),
+        );
       });
 
-      it('should handle merge failed', (done) => {
+      it('should handle merge failed', async () => {
         createComponent();
 
         jest.spyOn(eventHub, '$emit').mockImplementation(() => {});
-        jest.spyOn(wrapper.vm.service, 'merge').mockReturnValue(returnPromise('failed'));
+        jest.spyOn(wrapper.vm.service, 'merge').mockResolvedValue(response('failed'));
         wrapper.vm.handleMergeButtonClick(false, true);
 
-        setImmediate(() => {
-          expect(wrapper.vm.isMakingRequest).toBeTruthy();
-          expect(eventHub.$emit).toHaveBeenCalledWith('FailedToMerge', undefined);
+        await waitForPromises();
 
-          const params = wrapper.vm.service.merge.mock.calls[0][0];
+        expect(wrapper.vm.isMakingRequest).toBeTruthy();
+        expect(eventHub.$emit).toHaveBeenCalledWith('FailedToMerge', undefined);
 
-          expect(params.should_remove_source_branch).toBeTruthy();
-          expect(params.auto_merge_strategy).toBeUndefined();
-          done();
-        });
+        const params = wrapper.vm.service.merge.mock.calls[0][0];
+
+        expect(params.should_remove_source_branch).toBeTruthy();
+        expect(params.auto_merge_strategy).toBeUndefined();
       });
 
-      it('should handle merge action accepted case', (done) => {
+      it('should handle merge action accepted case', async () => {
         createComponent();
 
-        jest.spyOn(wrapper.vm.service, 'merge').mockReturnValue(returnPromise('success'));
-        jest.spyOn(wrapper.vm, 'initiateMergePolling').mockImplementation(() => {});
+        jest.spyOn(eventHub, '$emit').mockImplementation(() => {});
+        jest.spyOn(wrapper.vm.service, 'merge').mockResolvedValue(response('success'));
+        jest.spyOn(wrapper.vm.mr, 'transitionStateMachine');
         wrapper.vm.handleMergeButtonClick();
 
-        setImmediate(() => {
-          expect(wrapper.vm.isMakingRequest).toBeTruthy();
-          expect(wrapper.vm.initiateMergePolling).toHaveBeenCalled();
-
-          const params = wrapper.vm.service.merge.mock.calls[0][0];
-
-          expect(params.should_remove_source_branch).toBeTruthy();
-          expect(params.auto_merge_strategy).toBeUndefined();
-          done();
+        expect(eventHub.$emit).toHaveBeenCalledWith('StateMachineValueChanged', {
+          transition: 'start-merge',
         });
-      });
-    });
 
-    describe('initiateMergePolling', () => {
-      it('should call simplePoll', () => {
-        createComponent();
+        await waitForPromises();
 
-        wrapper.vm.initiateMergePolling();
+        expect(wrapper.vm.isMakingRequest).toBeTruthy();
+        expect(wrapper.vm.mr.transitionStateMachine).toHaveBeenCalledWith({
+          transition: 'start-merge',
+        });
 
-        expect(simplePoll).toHaveBeenCalledWith(expect.any(Function), { timeout: 0 });
-      });
+        const params = wrapper.vm.service.merge.mock.calls[0][0];
 
-      it('should call handleMergePolling', () => {
-        createComponent();
-
-        jest.spyOn(wrapper.vm, 'handleMergePolling').mockImplementation(() => {});
-
-        wrapper.vm.initiateMergePolling();
-
-        expect(wrapper.vm.handleMergePolling).toHaveBeenCalled();
+        expect(params.should_remove_source_branch).toBeTruthy();
+        expect(params.auto_merge_strategy).toBeUndefined();
       });
     });
 
@@ -392,20 +397,17 @@ describe('ReadyToMerge', () => {
     });
 
     describe('handleRemoveBranchPolling', () => {
-      const returnPromise = (state) =>
-        new Promise((resolve) => {
-          resolve({
-            data: {
-              source_branch_exists: state,
-            },
-          });
-        });
+      const response = (state) => ({
+        data: {
+          source_branch_exists: state,
+        },
+      });
 
-      it('should call start and stop polling when MR merged', (done) => {
+      it('should call start and stop polling when MR merged', async () => {
         createComponent();
 
         jest.spyOn(eventHub, '$emit').mockImplementation(() => {});
-        jest.spyOn(wrapper.vm.service, 'poll').mockReturnValue(returnPromise(false));
+        jest.spyOn(wrapper.vm.service, 'poll').mockResolvedValue(response(false));
 
         let cpc = false; // continuePollingCalled
         let spc = false; // stopPollingCalled
@@ -418,28 +420,27 @@ describe('ReadyToMerge', () => {
             spc = true;
           },
         );
-        setImmediate(() => {
-          expect(wrapper.vm.service.poll).toHaveBeenCalled();
 
-          const args = eventHub.$emit.mock.calls[0];
+        await waitForPromises();
 
-          expect(args[0]).toEqual('MRWidgetUpdateRequested');
-          expect(args[1]).toBeDefined();
-          args[1]();
+        expect(wrapper.vm.service.poll).toHaveBeenCalled();
 
-          expect(eventHub.$emit).toHaveBeenCalledWith('SetBranchRemoveFlag', [false]);
+        const args = eventHub.$emit.mock.calls[0];
 
-          expect(cpc).toBeFalsy();
-          expect(spc).toBeTruthy();
+        expect(args[0]).toEqual('MRWidgetUpdateRequested');
+        expect(args[1]).toBeDefined();
+        args[1]();
 
-          done();
-        });
+        expect(eventHub.$emit).toHaveBeenCalledWith('SetBranchRemoveFlag', [false]);
+
+        expect(cpc).toBeFalsy();
+        expect(spc).toBeTruthy();
       });
 
-      it('should continue polling until MR is merged', (done) => {
+      it('should continue polling until MR is merged', async () => {
         createComponent();
 
-        jest.spyOn(wrapper.vm.service, 'poll').mockReturnValue(returnPromise(true));
+        jest.spyOn(wrapper.vm.service, 'poll').mockResolvedValue(response(true));
 
         let cpc = false; // continuePollingCalled
         let spc = false; // stopPollingCalled
@@ -452,12 +453,11 @@ describe('ReadyToMerge', () => {
             spc = true;
           },
         );
-        setImmediate(() => {
-          expect(cpc).toBeTruthy();
-          expect(spc).toBeFalsy();
 
-          done();
-        });
+        await waitForPromises();
+
+        expect(cpc).toBeTruthy();
+        expect(spc).toBeFalsy();
       });
     });
   });
@@ -485,12 +485,6 @@ describe('ReadyToMerge', () => {
   });
 
   describe('render children components', () => {
-    const findCheckboxElement = () => wrapper.find(SquashBeforeMerge);
-    const findCommitsHeaderElement = () => wrapper.find(CommitsHeader);
-    const findCommitEditElements = () => wrapper.findAll(CommitEdit);
-    const findCommitDropdownElement = () => wrapper.find(CommitMessageDropdown);
-    const findFirstCommitEditLabel = () => findCommitEditElements().at(0).props('label');
-
     describe('squash checkbox', () => {
       it('should be rendered when squash before merge is enabled and there is more than 1 commit', () => {
         createComponent({
@@ -506,10 +500,10 @@ describe('ReadyToMerge', () => {
         expect(findCheckboxElement().exists()).toBeFalsy();
       });
 
-      it('should not be rendered when there is only 1 commit', () => {
+      it('should be rendered when there is only 1 commit', () => {
         createComponent({ mr: { commitsCount: 1, enableSquashBeforeMerge: true } });
 
-        expect(findCheckboxElement().exists()).toBeFalsy();
+        expect(findCheckboxElement().exists()).toBe(true);
       });
 
       describe('squash options', () => {
@@ -692,6 +686,8 @@ describe('ReadyToMerge', () => {
           true,
         );
 
+        // setData usage is discouraged. See https://gitlab.com/groups/gitlab-org/-/epics/7330 for details
+        // eslint-disable-next-line no-restricted-syntax
         wrapper.setData({
           loading: false,
           state: {
@@ -703,7 +699,7 @@ describe('ReadyToMerge', () => {
             commitsWithoutMergeCommits: {},
           },
         });
-        await wrapper.vm.$nextTick();
+        await nextTick();
 
         expect(findCommitEditElements().length).toBe(2);
       });
@@ -754,6 +750,12 @@ describe('ReadyToMerge', () => {
         expect(findCommitDropdownElement().exists()).toBeTruthy();
       });
     });
+
+    it('renders a tip including a link to docs on templates', () => {
+      createComponent();
+
+      expect(findTipLink().exists()).toBe(true);
+    });
   });
 
   describe('Merge request project settings', () => {
@@ -778,6 +780,87 @@ describe('ReadyToMerge', () => {
 
       it('should show fast forward message', () => {
         expect(wrapper.find('.mr-fast-forward-message').exists()).toBe(true);
+      });
+    });
+  });
+
+  describe('Merge button when pipeline has failed', () => {
+    beforeEach(() => {
+      createComponent({
+        mr: { pipeline: {}, isPipelineFailed: true, availableAutoMergeStrategies: [] },
+      });
+    });
+
+    it('should display the correct merge text', () => {
+      expect(findMergeButton().text()).toBe('Merge...');
+    });
+
+    it('should display confirmation modal when merge button is clicked', async () => {
+      expect(findPipelineFailedConfirmModal().props()).toEqual({ visible: false });
+
+      await findMergeButton().vm.$emit('click');
+
+      expect(findPipelineFailedConfirmModal().props()).toEqual({ visible: true });
+    });
+  });
+
+  describe('updating graphql data triggers commit message update when default changed', () => {
+    const UPDATED_MERGE_COMMIT_MESSAGE = 'New merge message from BE';
+    const UPDATED_SQUASH_COMMIT_MESSAGE = 'New squash message from BE';
+    const USER_COMMIT_MESSAGE = 'Merge message provided manually by user';
+
+    const createDefaultGqlComponent = () =>
+      createComponent({ mr: { commitsCount: 2, enableSquashBeforeMerge: true } }, true);
+
+    beforeEach(() => {
+      readyToMergeResponseSpy = jest
+        .fn()
+        .mockResolvedValueOnce(createReadyToMergeResponse({ squash: true, squashOnMerge: true }))
+        .mockResolvedValue(
+          createReadyToMergeResponse({
+            squash: true,
+            squashOnMerge: true,
+            defaultMergeCommitMessage: UPDATED_MERGE_COMMIT_MESSAGE,
+            defaultSquashCommitMessage: UPDATED_SQUASH_COMMIT_MESSAGE,
+          }),
+        );
+    });
+
+    describe.each`
+      desc                       | finderFn                   | initialValue           | updatedValue                     | inputId
+      ${'merge commit message'}  | ${findMergeCommitMessage}  | ${commitMessage}       | ${UPDATED_MERGE_COMMIT_MESSAGE}  | ${'#merge-message-edit'}
+      ${'squash commit message'} | ${findSquashCommitMessage} | ${squashCommitMessage} | ${UPDATED_SQUASH_COMMIT_MESSAGE} | ${'#squash-message-edit'}
+    `('with $desc', ({ finderFn, initialValue, updatedValue, inputId }) => {
+      it('should have initial value', async () => {
+        createDefaultGqlComponent();
+
+        await waitForPromises();
+
+        expect(finderFn()).toBe(initialValue);
+      });
+
+      it('should have updated value after graphql refetch', async () => {
+        createDefaultGqlComponent();
+        await waitForPromises();
+
+        triggerApprovalUpdated();
+        await waitForPromises();
+
+        expect(finderFn()).toBe(updatedValue);
+      });
+
+      it('should not update if user has touched', async () => {
+        createDefaultGqlComponent();
+        await waitForPromises();
+
+        const input = wrapper.find(inputId);
+        input.element.value = USER_COMMIT_MESSAGE;
+        input.trigger('input');
+
+        triggerApprovalUpdated();
+        await waitForPromises();
+
+        expect(finderFn()).toBe(USER_COMMIT_MESSAGE);
       });
     });
   });

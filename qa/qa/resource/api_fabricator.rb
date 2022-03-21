@@ -7,18 +7,11 @@ module QA
   module Resource
     module ApiFabricator
       include Capybara::DSL
+      include Support::API
+      include Errors
 
-      ResourceFabricationFailedError = Class.new(RuntimeError)
-      ResourceNotDeletedError = Class.new(RuntimeError)
-      ResourceNotFoundError = Class.new(RuntimeError)
-      ResourceQueryError = Class.new(RuntimeError)
-      ResourceUpdateFailedError = Class.new(RuntimeError)
-      ResourceURLMissingError = Class.new(RuntimeError)
-      InternalServerError = Class.new(RuntimeError)
-
-      attr_reader :api_resource, :api_response
       attr_writer :api_client
-      attr_accessor :api_user
+      attr_accessor :api_user, :api_resource, :api_response
 
       def api_support?
         respond_to?(:api_get_path) &&
@@ -55,19 +48,30 @@ module QA
         end
       end
 
-      include Support::API
-      attr_writer :api_resource, :api_response
-
       def api_put(body = api_put_body)
         response = put(
           Runtime::API::Request.new(api_client, api_put_path).url,
           body)
 
         unless response.code == HTTP_STATUS_OK
-          raise ResourceFabricationFailedError, "Updating #{self.class.name} using the API failed (#{response.code}) with `#{response}`."
+          raise ResourceFabricationFailedError, "Updating #{self.class.name} using the API failed (#{response.code}) with `#{response}`.\n#{QA::Support::Loglinking.failure_metadata(response.headers[:x_request_id])}"
         end
 
         process_api_response(parse_body(response))
+      end
+
+      def api_fabrication_http_method
+        @api_fabrication_http_method ||= :post
+      end
+
+      # Checks if a resource already exists
+      #
+      # @return [Boolean] true if the resource returns HTTP status code 200
+      def exists?
+        request = Runtime::API::Request.new(api_client, api_get_path)
+        response = get(request.url)
+
+        response.code == HTTP_STATUS_OK
       end
 
       private
@@ -87,40 +91,47 @@ module QA
         response = get(request.url)
 
         if response.code == HTTP_STATUS_SERVER_ERROR
-          raise InternalServerError, "Failed to GET #{request.mask_url} - (#{response.code}): `#{response}`."
+          raise InternalServerError, "Failed to GET #{request.mask_url} - (#{response.code}): `#{response}`.\n#{QA::Support::Loglinking.failure_metadata(response.headers[:x_request_id])}"
         elsif response.code != HTTP_STATUS_OK
-          raise ResourceNotFoundError, "Resource at #{request.mask_url} could not be found (#{response.code}): `#{response}`."
+          raise ResourceNotFoundError, "Resource at #{request.mask_url} could not be found (#{response.code}): `#{response}`.\n#{QA::Support::Loglinking.failure_metadata(response.headers[:x_request_id])}"
         end
+
+        @api_fabrication_http_method = :get # rubocop:disable Gitlab/ModuleWithInstanceVariables
 
         response
       end
 
       def api_post
-        if api_post_path == "/graphql"
-          graphql_response = post(
-            Runtime::API::Request.new(api_client, api_post_path).url,
-            query: api_post_body)
+        process_api_response(api_post_to(api_post_path, api_post_body))
+      end
 
-          flattened_response = flatten_hash(parse_body(graphql_response))
+      def api_post_to(post_path, post_body)
+        if post_path == "/graphql"
+          graphql_response = post(Runtime::API::Request.new(api_client, post_path).url, query: post_body)
 
-          unless graphql_response.code == HTTP_STATUS_OK && flattened_response[:errors].empty?
-            raise ResourceFabricationFailedError, "Fabrication of #{self.class.name} using the API failed (#{graphql_response.code}) with `#{graphql_response}`."
+          body = flatten_hash(parse_body(graphql_response))
+
+          unless graphql_response.code == HTTP_STATUS_OK && (body[:errors].nil? || body[:errors].empty?)
+            raise(ResourceFabricationFailedError, <<~MSG)
+              Fabrication of #{self.class.name} using the API failed (#{graphql_response.code}) with `#{graphql_response}`.
+              #{QA::Support::Loglinking.failure_metadata(graphql_response.headers[:x_request_id])}
+            MSG
           end
 
-          flattened_response[:web_url] = flattened_response.delete(:webUrl)
-          flattened_response[:id] = flattened_response.fetch(:id).split('/')[-1]
+          body[:id] = body.fetch(:id).split('/').last
 
-          process_api_response(flattened_response)
+          body.transform_keys { |key| key.to_s.underscore.to_sym }
         else
-          response = post(
-            Runtime::API::Request.new(api_client, api_post_path).url,
-            api_post_body)
+          response = post(Runtime::API::Request.new(api_client, post_path).url, post_body)
 
           unless response.code == HTTP_STATUS_CREATED
-            raise ResourceFabricationFailedError, "Fabrication of #{self.class.name} using the API failed (#{response.code}) with `#{response}`."
+            raise(
+              ResourceFabricationFailedError,
+              "Fabrication of #{self.class.name} using the API failed (#{response.code}) with `#{response}`.\n#{QA::Support::Loglinking.failure_metadata(response.headers[:x_request_id])}"
+            )
           end
 
-          process_api_response(parse_body(response))
+          parse_body(response)
         end
       end
 
@@ -135,7 +146,7 @@ module QA
         response = delete(request.url)
 
         unless [HTTP_STATUS_NO_CONTENT, HTTP_STATUS_ACCEPTED].include? response.code
-          raise ResourceNotDeletedError, "Resource at #{request.mask_url} could not be deleted (#{response.code}): `#{response}`."
+          raise ResourceNotDeletedError, "Resource at #{request.mask_url} could not be deleted (#{response.code}): `#{response}`.\n#{QA::Support::Loglinking.failure_metadata(response.headers[:x_request_id])}"
         end
 
         response
@@ -154,6 +165,14 @@ module QA
 
       def transform_api_resource(api_resource)
         api_resource
+      end
+
+      # Get api request url
+      #
+      # @param [String] path
+      # @return [String]
+      def request_url(path, **opts)
+        Runtime::API::Request.new(api_client, path, **opts).url
       end
     end
   end

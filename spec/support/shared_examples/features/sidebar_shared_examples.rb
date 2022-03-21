@@ -5,6 +5,7 @@ RSpec.shared_examples 'issue boards sidebar' do
 
   before do
     first_card.click
+    wait_for_requests
   end
 
   it 'shows sidebar when clicking issue' do
@@ -41,6 +42,18 @@ RSpec.shared_examples 'issue boards sidebar' do
     end
   end
 
+  context 'editing issue milestone', :js do
+    it_behaves_like 'milestone sidebar widget'
+  end
+
+  context 'editing issue due date', :js do
+    it_behaves_like 'date sidebar widget'
+  end
+
+  context 'editing issue labels', :js do
+    it_behaves_like 'labels sidebar widget'
+  end
+
   context 'in notifications subscription' do
     it 'displays notifications toggle', :aggregate_failures do
       page.within('[data-testid="sidebar-notifications"]') do
@@ -52,16 +65,17 @@ RSpec.shared_examples 'issue boards sidebar' do
 
     it 'shows toggle as on then as off as user toggles to subscribe and unsubscribe', :aggregate_failures do
       wait_for_requests
+      subscription_button = find('[data-testid="subscription-toggle"]')
 
-      click_button 'Notifications'
+      subscription_button.click
 
-      expect(page).to have_button('Notifications', class: 'is-checked')
+      expect(subscription_button).to have_css("button.is-checked")
 
-      click_button 'Notifications'
+      subscription_button.click
 
       wait_for_requests
 
-      expect(page).not_to have_button('Notifications', class: 'is-checked')
+      expect(subscription_button).to have_css("button:not(.is-checked)")
     end
 
     context 'when notifications have been disabled' do
@@ -73,7 +87,7 @@ RSpec.shared_examples 'issue boards sidebar' do
 
       it 'displays a message that notifications have been disabled' do
         page.within('[data-testid="sidebar-notifications"]') do
-          expect(page).to have_button('Notifications', class: 'is-disabled')
+          expect(page).to have_selector('[data-testid="subscription-toggle"]', class: 'is-disabled')
           expect(page).to have_content('Disabled by project owner')
         end
       end

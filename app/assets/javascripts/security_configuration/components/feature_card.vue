@@ -24,9 +24,6 @@ export default {
     enabled() {
       return this.available && this.feature.configured;
     },
-    hasStatus() {
-      return !this.available || typeof this.feature.configured === 'boolean';
-    },
     shortName() {
       return this.feature.shortName ?? this.feature.name;
     },
@@ -34,13 +31,12 @@ export default {
       const button = this.enabled
         ? {
             text: this.$options.i18n.configureFeature,
-            category: 'secondary',
           }
         : {
             text: this.$options.i18n.enableFeature,
-            category: 'primary',
           };
 
+      button.category = 'secondary';
       button.text = sprintf(button.text, { feature: this.shortName });
 
       return button;
@@ -66,6 +62,11 @@ export default {
       return Boolean(name && description && configurationText);
     },
   },
+  methods: {
+    onError(message) {
+      this.$emit('error', message);
+    },
+  },
   i18n: {
     enabled: s__('SecurityConfiguration|Enabled'),
     notEnabled: s__('SecurityConfiguration|Not enabled'),
@@ -88,19 +89,17 @@ export default {
         data-testid="feature-status"
         :data-qa-selector="`${feature.type}_status`"
       >
-        <template v-if="hasStatus">
-          <template v-if="enabled">
-            <gl-icon name="check-circle-filled" />
-            <span class="gl-text-green-700">{{ $options.i18n.enabled }}</span>
-          </template>
+        <template v-if="enabled">
+          <gl-icon name="check-circle-filled" />
+          <span class="gl-text-green-700">{{ $options.i18n.enabled }}</span>
+        </template>
 
-          <template v-else-if="available">
-            {{ $options.i18n.notEnabled }}
-          </template>
+        <template v-else-if="available">
+          {{ $options.i18n.notEnabled }}
+        </template>
 
-          <template v-else>
-            {{ $options.i18n.availableWith }}
-          </template>
+        <template v-else>
+          {{ $options.i18n.availableWith }}
         </template>
       </div>
     </div>
@@ -126,8 +125,10 @@ export default {
         v-else-if="showManageViaMr"
         :feature="feature"
         variant="confirm"
-        category="primary"
+        category="secondary"
         class="gl-mt-5"
+        :data-qa-selector="`${feature.type}_mr_button`"
+        @error="onError"
       />
 
       <gl-button

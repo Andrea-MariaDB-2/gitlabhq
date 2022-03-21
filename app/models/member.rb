@@ -13,17 +13,24 @@ class Member < ApplicationRecord
   include FromUnion
   include UpdateHighestRole
   include RestrictedSignup
+  include Gitlab::Experiment::Dsl
 
   AVATAR_SIZE = 40
   ACCESS_REQUEST_APPROVERS_TO_BE_NOTIFIED_LIMIT = 10
+
+  STATE_ACTIVE = 0
+  STATE_AWAITING = 1
 
   attr_accessor :raw_invite_token
 
   belongs_to :created_by, class_name: "User"
   belongs_to :user
   belongs_to :source, polymorphic: true # rubocop:disable Cop/PolymorphicAssociations
+  belongs_to :member_namespace, inverse_of: :namespace_members, foreign_key: 'member_namespace_id', class_name: 'Namespace'
+  has_one :member_task
 
-  delegate :name, :username, :email, to: :user, prefix: true
+  delegate :name, :username, :email, :last_activity_on, to: :user, prefix: true
+  delegate :tasks_to_be_done, to: :member_task, allow_nil: true
 
   validates :expires_at, allow_blank: true, future_date: true
   validates :user, presence: true, unless: :invite?
@@ -49,6 +56,12 @@ class Member < ApplicationRecord
       message: _('project bots cannot be added to other groups / projects')
     },
     if: :project_bot?
+  validate :access_level_inclusion
+
+  scope :with_invited_user_state, -> do
+    joins('LEFT JOIN users as invited_user ON invited_user.email = members.invite_email')
+    .select('members.*', 'invited_user.state as invited_user_state')
+  end
 
   scope :in_hierarchy, ->(source) do
     groups = source.root_ancestor.self_and_descendants
@@ -95,6 +108,8 @@ class Member < ApplicationRecord
       .reorder(nil)
   end
 
+  scope :active_state, -> { where(state: STATE_ACTIVE) }
+
   scope :connected_to_user, -> { where.not(user_id: nil) }
 
   # This scope is exclusively used to get the members
@@ -102,6 +117,7 @@ class Member < ApplicationRecord
   # to projects/groups.
   scope :authorizable, -> do
     connected_to_user
+      .active_state
       .non_request
       .non_minimal_access
   end
@@ -115,7 +131,8 @@ class Member < ApplicationRecord
   end
 
   scope :without_invites_and_requests, -> do
-    non_request
+    active_state
+      .non_request
       .non_invite
       .non_minimal_access
   end
@@ -147,7 +164,6 @@ class Member < ApplicationRecord
   scope :owners, -> { active.where(access_level: OWNER) }
   scope :owners_and_maintainers, -> { active.where(access_level: [OWNER, MAINTAINER]) }
   scope :with_user, -> (user) { where(user: user) }
-  scope :with_user_by_email, -> (email) { left_join_users.where(users: { email: email } ) }
 
   scope :preload_user_and_notification_settings, -> { preload(user: :notification_settings) }
 
@@ -168,6 +184,7 @@ class Member < ApplicationRecord
 
   scope :on_project_and_ancestors, ->(project) { where(source: [project] + project.ancestors) }
 
+  before_validation :set_member_namespace_id, on: :create
   before_validation :generate_invite_token, on: :create, if: -> (member) { member.invite_email.present? && !member.invite_accepted_at? }
 
   after_create :send_invite, if: :invite?, unless: :importing?
@@ -179,13 +196,19 @@ class Member < ApplicationRecord
   after_destroy :post_destroy_hook, unless: :pending?, if: :hook_prerequisites_met?
   after_save :log_invitation_token_cleanup
 
-  after_commit :refresh_member_authorized_projects, unless: :importing?
+  after_commit on: [:create, :update], unless: :importing? do
+    refresh_member_authorized_projects(blocking: true)
+  end
+
+  after_commit on: [:destroy], unless: :importing? do
+    refresh_member_authorized_projects(blocking: false)
+  end
 
   default_value_for :notification_level, NotificationSetting.levels[:global]
 
   class << self
     def search(query)
-      joins(:user).merge(User.search(query))
+      joins(:user).merge(User.search(query, use_minimum_char_limit: false))
     end
 
     def search_invite_email(query)
@@ -217,14 +240,7 @@ class Member < ApplicationRecord
     end
 
     def left_join_users
-      users = User.arel_table
-      members = Member.arel_table
-
-      member_users = members.join(users, Arel::Nodes::OuterJoin)
-                             .on(members[:user_id].eq(users[:id]))
-                             .join_sources
-
-      joins(member_users)
+      left_outer_joins(:user)
     end
 
     def access_for_user_ids(user_ids)
@@ -369,6 +385,18 @@ class Member < ApplicationRecord
 
   private
 
+  # TODO: https://gitlab.com/groups/gitlab-org/-/epics/7054
+  # temporary until we can we properly remove the source columns
+  def set_member_namespace_id
+    self.member_namespace_id = self.source_id
+  end
+
+  def access_level_inclusion
+    return if access_level.in?(Gitlab::Access.all_values)
+
+    errors.add(:access_level, "is not included in the list")
+  end
+
   def send_invite
     # override in subclass
   end
@@ -396,13 +424,19 @@ class Member < ApplicationRecord
   # transaction has been committed, resulting in the job either throwing an
   # error or not doing any meaningful work.
   # rubocop: disable CodeReuse/ServiceClass
-  def refresh_member_authorized_projects
-    UserProjectAccessChangedService.new(user_id).execute
+  def refresh_member_authorized_projects(blocking:)
+    UserProjectAccessChangedService.new(user_id).execute(blocking: blocking)
   end
   # rubocop: enable CodeReuse/ServiceClass
 
   def after_accept_invite
     post_create_hook
+
+    run_after_commit_or_now do
+      if member_task
+        TasksToBeDone::CreateWorker.perform_async(member_task.id, created_by_id, [user_id.to_i])
+      end
+    end
   end
 
   def after_decline_invite
@@ -441,6 +475,14 @@ class Member < ApplicationRecord
     error = validate_admin_signup_restrictions(invite_email)
 
     errors.add(:user, error) if error
+  end
+
+  def signup_email_invalid_message
+    if source_type == 'Project'
+      _("is not allowed for this project.")
+    else
+      _("is not allowed for this group.")
+    end
   end
 
   def update_highest_role?

@@ -21,7 +21,7 @@ blocks to an HTML image tag, with the source pointing to the PlantUML instance. 
 diagram delimiters `@startuml`/`@enduml` aren't required, as these are replaced
 by the `plantuml` block:
 
-- **Markdown**
+- **Markdown** files with the extension `.md`:
 
   ````markdown
   ```plantuml
@@ -30,7 +30,10 @@ by the `plantuml` block:
   ```
   ````
 
-- **AsciiDoc**
+  For additional acceptable extensions, review the
+  [`languages.yaml`](https://gitlab.com/gitlab-org/gitlab/-/blob/master/vendor/languages.yml#L3174) file.
+
+- **AsciiDoc** files with the extension `.asciidoc`, `.adoc`, or `.asc`:
 
   ```plaintext
   [plantuml, format="png", id="myDiagram", width="200px"]
@@ -207,7 +210,7 @@ After configuring your local PlantUML server, you're ready to enable the PlantUM
 
 1. Sign in to GitLab as an [Administrator](../../user/permissions.md) user.
 1. On the top bar, select **Menu > Admin**.
-1. In the left sidebar, go to **Settings > General** and expand the **PlantUML** section.
+1. On the left sidebar, go to **Settings > General** and expand the **PlantUML** section.
 1. Select the **Enable PlantUML** checkbox.
 1. Set the PlantUML instance as `https://gitlab.example.com/-/plantuml/`,
    and click **Save changes**.
@@ -223,6 +226,16 @@ these steps:
   ```ruby
    gitlab_rails['env'] = { 'PLANTUML_ENCODING' => 'deflate' }
    ```
+
+  In GitLab Helm chart, you can set it by adding a variable to the
+  [global.extraEnv](https://gitlab.com/gitlab-org/charts/gitlab/blob/master/doc/charts/globals.md#extraenv)
+  section, like this:
+
+  ```yaml
+  global:
+  extraEnv:
+    PLANTUML_ENCODING: deflate
+  ```
 
 - For GitLab versions 13.1 and later, PlantUML integration now
   [requires a header prefix in the URL](https://github.com/plantuml/plantuml/issues/117#issuecomment-6235450160)

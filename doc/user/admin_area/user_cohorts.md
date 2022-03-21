@@ -4,14 +4,14 @@ group: unassigned
 info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
 ---
 
-# Cohorts **(FREE)**
+# Cohorts **(FREE SELF)**
 
 You can analyze your users' GitLab activities over time.
 
 To view user cohorts:
 
 1. On the top bar, select **Menu > Admin**.
-1. In the left sidebar, select **Overview > Users**.
+1. On the left sidebar, select **Overview > Users**.
 1. Select the **Cohorts** tab.
 
 ## Overview

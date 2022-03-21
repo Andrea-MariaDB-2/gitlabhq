@@ -97,7 +97,7 @@ by the server-side endpoint satisfies the API contract.
 #### Related reading
 
 [Debug it!](https://pragprog.com/titles/pbdp/debug-it/) explores techniques to diagnose
-and fix non-determinstic bugs and write software that is easier to debug.
+and fix non-deterministic bugs and write software that is easier to debug.
 
 ## Backend
 
@@ -120,7 +120,7 @@ When there are 2 jobs being worked on at the same time, it is possible that the 
 In this example, `Worker B` is meant to set the updated status. But `Worker A` calls `#update_state` a little too late.
 
 This can be avoided by utilizing either database locks or `Gitlab::ExclusiveLease`. This way, jobs will be
-worked on one at a time. This also allows them to be marked as [idempotent](../sidekiq_style_guide.md#idempotent-jobs).
+worked on one at a time. This also allows them to be marked as [idempotent](../sidekiq/idempotent_jobs.md).
 
 ### Retry mechanism handling
 

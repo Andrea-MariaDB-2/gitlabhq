@@ -67,7 +67,7 @@ fi
 
 # Do not use 'README.md', instead use 'index.md'
 # Number of 'README.md's as of 2021-08-17
-NUMBER_READMES=13
+NUMBER_READMES=0
 FIND_READMES=$(find doc/ -name "README.md" | wc -l)
 echo '=> Checking for new README.md files...'
 echo
@@ -76,6 +76,22 @@ then
   echo
   echo '  ✖ ERROR: The number of README.md file(s) has changed. Use index.md instead of README.md.' >&2
   echo '  ✖        If removing a README.md file, update NUMBER_READMES in lint-doc.sh.' >&2
+  echo '  https://docs.gitlab.com/ee/development/documentation/styleguide/index.html#work-with-directories-and-files'
+  echo
+  ((ERRORCODE++))
+fi
+
+# Do not use dashes (-) in directory names, use underscores (_) instead.
+# Number of directories with dashes as of 2021-09-17
+NUMBER_DASHES=2
+FIND_DASHES=$(find doc -type d -name "*-*" | wc -l)
+echo '=> Checking for directory names containing dashes...'
+echo
+if [ ${FIND_DASHES} -ne $NUMBER_DASHES ]
+then
+  echo
+  echo '  ✖ ERROR: The number of directory names containing dashes has changed. Use underscores instead of dashes for the directory names.' >&2
+  echo '  ✖        If removing a directory containing dashes, update NUMBER_DASHES in lint-doc.sh.' >&2
   echo '  https://docs.gitlab.com/ee/development/documentation/styleguide/index.html#work-with-directories-and-files'
   echo
   ((ERRORCODE++))
@@ -112,7 +128,7 @@ function run_locally_or_in_docker() {
     $cmd $args
   elif hash docker 2>/dev/null
   then
-    docker run -t -v ${PWD}:/gitlab -w /gitlab --rm registry.gitlab.com/gitlab-org/gitlab-docs/lint-markdown:alpine-3.13-vale-2.10.2-markdownlint-0.26.0 ${cmd} ${args}
+    docker run -t -v ${PWD}:/gitlab -w /gitlab --rm registry.gitlab.com/gitlab-org/gitlab-docs/lint-markdown:alpine-3.15-vale-2.15.0-markdownlint-0.31.0 ${cmd} ${args}
   else
     echo
     echo "  ✖ ERROR: '${cmd}' not found. Install '${cmd}' or Docker to proceed." >&2

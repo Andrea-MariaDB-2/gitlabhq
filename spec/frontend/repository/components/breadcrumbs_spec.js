@@ -1,7 +1,9 @@
 import { GlDropdown } from '@gitlab/ui';
 import { shallowMount, RouterLinkStub } from '@vue/test-utils';
+import { nextTick } from 'vue';
 import Breadcrumbs from '~/repository/components/breadcrumbs.vue';
 import UploadBlobModal from '~/repository/components/upload_blob_modal.vue';
+import NewDirectoryModal from '~/repository/components/new_directory_modal.vue';
 
 const defaultMockRoute = {
   name: 'blobPath',
@@ -10,7 +12,7 @@ const defaultMockRoute = {
 describe('Repository breadcrumbs component', () => {
   let wrapper;
 
-  const factory = (currentPath, extraProps = {}, mockRoute = {}) => {
+  const factory = (currentPath, extraProps = {}, mockRoute = {}, newDirModal = true) => {
     const $apollo = {
       queries: {
         userPermissions: {
@@ -34,10 +36,12 @@ describe('Repository breadcrumbs component', () => {
         },
         $apollo,
       },
+      provide: { glFeatures: { newDirModal } },
     });
   };
 
   const findUploadBlobModal = () => wrapper.find(UploadBlobModal);
+  const findNewDirectoryModal = () => wrapper.find(NewDirectoryModal);
 
   afterEach(() => {
     wrapper.destroy();
@@ -54,6 +58,20 @@ describe('Repository breadcrumbs component', () => {
 
     expect(wrapper.findAll(RouterLinkStub).length).toEqual(linkCount);
   });
+
+  it.each`
+    routeName            | path                        | linkTo
+    ${'treePath'}        | ${'app/assets/javascripts'} | ${'/-/tree/app/assets/javascripts'}
+    ${'treePathDecoded'} | ${'app/assets/javascripts'} | ${'/-/tree/app/assets/javascripts'}
+    ${'blobPath'}        | ${'app/assets/index.js'}    | ${'/-/blob/app/assets/index.js'}
+    ${'blobPathDecoded'} | ${'app/assets/index.js'}    | ${'/-/blob/app/assets/index.js'}
+  `(
+    'links to the correct router path when routeName is $routeName',
+    ({ routeName, path, linkTo }) => {
+      factory(path, {}, { name: routeName });
+      expect(wrapper.findAll(RouterLinkStub).at(3).props('to')).toEqual(linkTo);
+    },
+  );
 
   it('escapes hash in directory path', () => {
     factory('app/assets/javascripts#');
@@ -72,9 +90,11 @@ describe('Repository breadcrumbs component', () => {
   it('does not render add to tree dropdown when permissions are false', async () => {
     factory('/', { canCollaborate: false });
 
+    // setData usage is discouraged. See https://gitlab.com/groups/gitlab-org/-/epics/7330 for details
+    // eslint-disable-next-line no-restricted-syntax
     wrapper.setData({ userPermissions: { forkProject: false, createMergeRequestIn: false } });
 
-    await wrapper.vm.$nextTick();
+    await nextTick();
 
     expect(wrapper.find(GlDropdown).exists()).toBe(false);
   });
@@ -97,9 +117,11 @@ describe('Repository breadcrumbs component', () => {
   it('renders add to tree dropdown when permissions are true', async () => {
     factory('/', { canCollaborate: true });
 
+    // setData usage is discouraged. See https://gitlab.com/groups/gitlab-org/-/epics/7330 for details
+    // eslint-disable-next-line no-restricted-syntax
     wrapper.setData({ userPermissions: { forkProject: true, createMergeRequestIn: true } });
 
-    await wrapper.vm.$nextTick();
+    await nextTick();
 
     expect(wrapper.find(GlDropdown).exists()).toBe(true);
   });
@@ -114,11 +136,48 @@ describe('Repository breadcrumbs component', () => {
     });
 
     it('renders the modal once loaded', async () => {
+      // setData usage is discouraged. See https://gitlab.com/groups/gitlab-org/-/epics/7330 for details
+      // eslint-disable-next-line no-restricted-syntax
       wrapper.setData({ $apollo: { queries: { userPermissions: { loading: false } } } });
 
-      await wrapper.vm.$nextTick();
+      await nextTick();
 
       expect(findUploadBlobModal().exists()).toBe(true);
+    });
+  });
+
+  describe('renders the new directory modal', () => {
+    describe('with the feature flag enabled', () => {
+      beforeEach(() => {
+        window.gon.features = {
+          newDirModal: true,
+        };
+        factory('/', { canEditTree: true });
+      });
+
+      it('does not render the modal while loading', () => {
+        expect(findNewDirectoryModal().exists()).toBe(false);
+      });
+
+      it('renders the modal once loaded', async () => {
+        // setData usage is discouraged. See https://gitlab.com/groups/gitlab-org/-/epics/7330 for details
+        // eslint-disable-next-line no-restricted-syntax
+        wrapper.setData({ $apollo: { queries: { userPermissions: { loading: false } } } });
+
+        await nextTick();
+
+        expect(findNewDirectoryModal().exists()).toBe(true);
+      });
+    });
+
+    describe('with the feature flag disabled', () => {
+      it('does not render the modal', () => {
+        window.gon.features = {
+          newDirModal: false,
+        };
+        factory('/', { canEditTree: true }, {}, {}, false);
+        expect(findNewDirectoryModal().exists()).toBe(false);
+      });
     });
   });
 });

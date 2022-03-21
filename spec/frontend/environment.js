@@ -29,6 +29,9 @@ class CustomEnvironment extends JSDOMEnvironment {
       },
 
       warn(...args) {
+        if (args[0].includes('The updateQuery callback for fetchMore is deprecated')) {
+          return;
+        }
         throw new ErrorWithStack(
           `Unexpected call of console.warn() with:\n\n${args.join(', ')}`,
           this.warn,
@@ -120,6 +123,7 @@ class CustomEnvironment extends JSDOMEnvironment {
     // Reset `Date` so that Jest can report timing accurately *roll eyes*...
     setGlobalDateToRealDate();
 
+    // eslint-disable-next-line no-restricted-syntax
     await new Promise(setImmediate);
 
     if (this.rejectedPromises.length > 0) {

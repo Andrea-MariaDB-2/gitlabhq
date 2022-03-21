@@ -101,19 +101,19 @@ This is due to technical limitations in the GitLab permission model: the ability
 against a protected branch is controlled by the ability to push/merge to this branch.
 This means that for developers to be able to trigger a pipeline for the default branch in
 `gitlab-org/omnibus-gitlab`/`gitlab-org/gitlab-qa`, they would need to have the
-[Maintainer role](../../../user/permissions.md) for those projects.
+Maintainer role for those projects.
 For security reasons and implications, we couldn't open up the default branch to all the Developers.
 Hence we created these mirrors where Developers and Maintainers are allowed to push/merge to the default branch.
 This problem was discovered in <https://gitlab.com/gitlab-org/gitlab-qa/-/issues/63#note_107175160> and the "mirror"
 work-around was suggested in <https://gitlab.com/gitlab-org/omnibus-gitlab/-/issues/4717>.
 A feature proposal to segregate access control regarding running pipelines from ability to push/merge was also created at <https://gitlab.com/gitlab-org/gitlab/-/issues/24585>.
 
-#### With Pipeline for Merged Results
+#### With merged results pipelines
 
-In a Pipeline for Merged Results, the pipeline runs on a new ref that contains the merge result of the source and target branch.
+In a merged results pipeline, the pipeline runs on a new ref that contains the merge result of the source and target branch.
 However, this ref is not available to the `gitlab-qa-mirror` pipeline.
 
-For this reason, the end-to-end tests on a Pipeline for Merged Results would use the head of the merge request source branch.
+For this reason, the end-to-end tests on a merged results pipeline would use the head of the merge request source branch.
 
 ```mermaid
 graph LR
@@ -126,7 +126,7 @@ A --> C
 B --> C
 
 A --> E["E2E tests"]
-C --> D["Pipeline for merged results"]
+C --> D["Merged results pipeline"]
  ```
 
 ##### Running custom tests
@@ -147,7 +147,7 @@ as well as these:
 | Variable | Description |
 |-|-|
 | `QA_SCENARIO` | The scenario to run (default `Test::Instance::Image`) |
-| `QA_TESTS` | The test(s) to run (no default, which means run all the tests in the scenario). Use file paths as you would when running tests via RSpec, e.g., `qa/specs/features/ee/browser_ui` would include all the `EE` UI tests. |
+| `QA_TESTS` | The test(s) to run (no default, which means run all the tests in the scenario). Use file paths as you would when running tests via RSpec, for example, `qa/specs/features/ee/browser_ui` would include all the `EE` UI tests. |
 | `QA_RSPEC_TAGS` | The RSpec tags to add (no default) |
 
 For now [manual jobs with custom variables don't use the same variable
@@ -169,6 +169,74 @@ Helm chart](https://gitlab.com/gitlab-org/charts/gitlab/), itself deployed with 
 [Cloud Native components](https://gitlab.com/gitlab-org/build/CNG) built from your merge request's changes.**
 
 See [Review Apps](../review_apps.md) for more details about Review Apps.
+
+### Run tests in parallel
+
+To run tests in parallel on CI, the [Knapsack](https://github.com/KnapsackPro/knapsack)
+gem is used. Knapsack reports are generated automatically and stored in the `GCS` bucket
+`knapsack-reports` in the `gitlab-qa-resources` project. The [`KnapsackReport`](https://gitlab.com/gitlab-org/gitlab/-/blob/master/qa/qa/tools/knapsack_report.rb)
+helper handles automated report generation and upload.
+
+## Test metrics
+
+For additional test health visibility, use a custom setup to export test execution
+results to your [InfluxDb](https://influxdb.quality.gitlab.net/) instance, and visualize
+results as [Grafana](https://dashboards.quality.gitlab.net/) dashboards.
+
+### Provisioning
+
+Provisioning of all components is performed by the
+[`engineering-productivity-infrastructure`](https://gitlab.com/gitlab-org/quality/engineering-productivity-infrastructure) project.
+
+### Exporting metrics in CI
+
+Use these environment variables to configure metrics export:
+
+| Variable | Required | Information |
+| -------- | -------- | ----------- |
+| `QA_INFLUXDB_URL` | `true` | Should be set to `https://influxdb.quality.gitlab.net`. No default value. |
+| `QA_INFLUXDB_TOKEN` | `true` | InfluxDB write token that can be found under `Influxdb auth tokens` document in `Gitlab-QA` `1Password` vault. No default value. |
+| `QA_RUN_TYPE` | `false` | Arbitrary name for test execution, like `package-and-qa`. Automatically inferred from the project name for live environment test executions. No default value. |
+| `QA_EXPORT_TEST_METRICS` | `false` | Flag to enable or disable metrics export. Defaults to `true`. |
+
+## Test reports
+
+### Allure report
+
+For additional test results visibility, tests that run on pipelines generate
+and host [Allure](https://github.com/allure-framework/allure2) test reports.
+
+The `QA` framework is using the [Allure RSpec](https://github.com/allure-framework/allure-ruby/blob/master/allure-rspec/README.md)
+gem to generate source files for the `Allure` test report. An additional job
+in the pipeline:
+
+- Fetches these source files from all test jobs.
+- Generates and uploads the report to the `GCS` bucket `gitlab-qa-allure-report` under the project `gitlab-qa-resources`.
+
+A common CI template for report uploading is stored in
+[`allure-report.yml`](https://gitlab.com/gitlab-org/quality/pipeline-common/-/blob/master/ci/allure-report.yml).
+
+#### Merge requests
+
+When these tests are executed in the scope of merge requests, the `Allure` report is
+uploaded to the `GCS` bucket and comment is added linking to their respective reports.
+
+#### Scheduled pipelines
+
+Scheduled pipelines for these tests contain a `generate-allure-report` job under the `Report` stage. They also output
+a link to the current test report.
+
+#### Static report links
+
+Each type of scheduled pipeline generates a static link for the latest test report according to its stage:
+
+- [`master`](https://storage.googleapis.com/gitlab-qa-allure-reports/package-and-qa/master/index.html)
+- [`staging-full`](https://storage.googleapis.com/gitlab-qa-allure-reports/staging-full/master/index.html)
+- [`staging-sanity`](https://storage.googleapis.com/gitlab-qa-allure-reports/staging-sanity/master/index.html)
+- [`staging-sanity-no-admin`](https://storage.googleapis.com/gitlab-qa-allure-reports/staging-sanity-no-admin/master/index.html)
+- [`canary-sanity`](https://storage.googleapis.com/gitlab-qa-allure-reports/canary-sanity/master/index.html)
+- [`production`](https://storage.googleapis.com/gitlab-qa-allure-reports/production/master/index.html)
+- [`production-sanity`](https://storage.googleapis.com/gitlab-qa-allure-reports/production-sanity/master/index.html)
 
 ## How do I run the tests?
 

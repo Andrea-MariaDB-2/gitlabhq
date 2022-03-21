@@ -9,6 +9,9 @@ module Gitlab
         ee/lib/ee/peek
         lib/peek
         lib/gitlab/database
+        lib/gitlab/gitaly_client.rb
+        lib/gitlab/gitaly_client/call.rb
+        lib/gitlab/instrumentation/redis_interceptor.rb
       ].freeze
 
       def initialize(redis)
@@ -19,9 +22,11 @@ module Gitlab
         data = request(id)
         return unless data
 
-        log_sql_queries(id, data)
-      rescue StandardError => err
-        logger.error(message: "failed to process request id #{id}: #{err.message}")
+        log_queries(id, data, 'active-record')
+        log_queries(id, data, 'gitaly')
+        log_queries(id, data, 'redis')
+      rescue StandardError => e
+        logger.error(message: "failed to process request id #{id}: #{e.message}")
       end
 
       private
@@ -29,18 +34,20 @@ module Gitlab
       def request(id)
         # Peek gem stores request data under peek:requests:request_id key
         json_data = @redis.get("peek:requests:#{id}")
+        raise "No data for #{id}" if json_data.nil?
+
         Gitlab::Json.parse(json_data)
       end
 
-      def log_sql_queries(id, data)
-        queries_by_location(data).each do |location, queries|
+      def log_queries(id, data, type)
+        queries_by_location(data, type).each do |location, queries|
           next unless location
 
           duration = queries.sum { |query| query['duration'].to_f }
           log_info = {
             method_path: "#{location[:filename]}:#{location[:method]}",
             filename: location[:filename],
-            type: :sql,
+            query_type: type,
             request_id: id,
             count: queries.count,
             duration_ms: duration
@@ -50,8 +57,8 @@ module Gitlab
         end
       end
 
-      def queries_by_location(data)
-        return [] unless queries = data.dig('data', 'active-record', 'details')
+      def queries_by_location(data, type)
+        return [] unless queries = data.dig('data', type, 'details')
 
         queries.group_by do |query|
           parse_backtrace(query['backtrace'])

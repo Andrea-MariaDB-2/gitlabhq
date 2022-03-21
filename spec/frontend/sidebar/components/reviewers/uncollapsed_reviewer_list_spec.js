@@ -1,5 +1,6 @@
 import { shallowMount } from '@vue/test-utils';
 import { TEST_HOST } from 'helpers/test_constants';
+import AttentionRequestedToggle from '~/sidebar/components/attention_requested_toggle.vue';
 import ReviewerAvatarLink from '~/sidebar/components/reviewers/reviewer_avatar_link.vue';
 import UncollapsedReviewerList from '~/sidebar/components/reviewers/uncollapsed_reviewer_list.vue';
 import userDataMock from '../../user_data_mock';
@@ -9,7 +10,7 @@ describe('UncollapsedReviewerList component', () => {
 
   const reviewerApprovalIcons = () => wrapper.findAll('[data-testid="re-approved"]');
 
-  function createComponent(props = {}) {
+  function createComponent(props = {}, glFeatures = {}) {
     const propsData = {
       users: [],
       rootPath: TEST_HOST,
@@ -18,6 +19,9 @@ describe('UncollapsedReviewerList component', () => {
 
     wrapper = shallowMount(UncollapsedReviewerList, {
       propsData,
+      provide: {
+        glFeatures,
+      },
     });
   }
 
@@ -26,9 +30,9 @@ describe('UncollapsedReviewerList component', () => {
   });
 
   describe('single reviewer', () => {
-    beforeEach(() => {
-      const user = userDataMock();
+    const user = userDataMock();
 
+    beforeEach(() => {
       createComponent({
         users: [user],
       });
@@ -39,16 +43,21 @@ describe('UncollapsedReviewerList component', () => {
     });
 
     it('shows one user with avatar, username and author name', () => {
+      expect(wrapper.text()).toContain(user.name);
       expect(wrapper.text()).toContain(`@root`);
     });
 
     it('renders re-request loading icon', async () => {
+      // setData usage is discouraged. See https://gitlab.com/groups/gitlab-org/-/epics/7330 for details
+      // eslint-disable-next-line no-restricted-syntax
       await wrapper.setData({ loadingStates: { 1: 'loading' } });
 
       expect(wrapper.find('[data-testid="re-request-button"]').props('loading')).toBe(true);
     });
 
     it('renders re-request success icon', async () => {
+      // setData usage is discouraged. See https://gitlab.com/groups/gitlab-org/-/epics/7330 for details
+      // eslint-disable-next-line no-restricted-syntax
       await wrapper.setData({ loadingStates: { 1: 'success' } });
 
       expect(wrapper.find('[data-testid="re-request-success"]').exists()).toBe(true);
@@ -56,11 +65,18 @@ describe('UncollapsedReviewerList component', () => {
   });
 
   describe('multiple reviewers', () => {
-    beforeEach(() => {
-      const user = userDataMock();
+    const user = userDataMock();
+    const user2 = {
+      ...user,
+      id: 2,
+      name: 'nonrooty-nonrootersen',
+      username: 'hello-world',
+      approved: true,
+    };
 
+    beforeEach(() => {
       createComponent({
-        users: [user, { ...user, id: 2, username: 'hello-world', approved: true }],
+        users: [user, user2],
       });
     });
 
@@ -69,7 +85,9 @@ describe('UncollapsedReviewerList component', () => {
     });
 
     it('shows both users with avatar, username and author name', () => {
+      expect(wrapper.text()).toContain(user.name);
       expect(wrapper.text()).toContain(`@root`);
+      expect(wrapper.text()).toContain(user2.name);
       expect(wrapper.text()).toContain(`@hello-world`);
     });
 
@@ -84,6 +102,8 @@ describe('UncollapsedReviewerList component', () => {
     });
 
     it('renders re-request loading icon', async () => {
+      // setData usage is discouraged. See https://gitlab.com/groups/gitlab-org/-/epics/7330 for details
+      // eslint-disable-next-line no-restricted-syntax
       await wrapper.setData({ loadingStates: { 2: 'loading' } });
 
       expect(wrapper.findAll('[data-testid="re-request-button"]').length).toBe(2);
@@ -93,11 +113,27 @@ describe('UncollapsedReviewerList component', () => {
     });
 
     it('renders re-request success icon', async () => {
+      // setData usage is discouraged. See https://gitlab.com/groups/gitlab-org/-/epics/7330 for details
+      // eslint-disable-next-line no-restricted-syntax
       await wrapper.setData({ loadingStates: { 2: 'success' } });
 
       expect(wrapper.findAll('[data-testid="re-request-button"]').length).toBe(1);
       expect(wrapper.findAll('[data-testid="re-request-success"]').length).toBe(1);
       expect(wrapper.find('[data-testid="re-request-success"]').exists()).toBe(true);
     });
+  });
+
+  it('hides re-request review button when attentionRequired feature flag is enabled', () => {
+    createComponent({ users: [userDataMock()] }, { mrAttentionRequests: true });
+
+    expect(wrapper.findAll('[data-testid="re-request-button"]').length).toBe(0);
+  });
+
+  it('emits toggle-attention-requested', () => {
+    createComponent({ users: [userDataMock()] }, { mrAttentionRequests: true });
+
+    wrapper.find(AttentionRequestedToggle).vm.$emit('toggle-attention-requested', 'data');
+
+    expect(wrapper.emitted('toggle-attention-requested')[0]).toEqual(['data']);
   });
 });

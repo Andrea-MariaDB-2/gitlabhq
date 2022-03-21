@@ -9,7 +9,7 @@ module Gitlab
         end
 
         def satisfied_by?(pipeline, context)
-          return true if pipeline.modified_paths.nil?
+          return true unless pipeline&.modified_paths
 
           expanded_globs = expand_globs(context)
           pipeline.modified_paths.any? do |path|
@@ -23,7 +23,7 @@ module Gitlab
           return @globs unless context
 
           @globs.map do |glob|
-            ExpandVariables.expand_existing(glob, context.variables)
+            ExpandVariables.expand_existing(glob, -> { context.variables_hash })
           end
         end
       end

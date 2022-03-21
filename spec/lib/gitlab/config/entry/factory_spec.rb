@@ -5,8 +5,8 @@ require 'spec_helper'
 RSpec.describe Gitlab::Config::Entry::Factory do
   describe '#create!' do
     before do
-      stub_const('Script', Class.new(Gitlab::Config::Entry::Node))
-      Script.class_eval do
+      stub_const('Commands', Class.new(Gitlab::Config::Entry::Node))
+      Commands.class_eval do
         include Gitlab::Config::Entry::Validatable
 
         validations do
@@ -15,7 +15,7 @@ RSpec.describe Gitlab::Config::Entry::Factory do
       end
     end
 
-    let(:entry) { Script }
+    let(:entry) { Commands }
     let(:factory) { described_class.new(entry) }
 
     context 'when setting a concrete value' do
@@ -113,6 +113,17 @@ RSpec.describe Gitlab::Config::Entry::Factory do
 
         expect(entry).to have_received(:new)
           .with('some value', { some: 'hash' })
+      end
+    end
+
+    context 'when setting deprecation information' do
+      it 'passes deprecation as a parameter' do
+        entry = factory
+           .value('some value')
+           .with(deprecation: { deprecated: '10.0', warning: '10.1', removed: '11.0', documentation: 'docs' })
+           .create!
+
+        expect(entry.deprecation).to eq({ deprecated: '10.0', warning: '10.1', removed: '11.0', documentation: 'docs' })
       end
     end
   end

@@ -2,12 +2,11 @@
 stage: Enablement
 group: Distribution
 info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
-type: reference
 ---
 
 # Install GitLab under a relative URL **(FREE SELF)**
 
-While it is recommended to install GitLab on its own (sub)domain, sometimes
+While we recommend to install GitLab on its own (sub)domain, sometimes
 this is not possible due to a variety of reasons. In that case, GitLab can also
 be installed under a relative URL, for example `https://example.com/gitlab`.
 
@@ -20,8 +19,8 @@ first time.
 There is no limit to how deeply nested the relative URL can be. For example you
 could serve GitLab under `/foo/bar/gitlab/git` without any issues.
 
-Note that by changing the URL on an existing GitLab installation, all remote
-URLs will change, so you'll have to manually edit them in any local repository
+Changing the URL on an existing GitLab installation, changes all remote
+URLs, so you have to manually edit them in any local repository
 that points to your GitLab instance.
 
 The list of configuration files you must change to serve GitLab from a
@@ -33,15 +32,15 @@ relative URL is:
 - `/home/git/gitlab-shell/config.yml`
 - `/etc/default/gitlab`
 
-After all the changes you need to recompile the assets and [restart GitLab](../administration/restart_gitlab.md#installations-from-source).
+After all the changes, you must recompile the assets and [restart GitLab](../administration/restart_gitlab.md#installations-from-source).
 
 ## Relative URL requirements
 
-If you configure GitLab with a relative URL, the assets (JavaScript, CSS, fonts,
-images, etc.) will need to be recompiled, which is a task which consumes a lot
-of CPU and memory resources. To avoid out-of-memory errors, you should have at
-least 2GB of RAM available on your system, while we recommend 4GB RAM, and 4 or
-8 CPU cores.
+If you configure GitLab with a relative URL, the assets (including JavaScript,
+CSS, fonts, and images) must be recompiled, which can consume a lot of CPU and
+memory resources. To avoid out-of-memory errors, you should have at least 2 GB
+of RAM available on your computer, and we recommend 4 GB RAM, and four or eight
+CPU cores.
 
 See the [requirements](requirements.md) document for more information.
 
@@ -61,7 +60,7 @@ assumptions are made:
 
 Make sure to follow all steps below:
 
-1. (Optional) If you run short on resources, you can temporarily free up some
+1. Optional. If you run short on resources, you can temporarily free up some
    memory by shutting down the GitLab service with the following command:
 
    ```shell
@@ -102,8 +101,9 @@ Make sure to follow all steps below:
    gitlab_url: http://127.0.0.1/gitlab
    ```
 
-1. Make sure you have copied the supplied init script and the defaults file
-   as stated in the [installation guide](installation.md#install-init-script).
+1. Make sure you have copied either the supplied systemd services, or the init
+   script and the defaults file, as stated in the
+   [installation guide](installation.md#install-the-service).
    Then, edit `/etc/default/gitlab` and set in `gitlab_workhorse_options` the
    `-authBackend` setting to read like:
 

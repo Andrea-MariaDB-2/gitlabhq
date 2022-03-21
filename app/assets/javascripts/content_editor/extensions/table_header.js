@@ -1,6 +1,10 @@
 import { TableHeader } from '@tiptap/extension-table-header';
-import { isBlockTablesFeatureEnabled } from '../services/feature_flags';
+import { VueNodeViewRenderer } from '@tiptap/vue-2';
+import TableCellHeaderWrapper from '../components/wrappers/table_cell_header.vue';
 
 export default TableHeader.extend({
-  content: isBlockTablesFeatureEnabled() ? 'block+' : 'inline*',
+  content: 'block+',
+  addNodeView() {
+    return VueNodeViewRenderer(TableCellHeaderWrapper);
+  },
 });

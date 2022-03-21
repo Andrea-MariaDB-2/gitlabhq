@@ -9,25 +9,12 @@ class ProjectAuthorization < ApplicationRecord
 
   validates :project, presence: true
   validates :access_level, inclusion: { in: Gitlab::Access.all_values }, presence: true
-  validates :user, uniqueness: { scope: [:project, :access_level] }, presence: true
+  validates :user, uniqueness: { scope: :project }, presence: true
 
   def self.select_from_union(relations)
     from_union(relations)
       .select(['project_id', 'MAX(access_level) AS access_level'])
       .group(:project_id)
-  end
-
-  def self.insert_authorizations(rows, per_batch = 1000)
-    rows.each_slice(per_batch) do |slice|
-      tuples = slice.map do |tuple|
-        tuple.map { |value| connection.quote(value) }
-      end
-
-      connection.execute <<-EOF.strip_heredoc
-      INSERT INTO project_authorizations (user_id, project_id, access_level)
-      VALUES #{tuples.map { |tuple| "(#{tuple.join(', ')})" }.join(', ')}
-      EOF
-    end
   end
 
   # This method overrides its ActiveRecord's version in order to work correctly
@@ -37,6 +24,12 @@ class ProjectAuthorization < ApplicationRecord
   # https://gitlab.com/gitlab-org/gitlab/-/issues/331264
   def self.insert_all(attributes)
     super(attributes, unique_by: connection.schema_cache.primary_keys(table_name))
+  end
+
+  def self.insert_all_in_batches(attributes, per_batch = 1000)
+    attributes.each_slice(per_batch) do |attributes_batch|
+      insert_all(attributes_batch)
+    end
   end
 end
 

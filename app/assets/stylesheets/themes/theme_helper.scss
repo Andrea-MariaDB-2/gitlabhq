@@ -4,12 +4,16 @@
  */
 @mixin gitlab-theme(
   $search-and-nav-links,
-  $active-tab-border,
+  $accent,
   $border-and-box-shadow,
   $sidebar-text,
   $nav-svg-color,
   $color-alternate
 ) {
+  // Set custom properties
+
+  --gl-theme-accent: #{$accent};
+
   // Header
 
   .navbar-gitlab {
@@ -59,6 +63,10 @@
     .nav {
       > li {
         color: $search-and-nav-links;
+
+        &.header-search-new {
+          color: $sidebar-text;
+        }
 
         > a {
           .notification-dot {
@@ -140,6 +148,36 @@
     }
   }
 
+  .header-search {
+    background-color: rgba($search-and-nav-links, 0.2) !important;
+
+    &:hover {
+      background-color: rgba($search-and-nav-links, 0.3) !important;
+    }
+
+    svg.gl-search-box-by-type-search-icon {
+      color: rgba($search-and-nav-links, 0.8);
+    }
+
+
+    input {
+      background-color: transparent;
+      color: rgba($search-and-nav-links, 0.8);
+      box-shadow: inset 0 0 0 1px rgba($search-and-nav-links, 0.4);
+
+      &::placeholder {
+        color: rgba($search-and-nav-links, 0.8);
+      }
+
+      &:focus,
+      &:active {
+        &::placeholder {
+          color: $gray-400;
+        }
+      }
+    }
+  }
+
   .search {
     form {
       background-color: rgba($search-and-nav-links, 0.2);
@@ -184,26 +222,10 @@
       a:hover,
       &.active a,
       .fly-out-top-item-container {
-        background-color: var(--purple-100, $purple-900);
-        color: var(--black, $white);
+        background-color: var(--gray-100, $gray-50);
+        color: var(--gray-900, $gray-900);
       }
     }
-  }
-
-  .nav-links li {
-    &.active a,
-    &.md-header-tab.active button,
-    a.active {
-      border-bottom: 2px solid $active-tab-border;
-
-      .badge.badge-pill {
-        font-weight: $gl-font-weight-bold;
-      }
-    }
-  }
-
-  .emoji-picker-category-active {
-    border-bottom-color: $active-tab-border;
   }
 
   .branch-header-title {

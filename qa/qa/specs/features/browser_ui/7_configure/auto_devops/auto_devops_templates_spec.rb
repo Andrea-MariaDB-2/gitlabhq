@@ -3,6 +3,8 @@
 module QA
   RSpec.describe 'Configure' do
     describe 'AutoDevOps Templates', only: { subdomain: :staging } do
+      using RSpec::Parameterized::TableSyntax
+
       # specify jobs to be disabled in the pipeline.
       # CANARY_ENABLED will allow the pipeline to be
       # blocked by a manual job, rather than fail
@@ -17,8 +19,8 @@ module QA
         ]
       end
 
-      where(:template) do
-        %w[express]
+      where(:case_name, :template, :testcase) do
+        'using express template' | 'express' | 'https://gitlab.com/gitlab-org/gitlab/-/quality/test_cases/348075'
       end
 
       with_them do
@@ -45,7 +47,7 @@ module QA
           Flow::Login.sign_in
         end
 
-        it 'works with Auto DevOps' do
+        it 'works with Auto DevOps', testcase: params[:testcase] do
           %w[build code_quality test].each do |job|
             pipeline.visit!
 
@@ -54,7 +56,7 @@ module QA
             end
 
             Page::Project::Job::Show.perform do |show|
-              expect(show).to have_passed(timeout: 360)
+              expect(show).to have_passed(timeout: 800)
             end
           end
         end

@@ -46,9 +46,6 @@ class PagesDomain < ApplicationRecord
     algorithm: 'aes-256-cbc'
 
   after_initialize :set_verification_code
-  after_create :update_daemon
-  after_update :update_daemon, if: :saved_change_to_pages_config?
-  after_destroy :update_daemon
 
   scope :for_project, ->(project) { where(project: project) }
 
@@ -129,16 +126,13 @@ class PagesDomain < ApplicationRecord
     store = OpenSSL::X509::Store.new
     store.set_default_paths
 
-    # This forces to load all intermediate certificates stored in `certificate`
-    Tempfile.open('certificate_chain') do |f|
-      f.write(certificate)
-      f.flush
-      store.add_file(f.path)
-    end
-
-    store.verify(x509)
+    store.verify(x509, untrusted_ca_certs_bundle)
   rescue OpenSSL::X509::StoreError
     false
+  end
+
+  def untrusted_ca_certs_bundle
+    ::Gitlab::X509::Certificate.load_ca_certs_bundle(certificate)
   end
 
   def expired?
@@ -236,32 +230,6 @@ class PagesDomain < ApplicationRecord
     self.verification_code = SecureRandom.hex(16)
   end
 
-  # rubocop: disable CodeReuse/ServiceClass
-  def update_daemon
-    return if usage_serverless?
-    return unless pages_deployed?
-
-    run_after_commit { PagesUpdateConfigurationWorker.perform_async(project_id) }
-  end
-  # rubocop: enable CodeReuse/ServiceClass
-
-  def saved_change_to_pages_config?
-    saved_change_to_project_id? ||
-      saved_change_to_domain? ||
-      saved_change_to_certificate? ||
-      saved_change_to_key? ||
-      became_enabled? ||
-      became_disabled?
-  end
-
-  def became_enabled?
-    enabled_until.present? && !enabled_until_before_last_save.present?
-  end
-
-  def became_disabled?
-    !enabled_until.present? && enabled_until_before_last_save.present?
-  end
-
   def validate_matching_key
     unless has_matching_key?
       self.errors.add(:key, "doesn't match the certificate")
@@ -277,8 +245,8 @@ class PagesDomain < ApplicationRecord
   def validate_pages_domain
     return unless domain
 
-    if domain.downcase.ends_with?(Settings.pages.host.downcase)
-      self.errors.add(:domain, "*.#{Settings.pages.host} is restricted. Please compare our documentation at https://docs.gitlab.com/ee/administration/pages/#advanced-configuration against your configuration.")
+    if domain.downcase.ends_with?(".#{Settings.pages.host.downcase}") || domain.casecmp(Settings.pages.host) == 0
+      self.errors.add(:domain, "#{Settings.pages.host} and its subdomains cannot be used as custom pages domains. Please compare our documentation at https://docs.gitlab.com/ee/administration/pages/#advanced-configuration against your configuration.")
     end
   end
 

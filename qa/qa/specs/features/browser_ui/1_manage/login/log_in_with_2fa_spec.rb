@@ -31,11 +31,10 @@ module QA
       let(:two_fa_expected_text) { /The group settings for.*require you to enable Two-Factor Authentication for your account.*You need to do this before/ }
 
       before do
-        Runtime::Feature.enable(:invite_members_group_modal, group: group)
         group.add_member(developer_user, Resource::Members::AccessLevel::DEVELOPER)
       end
 
-      it 'allows enforcing 2FA via UI and logging in with 2FA', testcase: 'https://gitlab.com/gitlab-org/quality/testcases/-/quality/test_cases/1320' do
+      it 'allows enforcing 2FA via UI and logging in with 2FA', testcase: 'https://gitlab.com/gitlab-org/gitlab/-/quality/test_cases/347931' do
         enforce_two_factor_authentication_on_group(group)
 
         enable_two_factor_authentication_for_user(developer_user)
@@ -98,6 +97,7 @@ module QA
             @otp = QA::Support::OTP.new(two_fa_auth.otp_secret_content)
 
             two_fa_auth.set_pin_code(@otp.fresh_otp)
+            two_fa_auth.set_current_password(user.password)
             two_fa_auth.click_register_2fa_app_button
 
             two_fa_auth.click_copy_and_proceed

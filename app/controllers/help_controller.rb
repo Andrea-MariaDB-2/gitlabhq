@@ -59,10 +59,6 @@ class HelpController < ApplicationController
     @instance_configuration = InstanceConfiguration.new
   end
 
-  def ui
-    @user = User.new(id: 0, name: 'John Doe', username: '@johndoe')
-  end
-
   private
 
   def path_params
@@ -72,7 +68,6 @@ class HelpController < ApplicationController
   end
 
   def redirect_to_documentation_website?
-    return false unless Feature.enabled?(:help_page_documentation_redirect)
     return false unless Gitlab::UrlSanitizer.valid_web?(documentation_url)
 
     true
@@ -123,3 +118,5 @@ class HelpController < ApplicationController
     end
   end
 end
+
+::HelpController.prepend_mod

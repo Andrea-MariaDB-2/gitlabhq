@@ -224,7 +224,8 @@ RSpec.describe Ci::PipelineEntity do
         end
 
         it 'makes atached flag true' do
-          expect(subject[:flags][:merge_request_pipeline]).to be_truthy
+          expect(subject[:flags][:merge_request_pipeline]).to be true
+          expect(subject[:flags][:merge_request]).to be true
         end
 
         it 'exposes source sha and target sha' do
@@ -258,6 +259,18 @@ RSpec.describe Ci::PipelineEntity do
         it 'is nil' do
           expect(subject[:failed_builds]).to be_nil
         end
+      end
+    end
+
+    context 'when pipeline has coverage' do
+      let_it_be(:pipeline) { create(:ci_pipeline, project: project, user: user) }
+
+      before do
+        allow(pipeline).to receive(:coverage).and_return(35.0)
+      end
+
+      it 'exposes the coverage' do
+        expect(subject[:coverage]).to eq('35.00')
       end
     end
   end

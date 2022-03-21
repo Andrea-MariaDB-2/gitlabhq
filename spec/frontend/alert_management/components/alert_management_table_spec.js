@@ -2,6 +2,7 @@ import { GlTable, GlAlert, GlLoadingIcon, GlDropdown, GlIcon, GlAvatar } from '@
 import { mount } from '@vue/test-utils';
 import axios from 'axios';
 import MockAdapter from 'axios-mock-adapter';
+import { nextTick } from 'vue';
 import { createMockDirective, getBinding } from 'helpers/vue_mock_directive';
 import { extendedWrapper } from 'helpers/vue_test_utils_helper';
 import mockAlerts from 'jest/vue_shared/alert_details/mocks/alerts.json';
@@ -40,7 +41,6 @@ describe('AlertManagementTable', () => {
     resolved: 11,
     all: 26,
   };
-  const findDeprecationNotice = () => wrapper.findByTestId('alerts-deprecation-warning');
 
   function mountComponent({ provide = {}, data = {}, loading = false, stubs = {} } = {}) {
     wrapper = extendedWrapper(
@@ -49,7 +49,6 @@ describe('AlertManagementTable', () => {
           ...defaultProvideValues,
           alertManagementEnabled: true,
           userCanEnableAlertManagement: true,
-          hasManagedPrometheus: false,
           ...provide,
         },
         data() {
@@ -171,7 +170,7 @@ describe('AlertManagementTable', () => {
         loading: false,
       });
 
-      await wrapper.vm.$nextTick();
+      await nextTick();
 
       expect(wrapper.find(GlTable).exists()).toBe(true);
       expect(findAlertsTable().find(GlIcon).classes('icon-critical')).toBe(true);
@@ -236,22 +235,6 @@ describe('AlertManagementTable', () => {
 
       expect(visitUrl).toHaveBeenCalledWith('/1527542/details', true);
     });
-
-    it.each`
-      managedAlertsDeprecation | hasManagedPrometheus | isVisible
-      ${false}                 | ${false}             | ${false}
-      ${false}                 | ${true}              | ${true}
-      ${true}                  | ${false}             | ${false}
-      ${true}                  | ${true}              | ${false}
-    `(
-      'when the deprecation feature flag is $managedAlertsDeprecation and has managed prometheus is $hasManagedPrometheus',
-      ({ hasManagedPrometheus, managedAlertsDeprecation, isVisible }) => {
-        mountComponent({
-          provide: { hasManagedPrometheus, glFeatures: { managedAlertsDeprecation } },
-        });
-        expect(findDeprecationNotice().exists()).toBe(isVisible);
-      },
-    );
 
     describe('alert issue links', () => {
       beforeEach(() => {

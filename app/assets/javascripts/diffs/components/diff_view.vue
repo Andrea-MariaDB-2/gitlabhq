@@ -1,4 +1,5 @@
 <script>
+import { GlSafeHtmlDirective as SafeHtml } from '@gitlab/ui';
 import { mapGetters, mapState, mapActions } from 'vuex';
 import { IdState } from 'vendor/vue-virtual-scroller';
 import DraftNote from '~/batch_comments/components/draft_note.vue';
@@ -6,6 +7,7 @@ import draftCommentsMixin from '~/diffs/mixins/draft_comments';
 import { getCommentedLines } from '~/notes/components/multiline_comment_utils';
 import { hide } from '~/tooltips';
 import glFeatureFlagsMixin from '~/vue_shared/mixins/gl_feature_flags_mixin';
+import { pickDirection } from '../utils/diff_line';
 import DiffCommentCell from './diff_comment_cell.vue';
 import DiffExpansionCell from './diff_expansion_cell.vue';
 import DiffRow from './diff_row.vue';
@@ -17,6 +19,9 @@ export default {
     DiffRow,
     DiffCommentCell,
     DraftNote,
+  },
+  directives: {
+    SafeHtml,
   },
   mixins: [
     draftCommentsMixin,
@@ -51,7 +56,7 @@ export default {
   },
   computed: {
     ...mapGetters('diffs', ['commitId', 'fileLineCoverage']),
-    ...mapState('diffs', ['codequalityDiff', 'highlightedRow']),
+    ...mapState('diffs', ['codequalityDiff', 'highlightedRow', 'coverageLoaded']),
     ...mapState({
       selectedCommentPosition: ({ notes }) => notes.selectedCommentPosition,
       selectedCommentPositionHover: ({ notes }) => notes.selectedCommentPositionHover,
@@ -106,6 +111,16 @@ export default {
       });
       this.idState.dragStart = null;
     },
+    singleLineComment(code, line) {
+      const lineDir = pickDirection({ line, code });
+
+      this.idState.updatedLineRange = {
+        start: lineDir,
+        end: lineDir,
+      };
+
+      this.showCommentForm({ lineCode: lineDir.line_code, fileHash: this.diffFile.file_hash });
+    },
     isHighlighted(line) {
       return isHighlighted(
         this.highlightedRow,
@@ -142,21 +157,40 @@ export default {
     @mousedown="handleParallelLineMouseDown"
   >
     <template v-for="(line, index) in diffLines">
-      <div
-        v-if="line.isMatchLineLeft || line.isMatchLineRight"
-        :key="`expand-${index}`"
-        class="diff-tr line_expansion match"
-      >
-        <div class="diff-td text-center gl-font-regular">
-          <diff-expansion-cell
-            :file-hash="diffFile.file_hash"
-            :context-lines-path="diffFile.context_lines_path"
-            :line="line.left"
-            :is-top="index === 0"
-            :is-bottom="index + 1 === diffLinesLength"
-          />
+      <template v-if="line.isMatchLineLeft || line.isMatchLineRight">
+        <div :key="`expand-${index}`" class="diff-tr line_expansion match">
+          <div class="diff-td text-center gl-font-regular">
+            <diff-expansion-cell
+              :file-hash="diffFile.file_hash"
+              :context-lines-path="diffFile.context_lines_path"
+              :line="line.left"
+              :is-top="index === 0"
+              :is-bottom="index + 1 === diffLinesLength"
+            />
+          </div>
         </div>
-      </div>
+        <div
+          v-if="line.left.rich_text"
+          :key="`expand-definition-${index}`"
+          class="diff-grid-row diff-tr line_holder match"
+        >
+          <div class="diff-grid-left diff-grid-3-col left-side">
+            <div class="diff-td diff-line-num"></div>
+            <div v-if="inline" class="diff-td diff-line-num"></div>
+            <div
+              v-safe-html="line.left.rich_text"
+              class="diff-td line_content left-side gl-white-space-normal!"
+            ></div>
+          </div>
+          <div v-if="!inline" class="diff-grid-right diff-grid-3-col right-side">
+            <div class="diff-td diff-line-num"></div>
+            <div
+              v-safe-html="line.left.rich_text"
+              class="diff-td line_content right-side gl-white-space-normal!"
+            ></div>
+          </div>
+        </div>
+      </template>
       <diff-row
         v-if="!line.isMatchLineLeft && !line.isMatchLineRight"
         :key="line.line_code"
@@ -169,7 +203,8 @@ export default {
         :index="index"
         :is-highlighted="isHighlighted(line)"
         :file-line-coverage="fileLineCoverage"
-        @showCommentForm="(lineCode) => showCommentForm({ lineCode, fileHash: diffFile.file_hash })"
+        :coverage-loaded="coverageLoaded"
+        @showCommentForm="(code) => singleLineComment(code, line)"
         @setHighlightedRow="setHighlightedRow"
         @toggleLineDiscussions="
           ({ lineCode, expanded }) =>
@@ -193,6 +228,7 @@ export default {
           <diff-comment-cell
             v-if="line.left && (line.left.renderDiscussion || line.left.hasCommentForm)"
             :line="line.left"
+            :line-range="idState.updatedLineRange"
             :diff-file-hash="diffFile.file_hash"
             :help-page-path="helpPagePath"
             line-position="left"
@@ -206,6 +242,7 @@ export default {
           <diff-comment-cell
             v-if="line.right && (line.right.renderDiscussion || line.right.hasCommentForm)"
             :line="line.right"
+            :line-range="idState.updatedLineRange"
             :diff-file-hash="diffFile.file_hash"
             :line-index="index"
             :help-page-path="helpPagePath"

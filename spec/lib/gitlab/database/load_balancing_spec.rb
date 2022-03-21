@@ -3,337 +3,70 @@
 require 'spec_helper'
 
 RSpec.describe Gitlab::Database::LoadBalancing do
-  describe '.proxy' do
-    before do
-      @previous_proxy = ActiveRecord::Base.load_balancing_proxy
+  describe '.base_models' do
+    it 'returns the models to apply load balancing to' do
+      models = described_class.base_models
 
-      ActiveRecord::Base.load_balancing_proxy = connection_proxy
-    end
+      expect(models).to include(ActiveRecord::Base)
 
-    after do
-      ActiveRecord::Base.load_balancing_proxy = @previous_proxy
-    end
-
-    context 'when configured' do
-      let(:connection_proxy) { double(:connection_proxy) }
-
-      it 'returns the connection proxy' do
-        expect(subject.proxy).to eq(connection_proxy)
+      if Gitlab::Database.has_config?(:ci)
+        expect(models).to include(Ci::ApplicationRecord)
       end
     end
 
-    context 'when not configured' do
-      let(:connection_proxy) { nil }
+    it 'returns the models as a frozen array' do
+      expect(described_class.base_models).to be_frozen
+    end
+  end
 
-      it 'returns nil' do
-        expect(subject.proxy).to be_nil
+  describe '.each_load_balancer' do
+    it 'yields every load balancer to the supplied block' do
+      lbs = []
+
+      described_class.each_load_balancer do |lb|
+        lbs << lb
       end
 
-      it 'tracks an error to sentry' do
-        expect(Gitlab::ErrorTracking).to receive(:track_exception).with(
-          an_instance_of(subject::ProxyNotConfiguredError)
-        )
+      expect(lbs.length).to eq(described_class.base_models.length)
+    end
 
-        subject.proxy
+    it 'returns an Enumerator when no block is given' do
+      res = described_class.each_load_balancer
+
+      expect(res.next)
+        .to be_an_instance_of(Gitlab::Database::LoadBalancing::LoadBalancer)
+    end
+  end
+
+  describe '.primary_only?' do
+    it 'returns true if all load balancers have no replicas' do
+      described_class.each_load_balancer do |lb|
+        allow(lb).to receive(:primary_only?).and_return(true)
       end
+
+      expect(described_class.primary_only?).to eq(true)
     end
-  end
 
-  describe '.configuration' do
-    it 'returns a Hash' do
-      lb_config = { 'hosts' => %w(foo) }
-
-      original_db_config = Gitlab::Database.main.config
-      modified_db_config = original_db_config.merge(load_balancing: lb_config)
-      expect(Gitlab::Database.main).to receive(:config).and_return(modified_db_config)
-
-      expect(described_class.configuration).to eq(lb_config)
-    end
-  end
-
-  describe '.max_replication_difference' do
-    context 'without an explicitly configured value' do
-      it 'returns the default value' do
-        allow(described_class)
-          .to receive(:configuration)
-          .and_return({})
-
-        expect(described_class.max_replication_difference).to eq(8.megabytes)
+    it 'returns false if at least one has replicas' do
+      described_class.each_load_balancer.with_index do |lb, index|
+        allow(lb).to receive(:primary_only?).and_return(index != 0)
       end
+
+      expect(described_class.primary_only?).to eq(false)
     end
+  end
 
-    context 'with an explicitly configured value' do
-      it 'returns the configured value' do
-        allow(described_class)
-          .to receive(:configuration)
-          .and_return({ 'max_replication_difference' => 4 })
-
-        expect(described_class.max_replication_difference).to eq(4)
+  describe '.release_hosts' do
+    it 'releases the host of every load balancer' do
+      described_class.each_load_balancer do |lb|
+        expect(lb).to receive(:release_host)
       end
-    end
-  end
 
-  describe '.max_replication_lag_time' do
-    context 'without an explicitly configured value' do
-      it 'returns the default value' do
-        allow(described_class)
-          .to receive(:configuration)
-          .and_return({})
-
-        expect(described_class.max_replication_lag_time).to eq(60)
-      end
-    end
-
-    context 'with an explicitly configured value' do
-      it 'returns the configured value' do
-        allow(described_class)
-          .to receive(:configuration)
-          .and_return({ 'max_replication_lag_time' => 4 })
-
-        expect(described_class.max_replication_lag_time).to eq(4)
-      end
-    end
-  end
-
-  describe '.replica_check_interval' do
-    context 'without an explicitly configured value' do
-      it 'returns the default value' do
-        allow(described_class)
-          .to receive(:configuration)
-          .and_return({})
-
-        expect(described_class.replica_check_interval).to eq(60)
-      end
-    end
-
-    context 'with an explicitly configured value' do
-      it 'returns the configured value' do
-        allow(described_class)
-          .to receive(:configuration)
-          .and_return({ 'replica_check_interval' => 4 })
-
-        expect(described_class.replica_check_interval).to eq(4)
-      end
-    end
-  end
-
-  describe '.hosts' do
-    it 'returns a list of hosts' do
-      allow(described_class)
-        .to receive(:configuration)
-        .and_return({ 'hosts' => %w(foo bar baz) })
-
-      expect(described_class.hosts).to eq(%w(foo bar baz))
-    end
-  end
-
-  describe '.pool_size' do
-    it 'returns a Fixnum' do
-      expect(described_class.pool_size).to be_a_kind_of(Integer)
-    end
-  end
-
-  describe '.enable?' do
-    before do
-      allow(described_class).to receive(:hosts).and_return(%w(foo))
-    end
-
-    it 'returns false when no hosts are specified' do
-      allow(described_class).to receive(:hosts).and_return([])
-
-      expect(described_class.enable?).to eq(false)
-    end
-
-    it 'returns true when Sidekiq is being used' do
-      allow(Gitlab::Runtime).to receive(:sidekiq?).and_return(true)
-
-      expect(described_class.enable?).to eq(true)
-    end
-
-    it 'returns false when running inside a Rake task' do
-      allow(Gitlab::Runtime).to receive(:rake?).and_return(true)
-
-      expect(described_class.enable?).to eq(false)
-    end
-
-    it 'returns true when load balancing should be enabled' do
-      allow(Gitlab::Runtime).to receive(:sidekiq?).and_return(false)
-
-      expect(described_class.enable?).to eq(true)
-    end
-
-    it 'returns true when service discovery is enabled' do
-      allow(described_class).to receive(:hosts).and_return([])
-      allow(Gitlab::Runtime).to receive(:sidekiq?).and_return(false)
-
-      allow(described_class)
-        .to receive(:service_discovery_enabled?)
-        .and_return(true)
-
-      expect(described_class.enable?).to eq(true)
-    end
-  end
-
-  describe '.configured?' do
-    it 'returns true when Sidekiq is being used' do
-      allow(described_class).to receive(:hosts).and_return(%w(foo))
-      allow(Gitlab::Runtime).to receive(:sidekiq?).and_return(true)
-      expect(described_class.configured?).to eq(true)
-    end
-
-    it 'returns true when service discovery is enabled in Sidekiq' do
-      allow(described_class).to receive(:hosts).and_return([])
-      allow(Gitlab::Runtime).to receive(:sidekiq?).and_return(true)
-
-      allow(described_class)
-        .to receive(:service_discovery_enabled?)
-        .and_return(true)
-
-      expect(described_class.configured?).to eq(true)
-    end
-
-    it 'returns false when neither service discovery nor hosts are configured' do
-      allow(described_class).to receive(:hosts).and_return([])
-
-      allow(described_class)
-        .to receive(:service_discovery_enabled?)
-        .and_return(false)
-
-      expect(described_class.configured?).to eq(false)
-    end
-  end
-
-  describe '.configure_proxy' do
-    before do
-      allow(ActiveRecord::Base).to receive(:load_balancing_proxy=)
-    end
-
-    it 'configures the connection proxy' do
-      described_class.configure_proxy
-
-      expect(ActiveRecord::Base).to have_received(:load_balancing_proxy=)
-        .with(Gitlab::Database::LoadBalancing::ConnectionProxy)
-    end
-
-    context 'when service discovery is enabled' do
-      it 'runs initial service discovery when configuring the connection proxy' do
-        discover = instance_spy(Gitlab::Database::LoadBalancing::ServiceDiscovery)
-
-        allow(described_class)
-          .to receive(:configuration)
-          .and_return('discover' => { 'record' => 'foo' })
-
-        expect(Gitlab::Database::LoadBalancing::ServiceDiscovery)
-          .to receive(:new)
-          .with(
-            an_instance_of(Gitlab::Database::LoadBalancing::LoadBalancer),
-            an_instance_of(Hash)
-          )
-          .and_return(discover)
-
-        expect(discover).to receive(:perform_service_discovery)
-
-        described_class.configure_proxy
-      end
-    end
-  end
-
-  describe '.active_record_models' do
-    it 'returns an Array' do
-      expect(described_class.active_record_models).to be_an_instance_of(Array)
-    end
-  end
-
-  describe '.service_discovery_enabled?' do
-    it 'returns true if service discovery is enabled' do
-      allow(described_class)
-        .to receive(:configuration)
-        .and_return('discover' => { 'record' => 'foo' })
-
-      expect(described_class.service_discovery_enabled?).to eq(true)
-    end
-
-    it 'returns false if service discovery is disabled' do
-      expect(described_class.service_discovery_enabled?).to eq(false)
-    end
-  end
-
-  describe '.service_discovery_configuration' do
-    context 'when no configuration is provided' do
-      it 'returns a default configuration Hash' do
-        expect(described_class.service_discovery_configuration).to eq(
-          nameserver: 'localhost',
-          port: 8600,
-          record: nil,
-          record_type: 'A',
-          interval: 60,
-          disconnect_timeout: 120,
-          use_tcp: false
-        )
-      end
-    end
-
-    context 'when configuration is provided' do
-      it 'returns a Hash including the custom configuration' do
-        allow(described_class)
-          .to receive(:configuration)
-          .and_return('discover' => { 'record' => 'foo', 'record_type' => 'SRV' })
-
-        expect(described_class.service_discovery_configuration).to eq(
-          nameserver: 'localhost',
-          port: 8600,
-          record: 'foo',
-          record_type: 'SRV',
-          interval: 60,
-          disconnect_timeout: 120,
-          use_tcp: false
-        )
-      end
-    end
-  end
-
-  describe '.start_service_discovery' do
-    it 'does not start if service discovery is disabled' do
-      expect(Gitlab::Database::LoadBalancing::ServiceDiscovery)
-        .not_to receive(:new)
-
-      described_class.start_service_discovery
-    end
-
-    it 'starts service discovery if enabled' do
-      allow(described_class)
-        .to receive(:service_discovery_enabled?)
-        .and_return(true)
-
-      instance = double(:instance)
-      lb = instance_spy(Gitlab::Database::LoadBalancing::LoadBalancer)
-      proxy = double(:proxy, load_balancer: lb)
-
-      allow(Gitlab::Database::LoadBalancing)
-        .to receive(:proxy)
-        .and_return(proxy)
-
-      expect(Gitlab::Database::LoadBalancing::ServiceDiscovery)
-        .to receive(:new)
-        .with(lb, an_instance_of(Hash))
-        .and_return(instance)
-
-      expect(instance)
-        .to receive(:start)
-
-      described_class.start_service_discovery
+      described_class.release_hosts
     end
   end
 
   describe '.db_role_for_connection' do
-    context 'when the load balancing is not configured' do
-      let(:connection) { ActiveRecord::Base.connection }
-
-      it 'returns primary' do
-        expect(described_class.db_role_for_connection(connection)).to eq(:primary)
-      end
-    end
-
     context 'when the NullPool is used for connection' do
       let(:pool) { ActiveRecord::ConnectionAdapters::NullPool.new }
       let(:connection) { double(:connection, pool: pool) }
@@ -345,7 +78,13 @@ RSpec.describe Gitlab::Database::LoadBalancing do
 
     context 'when the load balancing is configured' do
       let(:db_host) { ActiveRecord::Base.connection_pool.db_config.host }
-      let(:proxy) { described_class::ConnectionProxy.new([db_host]) }
+      let(:config) do
+        Gitlab::Database::LoadBalancing::Configuration
+          .new(ActiveRecord::Base, [db_host])
+      end
+
+      let(:load_balancer) { described_class::LoadBalancer.new(config) }
+      let(:proxy) { described_class::ConnectionProxy.new(load_balancer) }
 
       context 'when a proxy connection is used' do
         it 'returns :unknown' do
@@ -353,9 +92,21 @@ RSpec.describe Gitlab::Database::LoadBalancing do
         end
       end
 
+      context 'when an invalid connection is used' do
+        it 'returns :unknown' do
+          expect(described_class.db_role_for_connection(:invalid)).to eq(:unknown)
+        end
+      end
+
+      context 'when a null connection is used' do
+        it 'returns :unknown' do
+          expect(described_class.db_role_for_connection(nil)).to eq(:unknown)
+        end
+      end
+
       context 'when a read connection is used' do
         it 'returns :replica' do
-          proxy.load_balancer.read do |connection|
+          load_balancer.read do |connection|
             expect(described_class.db_role_for_connection(connection)).to eq(:replica)
           end
         end
@@ -363,7 +114,7 @@ RSpec.describe Gitlab::Database::LoadBalancing do
 
       context 'when a read_write connection is used' do
         it 'returns :primary' do
-          proxy.load_balancer.read_write do |connection|
+          load_balancer.read_write do |connection|
             expect(described_class.db_role_for_connection(connection)).to eq(:primary)
           end
         end
@@ -381,10 +132,10 @@ RSpec.describe Gitlab::Database::LoadBalancing do
   # - In each test, we listen to the SQL queries (via sql.active_record
   # instrumentation) while triggering real queries from the defined model.
   # - We assert the desinations (replica/primary) of the queries in order.
-  describe 'LoadBalancing integration tests', :db_load_balancing, :delete do
+  describe 'LoadBalancing integration tests', :database_replica, :delete do
     before(:all) do
       ActiveRecord::Schema.define do
-        create_table :load_balancing_test, force: true do |t|
+        create_table :_test_load_balancing_test, force: true do |t|
           t.string :name, null: true
         end
       end
@@ -392,18 +143,14 @@ RSpec.describe Gitlab::Database::LoadBalancing do
 
     after(:all) do
       ActiveRecord::Schema.define do
-        drop_table :load_balancing_test, force: true
+        drop_table :_test_load_balancing_test, force: true
       end
     end
 
     let(:model) do
       Class.new(ApplicationRecord) do
-        self.table_name = "load_balancing_test"
+        self.table_name = "_test_load_balancing_test"
       end
-    end
-
-    before do
-      model.singleton_class.prepend ::Gitlab::Database::LoadBalancing::ActiveRecordProxy
     end
 
     where(:queries, :include_transaction, :expected_results) do
@@ -726,7 +473,7 @@ RSpec.describe Gitlab::Database::LoadBalancing do
             elsif payload[:name] == 'SQL' # Custom query
               true
             else
-              keywords = %w[load_balancing_test]
+              keywords = %w[_test_load_balancing_test]
               keywords += %w[begin commit] if include_transaction
               keywords.any? { |keyword| payload[:sql].downcase.include?(keyword) }
             end
@@ -784,6 +531,16 @@ RSpec.describe Gitlab::Database::LoadBalancing do
       with_them do
         it 'redirects queries to the right roles' do
           roles = []
+
+          # If we don't run any queries, the pool may be a NullPool. This can
+          # result in some tests reporting a role as `:unknown`, even though the
+          # tests themselves are correct.
+          #
+          # To prevent this from happening we simply run a simple query to
+          # ensure the proper pool type is put in place. The exact query doesn't
+          # matter, provided it actually runs a query and thus creates a proper
+          # connection pool.
+          model.count
 
           subscriber = ActiveSupport::Notifications.subscribe('sql.active_record') do |event|
             role = ::Gitlab::Database::LoadBalancing.db_role_for_connection(event.payload[:connection])

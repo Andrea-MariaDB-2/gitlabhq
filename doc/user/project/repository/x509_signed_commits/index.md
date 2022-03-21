@@ -1,8 +1,7 @@
 ---
 stage: Create
 group: Source Code
-info: "To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments"
-type: concepts, howto
+info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
 ---
 
 # Sign commits and tags with X.509 certificates **(FREE)**
@@ -21,15 +20,15 @@ The main difference is the way GitLab determines whether or not the developer's 
   (A trust store is a repository of trusted security certificates.) Combined with
   any required intermediate certificates in the signature, the developer's certificate
   can be chained back to a trusted root certificate.
-- For GPG, developers [add their GPG key](../gpg_signed_commits/index.md#adding-a-gpg-key-to-your-account)
+- For GPG, developers [add their GPG key](../gpg_signed_commits/index.md#add-a-gpg-key-to-your-account)
   to their account.
 
 GitLab uses its own certificate store and therefore defines the
-[trust chain](https://www.ssl.com/faqs/what-is-a-chain-of-trust/).
+[trust chain](https://www.ssl.com/faqs/what-is-a-certificate-authority/).
 For a commit or tag to be *verified* by GitLab:
 
 - The signing certificate email must match a verified email address in GitLab.
-- The GitLab instance must be able to establish a full [trust chain](https://www.ssl.com/faqs/what-is-a-chain-of-trust/)
+- The GitLab instance must be able to establish a full trust chain
   from the certificate in the signature to a trusted certificate in the GitLab certificate store.
   This chain may include intermediate certificates supplied in the signature. You may
   need to add certificates, such as Certificate Authority root certificates,
@@ -158,7 +157,7 @@ can start signing your tags:
    git config --global tag.gpgsign true
    ```
 
-## Resources
+## Related topics
 
 - [Rake task for X.509 signatures](../../../../raketasks/x509_signatures.md)
 
@@ -290,7 +289,7 @@ To investigate why a commit shows as `Unverified`:
 1. The verification status is stored in the database. To display the database record:
 
    ```ruby
-   pp X509CommitSignature.by_commit_sha(commit.sha);nil
+   pp CommitSignatures::X509CommitSignature.by_commit_sha(commit.sha);nil
    ```
 
    If all the previous checks returned the correct values:
@@ -335,7 +334,7 @@ step of the previous [main verification checks](#main-verification-checks).
    signature.__send__(:p7).verify([], signature.__send__(:cert_store), signature.__send__(:signed_text))
    ```
 
-   1. If this fails, add the missing certificate(s) required to establish trust
+   1. If this fails, add the missing certificates required to establish trust
       [to the GitLab certificate store](https://docs.gitlab.com/omnibus/settings/ssl.html#install-custom-public-certificates).
 
    1. After adding more certificates, (if these troubleshooting steps then pass)
@@ -347,7 +346,7 @@ step of the previous [main verification checks](#main-verification-checks).
       pp signature.__send__(:p7).certificates ; nil
       ```
 
-Ensure any additional intermediate certificate(s) and the root certificate are added
+Ensure any additional intermediate certificates and the root certificate are added
 to the certificate store. For consistency with how certificate chains are built on
 web servers:
 

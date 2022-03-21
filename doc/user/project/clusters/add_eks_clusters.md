@@ -4,30 +4,37 @@ group: Configure
 info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
 ---
 
-# EKS clusters (DEPRECATED) **(FREE)**
+# Connect EKS clusters through cluster certificates (DEPRECATED) **(FREE)**
 
 > - [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/22392) in GitLab 12.5.
-> - [Deprecated](https://gitlab.com/gitlab-org/gitlab/-/issues/327908) in GitLab 14.0.
+> - [Deprecated](https://gitlab.com/groups/gitlab-org/configure/-/epics/8) in GitLab 14.5.
 
 WARNING:
-Use [Infrastrucure as Code](../../infrastructure/index.md) to create new clusters. The method described in this document is deprecated as of GitLab 14.0.
+This feature was deprecated in GitLab 14.5. Use [Infrastructure as Code](../../infrastructure/iac/index.md#create-a-new-cluster-through-iac)
+to create new clusters.
 
 Through GitLab, you can create new clusters and add existing clusters hosted on Amazon Elastic
 Kubernetes Service (EKS).
 
-## Add an existing EKS cluster
+## Connect an existing EKS cluster
 
-If you already have an EKS cluster and want to integrate it with GitLab,
-see how to [add an existing cluster](add_existing_cluster.md).
+If you already have an EKS cluster and want to connect it to GitLab,
+use the [GitLab agent](../../clusters/agent/index.md).
 
-## Create a new certificate-based EKS cluster
+## Create a new EKS cluster
+
+To create a new cluster from GitLab, use [Infrastructure as Code](../../infrastructure/iac/index.md#create-a-new-cluster-through-iac).
+
+### How to create a new cluster on EKS through cluster certificates (DEPRECATED)
+
+> [Deprecated](https://gitlab.com/gitlab-org/gitlab/-/issues/327908) in GitLab 14.0.
 
 Prerequisites:
 
 - An [Amazon Web Services](https://aws.amazon.com/) account.
 - Permissions to manage IAM resources.
 
-For instance-level clusters, see [additional requirements for self-managed instances](#additional-requirements-for-self-managed-instances). **(FREE SELF)**
+For instance-level clusters, see [additional requirements for self-managed instances](#additional-requirements-for-self-managed-instances).
 
 To create new Kubernetes clusters for your project, group, or instance through the certificate-based method:
 
@@ -41,9 +48,10 @@ Further steps:
 1. [Create a default Storage Class](#create-a-default-storage-class).
 1. [Deploy the app to EKS](#deploy-the-app-to-eks).
 
-### Create a new EKS cluster in GitLab
+#### Create a new EKS cluster in GitLab
 
-To create a new EKS cluster:
+To create new a EKS cluster for your project, group, or instance, through
+cluster certificates:
 
 1. Go to your:
    - Project's **Infrastructure > Kubernetes clusters** page, for a project-level cluster.
@@ -166,7 +174,7 @@ When you create a new cluster, you have the following settings:
 | Kubernetes cluster name | Your cluster's name. |
 | Environment scope       | The [associated environment](multiple_kubernetes_clusters.md#setting-the-environment-scope). |
 | Service role            | The **EKS IAM role** (**role A**). |
-| Kubernetes version      | The [Kubernetes version](index.md#supported-cluster-versions) for your cluster. |
+| Kubernetes version      | The [Kubernetes version](../../clusters/agent/index.md#supported-cluster-versions) for your cluster. |
 | Key pair name           | The [key pair](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-key-pairs.html) that you can use to connect to your worker nodes. |
 | VPC                     | The [VPC](https://docs.aws.amazon.com/vpc/latest/userguide/what-is-amazon-vpc.html) to use for your EKS Cluster resources. |
 | Subnets                 | The [subnets](https://docs.aws.amazon.com/vpc/latest/userguide/VPC_Subnets.html) in your VPC where your worker nodes run. Two are required. |
@@ -248,7 +256,7 @@ IAM user in the Amazon AWS console, and follow these steps:
 
 #### EKS access key and ID
 
-> Instance profiles were [introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/291015) in GitLab 13.7.
+> [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/291015) instance profiles in GitLab 13.7.
 
 If you're using GitLab 13.7 or later, you can use instance profiles to
 dynamically retrieve temporary credentials from AWS when needed.

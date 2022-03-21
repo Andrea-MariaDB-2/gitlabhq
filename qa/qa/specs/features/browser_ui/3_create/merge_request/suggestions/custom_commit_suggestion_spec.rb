@@ -43,12 +43,12 @@ module QA
         merge_request.visit!
       end
 
-      it 'applies a single suggestion with a custom message', testcase: 'https://gitlab.com/gitlab-org/quality/testcases/-/quality/test_cases/1815' do
+      it 'applies a single suggestion with a custom message', testcase: 'https://gitlab.com/gitlab-org/gitlab/-/quality/test_cases/347711' do
         Page::MergeRequest::Show.perform do |merge_request|
           merge_request.click_diffs_tab
           merge_request.apply_suggestion_with_message(commit_message)
 
-          expect(merge_request).to have_css('.badge-success', text: 'Applied')
+          expect(merge_request).to have_suggestions_applied
 
           merge_request.click_commits_tab
 

@@ -10,6 +10,7 @@ module Sidebars
 
           add_item(general_menu_item)
           add_item(integrations_menu_item)
+          add_item(access_tokens_menu_item)
           add_item(group_projects_menu_item)
           add_item(repository_menu_item)
           add_item(ci_cd_menu_item)
@@ -56,6 +57,19 @@ module Sidebars
           )
         end
 
+        def access_tokens_menu_item
+          unless can?(context.current_user, :read_resource_access_tokens, context.group)
+            return ::Sidebars::NilMenuItem.new(item_id: :access_tokens)
+          end
+
+          ::Sidebars::MenuItem.new(
+            title: _('Access Tokens'),
+            link: group_settings_access_tokens_path(context.group),
+            active_routes: { path: 'access_tokens#index' },
+            item_id: :access_tokens
+          )
+        end
+
         def group_projects_menu_item
           ::Sidebars::MenuItem.new(
             title: _('Projects'),
@@ -75,10 +89,16 @@ module Sidebars
         end
 
         def ci_cd_menu_item
+          active_routes_path = if Feature.enabled?(:runner_list_group_view_vue_ui, context.group, default_enabled: :yaml)
+                                 'ci_cd#show'
+                               else
+                                 %w[ci_cd#show groups/runners#show groups/runners#edit]
+                               end
+
           ::Sidebars::MenuItem.new(
             title: _('CI/CD'),
             link: group_settings_ci_cd_path(context.group),
-            active_routes: { path: %w[ci_cd#show groups/runners#show groups/runners#edit] },
+            active_routes: { path: active_routes_path },
             item_id: :ci_cd
           )
         end

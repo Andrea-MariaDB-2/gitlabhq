@@ -23,7 +23,11 @@ module Gitlab
           end
         end
         execution_message do
-          if preferred_strategy = preferred_auto_merge_strategy(quick_action_target)
+          if params[:merge_request_diff_head_sha].blank?
+            _("Merge request diff sha parameter is required for the merge quick action.")
+          elsif params[:merge_request_diff_head_sha] != quick_action_target.diff_head_sha
+            _("Branch has been updated since the merge was requested.")
+          elsif preferred_strategy = preferred_auto_merge_strategy(quick_action_target)
             _("Scheduled to merge this merge request (%{strategy}).") % { strategy: preferred_strategy.humanize }
           else
             _('Merged this merge request.')
@@ -35,6 +39,10 @@ module Gitlab
             merge_orchestration_service.can_merge?(quick_action_target)
         end
         command :merge do
+          next unless params[:merge_request_diff_head_sha].present?
+
+          next unless params[:merge_request_diff_head_sha] == quick_action_target.diff_head_sha
+
           @updates[:merge] = params[:merge_request_diff_head_sha]
         end
 
@@ -57,6 +65,11 @@ module Gitlab
           access_check.can_push_to_branch?(merge_request.source_branch)
         end
         command :rebase do
+          unless quick_action_target.permits_force_push?
+            @execution_message[:rebase] = _('This merge request branch is protected from force push.')
+            next
+          end
+
           if quick_action_target.cannot_be_merged?
             @execution_message[:rebase] = _('This merge request cannot be rebased while there are conflicts.')
             next
@@ -148,11 +161,25 @@ module Gitlab
           quick_action_target.persisted? && quick_action_target.can_be_approved_by?(current_user)
         end
         command :approve do
-          success = MergeRequests::ApprovalService.new(project: quick_action_target.project, current_user: current_user).execute(quick_action_target)
+          success = ::MergeRequests::ApprovalService.new(project: quick_action_target.project, current_user: current_user).execute(quick_action_target)
 
           next unless success
 
           @execution_message[:approve] = _('Approved the current merge request.')
+        end
+
+        desc _('Unapprove a merge request')
+        explanation _('Unapprove the current merge request.')
+        types MergeRequest
+        condition do
+          quick_action_target.persisted? && quick_action_target.can_be_unapproved_by?(current_user)
+        end
+        command :unapprove do
+          success = ::MergeRequests::RemoveApprovalService.new(project: quick_action_target.project, current_user: current_user).execute(quick_action_target)
+
+          next unless success
+
+          @execution_message[:unapprove] = _('Unapproved the current merge request.')
         end
 
         desc do
@@ -170,7 +197,7 @@ module Gitlab
         execution_message do |users = nil|
           reviewers = reviewers_to_add(users)
           if reviewers.blank?
-            _("Failed to assign a reviewer because no user was found.")
+            _("Failed to assign a reviewer because no user was specified.")
           else
             _('Assigned %{reviewer_users_sentence} as %{reviewer_text}.') % { reviewer_users_sentence: reviewer_users_sentence(users),
                                                                               reviewer_text: 'reviewer'.pluralize(reviewers.size) }
@@ -235,6 +262,76 @@ module Gitlab
             @updates[:reviewer_ids] = []
           end
         end
+
+        desc do
+          if quick_action_target.allows_multiple_reviewers?
+            _('Request attention from assignee(s) or reviewer(s)')
+          else
+            _('Request attention from assignee or reviewer')
+          end
+        end
+        explanation do |users|
+          _('Request attention from %{users_sentence}.') % { users_sentence: reviewer_users_sentence(users) }
+        end
+        execution_message do |users = nil|
+          if users.blank?
+            _("Failed to request attention because no user was found.")
+          else
+            _('Requested attention from %{users_sentence}.') % { users_sentence: reviewer_users_sentence(users) }
+          end
+        end
+        params do
+          quick_action_target.allows_multiple_reviewers? ? '@user1 @user2' : '@user'
+        end
+        types MergeRequest
+        condition do
+          Feature.enabled?(:mr_attention_requests, project, default_enabled: :yaml) &&
+            current_user.can?(:"admin_#{quick_action_target.to_ability_name}", project)
+        end
+        parse_params do |attention_param|
+          extract_users(attention_param)
+        end
+        command :attention do |users|
+          next if users.empty?
+
+          users.each do |user|
+            ::MergeRequests::ToggleAttentionRequestedService.new(project: quick_action_target.project, merge_request: quick_action_target, current_user: current_user, user: user).execute
+          end
+        end
+
+        desc do
+          if quick_action_target.allows_multiple_reviewers?
+            _('Remove attention request(s)')
+          else
+            _('Remove attention request')
+          end
+        end
+        explanation do |users|
+          _('Removes attention from %{users_sentence}.') % { users_sentence: reviewer_users_sentence(users) }
+        end
+        execution_message do |users = nil|
+          if users.blank?
+            _("Failed to remove attention because no user was found.")
+          else
+            _('Removed attention from %{users_sentence}.') % { users_sentence: reviewer_users_sentence(users) }
+          end
+        end
+        params do
+          quick_action_target.allows_multiple_reviewers? ? '@user1 @user2' : '@user'
+        end
+        types MergeRequest
+        condition do
+          Feature.enabled?(:mr_attention_requests, project, default_enabled: :yaml) &&
+            current_user.can?(:"admin_#{quick_action_target.to_ability_name}", project)
+        end
+        parse_params do |attention_param|
+          extract_users(attention_param)
+        end
+        command :remove_attention do |users|
+          next if users.empty?
+
+          ::MergeRequests::BulkRemoveAttentionRequestedService.new(project: quick_action_target.project, merge_request: quick_action_target, current_user: current_user, users: users).execute
+        end
       end
 
       def reviewer_users_sentence(users)
@@ -261,7 +358,7 @@ module Gitlab
       end
 
       def merge_orchestration_service
-        @merge_orchestration_service ||= MergeRequests::MergeOrchestrationService.new(project, current_user)
+        @merge_orchestration_service ||= ::MergeRequests::MergeOrchestrationService.new(project, current_user)
       end
 
       def preferred_auto_merge_strategy(merge_request)

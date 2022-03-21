@@ -6,6 +6,7 @@ import {
   getValueStreamStageRecords,
   getValueStreamStageCounts,
 } from '~/api/analytics_api';
+import { normalizeHeaders, parseIntPagination } from '~/lib/utils/common_utils';
 import createFlash from '~/flash';
 import { __ } from '~/locale';
 import { DEFAULT_VALUE_STREAM, I18N_VSA_ERROR_STAGE_MEDIAN } from '../constants';
@@ -13,7 +14,7 @@ import * as types from './mutation_types';
 
 export const setSelectedValueStream = ({ commit, dispatch }, valueStream) => {
   commit(types.SET_SELECTED_VALUE_STREAM, valueStream);
-  return Promise.all([dispatch('fetchValueStreamStages'), dispatch('fetchCycleAnalyticsData')]);
+  return dispatch('fetchValueStreamStages');
 };
 
 export const fetchValueStreamStages = ({ commit, state }) => {
@@ -45,10 +46,8 @@ export const fetchValueStreams = ({ commit, dispatch, state }) => {
   } = state;
   commit(types.REQUEST_VALUE_STREAMS);
 
-  const stageRequests = ['setSelectedStage', 'fetchStageMedians', 'fetchStageCountValues'];
   return getProjectValueStreams(fullPath)
     .then(({ data }) => dispatch('receiveValueStreamsSuccess', data))
-    .then(() => Promise.all(stageRequests.map((r) => dispatch(r))))
     .catch(({ response: { status } }) => {
       commit(types.RECEIVE_VALUE_STREAMS_ERROR, status);
     });
@@ -72,16 +71,21 @@ export const fetchCycleAnalyticsData = ({
     });
 };
 
-export const fetchStageData = ({ getters: { requestParams, filterParams }, commit }) => {
+export const fetchStageData = ({
+  getters: { requestParams, filterParams, paginationParams },
+  commit,
+}) => {
   commit(types.REQUEST_STAGE_DATA);
 
-  return getValueStreamStageRecords(requestParams, filterParams)
-    .then(({ data }) => {
+  return getValueStreamStageRecords(requestParams, { ...filterParams, ...paginationParams })
+    .then(({ data, headers }) => {
       // when there's a query timeout, the request succeeds but the error is encoded in the response data
       if (data?.error) {
         commit(types.RECEIVE_STAGE_DATA_ERROR, data.error);
       } else {
         commit(types.RECEIVE_STAGE_DATA_SUCCESS, data);
+        const { page = null, nextPage = null } = parseIntPagination(normalizeHeaders(headers));
+        commit(types.SET_PAGINATION, { ...paginationParams, page, hasNextPage: Boolean(nextPage) });
       }
     })
     .catch(() => commit(types.RECEIVE_STAGE_DATA_ERROR));
@@ -147,38 +151,74 @@ export const fetchStageCountValues = ({
     });
 };
 
-export const setSelectedStage = ({ dispatch, commit, state: { stages } }, selectedStage = null) => {
-  const stage = selectedStage || stages[0];
-  commit(types.SET_SELECTED_STAGE, stage);
-  return dispatch('fetchStageData');
+export const fetchValueStreamStageData = ({ dispatch }) =>
+  Promise.all([
+    dispatch('fetchCycleAnalyticsData'),
+    dispatch('fetchStageData'),
+    dispatch('fetchStageMedians'),
+    dispatch('fetchStageCountValues'),
+  ]);
+
+export const refetchStageData = async ({ dispatch, commit }) => {
+  commit(types.SET_LOADING, true);
+  await dispatch('fetchValueStreamStageData');
+  commit(types.SET_LOADING, false);
 };
 
-export const setLoading = ({ commit }, value) => commit(types.SET_LOADING, value);
-
-const refetchStageData = (dispatch) => {
-  return Promise.resolve()
-    .then(() => dispatch('setLoading', true))
-    .then(() =>
-      Promise.all([
-        dispatch('fetchCycleAnalyticsData'),
-        dispatch('fetchStageData'),
-        dispatch('fetchStageMedians'),
-      ]),
-    )
-    .finally(() => dispatch('setLoading', false));
+export const setSelectedStage = ({ dispatch, commit }, selectedStage = null) => {
+  commit(types.SET_SELECTED_STAGE, selectedStage);
+  return dispatch('refetchStageData');
 };
 
-export const setFilters = ({ dispatch }) => refetchStageData(dispatch);
+export const setFilters = ({ dispatch }) => dispatch('refetchStageData');
 
-export const setDateRange = ({ dispatch, commit }, daysInPast) => {
-  commit(types.SET_DATE_RANGE, daysInPast);
-  return refetchStageData(dispatch);
+export const setDateRange = ({ dispatch, commit }, { createdAfter, createdBefore }) => {
+  commit(types.SET_DATE_RANGE, { createdAfter, createdBefore });
+  return dispatch('refetchStageData');
 };
 
-export const initializeVsa = ({ commit, dispatch }, initialData = {}) => {
+export const setInitialStage = ({ dispatch, commit, state: { stages } }, stage) => {
+  const selectedStage = stage || stages[0];
+  commit(types.SET_SELECTED_STAGE, selectedStage);
+  return dispatch('fetchValueStreamStageData');
+};
+
+export const updateStageTablePagination = (
+  { commit, dispatch, state: { selectedStage } },
+  paginationParams,
+) => {
+  commit(types.SET_PAGINATION, paginationParams);
+  return dispatch('fetchStageData', selectedStage.id);
+};
+
+export const initializeVsa = async ({ commit, dispatch }, initialData = {}) => {
   commit(types.INITIALIZE_VSA, initialData);
 
-  return dispatch('setLoading', true)
-    .then(() => dispatch('fetchValueStreams'))
-    .finally(() => dispatch('setLoading', false));
+  const {
+    endpoints: { fullPath, groupPath, milestonesPath = '', labelsPath = '' },
+    selectedAuthor,
+    selectedMilestone,
+    selectedAssigneeList,
+    selectedLabelList,
+    selectedStage = null,
+  } = initialData;
+
+  dispatch('filters/setEndpoints', {
+    labelsEndpoint: labelsPath,
+    milestonesEndpoint: milestonesPath,
+    groupEndpoint: groupPath,
+    projectEndpoint: fullPath,
+  });
+
+  dispatch('filters/initialize', {
+    selectedAuthor,
+    selectedMilestone,
+    selectedAssigneeList,
+    selectedLabelList,
+  });
+
+  commit(types.SET_LOADING, true);
+  await dispatch('fetchValueStreams');
+  await dispatch('setInitialStage', selectedStage);
+  commit(types.SET_LOADING, false);
 };

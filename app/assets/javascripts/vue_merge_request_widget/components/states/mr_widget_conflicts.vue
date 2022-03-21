@@ -82,17 +82,8 @@ export default {
 
       return this.mr.shouldBeRebased;
     },
-    sourceBranchProtected() {
-      if (this.glFeatures.mergeRequestWidgetGraphql) {
-        return this.stateData.sourceBranchProtected;
-      }
-
-      return this.mr.sourceBranchProtected;
-    },
     showResolveButton() {
-      return (
-        this.mr.conflictResolutionPath && this.canPushToSourceBranch && !this.sourceBranchProtected
-      );
+      return this.mr.conflictResolutionPath && this.canPushToSourceBranch;
     },
   },
 };
@@ -109,25 +100,31 @@ export default {
       </gl-skeleton-loader>
     </div>
     <div v-else class="media-body space-children gl-display-flex gl-align-items-center">
-      <span v-if="shouldBeRebased" class="bold">
+      <span
+        v-if="shouldBeRebased"
+        :class="{ 'gl-ml-0! gl-text-body!': glFeatures.restructuredMrWidget }"
+        class="bold"
+      >
         {{
           s__(`mrWidget|Merge blocked: fast-forward merge is not possible.
   To merge this request, first rebase locally.`)
         }}
       </span>
       <template v-else>
-        <span class="bold">
-          {{ s__('mrWidget|There are merge conflicts') }}<span v-if="!canMerge">.</span>
+        <span :class="{ 'gl-ml-0! gl-text-body!': glFeatures.restructuredMrWidget }" class="bold">
+          {{ s__('mrWidget|Merge blocked: merge conflicts must be resolved.') }}
           <span v-if="!canMerge">
             {{
-              s__(`mrWidget|Resolve these conflicts or ask someone
-              with write access to this repository to merge it locally`)
+              s__(
+                `mrWidget|Users who can write to the source or target branches can resolve the conflicts.`,
+              )
             }}
           </span>
         </span>
         <gl-button
           v-if="showResolveButton"
           :href="mr.conflictResolutionPath"
+          :size="glFeatures.restructuredMrWidget ? 'small' : 'medium'"
           data-testid="resolve-conflicts-button"
         >
           {{ s__('mrWidget|Resolve conflicts') }}
@@ -135,9 +132,10 @@ export default {
         <gl-button
           v-if="canMerge"
           v-gl-modal-directive="'modal-merge-info'"
+          :size="glFeatures.restructuredMrWidget ? 'small' : 'medium'"
           data-testid="merge-locally-button"
         >
-          {{ s__('mrWidget|Merge locally') }}
+          {{ s__('mrWidget|Resolve locally') }}
         </gl-button>
       </template>
     </div>

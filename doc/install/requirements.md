@@ -2,13 +2,12 @@
 stage: Enablement
 group: Distribution
 info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
-type: reference
 ---
 
-# Installation requirements **(FREE SELF)**
+# GitLab installation minimum requirements **(FREE SELF)**
 
-This page includes useful information on the supported Operating Systems as well
-as the hardware requirements that are needed to install and use GitLab.
+This page includes information about both the supported operating systems and
+the minimum requirements needed to install and use GitLab.
 
 ## Operating Systems
 
@@ -16,12 +15,13 @@ as the hardware requirements that are needed to install and use GitLab.
 
 - Ubuntu (16.04/18.04/20.04)
 - Debian (9/10)
-- CentOS (7/8)
+- AlmaLinux (8)
+- CentOS (7)
 - openSUSE Leap (15.2)
 - SUSE Linux Enterprise Server (12 SP2/12 SP5)
-- Red Hat Enterprise Linux (please use the CentOS packages and instructions)
-- Scientific Linux (please use the CentOS packages and instructions)
-- Oracle Linux (please use the CentOS packages and instructions)
+- Red Hat Enterprise Linux (use the AlmaLinux or CentOS instructions)
+- Scientific Linux (use the CentOS instructions)
+- Oracle Linux (use the CentOS instructions)
 
 For the installation options, see [the main installation page](index.md).
 
@@ -36,7 +36,7 @@ For the installation options, see [the main installation page](index.md).
 Installation of GitLab on these operating systems is possible, but not supported.
 Please see the [installation from source guide](installation.md) and the [installation guides](https://about.gitlab.com/install/) for more information.
 
-Please see [OS versions that are no longer supported](https://docs.gitlab.com/omnibus/package-information/deprecated_os.html) for Omnibus installs page
+Please see [OS versions that are no longer supported](../administration/package_information/supported_os.md#os-versions-that-are-no-longer-supported) for Omnibus installs page
 for a list of supported and unsupported OS versions as well as the last support GitLab version for that OS.
 
 ### Microsoft Windows
@@ -58,7 +58,7 @@ Redis version 6.0 or higher is recommended, as this is what ships with
 
 ### Storage
 
-The necessary hard drive space largely depends on the size of the repositories you want to store in GitLab but as a *rule of thumb* you should have at least as much free space as all your repositories combined take up.
+The necessary hard drive space largely depends on the size of the repositories you want to store in GitLab but as a *guideline* you should have at least as much free space as all your repositories combined take up.
 
 The Omnibus GitLab package requires about 2.5 GB of storage space for installation.
 
@@ -114,12 +114,11 @@ MySQL/MariaDB are advised to [migrate to PostgreSQL](../update/mysql_to_postgres
 The server running PostgreSQL should have _at least_ 5-10 GB of storage
 available, though the exact requirements [depend on the number of users](../administration/reference_architectures/index.md).
 
-We highly recommend using the minimum PostgreSQL versions (as specified in
+We highly recommend using at least the minimum PostgreSQL versions (as specified in
 the following table) as these were used for development and testing:
 
 | GitLab version | Minimum PostgreSQL version |
 |----------------|----------------------------|
-| 10.0           | 9.6                        |
 | 13.0           | 11                         |
 | 14.0           | 12                         |
 
@@ -169,7 +168,7 @@ of GitLab Support or other GitLab engineers.
   operations to manage partitioned tables.
 
 - You should not modify the GitLab schema (for example, adding triggers or modifying tables).
-  Database migrations are tested against the schema definition in the GitLab code base. GitLab
+  Database migrations are tested against the schema definition in the GitLab codebase. GitLab
   version upgrades may fail if the schema is modified.
 
 ## Puma settings
@@ -199,7 +198,7 @@ Take for example the following scenarios:
   ```plaintext
   The highest number from
   2
-  And 
+  And
   [
   the lowest number from
     - number of cores: 2
@@ -214,11 +213,11 @@ Take for example the following scenarios:
   ```plaintext
   The highest number from
   2
-  And 
+  And
   [
   the lowest number from
     - number of cores: 4
-    - memory limit: (4 - 1.5) = 2.5 
+    - memory limit: (4 - 1.5) = 2.5
   ]
   ```
 
@@ -229,7 +228,7 @@ Take for example the following scenarios:
   ```plaintext
   The highest number from
   2
-  And 
+  And
   [
   the lowest number from
     - number of cores: 4
@@ -256,6 +255,12 @@ of [legacy Rugged code](../administration/gitaly/index.md#direct-access-to-git-i
 higher, due to how [Ruby MRI multi-threading](https://en.wikipedia.org/wiki/Global_interpreter_lock)
 works.
 
+### Puma per worker maximum memory
+
+By default, each Puma worker will be limited to 1024 MB of memory.
+This setting [can be adjusted](../administration/operations/puma.md#change-the-memory-limit-setting) and should be considered
+if you need to increase the number of Puma workers.
+
 ## Redis and Sidekiq
 
 Redis stores all user sessions and the background task queue.
@@ -266,9 +271,9 @@ On a very active server (10,000 billable users) the Sidekiq process can use 1GB+
 
 ## Prometheus and its exporters
 
-As of Omnibus GitLab 9.0, [Prometheus](https://prometheus.io) and its related
-exporters are enabled by default, to enable easy and in depth monitoring of
-GitLab. With default settings, these processes consume approximately 200MB of memory.
+[Prometheus](https://prometheus.io) and its related exporters are enabled by
+default to enable in depth monitoring of GitLab. With default settings, these
+processes consume approximately 200 MB of memory.
 
 If you would like to disable Prometheus and it's exporters or read more information
 about it, check the [Prometheus documentation](../administration/monitoring/prometheus/index.md).
@@ -298,7 +303,8 @@ The GitLab Runner server requirements depend on:
 
 Since the nature of the jobs varies for each use case, you need to experiment by adjusting the job concurrency to get the optimum setting.
 
-For reference, the GitLab.com Build Cloud [auto-scaling runner for Linux](../ci/runners/build_cloud/linux_build_cloud.md) is configured so that a **single job** runs in a **single instance** with:
+For reference, the [SaaS runners on Linux](../ci/runners/saas/linux_saas_runner.md)
+are configured so that a **single job** runs in a **single instance** with:
 
 - 1 vCPU.
 - 3.75 GB of RAM.
@@ -324,6 +330,10 @@ For the listed web browsers, GitLab supports:
 NOTE:
 We don't support running GitLab with JavaScript disabled in the browser and have no plans of supporting that
 in the future because we have features such as issue boards which require JavaScript extensively.
+
+## Security
+
+After installation, be sure to read and follow guidance on [maintaining a secure GitLab installation](../security/index.md).
 
 <!-- ## Troubleshooting
 

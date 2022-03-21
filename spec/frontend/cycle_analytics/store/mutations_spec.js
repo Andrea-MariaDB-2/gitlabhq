@@ -1,7 +1,10 @@
 import { useFakeDate } from 'helpers/fake_date';
-import { DEFAULT_DAYS_TO_DISPLAY } from '~/cycle_analytics/constants';
 import * as types from '~/cycle_analytics/store/mutation_types';
 import mutations from '~/cycle_analytics/store/mutations';
+import {
+  PAGINATION_SORT_FIELD_END_EVENT,
+  PAGINATION_SORT_DIRECTION_DESC,
+} from '~/cycle_analytics/constants';
 import {
   selectedStage,
   rawIssueEvents,
@@ -13,6 +16,7 @@ import {
   formattedStageMedians,
   rawStageCounts,
   stageCounts,
+  initialPaginationState as pagination,
 } from '../mock_data';
 
 let state;
@@ -26,7 +30,7 @@ describe('Project Value Stream Analytics mutations', () => {
   useFakeDate(2020, 6, 18);
 
   beforeEach(() => {
-    state = {};
+    state = { pagination };
   });
 
   afterEach(() => {
@@ -65,15 +69,16 @@ describe('Project Value Stream Analytics mutations', () => {
     expect(state).toMatchObject({ [stateKey]: value });
   });
 
+  const mockSetDatePayload = { createdAfter: mockCreatedAfter, createdBefore: mockCreatedBefore };
   const mockInitialPayload = {
     endpoints: { requestPath: mockRequestPath },
     currentGroup: { title: 'cool-group' },
     id: 1337,
+    ...mockSetDatePayload,
   };
   const mockInitializedObj = {
     endpoints: { requestPath: mockRequestPath },
-    createdAfter: mockCreatedAfter,
-    createdBefore: mockCreatedBefore,
+    ...mockSetDatePayload,
   };
 
   it.each`
@@ -88,17 +93,19 @@ describe('Project Value Stream Analytics mutations', () => {
   });
 
   it.each`
-    mutation                                     | payload                             | stateKey                 | value
-    ${types.SET_DATE_RANGE}                      | ${DEFAULT_DAYS_TO_DISPLAY}          | ${'daysInPast'}          | ${DEFAULT_DAYS_TO_DISPLAY}
-    ${types.SET_DATE_RANGE}                      | ${DEFAULT_DAYS_TO_DISPLAY}          | ${'createdAfter'}        | ${mockCreatedAfter}
-    ${types.SET_DATE_RANGE}                      | ${DEFAULT_DAYS_TO_DISPLAY}          | ${'createdBefore'}       | ${mockCreatedBefore}
-    ${types.SET_LOADING}                         | ${true}                             | ${'isLoading'}           | ${true}
-    ${types.SET_LOADING}                         | ${false}                            | ${'isLoading'}           | ${false}
-    ${types.SET_SELECTED_VALUE_STREAM}           | ${selectedValueStream}              | ${'selectedValueStream'} | ${selectedValueStream}
-    ${types.RECEIVE_VALUE_STREAMS_SUCCESS}       | ${[selectedValueStream]}            | ${'valueStreams'}        | ${[selectedValueStream]}
-    ${types.RECEIVE_VALUE_STREAM_STAGES_SUCCESS} | ${{ stages: rawValueStreamStages }} | ${'stages'}              | ${valueStreamStages}
-    ${types.RECEIVE_STAGE_MEDIANS_SUCCESS}       | ${rawStageMedians}                  | ${'medians'}             | ${formattedStageMedians}
-    ${types.RECEIVE_STAGE_COUNTS_SUCCESS}        | ${rawStageCounts}                   | ${'stageCounts'}         | ${stageCounts}
+    mutation                                     | payload                                                  | stateKey                 | value
+    ${types.SET_DATE_RANGE}                      | ${mockSetDatePayload}                                    | ${'createdAfter'}        | ${mockCreatedAfter}
+    ${types.SET_DATE_RANGE}                      | ${mockSetDatePayload}                                    | ${'createdBefore'}       | ${mockCreatedBefore}
+    ${types.SET_LOADING}                         | ${true}                                                  | ${'isLoading'}           | ${true}
+    ${types.SET_LOADING}                         | ${false}                                                 | ${'isLoading'}           | ${false}
+    ${types.SET_SELECTED_VALUE_STREAM}           | ${selectedValueStream}                                   | ${'selectedValueStream'} | ${selectedValueStream}
+    ${types.SET_PAGINATION}                      | ${pagination}                                            | ${'pagination'}          | ${{ ...pagination, sort: PAGINATION_SORT_FIELD_END_EVENT, direction: PAGINATION_SORT_DIRECTION_DESC }}
+    ${types.SET_PAGINATION}                      | ${{ ...pagination, sort: 'duration', direction: 'asc' }} | ${'pagination'}          | ${{ ...pagination, sort: 'duration', direction: 'asc' }}
+    ${types.SET_SELECTED_STAGE}                  | ${selectedStage}                                         | ${'selectedStage'}       | ${selectedStage}
+    ${types.RECEIVE_VALUE_STREAMS_SUCCESS}       | ${[selectedValueStream]}                                 | ${'valueStreams'}        | ${[selectedValueStream]}
+    ${types.RECEIVE_VALUE_STREAM_STAGES_SUCCESS} | ${{ stages: rawValueStreamStages }}                      | ${'stages'}              | ${valueStreamStages}
+    ${types.RECEIVE_STAGE_MEDIANS_SUCCESS}       | ${rawStageMedians}                                       | ${'medians'}             | ${formattedStageMedians}
+    ${types.RECEIVE_STAGE_COUNTS_SUCCESS}        | ${rawStageCounts}                                        | ${'stageCounts'}         | ${stageCounts}
   `(
     '$mutation with $payload will set $stateKey to $value',
     ({ mutation, payload, stateKey, value }) => {

@@ -6,6 +6,8 @@ require 'flipper/adapters/active_support_cache_store'
 class Feature
   # Classes to override flipper table names
   class FlipperFeature < Flipper::Adapters::ActiveRecord::Feature
+    include DatabaseReflection
+
     # Using `self.table_name` won't work. ActiveRecord bug?
     superclass.table_name = 'features'
 
@@ -27,6 +29,15 @@ class Feature
   class << self
     delegate :group, to: :flipper
 
+    def feature_flags_available?
+      # When the DBMS is not available, an exception (e.g. PG::ConnectionBad) is raised
+      active_db_connection = ActiveRecord::Base.connection.active? rescue false # rubocop:disable Database/MultipleDatabases
+
+      active_db_connection && Feature::FlipperFeature.table_exists?
+    rescue ActiveRecord::NoDatabaseError
+      false
+    end
+
     def all
       flipper.features.to_a
     end
@@ -36,7 +47,7 @@ class Feature
     end
 
     def persisted_names
-      return [] unless Gitlab::Database.main.exists?
+      return [] unless ApplicationRecord.database.exists?
 
       # This loads names of all stored feature flags
       # and returns a stable Set in the following order:
@@ -73,7 +84,7 @@ class Feature
 
       # During setup the database does not exist yet. So we haven't stored a value
       # for the feature yet and return the default.
-      return default_enabled unless Gitlab::Database.main.exists?
+      return default_enabled unless ApplicationRecord.database.exists?
 
       feature = get(key)
 
@@ -81,7 +92,12 @@ class Feature
       # `persisted?` can potentially generate DB queries and also checks for inclusion
       # in an array of feature names (177 at last count), possibly reducing performance by half.
       # So we only perform the `persisted` check if `default_enabled: true`
-      !default_enabled || Feature.persisted_name?(feature.name) ? feature.enabled?(thing) : true
+      feature_value = !default_enabled || Feature.persisted_name?(feature.name) ? feature.enabled?(thing) : true
+
+      # If we don't filter out this flag here we will enter an infinite loop
+      log_feature_flag_state(key, feature_value) if log_feature_flag_states?(key)
+
+      feature_value
     end
 
     def disabled?(key, thing = nil, type: :development, default_enabled: false)
@@ -151,17 +167,29 @@ class Feature
       @logger ||= Feature::Logger.build
     end
 
+    def log_feature_flag_states?(key)
+      Feature::Definition.log_states?(key)
+    end
+
+    def log_feature_flag_state(key, feature_value)
+      logged_states[key] ||= feature_value
+    end
+
+    def logged_states
+      RequestStore.fetch(:feature_flag_events) { {} }
+    end
+
     private
 
     def flipper
       if Gitlab::SafeRequestStore.active?
-        Gitlab::SafeRequestStore[:flipper] ||= build_flipper_instance
+        Gitlab::SafeRequestStore[:flipper] ||= build_flipper_instance(memoize: true)
       else
         @flipper ||= build_flipper_instance
       end
     end
 
-    def build_flipper_instance
+    def build_flipper_instance(memoize: false)
       active_record_adapter = Flipper::Adapters::ActiveRecord.new(
         feature_class: FlipperFeature,
         gate_class: FlipperGate)
@@ -182,7 +210,7 @@ class Feature
         expires_in: 1.minute)
 
       Flipper.new(flipper_adapter).tap do |flip|
-        flip.memoize = true
+        flip.memoize = memoize
       end
     end
 
@@ -217,11 +245,11 @@ class Feature
     end
 
     def gate_specified?
-      %i(user project group feature_group).any? { |key| params.key?(key) }
+      %i(user project group feature_group namespace).any? { |key| params.key?(key) }
     end
 
     def targets
-      [feature_group, user, project, group].compact
+      [feature_group, user, project, group, namespace].compact
     end
 
     private
@@ -250,6 +278,13 @@ class Feature
       return unless params.key?(:group)
 
       Group.find_by_full_path(params[:group])
+    end
+
+    def namespace
+      return unless params.key?(:namespace)
+
+      # We are interested in Group or UserNamespace
+      Namespace.without_project_namespaces.find_by_full_path(params[:namespace])
     end
   end
 end

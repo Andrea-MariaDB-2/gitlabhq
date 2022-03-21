@@ -27,13 +27,9 @@ module Projects
       attr_reader :project
 
       def generate_from_statement(user_ids_and_access_levels)
-        "(VALUES #{generate_values_expression(user_ids_and_access_levels)}) members (user_id, access_level)"
-      end
+        values_list = Arel::Nodes::ValuesList.new(user_ids_and_access_levels).to_sql
 
-      def generate_values_expression(user_ids_and_access_levels)
-        user_ids_and_access_levels.map do |user_id, access_level|
-          "(#{user_id}, #{access_level})"
-        end.join(",")
+        "(#{values_list}) members (user_id, access_level)"
       end
 
       def no_members?
@@ -44,7 +40,7 @@ module Projects
         avenues = [authorizable_project_members]
 
         avenues << if project.personal?
-                     project_owner_acting_as_maintainer
+                     project_owner
                    else
                      authorizable_group_members
                    end
@@ -89,9 +85,11 @@ module Projects
         Member.from_union(members)
       end
 
-      def project_owner_acting_as_maintainer
+      # workaround until we migrate Project#owners to have membership with
+      # OWNER access level
+      def project_owner
         user_id = project.namespace.owner.id
-        access_level = Gitlab::Access::MAINTAINER
+        access_level = Gitlab::Access::OWNER
 
         Member
           .from(generate_from_statement([[user_id, access_level]])) # rubocop: disable CodeReuse/ActiveRecord
@@ -99,7 +97,7 @@ module Projects
       end
 
       def include_membership_from_project_group_shares?
-        project.allowed_to_share_with_group? && project.project_group_links.any?
+        !project.namespace.share_with_group_lock && project.project_group_links.any?
       end
 
       # methods for `select` options

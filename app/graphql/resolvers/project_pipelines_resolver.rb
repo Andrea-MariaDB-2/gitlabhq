@@ -18,7 +18,7 @@ module Resolvers
 
     def preloads
       {
-        jobs: [:statuses],
+        jobs: { statuses_order_id_desc: [:needs] },
         upstream: [:triggered_by_pipeline],
         downstream: [:triggered_pipelines]
       }
@@ -26,3 +26,5 @@ module Resolvers
   end
 end
 # rubocop: enable Graphql/ResolverType
+
+Resolvers::ProjectPipelinesResolver.prepend_mod

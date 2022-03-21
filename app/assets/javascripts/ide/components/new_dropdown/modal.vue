@@ -2,9 +2,13 @@
 import { GlModal, GlButton } from '@gitlab/ui';
 import { mapActions, mapState, mapGetters } from 'vuex';
 import createFlash from '~/flash';
-import { __, sprintf, s__ } from '~/locale';
+import { __, sprintf } from '~/locale';
 import { modalTypes } from '../../constants';
 import { trimPathComponents, getPathParent } from '../../utils';
+
+const i18n = {
+  cancelButtonText: __('Cancel'),
+};
 
 export default {
   components: {
@@ -43,6 +47,18 @@ export default {
 
       return __('Create file');
     },
+    actionPrimary() {
+      return {
+        text: this.buttonLabel,
+        attributes: [{ variant: 'confirm' }],
+      };
+    },
+    actionCancel() {
+      return {
+        text: i18n.cancelButtonText,
+        attributes: [{ variant: 'default' }],
+      };
+    },
     isCreatingNewFile() {
       return this.modalType === modalTypes.blob;
     },
@@ -58,7 +74,7 @@ export default {
       if (this.modalType === modalTypes.rename) {
         if (this.entries[this.entryName] && !this.entries[this.entryName].deleted) {
           createFlash({
-            message: sprintf(s__('The name "%{name}" is already taken in this directory.'), {
+            message: sprintf(__('The name "%{name}" is already taken in this directory.'), {
               name: this.entryName,
             }),
             fadeTransition: false,
@@ -136,11 +152,11 @@ export default {
     data-qa-selector="new_file_modal"
     data-testid="ide-new-entry"
     :title="modalTitle"
-    :ok-title="buttonLabel"
-    ok-variant="success"
     size="lg"
-    @ok="submitForm"
-    @hide="resetData"
+    :action-primary="actionPrimary"
+    :action-cancel="actionCancel"
+    @primary="submitForm"
+    @cancel="resetData"
   >
     <div class="form-group row">
       <label class="label-bold col-form-label col-sm-2"> {{ __('Name') }} </label>

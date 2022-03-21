@@ -11,13 +11,21 @@ class IssuablePolicy < BasePolicy
     @user && @subject.assignee_or_author?(@user)
   end
 
+  condition(:is_author) { @subject&.author == @user }
+
   rule { can?(:guest_access) & assignee_or_author }.policy do
     enable :read_issue
     enable :update_issue
     enable :reopen_issue
-    enable :read_merge_request
+  end
+
+  rule { can?(:read_merge_request) & assignee_or_author }.policy do
     enable :update_merge_request
     enable :reopen_merge_request
+  end
+
+  rule { is_author }.policy do
+    enable :resolve_note
   end
 
   rule { locked & ~is_project_member }.policy do

@@ -4,7 +4,7 @@ group: Integrations
 info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
 ---
 
-# CAS OmniAuth Provider **(FREE)**
+# CAS OmniAuth Provider **(FREE SELF)**
 
 To enable the CAS OmniAuth provider you must register your application with your
 CAS instance. This requires the service URL GitLab supplies to CAS. It should be
@@ -28,7 +28,7 @@ configure CAS for back-channel logout.
    sudo -u git -H editor config/gitlab.yml
    ```
 
-1. See [Initial OmniAuth Configuration](omniauth.md#initial-omniauth-configuration) for initial settings.
+1. See [Configure initial settings](omniauth.md#configure-initial-settings) for initial settings.
 
 1. Add the provider configuration:
 
@@ -37,14 +37,14 @@ configure CAS for back-channel logout.
    ```ruby
    gitlab_rails['omniauth_providers'] = [
      {
-         "name"=> "cas3",
-         "label"=> "cas",
-         "args"=> {
-             "url"=> 'CAS_SERVER',
-             "login_url"=> '/CAS_PATH/login',
-             "service_validate_url"=> '/CAS_PATH/p3/serviceValidate',
-             "logout_url"=> '/CAS_PATH/logout'
-         }
+       name: "cas3",
+       label: "Provider name", # optional label for login button, defaults to "Cas3"
+       args: {
+           url: "CAS_SERVER",
+           login_url: "/CAS_PATH/login",
+           service_validate_url: "/CAS_PATH/p3/serviceValidate",
+           logout_url: "/CAS_PATH/logout"
+       }
      }
    ]
    ```
@@ -53,7 +53,7 @@ configure CAS for back-channel logout.
 
    ```yaml
    - { name: 'cas3',
-       label: 'cas',
+       label: 'Provider name', # optional label for login button, defaults to "Cas3"
        args: {
          url: 'CAS_SERVER',
          login_url: '/CAS_PATH/login',

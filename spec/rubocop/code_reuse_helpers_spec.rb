@@ -21,6 +21,8 @@ RSpec.describe RuboCop::CodeReuseHelpers do
     end.new
   end
 
+  let(:ee_file_path) { File.expand_path('../../ee/app/models/license.rb', __dir__) }
+
   describe '#send_to_constant?' do
     it 'returns true when sending to a constant' do
       node = build_and_parse_source('Foo.bar')
@@ -310,6 +312,14 @@ RSpec.describe RuboCop::CodeReuseHelpers do
         .with(send_node, location: :expression, message: 'oops')
 
       cop.disallow_send_to(def_node, 'Finder', 'oops')
+    end
+  end
+
+  %w[ee? jh?].each do |method_name|
+    it "delegates #{method_name} to GitlabEdition" do
+      expect(GitlabEdition).to receive(method_name)
+
+      cop.public_send(method_name)
     end
   end
 end

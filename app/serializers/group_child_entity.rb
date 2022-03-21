@@ -33,6 +33,8 @@ class GroupChildEntity < Grape::Entity
   end
 
   # Project only attributes
+  expose :last_activity_at, if: lambda { |instance| project? }
+
   expose :star_count, :archived,
          if: lambda { |_instance, _options| project? }
 
@@ -54,6 +56,10 @@ class GroupChildEntity < Grape::Entity
     else
       false
     end
+  end
+
+  expose :can_remove, unless: lambda { |_instance, _options| project? } do |group|
+    can?(request.current_user, :admin_group, group)
   end
 
   expose :number_users_with_delimiter, unless: lambda { |_instance, _options| project? } do |instance|

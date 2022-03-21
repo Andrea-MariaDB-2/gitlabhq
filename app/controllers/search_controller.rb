@@ -4,8 +4,9 @@ class SearchController < ApplicationController
   include ControllerWithCrossProjectAccessCheck
   include SearchHelper
   include RedisTracking
+  include SearchRateLimitable
 
-  RESCUE_FROM_TIMEOUT_ACTIONS = [:count, :show].freeze
+  RESCUE_FROM_TIMEOUT_ACTIONS = [:count, :show, :autocomplete].freeze
 
   track_redis_hll_event :show, name: 'i_search_total'
 
@@ -17,12 +18,15 @@ class SearchController < ApplicationController
     search_term_present = params[:search].present? || params[:term].present?
     search_term_present && !params[:project_id].present?
   end
+  before_action :check_search_rate_limit!, only: [:show, :count, :autocomplete]
 
   rescue_from ActiveRecord::QueryCanceled, with: :render_timeout
 
   layout 'search'
 
   feature_category :global_search
+  urgency :high, [:opensearch]
+  urgency :low, [:count]
 
   def show
     @project = search_service.project
@@ -44,6 +48,7 @@ class SearchController < ApplicationController
     @search_results = @search_service.search_results
     @search_objects = @search_service.search_objects
     @search_highlight = @search_service.search_highlight
+    @aggregations = @search_service.search_aggregations
 
     increment_search_counters
   end
@@ -71,11 +76,7 @@ class SearchController < ApplicationController
   def autocomplete
     term = params[:term]
 
-    if params[:project_id].present?
-      @project = Project.find_by(id: params[:project_id])
-      @project = nil unless can?(current_user, :read_project, @project)
-    end
-
+    @project = search_service.project
     @ref = params[:project_ref] if params[:project_ref].present?
 
     render json: search_autocomplete_opts(term).to_json
@@ -94,12 +95,12 @@ class SearchController < ApplicationController
 
   def search_term_valid?
     unless search_service.valid_query_length?
-      flash[:alert] = t('errors.messages.search_chars_too_long', count: SearchService::SEARCH_CHAR_LIMIT)
+      flash[:alert] = t('errors.messages.search_chars_too_long', count: Gitlab::Search::Params::SEARCH_CHAR_LIMIT)
       return false
     end
 
     unless search_service.valid_terms_count?
-      flash[:alert] = t('errors.messages.search_terms_too_long', count: SearchService::SEARCH_TERM_LIMIT)
+      flash[:alert] = t('errors.messages.search_terms_too_long', count: Gitlab::Search::Params::SEARCH_TERM_LIMIT)
       return false
     end
 
@@ -144,12 +145,19 @@ class SearchController < ApplicationController
     payload[:metadata]['meta.search.filters.confidential'] = params[:confidential]
     payload[:metadata]['meta.search.filters.state'] = params[:state]
     payload[:metadata]['meta.search.force_search_results'] = params[:force_search_results]
+    payload[:metadata]['meta.search.project_ids'] = params[:project_ids]
+    payload[:metadata]['meta.search.search_level'] = params[:search_level]
+
+    if search_service.abuse_detected?
+      payload[:metadata]['abuse.confidence'] = Gitlab::Abuse.confidence(:certain)
+      payload[:metadata]['abuse.messages'] = search_service.abuse_messages
+    end
   end
 
   def block_anonymous_global_searches
-    return if params[:project_id].present? || params[:group_id].present?
+    return unless search_service.global_search?
     return if current_user
-    return unless ::Feature.enabled?(:block_anonymous_global_searches)
+    return unless ::Feature.enabled?(:block_anonymous_global_searches, type: :ops)
 
     store_location_for(:user, request.fullpath)
 
@@ -157,7 +165,7 @@ class SearchController < ApplicationController
   end
 
   def check_scope_global_search_enabled
-    return if params[:project_id].present? || params[:group_id].present?
+    return unless search_service.global_search?
 
     search_allowed = case params[:scope]
                      when 'blobs'
@@ -186,15 +194,14 @@ class SearchController < ApplicationController
 
     @timeout = true
 
-    if count_action_name?
+    case action_name.to_sym
+    when :count
       render json: {}, status: :request_timeout
+    when :autocomplete
+      render json: [], status: :request_timeout
     else
       render status: :request_timeout
     end
-  end
-
-  def count_action_name?
-    action_name.to_sym == :count
   end
 end
 

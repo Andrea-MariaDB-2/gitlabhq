@@ -152,8 +152,8 @@ The `iid`, `title` and `description` are _scalar_ GraphQL types.
 `title` and `description` are regular `GraphQL::Types::String` types.
 
 Note that the old scalar types `GraphQL:ID`, `GraphQL::INT_TYPE`, `GraphQL::STRING_TYPE`,
-and `GraphQL:BOOLEAN_TYPE` are no longer allowed. Please use `GraphQL::Types::ID`,
-`GraphQL::Types::Int`, `GraphQL::Types::String`, and `GraphQL::Types::Boolean`.
+`GraphQL:BOOLEAN_TYPE`, and `GraphQL::FLOAT_TYPE` are no longer allowed. Please use `GraphQL::Types::ID`,
+`GraphQL::Types::Int`, `GraphQL::Types::String`, `GraphQL::Types::Boolean`, and `GraphQL::Types::Float`.
 
 When exposing a model through the GraphQL API, we do so by creating a
 new type in `app/graphql/types`. You can also declare custom GraphQL data types
@@ -442,9 +442,9 @@ booleans:
 
 ```ruby
 class MergeRequestPermissionsType < BasePermissionType
-  present_using MergeRequestPresenter
-
   graphql_name 'MergeRequestPermissions'
+
+  present_using MergeRequestPresenter
 
   abilities :admin_merge_request, :update_merge_request, :create_note
 
@@ -532,7 +532,7 @@ Example:
 ```ruby
 field :foo, GraphQL::Types::String,
       null: true,
-      description: 'Some test field. Will always return `null`' \
+      description: 'Some test field. Returns `null`' \
                    'if `my_feature_flag` feature flag is disabled.'
 
 def foo
@@ -698,7 +698,10 @@ aware of the support.
 
 The documentation will mention that the old Global ID style is now deprecated.
 
-See also [Aliasing and deprecating mutations](#aliasing-and-deprecating-mutations).
+See also:
+
+- [Aliasing and deprecating mutations](#aliasing-and-deprecating-mutations).
+- [How to filter Kibana for queries that used deprecated fields](graphql_guide/monitoring.md#queries-that-used-a-deprecated-field).
 
 ## Enums
 
@@ -830,7 +833,7 @@ field :id, GraphQL::Types::ID, description: 'ID of the resource.'
 Descriptions of fields and arguments are viewable to users through:
 
 - The [GraphiQL explorer](#graphiql).
-- The [static GraphQL API reference](../api/graphql/#reference).
+- The [static GraphQL API reference](../api/graphql/reference/index.md).
 
 ### Description style guide
 
@@ -940,7 +943,9 @@ class PostResolver < BaseResolver
 end
 ```
 
-You should never re-use resolvers directly. Resolvers have a complex life-cycle, with
+While you can use the same resolver class in two different places,
+such as in two different fields where the same object is exposed,
+you should never re-use resolver objects directly. Resolvers have a complex life-cycle, with
 authorization, readiness and resolution orchestrated by the framework, and at
 each stage [lazy values](#laziness) can be returned to take advantage of batching
 opportunities. Never instantiate a resolver or a mutation in application code.
@@ -1324,6 +1329,10 @@ class UserUpdateMutation < BaseMutation
 end
 ```
 
+Due to changes in the `1.13` version of the `graphql-ruby` gem, `graphql_name` should be the first
+line of the class to ensure that type names are generated correctly. The `Graphql::GraphqlNamePosition` cop enforces this.
+See [issue #27536](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/27536#note_840245581) for further context.
+
 Our GraphQL mutation names are historically inconsistent, but new mutation names should follow the
 convention `'{Resource}{Action}'` or `'{Resource}{Action}{Attribute}'`.
 
@@ -1506,9 +1515,9 @@ GraphQL-name of the mutation:
 ```ruby
 module Types
   class MutationType < BaseObject
-    include Gitlab::Graphql::MountMutation
+    graphql_name 'Mutation'
 
-    graphql_name "Mutation"
+    include Gitlab::Graphql::MountMutation
 
     mount_mutation Mutations::MergeRequests::SetDraft
   end
@@ -2025,3 +2034,7 @@ elimination of laziness, where needed.
 
 For dealing with lazy values without forcing them, use
 `Gitlab::Graphql::Lazy.with_value`.
+
+## Monitoring GraphQL
+
+See the [Monitoring GraphQL](graphql_guide/monitoring.md) guide for tips on how to inspect logs of GraphQL requests and monitor the performance of your GraphQL queries.

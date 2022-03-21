@@ -1,9 +1,12 @@
 # frozen_string_literal: true
 
 require 'spec_helper'
+include Spec::Support::Helpers::ModalHelpers # rubocop:disable  Style/MixinUsage
 
 RSpec.describe 'Merge request > User sees avatars on diff notes', :js do
   include NoteInteractionHelpers
+  include Spec::Support::Helpers::ModalHelpers
+  include MergeRequestDiffHelpers
 
   let(:project)       { create(:project, :public, :repository) }
   let(:user)          { project.creator }
@@ -22,6 +25,7 @@ RSpec.describe 'Merge request > User sees avatars on diff notes', :js do
   before do
     project.add_maintainer(user)
     sign_in user
+    stub_feature_flags(gl_avatar_for_all_user_avatars: false)
 
     set_cookie('sidebar_collapsed', 'true')
   end
@@ -79,6 +83,7 @@ RSpec.describe 'Merge request > User sees avatars on diff notes', :js do
   %w(parallel).each do |view|
     context "#{view} view" do
       before do
+        stub_feature_flags(bootstrap_confirmation_modals: false)
         visit diffs_project_merge_request_path(project, merge_request, view: view)
 
         wait_for_requests
@@ -120,8 +125,8 @@ RSpec.describe 'Merge request > User sees avatars on diff notes', :js do
       it 'removes avatar when note is deleted' do
         open_more_actions_dropdown(note)
 
-        page.within find(".note-row-#{note.id}") do
-          accept_confirm { find('.js-note-delete').click }
+        accept_gl_confirm(button_text: 'Delete Comment') do
+          find(".note-row-#{note.id} .js-note-delete").click
         end
 
         wait_for_requests
@@ -132,6 +137,7 @@ RSpec.describe 'Merge request > User sees avatars on diff notes', :js do
       end
 
       it 'adds avatar when commenting' do
+        find_by_scrolling('[data-discussion-id]', match: :first)
         find_field('Reply…', match: :first).click
 
         page.within '.js-discussion-note-form' do
@@ -151,6 +157,7 @@ RSpec.describe 'Merge request > User sees avatars on diff notes', :js do
 
       it 'adds multiple comments' do
         3.times do
+          find_by_scrolling('[data-discussion-id]', match: :first)
           find_field('Reply…', match: :first).click
 
           page.within '.js-discussion-note-form' do
@@ -189,7 +196,7 @@ RSpec.describe 'Merge request > User sees avatars on diff notes', :js do
   end
 
   def find_line(line_code)
-    line = find("[id='#{line_code}']")
+    line = find_by_scrolling("[id='#{line_code}']")
     line = line.find(:xpath, 'preceding-sibling::*[1][self::td]/preceding-sibling::*[1][self::td]') if line.tag_name == 'td'
     line
   end

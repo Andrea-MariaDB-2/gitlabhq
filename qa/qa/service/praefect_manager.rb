@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require 'digest'
+
 module QA
   module Service
     class PraefectManager
@@ -18,6 +20,8 @@ module QA
         @tertiary_node = 'gitaly3'
         @virtual_storage = 'default'
       end
+
+      attr_reader :primary_node, :secondary_node, :tertiary_node, :postgres
 
       # Executes the praefect `dataloss` command.
       #
@@ -46,12 +50,18 @@ module QA
         end
       end
 
+      def stop_primary_node
+        stop_node(@primary_node)
+        wait_until_node_is_removed_from_healthy_storages(@primary_node)
+      end
+
       def start_primary_node
         start_node(@primary_node)
       end
 
       def start_praefect
         start_node(@praefect)
+        wait_for_praefect
       end
 
       def stop_praefect
@@ -60,24 +70,56 @@ module QA
 
       def stop_secondary_node
         stop_node(@secondary_node)
+        wait_until_node_is_removed_from_healthy_storages(@secondary_node)
       end
 
       def start_secondary_node
         start_node(@secondary_node)
       end
 
+      def stop_tertiary_node
+        stop_node(@tertiary_node)
+        wait_until_node_is_removed_from_healthy_storages(@tertiary_node)
+      end
+
+      def start_tertiary_node
+        start_node(@tertiary_node)
+      end
+
       def start_node(name)
-        shell "docker start #{name}"
+        state = node_state(name)
+        return if state == "running"
+
+        if state == "paused"
+          shell "docker unpause #{name}"
+        end
+
+        if state == "stopped"
+          shell "docker start #{name}"
+        end
+
+        wait_until_shell_command_matches(
+          "docker inspect -f {{.State.Running}} #{name}",
+          /true/,
+          sleep_interval: 3,
+          max_duration: 180,
+          retry_on_exception: true
+        )
       end
 
       def stop_node(name)
-        shell "docker stop #{name}"
+        return if node_state(name) == 'paused'
+
+        shell "docker pause #{name}"
       end
 
-      def trigger_failover_by_stopping_primary_node
-        QA::Runtime::Logger.info("Stopping node #{@primary_node} to trigger failover")
-        stop_node(@primary_node)
-        wait_for_new_primary
+      def node_state(name)
+        state = "stopped"
+        wait_until_shell_command("docker inspect -f {{.State.Status}} #{name}") do |line|
+          QA::Runtime::Logger.debug(line)
+          break state = "running" if line.include?("running")
+          break state = "paused" if line.include?("paused")
+        end
       end
 
       def clear_replication_queue
@@ -157,27 +199,24 @@ module QA
         result[2].to_i
       end
 
-      # Makes the original primary (gitaly1) the primary again by
-      # stopping the other nodes, waiting for gitaly1 to be made the
-      # primary again, and then it starts the other nodes and enables
-      # writes
-      def reset_primary_to_original
-        QA::Runtime::Logger.info("Checking primary node...")
-
-        return if @primary_node == current_primary_node
-
-        QA::Runtime::Logger.info("Reset primary node to #{@primary_node}")
+      def start_all_nodes
+        start_postgres
         start_node(@primary_node)
-        stop_node(@secondary_node)
-        stop_node(@tertiary_node)
-
-        wait_for_new_primary_node(@primary_node)
-
         start_node(@secondary_node)
         start_node(@tertiary_node)
+        start_praefect
 
         wait_for_health_check_all_nodes
-        wait_for_reliable_connection
+      end
+
+      def start_postgres
+        start_node(@postgres)
+
+        Support::Waiter.repeat_until(max_attempts: 60, sleep_interval: 1) do
+          shell(sql_to_docker_exec_cmd("SELECT 1 as healthy_database"), fail_on_exception: false) do |line|
+            break true if line.include?("healthy_database")
+          end
+        end
       end
 
       def verify_storage_move(source_storage, destination_storage, repo_type: :project)
@@ -189,32 +228,21 @@ module QA
       end
 
       def wait_for_praefect
-        QA::Runtime::Logger.info('Wait until Praefect starts and is listening')
-        wait_until_shell_command_matches(
-          "docker exec #{@praefect} bash -c 'cat /var/log/gitlab/praefect/current'",
-          /listening at tcp address/
-        )
+        QA::Runtime::Logger.info("Waiting for health check on praefect")
+        Support::Waiter.wait_until(max_duration: 120, sleep_interval: 1, raise_on_failure: true) do
+          wait_until_shell_command("docker exec #{@praefect} gitlab-ctl status praefect") do |line|
+            break true if line.include?('run: praefect: ')
 
-        # Praefect can fail to start if unable to dial one of the gitaly nodes
-        # See https://gitlab.com/gitlab-org/gitaly/-/issues/2847
-        # We tail the logs to allow us to confirm if that is the problem if tests fail
+            QA::Runtime::Logger.debug(line.chomp)
+          end
+        end
+      end
 
-        shell "docker exec #{@praefect} bash -c 'tail /var/log/gitlab/praefect/current'" do |line|
+      def praefect_sql_ping_healthy?
+        cmd = "docker exec #{@praefect} bash -c '/opt/gitlab/embedded/bin/praefect -config /var/opt/gitlab/praefect/config.toml sql-ping'"
+        wait_until_shell_command(cmd) do |line|
           QA::Runtime::Logger.debug(line.chomp)
-        end
-      end
-
-      def wait_for_new_primary_node(node)
-        QA::Runtime::Logger.info("Wait until #{node} is the primary node")
-        with_praefect_log(max_duration: 120) do |log|
-          break true if log['msg'] == 'primary node changed' && log['newPrimary'] == node
-        end
-      end
-
-      def wait_for_new_primary
-        QA::Runtime::Logger.info("Wait until a new primary node is selected")
-        with_praefect_log(max_duration: 120) do |log|
-          break true if log['msg'] == 'primary node changed'
+          break line.include?('praefect sql-ping: OK')
         end
       end
 
@@ -229,102 +257,156 @@ module QA
         ['error when pinging healthcheck', 'failed checking node health'].include?(msg)
       end
 
-      def wait_for_no_praefect_storage_error
-        # If a healthcheck error was the last message to be logged, we'll keep seeing that message even if it's no longer a problem
-        # That is, there's no message shown in the Praefect logs when the healthcheck succeeds
-        # To work around that we perform the gitaly check rake task, wait a few seconds, and then we confirm that no healthcheck errors appear
-
-        QA::Runtime::Logger.info("Checking that Praefect does not report healthcheck errors with its gitaly nodes")
-
-        Support::Waiter.wait_until(max_duration: 120) do
-          wait_for_gitaly_check
-
-          sleep 5
-
-          shell "docker exec #{@praefect} bash -c 'tail -n 1 /var/log/gitlab/praefect/current'" do |line|
-            QA::Runtime::Logger.debug(line.chomp)
-            log = JSON.parse(line)
-
-            break true unless health_check_failure_message?(log['msg'])
-          rescue JSON::ParserError
-            # Ignore lines that can't be parsed as JSON
-          end
-        end
-      end
-
-      def wait_for_storage_nodes
-        wait_for_no_praefect_storage_error
-
-        Support::Waiter.repeat_until(max_attempts: 3) do
+      def wait_for_dial_nodes_successful
+        Support::Waiter.repeat_until(max_attempts: 3, max_duration: 120, sleep_interval: 1) do
           nodes_confirmed = {
             @primary_node => false,
             @secondary_node => false,
             @tertiary_node => false
           }
 
-          wait_until_shell_command("docker exec #{@praefect} bash -c '/opt/gitlab/embedded/bin/praefect -config /var/opt/gitlab/praefect/config.toml dial-nodes'") do |line|
+          nodes_confirmed.each_key do |node|
+            nodes_confirmed[node] = true if praefect_dial_nodes_status?(node)
+          end
+
+          nodes_confirmed.values.all?
+        end
+      end
+
+      def praefect_dial_nodes_status?(node, expect_healthy = true)
+        cmd = "docker exec #{@praefect} bash -c '/opt/gitlab/embedded/bin/praefect -config /var/opt/gitlab/praefect/config.toml dial-nodes -timeout 1s'"
+        if expect_healthy
+          wait_until_shell_command_matches(cmd, /SUCCESS: confirmed Gitaly storage "#{node}" in virtual storages \[#{@virtual_storage}\] is served/)
+        else
+          wait_until_shell_command(cmd, raise_on_failure: false) do |line|
             QA::Runtime::Logger.debug(line.chomp)
-
-            nodes_confirmed.each_key do |node|
-              nodes_confirmed[node] = true if line =~ /SUCCESS: confirmed Gitaly storage "#{node}" in virtual storages \[#{@virtual_storage}\] is served/
-            end
-
-            nodes_confirmed.values.all?
+            break true if line.include?('the following nodes are not healthy') && line.include?(node)
           end
         end
       end
 
-      def wait_for_health_check_current_primary_node
-        wait_for_health_check(current_primary_node)
+      def praefect_dataloss_information(project_id)
+        dataloss_info = []
+        cmd = "docker exec #{@praefect} praefect -config /var/opt/gitlab/praefect/config.toml dataloss --partially-unavailable=true"
+        shell(cmd) { |line| dataloss_info << line.strip }
+
+        # Expected will have a record for each repository in the storage, in the following format
+        #   @hashed/bc/52/bc52dd634277c4a34a2d6210994a9a5e2ab6d33bb4a3a8963410e00ca6c15a02.git:
+        #     Primary: gitaly1
+        #       In-Sync Storages:
+        #         gitaly1, assigned host
+        #         gitaly3, assigned host
+        #       Outdated Storages:
+        #         gitaly2 is behind by 1 change or less, assigned host
+        #
+        # Alternatively, if all repositories are in sync, a concise message is returned
+        #   Virtual storage: default
+        #     All repositories are fully available on all assigned storages!
+
+        # extract the relevant project under test info if it is identified
+        start_index = dataloss_info.index { |line| line.include?("#{Digest::SHA256.hexdigest(project_id.to_s)}.git") }
+        unless start_index.nil?
+          dataloss_info = dataloss_info[start_index, 7]
+        end
+
+        dataloss_info&.each { |info| QA::Runtime::Logger.debug(info) }
+        dataloss_info
+      end
+
+      def praefect_dataloss_info_for_project(project_id)
+        dataloss_info = []
+        Support::Retrier.retry_until(max_duration: 60) do
+          dataloss_info = praefect_dataloss_information(project_id)
+          dataloss_info.include?("#{Digest::SHA256.hexdigest(project_id.to_s)}.git")
+        end
+      end
+
+      def wait_for_project_synced_across_all_storages(project_id)
+        Support::Retrier.retry_until(max_duration: 60) do
+          praefect_dataloss_information(project_id).include?('All repositories are fully available on all assigned storages!')
+        end
+      end
+
+      def accept_dataloss_for_project(project_id, authoritative_storage)
+        repository_hash = "#{Digest::SHA256.hexdigest(project_id.to_s)}"
+        repository = "@hashed/#{repository_hash[0, 2]}/#{repository_hash[2, 2]}/#{repository_hash}.git"
+
+        cmd = %{
+          docker exec #{@praefect} \
+          praefect \
+            -config /var/opt/gitlab/praefect/config.toml \
+            accept-dataloss \
+            --virtual-storage=default \
+            --repository=#{repository} \
+            --authoritative-storage=#{authoritative_storage}
+        }
+        shell(cmd)
       end
 
       def wait_for_health_check_all_nodes
-        wait_for_health_check(@primary_node)
-        wait_for_health_check(@secondary_node)
-        wait_for_health_check(@tertiary_node)
+        wait_for_gitaly_health_check(@primary_node)
+        wait_for_gitaly_health_check(@secondary_node)
+        wait_for_gitaly_health_check(@tertiary_node)
       end
 
-      def wait_for_health_check(node)
+      def wait_for_gitaly_health_check(node)
         QA::Runtime::Logger.info("Waiting for health check on #{node}")
-        wait_until_shell_command("docker exec #{node} bash -c 'cat /var/log/gitlab/gitaly/current'") do |line|
-          QA::Runtime::Logger.debug(line.chomp)
-          log = JSON.parse(line)
+        Support::Waiter.wait_until(max_duration: 120, sleep_interval: 1, raise_on_failure: true) do
+          wait_until_shell_command("docker exec #{node} gitlab-ctl status gitaly") do |line|
+            break true if line.include?('run: gitaly: ')
 
-          log['grpc.request.fullMethod'] == '/grpc.health.v1.Health/Check' && log['grpc.code'] == 'OK'
-        rescue JSON::ParserError
-          # Ignore lines that can't be parsed as JSON
+            QA::Runtime::Logger.debug(line.chomp)
+          end
         end
+        wait_until_node_is_marked_as_healthy_storage(node)
+      end
+
+      def wait_for_primary_node_health_check
+        wait_for_gitaly_health_check(@primary_node)
+      end
+
+      def wait_for_secondary_node_health_check
+        wait_for_gitaly_health_check(@secondary_node)
+      end
+
+      def wait_for_tertiary_node_health_check
+        wait_for_gitaly_health_check(@tertiary_node)
+      end
+
+      def wait_for_health_check_failure(node)
+        QA::Runtime::Logger.info("Waiting for health check failure on #{node}")
+        wait_until_node_is_removed_from_healthy_storages(node)
+      end
+
+      def wait_for_primary_node_health_check_failure
+        wait_for_health_check_failure(@primary_node)
       end
 
       def wait_for_secondary_node_health_check_failure
         wait_for_health_check_failure(@secondary_node)
       end
 
-      def wait_for_health_check_failure(node)
-        QA::Runtime::Logger.info("Waiting for Praefect to record a health check failure on #{node}")
-        wait_until_shell_command("docker exec #{@praefect} bash -c 'tail -n 1 /var/log/gitlab/praefect/current'") do |line|
-          QA::Runtime::Logger.debug(line.chomp)
-          log = JSON.parse(line)
+      def wait_for_tertiary_node_health_check_failure
+        wait_for_health_check_failure(@tertiary_node)
+      end
 
-          health_check_failure_message?(log['msg']) && log['storage'] == node
-        rescue JSON::ParserError
-          # Ignore lines that can't be parsed as JSON
+      def wait_until_node_is_removed_from_healthy_storages(node)
+        Support::Waiter.wait_until(max_duration: 120, sleep_interval: 1, raise_on_failure: true) do
+          result = []
+          shell sql_to_docker_exec_cmd("SELECT count(*) FROM healthy_storages WHERE storage = '#{node}';") do |line|
+            result << line
+          end
+          result[2].to_i == 0
         end
       end
 
-      def wait_for_gitaly_check
-        Support::Waiter.repeat_until(max_attempts: 3) do
-          storage_ok = false
-          check_finished = false
-
-          wait_until_shell_command("docker exec #{@gitlab} bash -c 'gitlab-rake gitlab:gitaly:check'") do |line|
-            QA::Runtime::Logger.debug(line.chomp)
-
-            storage_ok = true if line =~ /Gitaly: ... #{@virtual_storage} ... OK/
-            check_finished = true if line =~ /Checking Gitaly ... Finished/
-
-            storage_ok && check_finished
+      def wait_until_node_is_marked_as_healthy_storage(node)
+        Support::Waiter.wait_until(max_duration: 120, sleep_interval: 1, raise_on_failure: true) do
+          result = []
+          shell sql_to_docker_exec_cmd("SELECT count(*) FROM healthy_storages WHERE storage = '#{node}';") do |line|
+            result << line
           end
+          result[2].to_i == 1
         end
       end
 
@@ -333,7 +415,7 @@ module QA
       # has no pre-read data, consider it to have had zero reads.
       def wait_for_read_count_change(pre_read_data)
         diff_found = false
-        Support::Waiter.wait_until(sleep_interval: 5) do
+        Support::Waiter.wait_until(sleep_interval: 1, max_duration: 60) do
           query_read_distribution.each_with_index do |data, index|
             diff_found = true if data[:value] > value_for_node(pre_read_data, data[:node])
           end
@@ -345,16 +427,29 @@ module QA
         data.find(-> {{ value: 0 }}) { |item| item[:node] == node }[:value]
       end
 
-      def wait_for_reliable_connection
-        QA::Runtime::Logger.info('Wait until GitLab and Praefect can communicate reliably')
-        wait_for_praefect
-        wait_for_sql_ping
-        wait_for_storage_nodes
-        wait_for_gitaly_check
-      end
-
       def wait_for_replication(project_id)
         Support::Waiter.wait_until(sleep_interval: 1) { replication_queue_incomplete_count == 0 && replicated?(project_id) }
+      end
+
+      def wait_for_replication_to_node(project_id, node)
+        Support::Waiter.wait_until(sleep_interval: 1) do
+          result = []
+          shell sql_to_docker_exec_cmd(%{
+            select * from replication_queue
+            where state = 'ready'
+              and job ->> 'change' = 'update'
+              and job ->> 'target_node_storage' = '#{node}'
+              and job ->> 'relative_path' = '#{Digest::SHA256.hexdigest(project_id.to_s)}.git';
+          }) do |line|
+            result << line.strip
+            QA::Runtime::Logger.debug(line.strip)
+          end
+          # The result should look like this when all items are replicated
+          #    id | state | created_at | updated_at | attempt | lock_id | job | meta
+          #   ----+-------+------------+------------+---------+---------+-----+------
+          #   (0 rows)
+          result[2] == '(0 rows)'
+        end
       end
 
       def replication_pending?
@@ -364,7 +459,6 @@ module QA
             select job from replication_queue
             where state = 'ready'
               and job ->> 'change' = 'update'
-              and job ->> 'source_node_storage' = '#{current_primary_node}'
               and job ->> 'target_node_storage' = '#{@primary_node}';
           SQL
         ) do |line|
@@ -382,6 +476,116 @@ module QA
         # Therefore when replication is pending there is at least 1 row of data plus 4 rows of metadata/layout
 
         result.size >= 5
+      end
+
+      def list_untracked_repositories
+        untracked_repositories = []
+        shell "docker exec #{@praefect} bash -c 'gitlab-ctl praefect list-untracked-repositories'" do |line|
+          # Results look like this
+          #   The following repositories were found on disk, but missing from the tracking database:
+          #   {"relative_path":"@hashed/aa/bb.git","storage":"gitaly1","virtual_storage":"default"}
+          #   {"relative_path":"@hashed/bb/cc.git","storage":"gitaly3","virtual_storage":"default"}
+
+          QA::Runtime::Logger.debug(line.chomp)
+          untracked_repositories.append(JSON.parse(line))
+        rescue JSON::ParserError
+          # Ignore lines that can't be parsed as JSON
+        end
+
+        QA::Runtime::Logger.debug("list_untracked_repositories --- #{untracked_repositories}")
+        untracked_repositories
+      end
+
+      def track_repository_in_praefect(relative_path, storage, virtual_storage)
+        cmd = "gitlab-ctl praefect track-repository --repository-relative-path #{relative_path} --authoritative-storage #{storage} --virtual-storage-name #{virtual_storage}"
+        shell "docker exec #{@praefect} bash -c '#{cmd}'"
+      end
+
+      def remove_tracked_praefect_repository(relative_path, virtual_storage)
+        cmd = "gitlab-ctl praefect remove-repository --repository-relative-path #{relative_path} --virtual-storage-name #{virtual_storage} --apply"
+        shell "docker exec #{@praefect} bash -c '#{cmd}'"
+      end
+
+      # set_replication_factor assigns or unassigns random storage nodes as necessary to reach the desired replication factor for a repository
+      def set_replication_factor(relative_path, virtual_storage, factor)
+        cmd = "/opt/gitlab/embedded/bin/praefect -config /var/opt/gitlab/praefect/config.toml set-replication-factor -repository #{relative_path} -virtual-storage #{virtual_storage} -replication-factor #{factor}"
+        shell "docker exec #{@praefect} bash -c '#{cmd}'"
+      end
+
+      # get_replication_storages retrieves a list of currently assigned storages for a repository
+      def get_replication_storages(relative_path, virtual_storage)
+        storage_repositories = []
+        query = "SELECT storage FROM repository_assignments WHERE relative_path='#{relative_path}' AND virtual_storage='#{virtual_storage}';"
+        shell(sql_to_docker_exec_cmd(query)) { |line| storage_repositories << line.strip }
+        # Returned data from query will be in format
+        #    storage
+        #    --------
+        #    gitaly1
+        #    gitaly3
+        #    gitaly2
+        #   (3 rows)
+        #
+
+        # remove 2 header rows and last 2 rows from query response (including blank line)
+        storage_repositories[2..-3]
+      end
+
+      def add_repo_to_disk(node, repo_path)
+        cmd = "GIT_DIR=. git init --initial-branch=main /var/opt/gitlab/git-data/repositories/#{repo_path}"
+        shell "docker exec --user git #{node} bash -c '#{cmd}'"
+      end
+
+      def remove_repo_from_disk(repo_path)
+        cmd = "rm -rf /var/opt/gitlab/git-data/repositories/#{repo_path}"
+        shell "docker exec #{@primary_node} bash -c '#{cmd}'"
+        shell "docker exec #{@secondary_node} bash -c '#{cmd}'"
+        shell "docker exec #{@tertiary_node} bash -c '#{cmd}'"
+      end
+
+      def remove_repository_from_praefect_database(relative_path)
+        shell sql_to_docker_exec_cmd("delete from repositories where relative_path = '#{relative_path}';")
+        shell sql_to_docker_exec_cmd("delete from storage_repositories where relative_path = '#{relative_path}';")
+      end
+
+      def praefect_database_tracks_repo?(relative_path)
+        storage_repositories = []
+        shell sql_to_docker_exec_cmd("SELECT count(*) FROM storage_repositories where relative_path='#{relative_path}';") do |line|
+          storage_repositories << line
+        end
+        QA::Runtime::Logger.debug("storage_repositories count is ---#{storage_repositories}")
+
+        repositories = []
+        shell sql_to_docker_exec_cmd("SELECT count(*) FROM repositories where relative_path='#{relative_path}';") do |line|
+          repositories << line
+        end
+        QA::Runtime::Logger.debug("repositories count is ---#{repositories}")
+
+        (storage_repositories[2].to_i >= 1) && (repositories[2].to_i >= 1)
+      end
+
+      def repository_replicated_to_disk?(node, relative_path)
+        Support::Waiter.wait_until(max_duration: 300, sleep_interval: 1, raise_on_failure: false) do
+          result = []
+          shell sql_to_docker_exec_cmd("SELECT count(*) FROM storage_repositories where relative_path='#{relative_path}';") do |line|
+            result << line
+          end
+          QA::Runtime::Logger.debug("result is ---#{result}")
+          result[2].to_i == 3
+        end
+
+        repository_exists_on_node_disk?(node, relative_path)
+      end
+
+      def repository_exists_on_node_disk?(node, relative_path)
+        # If the dir does not exist it has a non zero exit code leading to a error being raised
+        # Instead we echo a test line if the dir does not exist, which has a zero exit code, with no output
+        bash_command = "test -d /var/opt/gitlab/git-data/repositories/#{relative_path} || echo -n 'DIR_DOES_NOT_EXIST'"
+        result = []
+        shell "docker exec #{node} bash -c '#{bash_command}'" do |line|
+          result << line
+        end
+        QA::Runtime::Logger.debug("result is ---#{result}")
+        result.exclude?("DIR_DOES_NOT_EXIST")
       end
 
       private

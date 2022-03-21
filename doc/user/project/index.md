@@ -1,8 +1,7 @@
 ---
-stage: Create
-group: Source Code
-info: "To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments"
-type: reference
+stage: Manage
+group: Workspace
+info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
 ---
 
 # Organize work with projects **(FREE)**
@@ -12,7 +11,7 @@ your codebase. You can also use projects to track issues, plan work,
 collaborate on code, and continuously build, test, and use
 built-in CI/CD to deploy your app.
 
-Projects can be available [publicly, internally, or privately](../../public_access/public_access.md).
+Projects can be available [publicly, internally, or privately](../public_access.md).
 GitLab does not limit the number of private projects you can create.
 
 ## Project features
@@ -31,7 +30,7 @@ Projects include the following [features](https://about.gitlab.com/features/):
   from changing history or pushing code without review.
   - [Protected tags](protected_tags.md): Control who has
   permission to create tags and prevent accidental updates or deletions.
-  - [Repository mirroring](repository/repository_mirroring.md)
+  - [Repository mirroring](repository/mirror/index.md)
   - [Signing commits](repository/gpg_signed_commits/index.md): Use GNU Privacy Guard (GPG) to sign your commits.
   - [Deploy tokens](deploy_tokens/index.md): Manage access to the repository and Container Registry.
 - [Web IDE](web_ide/index.md)
@@ -43,11 +42,11 @@ Projects include the following [features](https://about.gitlab.com/features/):
 - [Issue tracker](issues/index.md): Discuss implementations with your team.
   - [Issue boards](issue_board.md): Organize and prioritize your workflow.
   - [Multiple issue boards](issue_board.md#multiple-issue-boards): Create team-specific workflows (issue boards) for a project.
-- [Merge Requests](merge_requests/index.md): Apply a branching
+- [Merge requests](merge_requests/index.md): Apply a branching
   strategy and get reviewed by your team.
-  - [Merge Request Approvals](merge_requests/approvals/index.md): Ask for approval before
+  - [Merge request approvals](merge_requests/approvals/index.md): Ask for approval before
   implementing a change.
-  - [Fix merge conflicts from the UI](merge_requests/resolve_conflicts.md): View Git diffs from the GitLab UI.
+  - [Fix merge conflicts from the UI](merge_requests/conflicts.md): View Git diffs from the GitLab UI.
   - [Review Apps](../../ci/review_apps/index.md): By branch, preview the results
   of the changes proposed in a merge request.
 - [Labels](labels.md): Organize issues and merge requests by labels.
@@ -81,7 +80,7 @@ Projects include the following [features](https://about.gitlab.com/features/):
       browse, and download job artifacts.
     - [Pipeline settings](../../ci/pipelines/settings.md): Set up Git strategy (how jobs fetch your repository),
       timeout (the maximum amount of time a job can run), custom path for `.gitlab-ci.yml`, test coverage parsing, pipeline visibility, and more.
-  - [Kubernetes cluster integration](clusters/index.md): Connect your GitLab project
+  - [Kubernetes cluster integration](../infrastructure/clusters/index.md): Connect your GitLab project
     with a Kubernetes cluster.
   - [Feature Flags](../../operations/feature_flags.md): Ship different features
     by dynamically toggling functionality. **(PREMIUM)**
@@ -106,7 +105,6 @@ Projects include the following [features](https://about.gitlab.com/features/):
 - [License Compliance](../compliance/license_compliance/index.md): Approve and deny licenses for projects. **(ULTIMATE)**
 - [Dependency List](../application_security/dependency_list/index.md): View project dependencies. **(ULTIMATE)**
 - [Requirements](requirements/index.md): Create criteria to check your products against. **(ULTIMATE)**
-- [Static Site Editor](static_site_editor/index.md): Edit content on static websites without prior knowledge of the codebase or Git commands.
 - [Code Intelligence](code_intelligence.md): Navigate code.
 
 ## Project integrations
@@ -144,9 +142,9 @@ There are numerous [APIs](../../api/index.md) to use with your projects:
 - [Issue board](../../api/boards.md)
 - [Labels](../../api/labels.md)
 - [Markdown](../../api/markdown.md)
-- [Merge Requests](../../api/merge_requests.md)
+- [Merge requests](../../api/merge_requests.md)
 - [Milestones](../../api/milestones.md)
-- [Services](../../api/services.md)
+- [Services](../../api/integrations.md)
 - [Snippets](../../api/project_snippets.md)
 - [Templates](../../api/project_templates.md)
 - [Traffic](../../api/project_statistics.md)

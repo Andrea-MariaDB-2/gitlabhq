@@ -2,6 +2,8 @@
 require 'spec_helper'
 
 RSpec.describe Gitlab::Tracking do
+  include StubENV
+
   before do
     stub_application_setting(snowplow_enabled: true)
     stub_application_setting(snowplow_collector_hostname: 'gitfoo.com')
@@ -11,24 +13,73 @@ RSpec.describe Gitlab::Tracking do
     described_class.instance_variable_set("@snowplow", nil)
   end
 
-  describe '.snowplow_options' do
-    it 'returns useful client options' do
-      expected_fields = {
-        namespace: 'gl',
-        hostname: 'gitfoo.com',
-        cookieDomain: '.gitfoo.com',
-        appId: '_abc123_',
-        formTracking: true,
-        linkClickTracking: true
-      }
+  after do
+    described_class.instance_variable_set("@snowplow", nil)
+  end
 
-      expect(subject.snowplow_options(nil)).to match(expected_fields)
+  describe '.options' do
+    shared_examples 'delegates to destination' do |klass|
+      before do
+        allow_next_instance_of(klass) do |instance|
+          allow(instance).to receive(:options).and_call_original
+        end
+      end
+
+      it "delegates to #{klass} destination" do
+        expect_next_instance_of(klass) do |instance|
+          expect(instance).to receive(:options)
+        end
+
+        subject.options(nil)
+      end
+    end
+
+    context 'when destination is Snowplow' do
+      it_behaves_like 'delegates to destination', Gitlab::Tracking::Destinations::Snowplow
+
+      it 'returns useful client options' do
+        expected_fields = {
+          namespace: 'gl',
+          hostname: 'gitfoo.com',
+          cookieDomain: '.gitfoo.com',
+          appId: '_abc123_',
+          formTracking: true,
+          linkClickTracking: true
+        }
+
+        expect(subject.options(nil)).to match(expected_fields)
+      end
+    end
+
+    context 'when destination is SnowplowMicro' do
+      before do
+        stub_env('SNOWPLOW_MICRO_ENABLE', '1')
+        allow(Rails.env).to receive(:development?).and_return(true)
+      end
+
+      it_behaves_like 'delegates to destination', Gitlab::Tracking::Destinations::SnowplowMicro
+
+      it 'returns useful client options' do
+        expected_fields = {
+          namespace: 'gl',
+          hostname: 'localhost:9090',
+          cookieDomain: '.gitlab.com',
+          appId: '_abc123_',
+          protocol: 'http',
+          port: 9090,
+          forceSecureTracker: false,
+          formTracking: true,
+          linkClickTracking: true
+        }
+
+        expect(subject.options(nil)).to match(expected_fields)
+      end
     end
 
     it 'when feature flag is disabled' do
       stub_feature_flags(additional_snowplow_tracking: false)
 
-      expect(subject.snowplow_options(nil)).to include(
+      expect(subject.options(nil)).to include(
         formTracking: false,
         linkClickTracking: false
       )
@@ -41,14 +92,13 @@ RSpec.describe Gitlab::Tracking do
     shared_examples 'delegates to destination' do |klass|
       before do
         allow_any_instance_of(Gitlab::Tracking::Destinations::Snowplow).to receive(:event)
-        allow_any_instance_of(Gitlab::Tracking::Destinations::ProductAnalytics).to receive(:event)
       end
 
       it "delegates to #{klass} destination" do
         other_context = double(:context)
 
         project = build_stubbed(:project)
-        user = double(:user)
+        user = build_stubbed(:user)
 
         expect(Gitlab::Tracking::StandardContext)
           .to receive(:new)
@@ -72,8 +122,23 @@ RSpec.describe Gitlab::Tracking do
       end
     end
 
-    it_behaves_like 'delegates to destination', Gitlab::Tracking::Destinations::Snowplow
-    it_behaves_like 'delegates to destination', Gitlab::Tracking::Destinations::ProductAnalytics
+    context 'when destination is Snowplow' do
+      before do
+        stub_env('SNOWPLOW_MICRO_ENABLE', '0')
+        allow(Rails.env).to receive(:development?).and_return(true)
+      end
+
+      it_behaves_like 'delegates to destination', Gitlab::Tracking::Destinations::Snowplow
+    end
+
+    context 'when destination is SnowplowMicro' do
+      before do
+        stub_env('SNOWPLOW_MICRO_ENABLE', '1')
+        allow(Rails.env).to receive(:development?).and_return(true)
+      end
+
+      it_behaves_like 'delegates to destination', Gitlab::Tracking::Destinations::SnowplowMicro
+    end
 
     it 'tracks errors' do
       expect(Gitlab::ErrorTracking).to receive(:track_and_raise_for_dev_exception).with(

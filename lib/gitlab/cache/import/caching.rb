@@ -9,6 +9,8 @@ module Gitlab
 
         LONGER_TIMEOUT = 72.hours.to_i
 
+        SHORTER_TIMEOUT = 15.minutes.to_i
+
         WRITE_IF_GREATER_SCRIPT = <<-EOF.strip_heredoc.freeze
         local key, value, ttl = KEYS[1], tonumber(ARGV[1]), ARGV[2]
         local existing = tonumber(redis.call("get", key))
@@ -82,8 +84,10 @@ module Gitlab
           key = cache_key_for(raw_key)
 
           Redis::Cache.with do |redis|
-            redis.incr(key)
+            value = redis.incr(key)
             redis.expire(key, timeout)
+
+            value
           end
         end
 

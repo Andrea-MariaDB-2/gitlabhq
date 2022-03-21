@@ -132,6 +132,29 @@ RSpec.describe GroupsController, factory_default: :keep do
         end
       end
     end
+
+    describe 'require_verification_for_namespace_creation experiment', :experiment do
+      before do
+        sign_in(owner)
+        stub_experiments(require_verification_for_namespace_creation: :candidate)
+      end
+
+      it 'tracks a "start_create_group" event' do
+        expect(experiment(:require_verification_for_namespace_creation)).to track(
+          :start_create_group
+        ).on_next_instance.with_context(user: owner)
+
+        get :new
+      end
+
+      context 'when creating a sub-group' do
+        it 'does not track a "start_create_group" event' do
+          expect(experiment(:require_verification_for_namespace_creation)).not_to track(:start_create_group)
+
+          get :new, params: { parent_id: group.id }
+        end
+      end
+    end
   end
 
   describe 'GET #activity' do
@@ -485,6 +508,14 @@ RSpec.describe GroupsController, factory_default: :keep do
 
         expect(assigns(:issues)).to eq([issue_1])
       end
+    end
+
+    it 'saves the sort order to user preferences' do
+      stub_feature_flags(vue_issues_list: true)
+
+      get :issues, params: { id: group.to_param, sort: 'priority' }
+
+      expect(user.reload.user_preference.issues_sort).to eq('priority')
     end
   end
 
@@ -1205,26 +1236,6 @@ RSpec.describe GroupsController, factory_default: :keep do
 
         expect(response.body).to eq('This endpoint has been requested too many times. Try again later.')
         expect(response).to have_gitlab_http_status :too_many_requests
-      end
-    end
-  end
-
-  context 'token authentication' do
-    it_behaves_like 'authenticates sessionless user', :show, :atom, public: true do
-      before do
-        default_params.merge!(id: group)
-      end
-    end
-
-    it_behaves_like 'authenticates sessionless user', :issues, :atom, public: true do
-      before do
-        default_params.merge!(id: group, author_id: user.id)
-      end
-    end
-
-    it_behaves_like 'authenticates sessionless user', :issues_calendar, :ics, public: true do
-      before do
-        default_params.merge!(id: group)
       end
     end
   end

@@ -50,21 +50,17 @@ module Labels
 
     # rubocop: disable CodeReuse/ActiveRecord
     def group_labels_applied_to_issues
-      @group_labels_applied_to_issues ||= Label.joins(:issues)
-        .where(
-          issues: { project_id: project.id },
-          labels: { group_id: old_group.self_and_ancestors }
-        )
+      @labels_applied_to_issues ||= Label.joins(:issues)
+        .joins("INNER JOIN namespaces on namespaces.id = labels.group_id AND namespaces.type = 'Group'" )
+        .where(issues: { project_id: project.id }).reorder(nil)
     end
     # rubocop: enable CodeReuse/ActiveRecord
 
     # rubocop: disable CodeReuse/ActiveRecord
     def group_labels_applied_to_merge_requests
-      @group_labels_applied_to_merge_requests ||= Label.joins(:merge_requests)
-        .where(
-          merge_requests: { target_project_id: project.id },
-          labels: { group_id: old_group.self_and_ancestors }
-        )
+      @labels_applied_to_mrs ||= Label.joins(:merge_requests)
+        .joins("INNER JOIN namespaces on namespaces.id = labels.group_id AND namespaces.type = 'Group'" )
+        .where(merge_requests: { target_project_id: project.id }).reorder(nil)
     end
     # rubocop: enable CodeReuse/ActiveRecord
 

@@ -1,5 +1,4 @@
 ---
-type: reference, howto
 stage: Secure
 group: Threat Insights
 info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
@@ -7,7 +6,7 @@ info: To determine the technical writer assigned to the Stage/Group associated w
 
 # Vulnerability Pages **(ULTIMATE)**
 
-> [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/13561) in [GitLab Ultimate](https://about.gitlab.com/pricing/) 13.0.
+> [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/13561) in GitLab 13.0.
 
 Each vulnerability in a project has a Vulnerability Page. This page contains details of the
 vulnerability. The details included vary according to the type of vulnerability. Details of each
@@ -20,13 +19,17 @@ vulnerability include:
 - Linked issues
 - Actions log
 
+In GitLab 14.3 and later, if the scanner determined the vulnerability to be a false positive, an
+alert message is included at the top of the vulnerability's page.
+
 On the vulnerability's page, you can:
 
 - [Change the vulnerability's status](#change-vulnerability-status).
 - [Create an issue](#create-an-issue-for-a-vulnerability).
 - [Link issues to the vulnerability](#linked-issues).
-- [Resolve a vulnerability](#resolve-a-vulnerability), if a solution is
-  available.
+- [Resolve a vulnerability](#resolve-a-vulnerability) if a solution is
+  available. 
+- [View security training specific to the detected vulnerability](#view-security-training-for-a-vulnerability).
 
 ## Vulnerability status values
 
@@ -34,10 +37,12 @@ A vulnerability's status can be one of the following:
 
 | Status    | Description |
 |:----------|:------------|
-| Detected  | The default state for a newly discovered vulnerability. |
+| Detected  | The default state for a newly discovered vulnerability. Appears as "Needs triage" in the UI. |
 | Confirmed | A user has seen this vulnerability and confirmed it to be accurate. |
 | Dismissed | A user has seen this vulnerability and dismissed it because it is not accurate or otherwise not to be resolved. |
-| Resolved  | The vulnerability has been fixed and is no longer valid. |
+| Resolved  | The vulnerability has been fixed or is no longer present. |
+
+Dismissed vulnerabilities are ignored if detected in subsequent scans. Resolved vulnerabilities that are reintroduced and detected by subsequent scans have a _new_ vulnerability record created. When an existing vulnerability is no longer detected in a project's `default` branch, you should change its status to Resolved. This ensures that if it is accidentally reintroduced in a future merge, it will be visible again as a new record. You can use the [Activity filter](../vulnerability_report/#activity-filter) to select all vulnerabilities that are no longer detected, and [change their status](../vulnerability_report#change-status-of-multiple-vulnerabilities).
 
 ## Change vulnerability status
 
@@ -76,7 +81,7 @@ The issue is then opened so you can take further action.
 Prerequisites:
 
 - [Enable Jira integration](../../../integration/jira/index.md).
-  The **Enable Jira issues creation from vulnerabilities** option must be selected as part of the configuration.
+  The **Enable Jira issue creation from vulnerabilities** option must be selected as part of the configuration.
 - Each user must have a personal Jira user account with permission to create issues in the target project.
 
 To create a Jira issue for a vulnerability:
@@ -156,22 +161,28 @@ To manually apply the patch that GitLab generated for a vulnerability:
 1. Run `git apply remediation.patch`.
 1. Verify and commit the changes to your branch.
 
-## Vulnerability scanner maintenance
+## Enable security training for vulnerabilities
 
-The following vulnerability scanners and their databases are regularly updated:
+> [Introduced](https://gitlab.com/groups/gitlab-org/-/epics/6176) in GitLab 14.9.
 
-| Secure scanning tool                                            | Vulnerabilities database updates |
-|:----------------------------------------------------------------|----------------------------------|
-| [Container Scanning](../container_scanning/index.md)            | A job runs on a daily basis to build new images with the latest vulnerability database updates from the upstream scanner. |
-| [Dependency Scanning](../dependency_scanning/index.md)          | Relies on `bundler-audit` (for Ruby gems), `retire.js` (for npm packages), and `gemnasium` (the GitLab tool for all libraries). Both `bundler-audit` and `retire.js` fetch their vulnerabilities data from GitHub repositories, so vulnerabilities added to `ruby-advisory-db` and `retire.js` are immediately available. The tools themselves are updated once per month if there's a new version. The [Gemnasium DB](https://gitlab.com/gitlab-org/security-products/gemnasium-db) is updated at least once a week. See our [current measurement of time from CVE being issued to our product being updated](https://about.gitlab.com/handbook/engineering/development/performance-indicators/#cve-issue-to-update). |
-| [Dynamic Application Security Testing (DAST)](../dast/index.md) | The scanning engine is updated on a periodic basis. See the [version of the underlying tool `zaproxy`](https://gitlab.com/gitlab-org/security-products/dast/blob/main/Dockerfile#L1). The scanning rules are downloaded at scan runtime. |
-| [Static Application Security Testing (SAST)](../sast/index.md)  | Relies exclusively on [the tools GitLab wraps](../sast/index.md#supported-languages-and-frameworks). The underlying analyzers are updated at least once per month if a relevant update is available. The vulnerabilities database is updated by the upstream tools. |
+Security training helps your developers learn how to fix vulnerabilities. Developers can view security training from selected educational providers, relevant to the detected vulnerability.
 
-You do not have to update GitLab to benefit from the latest vulnerabilities definitions.
-The security tools are released as Docker images. The vendored job definitions that enable them use
-major release tags according to [semantic versioning](https://semver.org/). Each new release of the
-tools overrides these tags.
-The Docker images are updated to match the previous GitLab releases. Although
-you automatically get the latest versions of the scanning tools,
-there are some [known issues](https://gitlab.com/gitlab-org/gitlab/-/issues/9725)
-with this approach.
+To enable security training for vulnerabilities in your project:
+
+1. On the top bar, select **Menu > Projects** and find your project.
+1. On the left sidebar, select **Security & Compliance > Configuration**.
+1. On the tab bar, select **Vulnerability Management**.
+1. To enable a security training provider, turn on the toggle.
+
+## View security training for a vulnerability
+
+> [Introduced](https://gitlab.com/groups/gitlab-org/-/epics/6176) in GitLab 14.9.
+
+If security training is enabled, the vulnerability page includes a training link relevant to the detected vulnerability.
+
+To view the security training for a vulnerability:
+
+1. On the top bar, select **Menu > Projects** and find your project.
+1. On the left sidebar, select **Security & Compliance > Vulnerability report**.
+1. Select the vulnerability for which you want to view security training.
+1. Select **View training**.

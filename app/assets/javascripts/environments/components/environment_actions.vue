@@ -1,8 +1,10 @@
 <script>
-import { GlDropdown, GlDropdownItem, GlIcon, GlLoadingIcon, GlTooltipDirective } from '@gitlab/ui';
+import { GlDropdown, GlDropdownItem, GlIcon, GlTooltipDirective } from '@gitlab/ui';
+import { confirmAction } from '~/lib/utils/confirm_via_gl_modal/confirm_via_gl_modal';
 import { formatTime } from '~/lib/utils/datetime_utility';
 import { __, s__, sprintf } from '~/locale';
 import eventHub from '../event_hub';
+import actionMutation from '../graphql/mutations/action.mutation.graphql';
 
 export default {
   directives: {
@@ -12,13 +14,17 @@ export default {
     GlDropdown,
     GlDropdownItem,
     GlIcon,
-    GlLoadingIcon,
   },
   props: {
     actions: {
       type: Array,
       required: false,
       default: () => [],
+    },
+    graphql: {
+      type: Boolean,
+      required: false,
+      default: false,
     },
   },
   data() {
@@ -32,7 +38,7 @@ export default {
     },
   },
   methods: {
-    onClickAction(action) {
+    async onClickAction(action) {
       if (action.scheduledAt) {
         const confirmationMessage = sprintf(
           s__(
@@ -40,16 +46,21 @@ export default {
           ),
           { jobName: action.name },
         );
-        // https://gitlab.com/gitlab-org/gitlab-foss/issues/52156
-        // eslint-disable-next-line no-alert
-        if (!window.confirm(confirmationMessage)) {
+
+        const confirmed = await confirmAction(confirmationMessage);
+
+        if (!confirmed) {
           return;
         }
       }
 
       this.isLoading = true;
 
-      eventHub.$emit('postAction', { endpoint: action.playPath });
+      if (this.graphql) {
+        this.$apollo.mutate({ mutation: actionMutation, variables: { action } });
+      } else {
+        eventHub.$emit('postAction', { endpoint: action.playPath });
+      }
     },
 
     isActionDisabled(action) {
@@ -70,18 +81,16 @@ export default {
 <template>
   <gl-dropdown
     v-gl-tooltip
+    :text="title"
     :title="title"
+    :loading="isLoading"
     :aria-label="title"
-    :disabled="isLoading"
+    icon="play"
+    text-sr-only
     right
     data-container="body"
     data-testid="environment-actions-button"
   >
-    <template #button-content>
-      <gl-icon name="play" />
-      <gl-icon name="chevron-down" />
-      <gl-loading-icon v-if="isLoading" size="sm" />
-    </template>
     <gl-dropdown-item
       v-for="(action, i) in actions"
       :key="i"

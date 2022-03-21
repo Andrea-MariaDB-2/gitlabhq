@@ -8,15 +8,9 @@ RSpec.describe TimeZoneHelper, '(JavaScript fixtures)' do
 
   let(:response) { @timezones.sort_by! { |tz| tz[:name] }.to_json }
 
-  before(:all) do
-    clean_frontend_fixtures('timezones/')
-  end
-
-  it 'timezones/short.json' do
-    @timezones = timezone_data(format: :short)
-  end
-
-  it 'timezones/full.json' do
-    @timezones = timezone_data(format: :full)
+  %I[short abbr full].each do |format|
+    it "timezones/#{format}.json" do
+      @timezones = timezone_data(format: format)
+    end
   end
 end

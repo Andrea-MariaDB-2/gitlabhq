@@ -1,6 +1,8 @@
 import dateFormat from 'dateformat';
-import { isString, mapValues, reduce, isDate } from 'lodash';
-import { s__, n__, __ } from '../../../locale';
+import { isString, mapValues, reduce, isDate, unescape } from 'lodash';
+import { roundToNearestHalf } from '~/lib/utils/common_utils';
+import { sanitize } from '~/lib/dompurify';
+import { s__, n__, __, sprintf } from '../../../locale';
 
 /**
  * Returns i18n month names array.
@@ -12,33 +14,33 @@ import { s__, n__, __ } from '../../../locale';
 export const getMonthNames = (abbreviated) => {
   if (abbreviated) {
     return [
-      s__('Jan'),
-      s__('Feb'),
-      s__('Mar'),
-      s__('Apr'),
-      s__('May'),
-      s__('Jun'),
-      s__('Jul'),
-      s__('Aug'),
-      s__('Sep'),
-      s__('Oct'),
-      s__('Nov'),
-      s__('Dec'),
+      __('Jan'),
+      __('Feb'),
+      __('Mar'),
+      __('Apr'),
+      __('May'),
+      __('Jun'),
+      __('Jul'),
+      __('Aug'),
+      __('Sep'),
+      __('Oct'),
+      __('Nov'),
+      __('Dec'),
     ];
   }
   return [
-    s__('January'),
-    s__('February'),
-    s__('March'),
-    s__('April'),
-    s__('May'),
-    s__('June'),
-    s__('July'),
-    s__('August'),
-    s__('September'),
-    s__('October'),
-    s__('November'),
-    s__('December'),
+    __('January'),
+    __('February'),
+    __('March'),
+    __('April'),
+    __('May'),
+    __('June'),
+    __('July'),
+    __('August'),
+    __('September'),
+    __('October'),
+    __('November'),
+    __('December'),
   ];
 };
 
@@ -299,8 +301,12 @@ export const dateToYearMonthDate = (date) => {
     // eslint-disable-next-line @gitlab/require-i18n-strings
     throw new Error('Argument should be a Date instance');
   }
-  const [year, month, day] = date.toISOString().replace(/T.*$/, '').split('-');
-  return { year, month, day };
+  const [month, day] = padWithZeros(date.getMonth() + 1, date.getDate());
+  return {
+    year: `${date.getFullYear()}`,
+    month,
+    day,
+  };
 };
 
 /**
@@ -328,13 +334,15 @@ export const timeToHoursMinutes = (time = '') => {
  * @param {String} offset An optional Date-compatible offset.
  * @returns {String} The combined Date's ISO string representation.
  */
-export const dateAndTimeToUTCString = (date, time, offset = '') => {
+export const dateAndTimeToISOString = (date, time, offset = '') => {
   const { year, month, day } = dateToYearMonthDate(date);
   const { hours, minutes } = timeToHoursMinutes(time);
-
-  return new Date(
-    `${year}-${month}-${day}T${hours}:${minutes}:00.000${offset || 'Z'}`,
-  ).toISOString();
+  const dateString = `${year}-${month}-${day}T${hours}:${minutes}:00.000${offset || 'Z'}`;
+  if (Number.isNaN(Date.parse(dateString))) {
+    // eslint-disable-next-line @gitlab/require-i18n-strings
+    throw new Error('Could not initialize date');
+  }
+  return dateString;
 };
 
 /**
@@ -354,4 +362,27 @@ export const dateToTimeInputValue = (date) => {
     minute: '2-digit',
     hour12: false,
   });
+};
+
+export const formatTimeAsSummary = ({ seconds, hours, days, minutes, weeks, months }) => {
+  if (months) {
+    return sprintf(s__('ValueStreamAnalytics|%{value}M'), {
+      value: roundToNearestHalf(months),
+    });
+  } else if (weeks) {
+    return sprintf(s__('ValueStreamAnalytics|%{value}w'), {
+      value: roundToNearestHalf(weeks),
+    });
+  } else if (days) {
+    return sprintf(s__('ValueStreamAnalytics|%{value}d'), {
+      value: roundToNearestHalf(days),
+    });
+  } else if (hours) {
+    return sprintf(s__('ValueStreamAnalytics|%{value}h'), { value: hours });
+  } else if (minutes) {
+    return sprintf(s__('ValueStreamAnalytics|%{value}m'), { value: minutes });
+  } else if (seconds) {
+    return unescape(sanitize(s__('ValueStreamAnalytics|&lt;1m'), { ALLOWED_TAGS: [] }));
+  }
+  return '-';
 };

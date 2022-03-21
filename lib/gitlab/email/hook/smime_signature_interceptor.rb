@@ -22,7 +22,7 @@ module Gitlab
           private
 
           def certificate
-            @certificate ||= Gitlab::Email::Smime::Certificate.from_files(key_path, cert_path, ca_certs_path)
+            @certificate ||= Gitlab::X509::Certificate.from_files(key_path, cert_path, ca_certs_path)
           end
 
           def key_path
@@ -45,7 +45,6 @@ module Gitlab
           end
 
           def overwrite_headers(message, signed_email)
-            message.content_disposition = signed_email.content_disposition
             message.content_transfer_encoding = signed_email.content_transfer_encoding
             message.content_type = signed_email.content_type
           end

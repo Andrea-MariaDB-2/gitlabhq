@@ -24,6 +24,7 @@ class Projects::CommitController < Projects::ApplicationController
   COMMIT_DIFFS_PER_PAGE = 20
 
   feature_category :source_code_management
+  urgency :low, [:pipelines, :merge_requests, :show]
 
   def show
     apply_diff_view_cookie!
@@ -91,6 +92,8 @@ class Projects::CommitController < Projects::ApplicationController
   end
 
   def branches
+    return git_not_found! unless commit
+
     # branch_names_contains/tag_names_contains can take a long time when there are thousands of
     # branches/tags - each `git branch --contains xxx` request can consume a cpu core.
     # so only do the query when there are a manageable number of branches/tags
@@ -103,6 +106,8 @@ class Projects::CommitController < Projects::ApplicationController
   end
 
   def revert
+    return render_404 unless @commit
+
     assign_change_commit_vars
 
     return render_404 if @start_branch.blank?
@@ -114,6 +119,8 @@ class Projects::CommitController < Projects::ApplicationController
   end
 
   def cherry_pick
+    return render_404 unless @commit
+
     assign_change_commit_vars
 
     return render_404 if @start_branch.blank?
@@ -161,6 +168,7 @@ class Projects::CommitController < Projects::ApplicationController
 
     opts = diff_options
     opts[:ignore_whitespace_change] = true if params[:format] == 'diff'
+    opts[:use_extra_viewer_as_main] = false
 
     @diffs = commit.diffs(opts)
     @notes_count = commit.notes.count

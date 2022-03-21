@@ -9,6 +9,12 @@ RSpec.shared_examples 'TokenAuthenticatable' do
     it { is_expected.to respond_to("set_#{token_field}") }
     it { is_expected.to respond_to("reset_#{token_field}!") }
   end
+
+  describe 'SensitiveSerializableHash' do
+    it 'includes the token field in list of sensitive attributes prevented from serialization' do
+      expect(described_class.attributes_exempt_from_serializable_hash).to include(token_field)
+    end
+  end
 end
 
 RSpec.describe User, 'TokenAuthenticatable' do
@@ -289,4 +295,222 @@ RSpec.describe Ci::Build, 'TokenAuthenticatable' do
       expect(build.read_attribute('token')).to be_nil
     end
   end
+
+  describe '#token_with_expiration' do
+    describe '#expirable?' do
+      subject { build.token_with_expiration.expirable? }
+
+      it { is_expected.to eq(false) }
+    end
+  end
+end
+
+RSpec.describe Ci::Runner, 'TokenAuthenticatable', :freeze_time do
+  let_it_be(:non_expirable_runner) { create(:ci_runner) }
+  let_it_be(:non_expired_runner) { create(:ci_runner).tap { |r| r.update!(token_expires_at: 5.seconds.from_now) } }
+  let_it_be(:expired_runner) { create(:ci_runner).tap { |r| r.update!(token_expires_at: 5.seconds.ago) } }
+
+  describe '#token_expired?' do
+    subject { runner.token_expired? }
+
+    context 'when enforce_runner_token_expires_at feature flag is disabled' do
+      before do
+        stub_feature_flags(enforce_runner_token_expires_at: false)
+      end
+
+      context 'when runner has no token expiration' do
+        let(:runner) { non_expirable_runner }
+
+        it { is_expected.to eq(false) }
+      end
+
+      context 'when runner token is not expired' do
+        let(:runner) { non_expired_runner }
+
+        it { is_expected.to eq(false) }
+      end
+
+      context 'when runner token is expired' do
+        let(:runner) { expired_runner }
+
+        it { is_expected.to eq(false) }
+      end
+    end
+
+    context 'when enforce_runner_token_expires_at feature flag is enabled' do
+      before do
+        stub_feature_flags(enforce_runner_token_expires_at: true)
+      end
+
+      context 'when runner has no token expiration' do
+        let(:runner) { non_expirable_runner }
+
+        it { is_expected.to eq(false) }
+      end
+
+      context 'when runner token is not expired' do
+        let(:runner) { non_expired_runner }
+
+        it { is_expected.to eq(false) }
+      end
+
+      context 'when runner token is expired' do
+        let(:runner) { expired_runner }
+
+        it { is_expected.to eq(true) }
+      end
+    end
+  end
+
+  describe '#token_with_expiration' do
+    describe '#token' do
+      subject { non_expired_runner.token_with_expiration.token }
+
+      it { is_expected.to eq(non_expired_runner.token) }
+    end
+
+    describe '#token_expires_at' do
+      subject { non_expired_runner.token_with_expiration.token_expires_at }
+
+      it { is_expected.to eq(non_expired_runner.token_expires_at) }
+    end
+
+    describe '#expirable?' do
+      subject { non_expired_runner.token_with_expiration.expirable? }
+
+      it { is_expected.to eq(true) }
+    end
+  end
+
+  describe '.find_by_token' do
+    subject { Ci::Runner.find_by_token(runner.token) }
+
+    context 'when enforce_runner_token_expires_at feature flag is disabled' do
+      before do
+        stub_feature_flags(enforce_runner_token_expires_at: false)
+      end
+
+      context 'when runner has no token expiration' do
+        let(:runner) { non_expirable_runner }
+
+        it { is_expected.to eq(non_expirable_runner) }
+      end
+
+      context 'when runner token is not expired' do
+        let(:runner) { non_expired_runner }
+
+        it { is_expected.to eq(non_expired_runner) }
+      end
+
+      context 'when runner token is expired' do
+        let(:runner) { expired_runner }
+
+        it { is_expected.to eq(expired_runner) }
+      end
+    end
+
+    context 'when enforce_runner_token_expires_at feature flag is enabled' do
+      before do
+        stub_feature_flags(enforce_runner_token_expires_at: true)
+      end
+
+      context 'when runner has no token expiration' do
+        let(:runner) { non_expirable_runner }
+
+        it { is_expected.to eq(non_expirable_runner) }
+      end
+
+      context 'when runner token is not expired' do
+        let(:runner) { non_expired_runner }
+
+        it { is_expected.to eq(non_expired_runner) }
+      end
+
+      context 'when runner token is expired' do
+        let(:runner) { expired_runner }
+
+        it { is_expected.to be_nil }
+      end
+    end
+  end
+end
+
+RSpec.shared_examples 'prefixed token rotation' do
+  describe "ensure_runners_token" do
+    subject { instance.ensure_runners_token }
+
+    context 'token is not set' do
+      it 'generates a new token' do
+        expect(subject).to match(/^#{RunnersTokenPrefixable::RUNNERS_TOKEN_PREFIX}/)
+        expect(instance).not_to be_persisted
+      end
+    end
+
+    context 'token is set, but does not match the prefix' do
+      before do
+        instance.set_runners_token('abcdef')
+      end
+
+      it 'generates a new token' do
+        expect(subject).to match(/^#{RunnersTokenPrefixable::RUNNERS_TOKEN_PREFIX}/)
+        expect(instance).not_to be_persisted
+      end
+    end
+
+    context 'token is set and matches prefix' do
+      before do
+        instance.set_runners_token(RunnersTokenPrefixable::RUNNERS_TOKEN_PREFIX + '-abcdef')
+      end
+
+      it 'leaves the token unchanged' do
+        expect { subject }.not_to change(instance, :runners_token)
+        expect(instance).not_to be_persisted
+      end
+    end
+  end
+
+  describe 'ensure_runners_token!' do
+    subject { instance.ensure_runners_token! }
+
+    context 'token is not set' do
+      it 'generates a new token' do
+        expect(subject).to match(/^#{RunnersTokenPrefixable::RUNNERS_TOKEN_PREFIX}/)
+        expect(instance).to be_persisted
+      end
+    end
+
+    context 'token is set, but does not match the prefix' do
+      before do
+        instance.set_runners_token('abcdef')
+      end
+
+      it 'generates a new token' do
+        expect(subject).to match(/^#{RunnersTokenPrefixable::RUNNERS_TOKEN_PREFIX}/)
+        expect(instance).to be_persisted
+      end
+    end
+
+    context 'token is set and matches prefix' do
+      before do
+        instance.set_runners_token(RunnersTokenPrefixable::RUNNERS_TOKEN_PREFIX + '-abcdef')
+        instance.save!
+      end
+
+      it 'leaves the token unchanged' do
+        expect { subject }.not_to change(instance, :runners_token)
+      end
+    end
+  end
+end
+
+RSpec.describe Project, 'TokenAuthenticatable' do
+  let(:instance) { build(:project, runners_token: nil) }
+
+  it_behaves_like 'prefixed token rotation'
+end
+
+RSpec.describe Group, 'TokenAuthenticatable' do
+  let(:instance) { build(:group, runners_token: nil) }
+
+  it_behaves_like 'prefixed token rotation'
 end

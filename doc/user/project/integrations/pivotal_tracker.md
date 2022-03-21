@@ -29,7 +29,7 @@ Read more about the
 [Source Commits endpoint](https://www.pivotaltracker.com/help/api/rest/v5#Source_Commits) in
 the Pivotal Tracker API documentation.
 
-See also the [Pivotal Tracker service API documentation](../../../api/services.md#pivotal-tracker).
+See also the [Pivotal Tracker integration API documentation](../../../api/integrations.md#pivotal-tracker).
 
 ## Set up Pivotal Tracker
 
@@ -42,6 +42,6 @@ Complete these steps in GitLab:
 1. Select **Pivotal Tracker**.
 1. Ensure that the **Active** toggle is enabled.
 1. Paste the token you generated in Pivotal Tracker.
-1. (Optional) To restrict this setting to specific branches, list them in the **Restrict to branch**
+1. Optional. To restrict this setting to specific branches, list them in the **Restrict to branch**
    field, separated with commas.
 1. Select **Save changes** or optionally select **Test settings**.

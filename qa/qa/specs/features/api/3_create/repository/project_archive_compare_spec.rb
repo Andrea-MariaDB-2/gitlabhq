@@ -27,7 +27,7 @@ module QA
         end
       end
 
-      it 'download archives of each user project then check they are different', testcase: 'https://gitlab.com/gitlab-org/quality/testcases/-/quality/test_cases/1575' do
+      it 'download archives of each user project then check they are different', testcase: 'https://gitlab.com/gitlab-org/gitlab/-/quality/test_cases/347748' do
         archive_checksums = {}
 
         users.each do |user_key, user_info|
@@ -46,10 +46,9 @@ module QA
 
       def create_project(user, api_client, project_name)
         project = Resource::Project.fabricate_via_api! do |project|
-          project.personal_namespace = true
+          project.personal_namespace = user.username
           project.add_name_uuid = false
           project.name = project_name
-          project.path_with_namespace = "#{user.username}/#{project_name}"
           project.api_client = api_client
         end
 

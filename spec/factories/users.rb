@@ -5,7 +5,7 @@ FactoryBot.define do
     email { generate(:email) }
     name { generate(:name) }
     username { generate(:username) }
-    password { "12345678" }
+    password { Gitlab::Password.test_default }
     role { 'software_developer' }
     confirmed_at { Time.now }
     confirmation_token { nil }
@@ -13,6 +13,14 @@ FactoryBot.define do
 
     trait :admin do
       admin { true }
+    end
+
+    trait :public_email do
+      public_email { email }
+    end
+
+    trait :private_profile do
+      private_profile { true }
     end
 
     trait :blocked do
@@ -139,9 +147,11 @@ FactoryBot.define do
     end
 
     factory :omniauth_user do
+      password_automatically_set { true }
+
       transient do
         extern_uid { '123456' }
-        provider { 'ldapmain' }
+        provider { 'twitter' }
       end
 
       after(:create) do |user, evaluator|
@@ -155,6 +165,12 @@ FactoryBot.define do
         end
 
         user.identities << create(:identity, identity_attrs)
+      end
+
+      trait :ldap do
+        transient do
+          provider { 'ldapmain' }
+        end
       end
     end
 

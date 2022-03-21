@@ -1,12 +1,16 @@
 ---
 stage: Monitor
-group: Monitor
+group: Respond
 info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
 ---
 
-# Monitoring NGINX Ingress Controller **(FREE)**
+# Monitoring NGINX Ingress Controller (DEPRECATED) **(FREE)**
 
-> [Introduced](https://gitlab.com/gitlab-org/gitlab-foss/-/merge_requests/22133) in GitLab 11.7.
+> [Deprecated](https://gitlab.com/gitlab-org/gitlab/-/issues/346541) in GitLab 14.7.
+
+WARNING:
+This feature is in its end-of-life process. It is [deprecated](https://gitlab.com/gitlab-org/gitlab/-/issues/346541)
+for use in GitLab 14.7, and is planned for removal in GitLab 15.0.
 
 GitLab has support for automatically detecting and monitoring the Kubernetes NGINX Ingress controller. This is provided by leveraging the built-in Prometheus metrics included with Kubernetes NGINX Ingress controller [version 0.16.0](https://github.com/kubernetes/ingress-nginx/blob/master/Changelog.md#0160) onward.
 
@@ -38,6 +42,8 @@ Managing these settings depends on how NGINX Ingress has been deployed. If you h
 
 ## Specifying the Environment label
 
-In order to isolate and only display relevant metrics for a given environment, GitLab needs a method to detect which labels are associated. To do this, GitLab searches for metrics with appropriate labels. In this case, the `ingress` label must `<CI_ENVIRONMENT_SLUG>`.
+To isolate and display only relevant metrics for a given environment, GitLab needs a method to
+detect which labels are associated. To do this, GitLab searches for metrics with appropriate labels.
+In this case, the `ingress` label must include the value `<CI_ENVIRONMENT_SLUG>`.
 
 If you have used [Auto Deploy](../../../../topics/autodevops/stages.md#auto-deploy) to deploy your app, this format is used automatically and metrics are detected with no action on your part.

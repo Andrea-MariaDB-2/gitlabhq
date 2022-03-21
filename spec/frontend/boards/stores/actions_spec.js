@@ -20,15 +20,20 @@ import {
   formatIssue,
   getMoveData,
   updateListPosition,
-} from '~/boards/boards_util';
+} from 'ee_else_ce/boards/boards_util';
+import { gqlClient } from '~/boards/graphql';
 import destroyBoardListMutation from '~/boards/graphql/board_list_destroy.mutation.graphql';
 import issueCreateMutation from '~/boards/graphql/issue_create.mutation.graphql';
-import actions, { gqlClient } from '~/boards/stores/actions';
+import actions from '~/boards/stores/actions';
 import * as types from '~/boards/stores/mutation_types';
 import mutations from '~/boards/stores/mutations';
 import { getIdFromGraphQLId } from '~/graphql_shared/utils';
 
+import projectBoardMilestones from '~/boards/graphql/project_board_milestones.query.graphql';
+import groupBoardMilestones from '~/boards/graphql/group_board_milestones.query.graphql';
 import {
+  mockBoard,
+  mockBoardConfig,
   mockLists,
   mockListsById,
   mockIssue,
@@ -57,6 +62,52 @@ beforeEach(() => {
   window.gon = { features: {} };
 });
 
+describe('fetchBoard', () => {
+  const payload = {
+    fullPath: 'gitlab-org',
+    fullBoardId: 'gid://gitlab/Board/1',
+    boardType: 'project',
+  };
+
+  const queryResponse = {
+    data: {
+      workspace: {
+        board: mockBoard,
+      },
+    },
+  };
+
+  it('should commit mutation RECEIVE_BOARD_SUCCESS and dispatch setBoardConfig on success', async () => {
+    jest.spyOn(gqlClient, 'query').mockResolvedValue(queryResponse);
+
+    await testAction({
+      action: actions.fetchBoard,
+      payload,
+      expectedMutations: [
+        {
+          type: types.RECEIVE_BOARD_SUCCESS,
+          payload: mockBoard,
+        },
+      ],
+      expectedActions: [{ type: 'setBoardConfig', payload: mockBoard }],
+    });
+  });
+
+  it('should commit mutation RECEIVE_BOARD_FAILURE on failure', async () => {
+    jest.spyOn(gqlClient, 'query').mockResolvedValue(Promise.reject());
+
+    await testAction({
+      action: actions.fetchBoard,
+      payload,
+      expectedMutations: [
+        {
+          type: types.RECEIVE_BOARD_FAILURE,
+        },
+      ],
+    });
+  });
+});
+
 describe('setInitialBoardData', () => {
   it('sets data object', () => {
     const mockData = {
@@ -64,13 +115,21 @@ describe('setInitialBoardData', () => {
       bar: 'baz',
     };
 
-    return testAction(
-      actions.setInitialBoardData,
-      mockData,
-      {},
-      [{ type: types.SET_INITIAL_BOARD_DATA, payload: mockData }],
-      [],
-    );
+    return testAction({
+      action: actions.setInitialBoardData,
+      payload: mockData,
+      expectedMutations: [{ type: types.SET_INITIAL_BOARD_DATA, payload: mockData }],
+    });
+  });
+});
+
+describe('setBoardConfig', () => {
+  it('sets board config object from board object', () => {
+    return testAction({
+      action: actions.setBoardConfig,
+      payload: mockBoard,
+      expectedMutations: [{ type: types.SET_BOARD_CONFIG, payload: mockBoardConfig }],
+    });
   });
 });
 
@@ -84,7 +143,7 @@ describe('setFilters', () => {
       },
     ],
     [
-      "and use 'assigneeWildcardId' as filter variable for 'assigneId' param",
+      "and use 'assigneeWildcardId' as filter variable for 'assigneeId' param",
       {
         filters: { assigneeId: 'None' },
         filterVariables: { assigneeWildcardId: 'NONE', not: {} },
@@ -306,6 +365,36 @@ describe('fetchMilestones', () => {
 
     expect(() => actions.fetchMilestones(store)).toThrow(new Error('Unknown board type'));
   });
+
+  it.each([
+    [
+      'project',
+      {
+        query: projectBoardMilestones,
+        variables: { fullPath: 'gitlab-org/gitlab' },
+      },
+    ],
+    [
+      'group',
+      {
+        query: groupBoardMilestones,
+        variables: { fullPath: 'gitlab-org/gitlab' },
+      },
+    ],
+  ])(
+    'when boardType is %s it calls fetchMilestones with the correct query and variables',
+    (boardType, variables) => {
+      jest.spyOn(gqlClient, 'query').mockResolvedValue(queryResponse);
+
+      const store = createStore();
+
+      store.state.boardType = boardType;
+
+      actions.fetchMilestones(store);
+
+      expect(gqlClient.query).toHaveBeenCalledWith(variables);
+    },
+  );
 
   it('sets milestonesLoading to true', async () => {
     jest.spyOn(gqlClient, 'query').mockResolvedValue(queryResponse);
@@ -1213,8 +1302,8 @@ describe('updateMovedIssueCard', () => {
 
 describe('updateIssueOrder', () => {
   const issues = {
-    436: mockIssue,
-    437: mockIssue2,
+    [mockIssue.id]: mockIssue,
+    [mockIssue2.id]: mockIssue2,
   };
 
   const state = {
@@ -1223,7 +1312,7 @@ describe('updateIssueOrder', () => {
   };
 
   const moveData = {
-    itemId: 436,
+    itemId: mockIssue.id,
     fromListId: 'gid://gitlab/List/1',
     toListId: 'gid://gitlab/List/2',
   };
@@ -1240,6 +1329,7 @@ describe('updateIssueOrder', () => {
         moveBeforeId: undefined,
         moveAfterId: undefined,
       },
+      update: expect.anything(),
     };
     jest.spyOn(gqlClient, 'mutate').mockResolvedValue({
       data: {
@@ -1332,20 +1422,54 @@ describe('addListItem', () => {
       list: mockLists[0],
       item: mockIssue,
       position: 0,
+      inProgress: true,
     };
 
-    testAction(actions.addListItem, payload, {}, [
-      {
-        type: types.ADD_BOARD_ITEM_TO_LIST,
-        payload: {
-          listId: mockLists[0].id,
-          itemId: mockIssue.id,
-          atIndex: 0,
-          inProgress: false,
+    testAction(
+      actions.addListItem,
+      payload,
+      {},
+      [
+        {
+          type: types.ADD_BOARD_ITEM_TO_LIST,
+          payload: {
+            listId: mockLists[0].id,
+            itemId: mockIssue.id,
+            atIndex: 0,
+            inProgress: true,
+          },
         },
-      },
-      { type: types.UPDATE_BOARD_ITEM, payload: mockIssue },
-    ]);
+        { type: types.UPDATE_BOARD_ITEM, payload: mockIssue },
+      ],
+      [],
+    );
+  });
+
+  it('should commit ADD_BOARD_ITEM_TO_LIST and UPDATE_BOARD_ITEM mutations, dispatch setActiveId action when inProgress is false', () => {
+    const payload = {
+      list: mockLists[0],
+      item: mockIssue,
+      position: 0,
+    };
+
+    testAction(
+      actions.addListItem,
+      payload,
+      {},
+      [
+        {
+          type: types.ADD_BOARD_ITEM_TO_LIST,
+          payload: {
+            listId: mockLists[0].id,
+            itemId: mockIssue.id,
+            atIndex: 0,
+            inProgress: false,
+          },
+        },
+        { type: types.UPDATE_BOARD_ITEM, payload: mockIssue },
+      ],
+      [{ type: 'setActiveId', payload: { id: mockIssue.id, sidebarType: ISSUABLE } }],
+    );
   });
 });
 
@@ -1412,6 +1536,7 @@ describe('addListNewIssue', () => {
       variables: {
         input: formatIssueInput(mockIssue, stateWithBoardConfig.boardConfig),
       },
+      update: expect.anything(),
     });
   });
 
@@ -1443,6 +1568,7 @@ describe('addListNewIssue', () => {
       variables: {
         input: formatIssueInput(issue, stateWithBoardConfig.boardConfig),
       },
+      update: expect.anything(),
     });
     expect(payload.labelIds).toEqual(['gid://gitlab/GroupLabel/4', 'gid://gitlab/GroupLabel/5']);
     expect(payload.assigneeIds).toEqual(['gid://gitlab/User/1', 'gid://gitlab/User/2']);
@@ -1482,7 +1608,7 @@ describe('addListNewIssue', () => {
             type: 'addListItem',
             payload: {
               list: fakeList,
-              item: formatIssue({ ...mockIssue, id: getIdFromGraphQLId(mockIssue.id) }),
+              item: formatIssue(mockIssue),
               position: 0,
             },
           },
@@ -1535,19 +1661,16 @@ describe('addListNewIssue', () => {
 
 describe('setActiveIssueLabels', () => {
   const state = { boardItems: { [mockIssue.id]: mockIssue } };
-  const getters = { activeBoardItem: mockIssue };
+  const getters = { activeBoardItem: { ...mockIssue, labels } };
   const testLabelIds = labels.map((label) => label.id);
   const input = {
-    addLabelIds: testLabelIds,
+    labelIds: testLabelIds,
     removeLabelIds: [],
     projectPath: 'h/b',
+    labels,
   };
 
-  it('should assign labels on success', (done) => {
-    jest
-      .spyOn(gqlClient, 'mutate')
-      .mockResolvedValue({ data: { updateIssue: { issue: { labels: { nodes: labels } } } } });
-
+  it('should assign labels', () => {
     const payload = {
       itemId: getters.activeBoardItem.id,
       prop: 'labels',
@@ -1565,16 +1688,28 @@ describe('setActiveIssueLabels', () => {
         },
       ],
       [],
-      done,
     );
   });
 
-  it('throws error if fails', async () => {
-    jest
-      .spyOn(gqlClient, 'mutate')
-      .mockResolvedValue({ data: { updateIssue: { errors: ['failed mutation'] } } });
+  it('should remove label', () => {
+    const payload = {
+      itemId: getters.activeBoardItem.id,
+      prop: 'labels',
+      value: [labels[1]],
+    };
 
-    await expect(actions.setActiveIssueLabels({ getters }, input)).rejects.toThrow(Error);
+    testAction(
+      actions.setActiveIssueLabels,
+      { ...input, removeLabelIds: [getIdFromGraphQLId(labels[0].id)] },
+      { ...state, ...getters },
+      [
+        {
+          type: types.UPDATE_BOARD_ITEM_BY_ID,
+          payload,
+        },
+      ],
+      [],
+    );
   });
 });
 

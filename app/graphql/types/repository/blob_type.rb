@@ -4,9 +4,9 @@ module Types
     # rubocop: disable Graphql/AuthorizeTypes
     # This is presented through `Repository` that has its own authorization
     class BlobType < BaseObject
-      present_using BlobPresenter
-
       graphql_name 'RepositoryBlob'
+
+      present_using BlobPresenter
 
       field :id, GraphQL::Types::ID, null: false,
             description: 'ID of the blob.'
@@ -41,6 +41,9 @@ module Types
       field :ide_fork_and_edit_path, GraphQL::Types::String, null: true,
             description: 'Web path to edit this blob in the Web IDE using a forked project.'
 
+      field :fork_and_view_path, GraphQL::Types::String, null: true,
+            description: 'Web path to view this blob using a forked project.'
+
       field :size, GraphQL::Types::Int, null: true,
             description: 'Size (in bytes) of the blob.'
 
@@ -56,6 +59,9 @@ module Types
       field :stored_externally, GraphQL::Types::Boolean, null: true, method: :stored_externally?,
             description: "Whether the blob's content is stored externally (for instance, in LFS)."
 
+      field :external_storage, GraphQL::Types::String, null: true, method: :external_storage,
+            description: "External storage being used, if enabled (for instance, 'LFS')."
+
       field :edit_blob_path, GraphQL::Types::String, null: true,
             description: 'Web path to edit the blob in the old-style editor.'
 
@@ -67,6 +73,37 @@ module Types
 
       field :replace_path, GraphQL::Types::String, null: true,
             description: 'Web path to replace the blob content.'
+
+      field :pipeline_editor_path, GraphQL::Types::String, null: true,
+            description: 'Web path to edit .gitlab-ci.yml file.'
+
+      field :gitpod_blob_url, GraphQL::Types::String, null: true,
+            description: 'URL to the blob within Gitpod.'
+
+      field :find_file_path, GraphQL::Types::String, null: true,
+            description: 'Web path to find file.'
+
+      field :blame_path, GraphQL::Types::String, null: true,
+            description: 'Web path to blob blame page.'
+
+      field :history_path, GraphQL::Types::String, null: true,
+            description: 'Web path to blob history page.'
+
+      field :permalink_path, GraphQL::Types::String, null: true,
+            description: 'Web path to blob permalink.',
+            calls_gitaly: true
+
+      field :environment_formatted_external_url, GraphQL::Types::String, null: true,
+            description: 'Environment on which the blob is available.',
+            calls_gitaly: true
+
+      field :environment_external_url_for_route_map, GraphQL::Types::String, null: true,
+            description: 'Web path to blob on an environment.',
+            calls_gitaly: true
+
+      field :code_owners, [Types::UserType], null: true,
+            description: 'List of code owners for the blob.',
+            calls_gitaly: true
 
       field :file_type, GraphQL::Types::String, null: true,
             description: 'Expected format of the blob based on the extension.'
@@ -88,6 +125,24 @@ module Types
             calls_gitaly: true,
             description: 'Whether the current user can modify the blob.'
 
+      field :can_current_user_push_to_branch, GraphQL::Types::Boolean, null: true, method: :can_current_user_push_to_branch?,
+            description: 'Whether the current user can push to the branch.'
+
+      field :archived, GraphQL::Types::Boolean, null: true, method: :archived?,
+            description: 'Whether the current project is archived.'
+
+      field :language, GraphQL::Types::String,
+            description: 'Blob language.',
+            method: :blob_language,
+            null: true,
+            calls_gitaly: true
+
+      field :code_navigation_path, GraphQL::Types::String, null: true, calls_gitaly: true,
+            description: 'Web path for code navigation.'
+
+      field :project_blob_path_root, GraphQL::Types::String, null: true,
+            description: 'Web path for the root of the blob.'
+
       def raw_text_blob
         object.data unless object.binary?
       end
@@ -98,3 +153,5 @@ module Types
     end
   end
 end
+
+Types::Repository::BlobType.prepend_mod_with('Types::Repository::BlobType')

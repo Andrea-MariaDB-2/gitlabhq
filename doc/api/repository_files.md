@@ -7,9 +7,11 @@ type: reference, api
 
 # Repository files API **(FREE)**
 
-**CRUD for repository files**
+You can fetch, create, update, and delete files in your repository with this API.
+You can also [configure rate limits](../user/admin_area/settings/files_api_rate_limits.md)
+for this API.
 
-**Create, read, update, and delete repository files using this API**
+## Available scopes for personal access tokens
 
 The different scopes available using [personal access tokens](../user/profile/personal_access_tokens.md) are depicted
 in the following table.
@@ -18,8 +20,6 @@ in the following table.
 | ----- | ----------- |
 | `read_repository` | Allows read-access to the repository files. |
 | `api` | Allows read-write access to the repository files. |
-
-> `read_repository` scope was [introduced](https://gitlab.com/gitlab-org/gitlab-foss/-/merge_requests/23534) in GitLab 11.6.
 
 ## Get file from repository
 
@@ -34,6 +34,12 @@ GET /projects/:id/repository/files/:file_path
 ```shell
 curl --header "PRIVATE-TOKEN: <your_access_token>" "https://gitlab.example.com/api/v4/projects/13083/repository/files/app%2Fmodels%2Fkey%2Erb?ref=master"
 ```
+
+| Attribute   | Type           | Required | Description                                                                                                     |
+|-------------|----------------|----------|-----------------------------------------------------------------------------------------------------------------|
+| `id`        | integer or string | yes   | The ID or [URL-encoded path of the project](index.md#namespaced-path-encoding) owned by the authenticated user  |
+| `file_path` | string         | yes      | URL encoded full path to new file. Ex. `lib%2Fclass%2Erb`.                                                      |
+| `ref`       | string         | yes      | The name of branch, tag or commit                                                                               |
 
 Example response:
 
@@ -51,11 +57,6 @@ Example response:
   "last_commit_id": "570e7b2abdd848b95f2f578043fc23bd6f6fd24d"
 }
 ```
-
-Parameters:
-
-- `file_path` (required) - URL encoded full path to new file. Ex. lib%2Fclass%2Erb
-- `ref` (required) - The name of branch, tag or commit
 
 NOTE:
 `blob_id` is the blob SHA, see [repositories - Get a blob from repository](repositories.md#get-a-blob-from-repository)
@@ -95,6 +96,12 @@ Allows you to receive blame information. Each blame range contains lines and cor
 GET /projects/:id/repository/files/:file_path/blame
 ```
 
+| Attribute   | Type           | Required | Description                                                                                                     |
+|-------------|----------------|----------|-----------------------------------------------------------------------------------------------------------------|
+| `id`        | integer or string | yes   | The ID or [URL-encoded path of the project](index.md#namespaced-path-encoding) owned by the authenticated user  |
+| `file_path` | string         | yes      | URL encoded full path to new file. Ex. `lib%2Fclass%2Erb`.                                                      |
+| `ref`       | string         | yes      | The name of branch, tag or commit                                                                               |
+
 ```shell
 curl --header "PRIVATE-TOKEN: <your_access_token>" "https://gitlab.example.com/api/v4/projects/13083/repository/files/path%2Fto%2Ffile.rb/blame?ref=master"
 ```
@@ -127,11 +134,6 @@ Example response:
 ]
 ```
 
-Parameters:
-
-- `file_path` (required) - URL encoded full path to new file. Ex. lib%2Fclass%2Erb
-- `ref` (required) - The name of branch, tag or commit
-
 NOTE:
 `HEAD` method return just file metadata as in [Get file from repository](repository_files.md#get-file-from-repository).
 
@@ -162,14 +164,15 @@ X-Gitlab-Size: 1476
 GET /projects/:id/repository/files/:file_path/raw
 ```
 
+| Attribute   | Type           | Required | Description                                                                                                     |
+|-------------|----------------|----------|-----------------------------------------------------------------------------------------------------------------|
+| `id`        | integer or string | yes   | The ID or [URL-encoded path of the project](index.md#namespaced-path-encoding) owned by the authenticated user  |
+| `file_path` | string         | yes      | URL encoded full path to new file. Ex. `lib%2Fclass%2Erb`.                                                      |
+| `ref`       | string         | yes      | The name of branch, tag or commit. Default is the `HEAD` of the project.                                        |
+
 ```shell
 curl --header "PRIVATE-TOKEN: <your_access_token>" "https://gitlab.example.com/api/v4/projects/13083/repository/files/app%2Fmodels%2Fkey%2Erb/raw?ref=master"
 ```
-
-Parameters:
-
-- `file_path` (required) - URL encoded full path to new file, such as lib%2Fclass%2Erb.
-- `ref` (optional) - The name of branch, tag or commit. Default is the `HEAD` of the project.
 
 NOTE:
 Like [Get file from repository](repository_files.md#get-file-from-repository) you can use `HEAD` to get just file metadata.
@@ -182,10 +185,22 @@ This allows you to create a single file. For creating multiple files with a sing
 POST /projects/:id/repository/files/:file_path
 ```
 
+| Attribute        | Type           | Required | Description |
+| ---------------- | -------------- | -------- | ----------- |
+| `id`             | integer or string | yes   | The ID or [URL-encoded path of the project](index.md#namespaced-path-encoding) owned by the authenticated user. |
+| `file_path`      | string         | yes      | URL-encoded full path to new file. For example:  `lib%2Fclass%2Erb`. |
+| `branch`         | string         | yes      | Name of the new branch to create. The commit is added to this branch. |
+| `start_branch`   | string         | no       | Name of the base branch to create the new branch from. |
+| `encoding`       | string         | no       | Change encoding to `base64`. Default is `text`. |
+| `author_email`   | string         | no       | The commit author's email address. |
+| `author_name`    | string         | no       | The commit author's name. |
+| `content`        | string         | yes      | The file's content. |
+| `commit_message` | string         | yes      | The commit message. |
+
 ```shell
 curl --request POST --header 'PRIVATE-TOKEN: <your_access_token>' \
      --header "Content-Type: application/json" \
-     --data '{"branch": "master", "author_email": "author@example.com", "author_name": "Firstname Lastname", \
+     --data '{"branch": "master", "author_email": "author@example.com", "author_name": "Firstname Lastname",
                "content": "some content", "commit_message": "create a new file"}' \
      "https://gitlab.example.com/api/v4/projects/13083/repository/files/app%2Fproject%2Erb"
 ```
@@ -199,17 +214,6 @@ Example response:
 }
 ```
 
-Parameters:
-
-- `file_path` (required) - URL encoded full path to new file. Ex. lib%2Fclass%2Erb
-- `branch` (required) - Name of the branch
-- `start_branch` (optional) - Name of the branch to start the new commit from
-- `encoding` (optional) - Change encoding to `base64`. Default is `text`.
-- `author_email` (optional) - Specify the commit author's email address
-- `author_name` (optional) - Specify the commit author's name
-- `content` (required) - File content
-- `commit_message` (required) - Commit message
-
 ## Update existing file in repository
 
 This allows you to update a single file. For updating multiple files with a single request see the [commits API](commits.md#create-a-commit-with-multiple-files-and-actions).
@@ -218,10 +222,23 @@ This allows you to update a single file. For updating multiple files with a sing
 PUT /projects/:id/repository/files/:file_path
 ```
 
+| Attribute        | Type           | Required | Description |
+| ---------------- | -------------- | -------- | ----------- |
+| `id`             | integer or string | yes   | The ID or [URL-encoded path of the project](index.md#namespaced-path-encoding) owned by the authenticated user  |
+| `file_path`      | string         | yes      | URL-encoded full path to new file. For example: `lib%2Fclass%2Erb`. |
+| `branch`         | string         | yes      | Name of the new branch to create. The commit is added to this branch. |
+| `start_branch`   | string         | no       | Name of the base branch to create the new branch from. |
+| `encoding`       | string         | no       | Change encoding to `base64`. Default is `text`.  |
+| `author_email`   | string         | no       | The commit author's email address. |
+| `author_name`    | string         | no       | The commit author's name. |
+| `content`        | string         | yes      | The file's content. |
+| `commit_message` | string         | yes      | The commit message. |
+| `last_commit_id` | string         | no       | Last known file commit ID. |
+
 ```shell
 curl --request PUT --header 'PRIVATE-TOKEN: <your_access_token>' \
      --header "Content-Type: application/json" \
-     --data '{"branch": "master", "author_email": "author@example.com", "author_name": "Firstname Lastname", \
+     --data '{"branch": "master", "author_email": "author@example.com", "author_name": "Firstname Lastname",
        "content": "some content", "commit_message": "update file"}' \
      "https://gitlab.example.com/api/v4/projects/13083/repository/files/app%2Fproject%2Erb"
 ```
@@ -234,18 +251,6 @@ Example response:
   "branch": "master"
 }
 ```
-
-Parameters:
-
-- `file_path` (required) - URL encoded full path to new file. Ex. lib%2Fclass%2Erb
-- `branch` (required) - Name of the branch
-- `start_branch` (optional) - Name of the branch to start the new commit from
-- `encoding` (optional) - Change encoding to `base64`. Default is `text`.
-- `author_email` (optional) - Specify the commit author's email address
-- `author_name` (optional) - Specify the commit author's name
-- `content` (required) - New file content
-- `commit_message` (required) - Commit message
-- `last_commit_id` (optional) - Last known file commit ID
 
 If the commit fails for any reason we return a 400 error with a non-specific
 error message. Possible causes for a failed commit include:
@@ -265,20 +270,21 @@ This allows you to delete a single file. For deleting multiple files with a sing
 DELETE /projects/:id/repository/files/:file_path
 ```
 
+| Attribute        | Type           | Required | Description |
+| ---------------- | -------------- | -------- | ----------- |
+| `id`             | integer or string | yes   | The ID or [URL-encoded path of the project](index.md#namespaced-path-encoding) owned by the authenticated user. |
+| `file_path`      | string         | yes      | URL-encoded full path to new file. For example: `lib%2Fclass%2Erb`. |
+| `branch`         | string         | yes      | Name of the new branch to create. The commit is added to this branch. |
+| `start_branch`   | string         | no       | Name of the base branch to create the new branch from. |
+| `author_email`   | string         | no       | The commit author's email address. |
+| `author_name`    | string         | no       | The commit author's name. |
+| `commit_message` | string         | yes      | The commit message. |
+| `last_commit_id` | string         | no       | Last known file commit ID. |
+
 ```shell
 curl --request DELETE --header 'PRIVATE-TOKEN: <your_access_token>' \
      --header "Content-Type: application/json" \
-     --data '{"branch": "master", "author_email": "author@example.com", "author_name": "Firstname Lastname", \
+     --data '{"branch": "master", "author_email": "author@example.com", "author_name": "Firstname Lastname",
        "commit_message": "delete file"}' \
      "https://gitlab.example.com/api/v4/projects/13083/repository/files/app%2Fproject%2Erb"
 ```
-
-Parameters:
-
-- `file_path` (required) - URL encoded full path to new file. Ex. lib%2Fclass%2Erb
-- `branch` (required) - Name of the branch
-- `start_branch` (optional) - Name of the branch to start the new commit from
-- `author_email` (optional) - Specify the commit author's email address
-- `author_name` (optional) - Specify the commit author's name
-- `commit_message` (required) - Commit message
-- `last_commit_id` (optional) - Last known file commit ID

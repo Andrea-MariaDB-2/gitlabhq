@@ -7,41 +7,44 @@ module Banzai
     # Footnotes are supported in CommonMark.  However we were stripping
     # the ids during sanitization.  Those are now allowed.
     #
-    # Footnotes are numbered the same - the first one has `id=fn1`, the
-    # second is `id=fn2`, etc.  In order to allow footnotes when rendering
-    # multiple markdown blocks on a page, we need to make each footnote
-    # reference unique.
-    #
+    # Footnotes are numbered as an increasing integer starting at `1`.
+    # The `id` associated with a footnote is based on the footnote reference
+    # string.  For example, `[^foot]` will generate `id="fn-foot"`.
+    # In order to allow footnotes when rendering multiple markdown blocks
+    # on a page, we need to make each footnote reference unique.
+
     # This filter adds a random number to each footnote (the same number
-    # can be used for a single render). So you get `id=fn1-4335` and `id=fn2-4335`.
+    # can be used for a single render). So you get `id=fn-1-4335` and `id=fn-foot-4335`.
     #
     class FootnoteFilter < HTML::Pipeline::Filter
-      INTEGER_PATTERN                 = /\A\d+\z/.freeze
-      FOOTNOTE_ID_PREFIX              = 'fn'
-      FOOTNOTE_LINK_ID_PREFIX         = 'fnref'
-      FOOTNOTE_LI_REFERENCE_PATTERN   = /\A#{FOOTNOTE_ID_PREFIX}\d+\z/.freeze
-      FOOTNOTE_LINK_REFERENCE_PATTERN = /\A#{FOOTNOTE_LINK_ID_PREFIX}\d+\z/.freeze
-      FOOTNOTE_START_NUMBER           = 1
+      FOOTNOTE_ID_PREFIX              = 'fn-'
+      FOOTNOTE_LINK_ID_PREFIX         = 'fnref-'
+      FOOTNOTE_LI_REFERENCE_PATTERN   = /\A#{FOOTNOTE_ID_PREFIX}.+\z/.freeze
+      FOOTNOTE_LINK_REFERENCE_PATTERN = /\A#{FOOTNOTE_LINK_ID_PREFIX}.+\z/.freeze
 
-      CSS_SECTION    = "ol > li[id=#{FOOTNOTE_ID_PREFIX}#{FOOTNOTE_START_NUMBER}]"
+      CSS_SECTION    = "section[data-footnotes]"
       XPATH_SECTION  = Gitlab::Utils::Nokogiri.css_to_xpath(CSS_SECTION).freeze
-      CSS_FOOTNOTE   = 'sup > a[id]'
+      CSS_FOOTNOTE   = 'sup > a[data-footnote-ref]'
       XPATH_FOOTNOTE = Gitlab::Utils::Nokogiri.css_to_xpath(CSS_FOOTNOTE).freeze
 
       def call
-        return doc unless first_footnote = doc.at_xpath(XPATH_SECTION)
+        # Sanitization stripped off the section class - add it back in
+        return doc unless section_node = doc.at_xpath(XPATH_SECTION)
 
-        # Sanitization stripped off the section wrapper - add it back in
-        first_footnote.parent.wrap('<section class="footnotes">')
+        section_node.append_class('footnotes')
+
         rand_suffix = "-#{random_number}"
         modified_footnotes = {}
 
         doc.xpath(XPATH_FOOTNOTE).each do |link_node|
-          ref_num       = link_node[:id].delete_prefix(FOOTNOTE_LINK_ID_PREFIX)
-          node_xpath    = Gitlab::Utils::Nokogiri.css_to_xpath("li[id=#{fn_id(ref_num)}]")
+          ref_num = link_node[:id].delete_prefix(FOOTNOTE_LINK_ID_PREFIX)
+          ref_num.gsub!(/[[:punct:]]/, '\\\\\&')
+
+          css = "section[data-footnotes] li[id=#{fn_id(ref_num)}]"
+          node_xpath = Gitlab::Utils::Nokogiri.css_to_xpath(css)
           footnote_node = doc.at_xpath(node_xpath)
 
-          if INTEGER_PATTERN.match?(ref_num) && (footnote_node || modified_footnotes[ref_num])
+          if footnote_node || modified_footnotes[ref_num]
             link_node[:href] += rand_suffix
             link_node[:id]   += rand_suffix
 

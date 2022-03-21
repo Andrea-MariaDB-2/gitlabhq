@@ -1,4 +1,5 @@
 import { mount } from '@vue/test-utils';
+import { nextTick } from 'vue';
 import { TEST_HOST } from 'helpers/test_constants';
 import UsersMockHelper from 'helpers/user_mock_data_helper';
 import AssigneeAvatarLink from '~/sidebar/components/assignees/assignee_avatar_link.vue';
@@ -10,7 +11,7 @@ const DEFAULT_RENDER_COUNT = 5;
 describe('UncollapsedAssigneeList component', () => {
   let wrapper;
 
-  function createComponent(props = {}) {
+  function createComponent(props = {}, glFeatures = {}) {
     const propsData = {
       users: [],
       rootPath: TEST_HOST,
@@ -19,6 +20,7 @@ describe('UncollapsedAssigneeList component', () => {
 
     wrapper = mount(UncollapsedAssigneeList, {
       propsData,
+      provide: { glFeatures },
     });
   }
 
@@ -83,10 +85,10 @@ describe('UncollapsedAssigneeList component', () => {
       });
 
       describe('when more button is clicked', () => {
-        beforeEach(() => {
+        beforeEach(async () => {
           findMoreButton().trigger('click');
 
-          return wrapper.vm.$nextTick();
+          await nextTick();
         });
 
         it('shows "show less" label', () => {
@@ -97,6 +99,24 @@ describe('UncollapsedAssigneeList component', () => {
           expect(wrapper.findAll(AssigneeAvatarLink).length).toBe(DEFAULT_RENDER_COUNT + 1);
         });
       });
+    });
+  });
+
+  describe('merge requests', () => {
+    it.each`
+      numberOfUsers
+      ${1}
+      ${5}
+    `('displays as a vertical list for $numberOfUsers of users', ({ numberOfUsers }) => {
+      createComponent(
+        {
+          users: UsersMockHelper.createNumberRandomUsers(numberOfUsers),
+          issuableType: 'merge_request',
+        },
+        { mrAttentionRequests: true },
+      );
+
+      expect(wrapper.findAll('[data-testid="username"]').length).toBe(numberOfUsers);
     });
   });
 });

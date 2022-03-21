@@ -20,7 +20,7 @@ RSpec.describe 'User views an open merge request' do
 
       # Work around a weird Capybara behavior where calling `parent` on a node
       # returns the whole document, not the node's actual parent element
-      expect(find(:xpath, "#{node.path}/..").text).to eq(merge_request.description[2..-1])
+      expect(find(:xpath, "#{node.path}/..").text).to eq(merge_request.description[2..])
 
       expect(page).to have_content(merge_request.title)
     end
@@ -126,6 +126,32 @@ RSpec.describe 'User views an open merge request' do
 
     it 'encodes branch name' do
       expect(find("[data-testid='ref-name']")[:title]).to eq(source_branch)
+    end
+  end
+
+  context 'when user preferred language has changed', :use_clean_rails_memory_store_fragment_caching do
+    let(:project) { create(:project, :public, :repository) }
+    let(:user) { create(:user) }
+
+    before do
+      project.add_maintainer(user)
+      sign_in(user)
+    end
+
+    it 'renders edit button in preferred language' do
+      visit(merge_request_path(merge_request))
+
+      page.within('.detail-page-header-actions') do
+        expect(page).to have_link('Edit')
+      end
+
+      user.update!(preferred_language: 'de')
+
+      visit(merge_request_path(merge_request))
+
+      page.within('.detail-page-header-actions') do
+        expect(page).to have_link('Bearbeiten')
+      end
     end
   end
 end

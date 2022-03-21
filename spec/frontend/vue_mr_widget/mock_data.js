@@ -51,7 +51,7 @@ export default {
   target_branch: 'main',
   target_project_id: 19,
   target_project_full_path: '/group2/project2',
-  merge_request_add_ci_config_path: '/group2/project2/new/pipeline',
+  merge_request_add_ci_config_path: '/root/group2/project2/-/ci/editor',
   is_dismissed_suggest_pipeline: false,
   user_callouts_path: 'some/callout/path',
   suggest_pipeline_feature_id: 'suggest_pipeline',
@@ -271,8 +271,6 @@ export default {
   mr_troubleshooting_docs_path: 'help',
   ci_troubleshooting_docs_path: 'help2',
   merge_request_pipelines_docs_path: '/help/ci/pipelines/merge_request_pipelines.md',
-  merge_train_when_pipeline_succeeds_docs_path:
-    '/help/ci/pipelines/merge_trains.md#startadd-to-merge-train-when-pipeline-succeeds',
   squash: true,
   visual_review_app_available: true,
   merge_trains_enabled: true,
@@ -280,10 +278,12 @@ export default {
   merge_train_index: 1,
   security_reports_docs_path: 'security-reports-docs-path',
   sast_comparison_path: '/sast_comparison_path',
-  secret_scanning_comparison_path: '/secret_scanning_comparison_path',
+  secret_detection_comparison_path: '/secret_detection_comparison_path',
   gitpod_enabled: true,
   show_gitpod_button: true,
   gitpod_url: 'http://gitpod.localhost',
+  user_preferences_gitpod_path: '/-/profile/preferences#user_gitpod_enabled',
+  user_profile_enable_gitpod_path: '/-/profile?user%5Bgitpod_enabled%5D=true',
 };
 
 export const mockStore = {

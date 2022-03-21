@@ -1,20 +1,28 @@
 # frozen_string_literal: true
 
 class LabelPresenter < Gitlab::View::Presenter::Delegated
-  presents :label
-  delegate :name, :full_name, to: :label_subject, prefix: :subject
+  presents ::Label, as: :label
+  delegate :name, :full_name, to: :label_subject, prefix: :subject, allow_nil: true
+
+  delegator_override :subject # TODO: Fix `Gitlab::View::Presenter::Delegated#subject` not to override `Label#subject`.
 
   def edit_path
     case label
     when GroupLabel then edit_group_label_path(label.group, label)
     when ProjectLabel then edit_project_label_path(label.project, label)
+    else edit_admin_label_path(label)
     end
+  end
+
+  def text_color_class
+    "gl-label-text-#{label.color.contrast.luminosity}"
   end
 
   def destroy_path
     case label
     when GroupLabel then group_label_path(label.group, label)
     when ProjectLabel then project_label_path(label.project, label)
+    else admin_label_path(label)
     end
   end
 
@@ -41,7 +49,7 @@ class LabelPresenter < Gitlab::View::Presenter::Delegated
   end
 
   def label_subject
-    @label_subject ||= label.subject
+    @label_subject ||= label.subject if label.respond_to?(:subject)
   end
 
   private

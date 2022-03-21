@@ -61,7 +61,7 @@ RSpec.describe 'Git HTTP requests' do
   shared_examples 'operations are not allowed with expired password' do
     context "when password is expired" do
       it "responds to downloads with status 401 Unauthorized" do
-        user.update!(password_expires_at: 2.days.ago, password_automatically_set: true)
+        user.update!(password_expires_at: 2.days.ago)
 
         download(path, user: user.username, password: user.password) do |response|
           expect(response).to have_gitlab_http_status(:unauthorized)
@@ -69,7 +69,7 @@ RSpec.describe 'Git HTTP requests' do
       end
 
       it "responds to uploads with status 401 Unauthorized" do
-        user.update!(password_expires_at: 2.days.ago, password_automatically_set: true)
+        user.update!(password_expires_at: 2.days.ago)
 
         upload(path, user: user.username, password: user.password) do |response|
           expect(response).to have_gitlab_http_status(:unauthorized)
@@ -319,7 +319,7 @@ RSpec.describe 'Git HTTP requests' do
             context 'when user is using credentials with special characters' do
               context 'with password with special characters' do
                 before do
-                  user.update!(password: 'RKszEwéC5kFnû∆f243fycGu§Gh9ftDj!U')
+                  user.update!(password: Gitlab::Password.test_default)
                 end
 
                 it 'allows clones' do
@@ -614,7 +614,7 @@ RSpec.describe 'Git HTTP requests' do
 
                 context "when password is expired" do
                   it "responds to downloads with status 401 unauthorized" do
-                    user.update!(password_expires_at: 2.days.ago, password_automatically_set: true)
+                    user.update!(password_expires_at: 2.days.ago)
 
                     download(path, **env) do |response|
                       expect(response).to have_gitlab_http_status(:unauthorized)
@@ -697,7 +697,7 @@ RSpec.describe 'Git HTTP requests' do
 
                   context "when password is expired" do
                     it "responds to uploads with status 401 unauthorized" do
-                      user.update!(password_expires_at: 2.days.ago, password_automatically_set: true)
+                      user.update!(password_expires_at: 2.days.ago)
 
                       write_access_token = create(:personal_access_token, user: user, scopes: [:write_repository])
 
@@ -836,6 +836,24 @@ RSpec.describe 'Git HTTP requests' do
                 end
               end
             end
+
+            context "when the user is admin" do
+              let(:admin) { create(:admin) }
+              let(:env) { { user: admin.username, password: admin.password } }
+
+              # Currently, the admin mode is bypassed for git operations.
+              # Once the admin mode is considered for git operations, this test will fail.
+              # Issue: https://gitlab.com/gitlab-org/gitlab/-/issues/296509
+              context 'when admin mode is enabled', :enable_admin_mode do
+                it_behaves_like 'pulls are allowed'
+                it_behaves_like 'pushes are allowed'
+              end
+
+              context 'when admin mode is disabled' do
+                it_behaves_like 'pulls are allowed'
+                it_behaves_like 'pushes are allowed'
+              end
+            end
           end
         end
 
@@ -929,10 +947,10 @@ RSpec.describe 'Git HTTP requests' do
               context 'when admin mode is disabled' do
                 it_behaves_like 'can download code only'
 
-                it 'downloads from other project get status 404' do
+                it 'downloads from other project get status 403' do
                   clone_get "#{other_project.full_path}.git", user: 'gitlab-ci-token', password: build.token
 
-                  expect(response).to have_gitlab_http_status(:not_found)
+                  expect(response).to have_gitlab_http_status(:forbidden)
                 end
               end
             end
@@ -950,7 +968,7 @@ RSpec.describe 'Git HTTP requests' do
 
               context 'when users password is expired' do
                 it 'rejects pulls with 401 unauthorized' do
-                  user.update!(password_expires_at: 2.days.ago, password_automatically_set: true)
+                  user.update!(password_expires_at: 2.days.ago)
 
                   download(path, user: 'gitlab-ci-token', password: build.token) do |response|
                     expect(response).to have_gitlab_http_status(:unauthorized)
@@ -1001,7 +1019,11 @@ RSpec.describe 'Git HTTP requests' do
       let(:path) { "#{project.full_path}.git" }
 
       context "when the project is public" do
-        let(:project) { create(:project, :repository, :public, path: 'foo.') }
+        let(:project) do
+          project = create(:project, :repository, :public)
+          project.update_attribute(:path, 'foo.')
+          project
+        end
 
         it_behaves_like 'pushes require Basic HTTP Authentication'
 
@@ -1140,7 +1162,11 @@ RSpec.describe 'Git HTTP requests' do
       end
 
       context "when the project is private" do
-        let(:project) { create(:project, :repository, :private, path: 'foo.') }
+        let(:project) do
+          project = create(:project, :repository, :private)
+          project.update_attribute(:path, 'foo.')
+          project
+        end
 
         it_behaves_like 'pulls require Basic HTTP Authentication'
         it_behaves_like 'pushes require Basic HTTP Authentication'
@@ -1245,7 +1271,7 @@ RSpec.describe 'Git HTTP requests' do
 
                 context "when password is expired" do
                   it "responds to downloads with status 401 unauthorized" do
-                    user.update!(password_expires_at: 2.days.ago, password_automatically_set: true)
+                    user.update!(password_expires_at: 2.days.ago)
 
                     download(path, **env) do |response|
                       expect(response).to have_gitlab_http_status(:unauthorized)
@@ -1328,7 +1354,7 @@ RSpec.describe 'Git HTTP requests' do
 
                   context "when password is expired" do
                     it "responds to uploads with status 401 unauthorized" do
-                      user.update!(password_expires_at: 2.days.ago, password_automatically_set: true)
+                      user.update!(password_expires_at: 2.days.ago)
 
                       write_access_token = create(:personal_access_token, user: user, scopes: [:write_repository])
 
@@ -1534,10 +1560,10 @@ RSpec.describe 'Git HTTP requests' do
               context 'when admin mode is disabled' do
                 it_behaves_like 'can download code only'
 
-                it 'downloads from other project get status 404' do
+                it 'downloads from other project get status 403' do
                   clone_get "#{other_project.full_path}.git", user: 'gitlab-ci-token', password: build.token
 
-                  expect(response).to have_gitlab_http_status(:not_found)
+                  expect(response).to have_gitlab_http_status(:forbidden)
                 end
               end
             end
@@ -1555,7 +1581,7 @@ RSpec.describe 'Git HTTP requests' do
 
               context 'when users password is expired' do
                 it 'rejects pulls with 401 unauthorized' do
-                  user.update!(password_expires_at: 2.days.ago, password_automatically_set: true)
+                  user.update!(password_expires_at: 2.days.ago)
 
                   download(path, user: 'gitlab-ci-token', password: build.token) do |response|
                     expect(response).to have_gitlab_http_status(:unauthorized)
@@ -1568,11 +1594,19 @@ RSpec.describe 'Git HTTP requests' do
       end
 
       it_behaves_like 'project path without .git suffix' do
-        let(:repository_path) { create(:project, :repository, :public, path: 'project.').full_path }
+        let(:repository_path) do
+          project = create(:project, :repository, :public)
+          project.update_attribute(:path, 'project.')
+          project.full_path
+        end
       end
 
       context "retrieving an info/refs file" do
-        let(:project) { create(:project, :repository, :public, path: 'project.') }
+        let(:project) do
+          project = create(:project, :repository, :public)
+          project.update_attribute(:path, 'project.')
+          project
+        end
 
         context "when the file exists" do
           before do
@@ -1607,7 +1641,11 @@ RSpec.describe 'Git HTTP requests' do
       let(:path) { "/#{wiki.repository.full_path}.git" }
 
       context "when the project is public" do
-        let(:project) { create(:project, :wiki_repo, :public, :wiki_enabled, path: 'foo.') }
+        let(:project) do
+          project = create(:project, :wiki_repo, :public, :wiki_enabled)
+          project.update_attribute(:path, 'foo.')
+          project
+        end
 
         it_behaves_like 'pushes require Basic HTTP Authentication'
 
@@ -1634,7 +1672,11 @@ RSpec.describe 'Git HTTP requests' do
             end
 
             context 'but the repo is disabled' do
-              let(:project) { create(:project, :wiki_repo, :public, :repository_disabled, :wiki_enabled, path: 'foo.') }
+              let(:project) do
+                project = create(:project, :wiki_repo, :public, :repository_disabled, :wiki_enabled)
+                project.update_attribute(:path, 'foo.')
+                project
+              end
 
               it_behaves_like 'pulls are allowed'
               it_behaves_like 'pushes are allowed'
@@ -1655,7 +1697,11 @@ RSpec.describe 'Git HTTP requests' do
       end
 
       context "when the project is private" do
-        let(:project) { create(:project, :wiki_repo, :private, :wiki_enabled, path: 'foo.') }
+        let(:project) do
+          project = create(:project, :wiki_repo, :private, :wiki_enabled)
+          project.update_attribute(:path, 'foo.')
+          project
+        end
 
         it_behaves_like 'pulls require Basic HTTP Authentication'
         it_behaves_like 'pushes require Basic HTTP Authentication'
@@ -1670,7 +1716,7 @@ RSpec.describe 'Git HTTP requests' do
             context 'when user is using credentials with special characters' do
               context 'with password with special characters' do
                 before do
-                  user.update!(password: 'RKszEwéC5kFnû∆f243fycGu§Gh9ftDj!U')
+                  user.update!(password: Gitlab::Password.test_default)
                 end
 
                 it 'allows clones' do
@@ -1682,7 +1728,11 @@ RSpec.describe 'Git HTTP requests' do
             end
 
             context 'but the repo is disabled' do
-              let(:project) { create(:project, :wiki_repo, :private, :repository_disabled, :wiki_enabled, path: 'foo.') }
+              let(:project) do
+                project = create(:project, :wiki_repo, :private, :repository_disabled, :wiki_enabled)
+                project.update_attribute(:path, 'foo.')
+                project
+              end
 
               it 'allows clones' do
                 download(path, user: user.username, password: user.password) do |response|

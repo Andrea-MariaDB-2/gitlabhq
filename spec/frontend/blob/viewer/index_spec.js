@@ -21,6 +21,7 @@ describe('Blob viewer', () => {
   setTestTimeout(2000);
 
   beforeEach(() => {
+    window.gon.features = { refactorBlobViewer: false }; // This file is based on the old (non-refactored) blob viewer
     jest.spyOn(window, 'requestIdleCallback').mockImplementation(execImmediately);
     $.fn.extend(jQueryMock);
     mock = new MockAdapter(axios);
@@ -28,7 +29,7 @@ describe('Blob viewer', () => {
     loadFixtures('blob/show_readme.html');
     $('#modal-upload-blob').remove();
 
-    mock.onGet(/blob\/master\/README\.md/).reply(200, {
+    mock.onGet(/blob\/.+\/README\.md/).reply(200, {
       html: '<div>testing</div>',
     });
 
@@ -40,34 +41,30 @@ describe('Blob viewer', () => {
     window.location.hash = '';
   });
 
-  it('loads source file after switching views', (done) => {
+  it('loads source file after switching views', async () => {
     document.querySelector('.js-blob-viewer-switch-btn[data-viewer="simple"]').click();
 
-    setImmediate(() => {
-      expect(
-        document
-          .querySelector('.js-blob-viewer-switch-btn[data-viewer="simple"]')
-          .classList.contains('hidden'),
-      ).toBeFalsy();
+    await axios.waitForAll();
 
-      done();
-    });
+    expect(
+      document
+        .querySelector('.js-blob-viewer-switch-btn[data-viewer="simple"]')
+        .classList.contains('hidden'),
+    ).toBeFalsy();
   });
 
-  it('loads source file when line number is in hash', (done) => {
+  it('loads source file when line number is in hash', async () => {
     window.location.hash = '#L1';
 
     new BlobViewer();
 
-    setImmediate(() => {
-      expect(
-        document
-          .querySelector('.js-blob-viewer-switch-btn[data-viewer="simple"]')
-          .classList.contains('hidden'),
-      ).toBeFalsy();
+    await axios.waitForAll();
 
-      done();
-    });
+    expect(
+      document
+        .querySelector('.js-blob-viewer-switch-btn[data-viewer="simple"]')
+        .classList.contains('hidden'),
+    ).toBeFalsy();
   });
 
   it('doesnt reload file if already loaded', () => {
@@ -122,24 +119,20 @@ describe('Blob viewer', () => {
       expect(copyButton.blur).not.toHaveBeenCalled();
     });
 
-    it('enables after switching to simple view', (done) => {
+    it('enables after switching to simple view', async () => {
       document.querySelector('.js-blob-viewer-switch-btn[data-viewer="simple"]').click();
 
-      setImmediate(() => {
-        expect(copyButton.classList.contains('disabled')).toBeFalsy();
+      await axios.waitForAll();
 
-        done();
-      });
+      expect(copyButton.classList.contains('disabled')).toBeFalsy();
     });
 
-    it('updates tooltip after switching to simple view', (done) => {
+    it('updates tooltip after switching to simple view', async () => {
       document.querySelector('.js-blob-viewer-switch-btn[data-viewer="simple"]').click();
 
-      setImmediate(() => {
-        expect(copyButtonTooltip.getAttribute('title')).toBe('Copy file contents');
+      await axios.waitForAll();
 
-        done();
-      });
+      expect(copyButtonTooltip.getAttribute('title')).toBe('Copy file contents');
     });
   });
 

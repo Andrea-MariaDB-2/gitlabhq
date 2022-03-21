@@ -4,9 +4,15 @@ group: Configure
 info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
 ---
 
-# Cluster access controls (RBAC or ABAC)
+# Access controls with cluster certificates (RBAC or ABAC) (DEPRECATED) **(FREE)**
 
-> Restricted service account for deployment was [introduced](https://gitlab.com/gitlab-org/gitlab-foss/-/issues/51716) in GitLab 11.5.
+> - Restricted service account for deployment was [introduced](https://gitlab.com/gitlab-org/gitlab-foss/-/issues/51716) in GitLab 11.5.
+> - [Deprecated](https://gitlab.com/groups/gitlab-org/configure/-/epics/8) in GitLab 14.5.
+
+WARNING:
+This feature was [deprecated](https://gitlab.com/groups/gitlab-org/configure/-/epics/8) in GitLab 14.5.
+To connect your cluster to GitLab, use the [GitLab agent](../../clusters/agent/index.md)
+instead.
 
 When creating a cluster in GitLab, you are asked if you would like to create either:
 
@@ -32,7 +38,7 @@ The resources created by GitLab differ depending on the type of cluster.
 Note the following about access controls:
 
 - Environment-specific resources are only created if your cluster is
-  [managed by GitLab](index.md#gitlab-managed-clusters).
+  [managed by GitLab](gitlab_managed_clusters.md).
 - If your cluster was created before GitLab 12.2, it uses a single namespace for all project
   environments.
 

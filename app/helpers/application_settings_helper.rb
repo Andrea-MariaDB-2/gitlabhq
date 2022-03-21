@@ -144,36 +144,49 @@ module ApplicationSettingsHelper
   end
 
   def external_authorization_description
-    _("If enabled, access to projects will be validated on an external service"\
+    s_("ExternalAuthorization|Access to projects is validated on an external service"\
         " using their classification label.")
   end
 
   def external_authorization_timeout_help_text
-    _("Time in seconds GitLab will wait for a response from the external "\
-        "service. When the service does not respond in time, access will be "\
-        "denied.")
+    s_("ExternalAuthorization|Period GitLab waits for a response from the external "\
+        "service. If there is no response, access is denied. Default: 0.5 seconds.")
   end
 
   def external_authorization_url_help_text
-    _("When leaving the URL blank, classification labels can still be "\
-        "specified without disabling cross project features or performing "\
-        "external authorization checks.")
+    s_("ExternalAuthorization|URL to which the projects make authorization requests. If the URL is blank, cross-project "\
+      "features are available and can still specify classification "\
+      "labels for projects.")
   end
 
   def external_authorization_client_certificate_help_text
-    _("The X509 Certificate to use when mutual TLS is required to communicate "\
-        "with the external authorization service. If left blank, the server "\
-        "certificate is still validated when accessing over HTTPS.")
+    s_("ExternalAuthorization|Certificate used to authenticate with the external authorization service. "\
+        "If blank, the server certificate is validated when accessing over HTTPS.")
   end
 
   def external_authorization_client_key_help_text
-    _("The private key to use when a client certificate is provided. This value "\
-        "is encrypted at rest.")
+    s_("ExternalAuthorization|Private key of client authentication certificate. "\
+        "Encrypted when stored.")
   end
 
   def external_authorization_client_pass_help_text
-    _("The passphrase required to decrypt the private key. This is optional "\
-        "and the value is encrypted at rest.")
+    s_("ExternalAuthorization|Passphrase required to decrypt the private key. "\
+        "Encrypted when stored.")
+  end
+
+  def external_authorization_client_url_help_text
+    s_("ExternalAuthorization|Classification label to use when requesting authorization if no specific "\
+      " label is defined on the project.")
+  end
+
+  def sidekiq_job_limiter_mode_help_text
+    _("How the job limiter handles jobs exceeding the thresholds specified below. "\
+      "The 'track' mode only logs the jobs. The 'compress' mode compresses the jobs and "\
+      "raises an exception if the compressed size exceeds the limit.")
+  end
+
+  def sidekiq_job_limiter_modes_for_select
+    ApplicationSetting.sidekiq_job_limiter_modes.keys.map { |mode| [mode.humanize, mode] }
   end
 
   def visible_attributes
@@ -199,6 +212,7 @@ module ApplicationSettingsHelper
       :auto_devops_enabled,
       :auto_devops_domain,
       :container_expiration_policies_enable_historic_entries,
+      :container_registry_expiration_policies_caching,
       :container_registry_token_expire_delay,
       :default_artifacts_expire_in,
       :default_branch_name,
@@ -221,7 +235,9 @@ module ApplicationSettingsHelper
       :outbound_local_requests_allowlist_raw,
       :dsa_key_restriction,
       :ecdsa_key_restriction,
+      :ecdsa_sk_key_restriction,
       :ed25519_key_restriction,
+      :ed25519_sk_key_restriction,
       :eks_integration_enabled,
       :eks_account_id,
       :eks_access_key_id,
@@ -323,6 +339,12 @@ module ApplicationSettingsHelper
       :throttle_authenticated_files_api_enabled,
       :throttle_authenticated_files_api_period_in_seconds,
       :throttle_authenticated_files_api_requests_per_period,
+      :throttle_authenticated_deprecated_api_enabled,
+      :throttle_authenticated_deprecated_api_period_in_seconds,
+      :throttle_authenticated_deprecated_api_requests_per_period,
+      :throttle_unauthenticated_api_enabled,
+      :throttle_unauthenticated_api_period_in_seconds,
+      :throttle_unauthenticated_api_requests_per_period,
       :throttle_unauthenticated_enabled,
       :throttle_unauthenticated_period_in_seconds,
       :throttle_unauthenticated_requests_per_period,
@@ -332,6 +354,9 @@ module ApplicationSettingsHelper
       :throttle_unauthenticated_files_api_enabled,
       :throttle_unauthenticated_files_api_period_in_seconds,
       :throttle_unauthenticated_files_api_requests_per_period,
+      :throttle_unauthenticated_deprecated_api_enabled,
+      :throttle_unauthenticated_deprecated_api_period_in_seconds,
+      :throttle_unauthenticated_deprecated_api_requests_per_period,
       :throttle_protected_paths_enabled,
       :throttle_protected_paths_period_in_seconds,
       :throttle_protected_paths_requests_per_period,
@@ -382,8 +407,30 @@ module ApplicationSettingsHelper
       :rate_limiting_response_text,
       :container_registry_expiration_policies_worker_capacity,
       :container_registry_cleanup_tags_service_max_list_size,
+      :container_registry_import_max_tags_count,
+      :container_registry_import_max_retries,
+      :container_registry_import_start_max_retries,
+      :container_registry_import_max_step_duration,
+      :container_registry_import_target_plan,
+      :container_registry_import_created_before,
       :keep_latest_artifact,
-      :whats_new_variant
+      :whats_new_variant,
+      :user_deactivation_emails_enabled,
+      :sentry_enabled,
+      :sentry_dsn,
+      :sentry_clientside_dsn,
+      :sentry_environment,
+      :sidekiq_job_limiter_mode,
+      :sidekiq_job_limiter_compression_threshold_bytes,
+      :sidekiq_job_limiter_limit_bytes,
+      :suggest_pipeline_enabled,
+      :search_rate_limit,
+      :search_rate_limit_unauthenticated,
+      :users_get_by_id_limit,
+      :users_get_by_id_limit_allowlist_raw,
+      :runner_token_expiration_interval,
+      :group_runner_token_expiration_interval,
+      :project_runner_token_expiration_interval
     ].tap do |settings|
       settings << :deactivate_dormant_users unless Gitlab.com?
     end
@@ -418,7 +465,10 @@ module ApplicationSettingsHelper
   end
 
   def instance_clusters_enabled?
-    can?(current_user, :read_cluster, Clusters::Instance.new)
+    clusterable = Clusters::Instance.new
+
+    Feature.enabled?(:certificate_based_clusters, clusterable, default_enabled: :yaml, type: :ops) &&
+      can?(current_user, :read_cluster, clusterable)
   end
 
   def omnibus_protected_paths_throttle?
@@ -447,10 +497,6 @@ module ApplicationSettingsHelper
     }
   end
 
-  def show_documentation_base_url_field?
-    Feature.enabled?(:help_page_documentation_redirect)
-  end
-
   def valid_runner_registrars
     Gitlab::CurrentSettings.valid_runner_registrars
   end
@@ -460,9 +506,11 @@ module ApplicationSettingsHelper
   end
 
   def pending_user_count
-    return 0 if Gitlab::CurrentSettings.new_user_signups_cap.blank?
-
     User.blocked_pending_approval.count
+  end
+
+  def registration_features_can_be_prompted?
+    !Gitlab::CurrentSettings.usage_ping_enabled?
   end
 end
 

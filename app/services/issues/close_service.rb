@@ -3,8 +3,8 @@
 module Issues
   class CloseService < Issues::BaseService
     # Closes the supplied issue if the current user is able to do so.
-    def execute(issue, commit: nil, notifications: true, system_note: true)
-      return issue unless can?(current_user, :update_issue, issue) || issue.is_a?(ExternalIssue)
+    def execute(issue, commit: nil, notifications: true, system_note: true, skip_authorization: false)
+      return issue unless can_close?(issue, skip_authorization: skip_authorization)
 
       close_issue(issue,
                   closed_via: commit,
@@ -24,7 +24,7 @@ module Issues
         return issue
       end
 
-      if project.issues_enabled? && issue.close(current_user)
+      if perform_close(issue)
         event_service.close_issue(issue, current_user)
         create_note(issue, closed_via) if system_note
 
@@ -51,8 +51,18 @@ module Issues
 
     private
 
+    # Overridden on EE
+    def perform_close(issue)
+      issue.close(current_user)
+    end
+
+    def can_close?(issue, skip_authorization: false)
+      skip_authorization || can?(current_user, :update_issue, issue) || issue.is_a?(ExternalIssue)
+    end
+
     def perform_incident_management_actions(issue)
       resolve_alert(issue)
+      resolve_incident(issue)
     end
 
     def close_external_issue(issue, closed_via)
@@ -71,7 +81,7 @@ module Issues
       return if alert.resolved?
 
       if alert.resolve
-        SystemNotes::AlertManagementService.new(noteable: alert, project: alert.project, author: current_user).closed_alert_issue(issue)
+        SystemNoteService.change_alert_status(alert, current_user, " by closing incident #{issue.to_reference(project)}")
       else
         Gitlab::AppLogger.warn(
           message: 'Cannot resolve an associated Alert Management alert',
@@ -82,11 +92,19 @@ module Issues
       end
     end
 
-    def store_first_mentioned_in_commit_at(issue, merge_request)
+    def resolve_incident(issue)
+      return unless issue.incident?
+
+      status = issue.incident_management_issuable_escalation_status || issue.build_incident_management_issuable_escalation_status
+
+      SystemNoteService.change_incident_status(issue, current_user, ' by closing the incident') if status.resolve
+    end
+
+    def store_first_mentioned_in_commit_at(issue, merge_request, max_commit_lookup: 100)
       metrics = issue.metrics
       return if metrics.nil? || metrics.first_mentioned_in_commit_at
 
-      first_commit_timestamp = merge_request.commits(limit: 1).first.try(:authored_date)
+      first_commit_timestamp = merge_request.commits(limit: max_commit_lookup).last.try(:authored_date)
       return unless first_commit_timestamp
 
       metrics.update!(first_mentioned_in_commit_at: first_commit_timestamp)

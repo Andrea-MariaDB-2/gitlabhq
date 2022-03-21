@@ -1,4 +1,5 @@
-import { mount, createLocalVue } from '@vue/test-utils';
+import { mount } from '@vue/test-utils';
+import Vue from 'vue';
 import Vuex from 'vuex';
 import Log from '~/jobs/components/log/log.vue';
 import { logLinesParserLegacy, logLinesParser } from '~/jobs/store/utils';
@@ -11,12 +12,10 @@ describe('Job Log', () => {
   let store;
   let origGon;
 
-  const localVue = createLocalVue();
-  localVue.use(Vuex);
+  Vue.use(Vuex);
 
   const createComponent = () => {
     wrapper = mount(Log, {
-      localVue,
       store,
     });
   };
@@ -31,8 +30,8 @@ describe('Job Log', () => {
     window.gon = { features: { infinitelyCollapsibleSections: false } };
 
     state = {
-      trace: logLinesParserLegacy(jobLog),
-      traceEndpoint: 'jobs/id',
+      jobLog: logLinesParserLegacy(jobLog),
+      jobLogEndpoint: 'jobs/id',
     };
 
     store = new Vuex.Store({
@@ -59,7 +58,7 @@ describe('Job Log', () => {
     });
 
     it('links to the provided path and correct line number', () => {
-      expect(wrapper.find('#L1').attributes('href')).toBe(`${state.traceEndpoint}#L1`);
+      expect(wrapper.find('#L1').attributes('href')).toBe(`${state.jobLogEndpoint}#L1`);
     });
   });
 
@@ -91,12 +90,10 @@ describe('Job Log, infinitelyCollapsibleSections feature flag enabled', () => {
   let store;
   let origGon;
 
-  const localVue = createLocalVue();
-  localVue.use(Vuex);
+  Vue.use(Vuex);
 
   const createComponent = () => {
     wrapper = mount(Log, {
-      localVue,
       store,
     });
   };
@@ -111,8 +108,8 @@ describe('Job Log, infinitelyCollapsibleSections feature flag enabled', () => {
     window.gon = { features: { infinitelyCollapsibleSections: true } };
 
     state = {
-      trace: logLinesParser(jobLog).parsedLines,
-      traceEndpoint: 'jobs/id',
+      jobLog: logLinesParser(jobLog).parsedLines,
+      jobLogEndpoint: 'jobs/id',
     };
 
     store = new Vuex.Store({
@@ -139,7 +136,7 @@ describe('Job Log, infinitelyCollapsibleSections feature flag enabled', () => {
     });
 
     it('links to the provided path and correct line number', () => {
-      expect(wrapper.find('#L1').attributes('href')).toBe(`${state.traceEndpoint}#L1`);
+      expect(wrapper.find('#L1').attributes('href')).toBe(`${state.jobLogEndpoint}#L1`);
     });
   });
 

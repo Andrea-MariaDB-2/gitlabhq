@@ -3,29 +3,30 @@
     %h3.page-title.gl-m-0
       = @user.name
       - if @user.blocked_pending_approval?
-        %span.cred
+        %span.gl-text-red-500
           = s_('AdminUsers|(Pending approval)')
       - elsif @user.banned?
-        %span.cred
+        %span.gl-text-red-500
           = s_('AdminUsers|(Banned)')
       - elsif @user.blocked?
-        %span.cred
+        %span.gl-text-red-500
           = s_('AdminUsers|(Blocked)')
       - if @user.internal?
-        %span.cred
+        %span.gl-text-red-500
           = s_('AdminUsers|(Internal)')
       - if @user.admin
-        %span.cred
+        %span.gl-text-red-500
           = s_('AdminUsers|(Admin)')
       - if @user.deactivated?
-        %span.cred
+        %span.gl-text-red-500
           = s_('AdminUsers|(Deactivated)')
+      - if @user.access_locked?
+        %span.gl-text-red-500
+          = s_('AdminUsers|(Locked)')
       = render_if_exists 'admin/users/auditor_user_badge'
       = render_if_exists 'admin/users/gma_user_badge'
 
   .gl-my-3.gl-display-flex.gl-flex-wrap.gl-my-n2.gl-mx-n2
-    .gl-p-2
-      #js-admin-user-actions{ data: admin_user_actions_data_attributes(@user) }
     - if @user != current_user
       .gl-p-2
         - if impersonation_enabled? && @user.can?(:log_in)
@@ -33,16 +34,13 @@
         - if can_force_email_confirmation?(@user)
           %button.btn.gl-button.btn-info.js-confirm-modal-button{ data: confirm_user_data(@user) }
             = _('Confirm user')
-%ul.nav-links.nav.nav-tabs
-  = nav_link(path: 'users#show') do
-    = link_to _("Account"), admin_user_path(@user)
-  = nav_link(path: 'users#projects') do
-    = link_to _("Groups and projects"), projects_admin_user_path(@user)
-  = nav_link(path: 'users#keys') do
-    = link_to _("SSH keys"), keys_admin_user_path(@user)
-  = nav_link(controller: :identities) do
-    = link_to _("Identities"), admin_user_identities_path(@user)
+    .gl-p-2
+      #js-admin-user-actions{ data: admin_user_actions_data_attributes(@user) }
+= gl_tabs_nav do
+  = gl_tab_link_to _("Account"), admin_user_path(@user)
+  = gl_tab_link_to _("Groups and projects"), projects_admin_user_path(@user)
+  = gl_tab_link_to _("SSH keys"), keys_admin_user_path(@user)
+  = gl_tab_link_to _("Identities"), admin_user_identities_path(@user)
   - if impersonation_enabled?
-    = nav_link(controller: :impersonation_tokens) do
-      = link_to _("Impersonation Tokens"), admin_user_impersonation_tokens_path(@user)
+    = gl_tab_link_to _("Impersonation Tokens"), admin_user_impersonation_tokens_path(@user)
 .gl-mb-3

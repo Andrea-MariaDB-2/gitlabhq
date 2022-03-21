@@ -30,35 +30,28 @@ class Projects::MergeRequestsController < Projects::MergeRequests::ApplicationCo
   before_action :set_issuables_index, only: [:index]
   before_action :authenticate_user!, only: [:assign_related_issues]
   before_action :check_user_can_push_to_source_branch!, only: [:rebase]
+
   before_action only: [:show] do
     push_frontend_feature_flag(:file_identifier_hash)
-    push_frontend_feature_flag(:merge_request_widget_graphql, @project, default_enabled: :yaml)
-    push_frontend_feature_flag(:default_merge_ref_for_diffs, @project, default_enabled: :yaml)
-    push_frontend_feature_flag(:core_security_mr_widget_counts, @project)
-    push_frontend_feature_flag(:paginated_notes, @project, default_enabled: :yaml)
-    push_frontend_feature_flag(:confidential_notes, @project, default_enabled: :yaml)
-    push_frontend_feature_flag(:usage_data_i_testing_summary_widget_total, @project, default_enabled: :yaml)
+    push_frontend_feature_flag(:merge_request_widget_graphql, project, default_enabled: :yaml)
+    push_frontend_feature_flag(:core_security_mr_widget_counts, project)
+    push_frontend_feature_flag(:paginated_notes, project, default_enabled: :yaml)
+    push_frontend_feature_flag(:confidential_notes, project, default_enabled: :yaml)
     push_frontend_feature_flag(:improved_emoji_picker, project, default_enabled: :yaml)
-    push_frontend_feature_flag(:diffs_virtual_scrolling, project, default_enabled: :yaml)
     push_frontend_feature_flag(:restructured_mr_widget, project, default_enabled: :yaml)
-
+    push_frontend_feature_flag(:refactor_mr_widgets_extensions, project, default_enabled: :yaml)
+    push_frontend_feature_flag(:rebase_without_ci_ui, project, default_enabled: :yaml)
+    push_frontend_feature_flag(:markdown_continue_lists, project, default_enabled: :yaml)
+    push_frontend_feature_flag(:secure_vulnerability_training, project, default_enabled: :yaml)
+    push_frontend_feature_flag(:issue_assignees_widget, @project, default_enabled: :yaml)
     # Usage data feature flags
-    push_frontend_feature_flag(:users_expanding_widgets_usage_data, @project, default_enabled: :yaml)
+    push_frontend_feature_flag(:users_expanding_widgets_usage_data, project, default_enabled: :yaml)
     push_frontend_feature_flag(:diff_settings_usage_data, default_enabled: :yaml)
-    push_frontend_feature_flag(:diff_searching_usage_data, @project, default_enabled: :yaml)
-
-    experiment(:invite_members_in_comment, namespace: @project.root_ancestor) do |experiment_instance|
-      experiment_instance.exclude! unless helpers.can_admin_project_member?(@project)
-
-      experiment_instance.use {}
-      experiment_instance.try(:invite_member_link) {}
-
-      experiment_instance.track(:view, property: @project.root_ancestor.id.to_s)
-    end
+    push_frontend_feature_flag(:usage_data_diff_searches, project, default_enabled: :yaml)
   end
 
   before_action do
-    push_frontend_feature_flag(:show_relevant_approval_rule_approvers, @project, default_enabled: :yaml)
+    push_frontend_feature_flag(:permit_all_shared_groups_for_approval, @project, default_enabled: :yaml)
   end
 
   around_action :allow_gitaly_ref_name_caching, only: [:index, :show, :discussions]
@@ -72,21 +65,35 @@ class Projects::MergeRequestsController < Projects::MergeRequests::ApplicationCo
                      :show, :toggle_award_emoji, :toggle_subscription, :update
                    ]
 
-  feature_category :code_testing, [
-                     :test_reports, :coverage_reports, :codequality_reports,
-                     :codequality_mr_diff_reports
-                   ]
-
-  feature_category :accessibility_testing, [:accessibility_reports]
+  feature_category :code_testing, [:test_reports, :coverage_reports]
+  feature_category :code_quality, [:codequality_reports, :codequality_mr_diff_reports]
+  feature_category :code_testing, [:accessibility_reports]
   feature_category :infrastructure_as_code, [:terraform_reports]
   feature_category :continuous_integration, [:pipeline_status, :pipelines, :exposed_artifacts]
+
+  urgency :high, [:export_csv]
+  urgency :low, [
+    :index,
+    :show,
+    :commits,
+    :bulk_update,
+    :edit,
+    :update,
+    :cancel_auto_merge,
+    :merge,
+    :ci_environments_status,
+    :destroy,
+    :rebase,
+    :discussions,
+    :pipelines
+  ]
 
   def index
     @merge_requests = @issuables
 
     respond_to do |format|
       format.html
-      format.atom { render layout: 'xml.atom' }
+      format.atom { render layout: 'xml' }
       format.json do
         render json: {
           html: view_to_html_string("projects/merge_requests/_merge_requests")
@@ -98,10 +105,7 @@ class Projects::MergeRequestsController < Projects::MergeRequests::ApplicationCo
   # rubocop:disable Metrics/AbcSize
   def show
     close_merge_request_if_no_source_project
-
-    if Feature.disabled?(:check_mergeability_async_in_widget, @project, default_enabled: :yaml)
-      @merge_request.check_mergeability(async: true)
-    end
+    @merge_request.check_mergeability(async: true)
 
     respond_to do |format|
       format.html do
@@ -126,18 +130,22 @@ class Projects::MergeRequestsController < Projects::MergeRequests::ApplicationCo
 
         set_pipeline_variables
 
+        ::Gitlab::Database.allow_cross_joins_across_databases(url: 'https://gitlab.com/gitlab-org/gitlab/-/issues/336891') do
+          @number_of_pipelines = @pipelines.size
+        end
+
         render
       end
 
       format.json do
         Gitlab::PollingInterval.set_header(response, interval: 10_000)
 
-        if params[:serializer] == 'sidebar_extras' && Feature.enabled?(:merge_request_show_render_cached, @project, default_enabled: :yaml)
+        if params[:serializer] == 'sidebar_extras'
           cache_context = [
             params[:serializer],
             current_user&.cache_key,
-            @merge_request.assignees.map(&:cache_key),
-            @merge_request.reviewers.map(&:cache_key)
+            @merge_request.merge_request_assignees.map(&:cache_key),
+            @merge_request.merge_request_reviewers.map(&:cache_key)
           ]
 
           render_cached(@merge_request,
@@ -188,15 +196,17 @@ class Projects::MergeRequestsController < Projects::MergeRequests::ApplicationCo
 
     Gitlab::PollingInterval.set_header(response, interval: 10_000)
 
-    render json: {
-      pipelines: PipelineSerializer
-        .new(project: @project, current_user: @current_user)
-        .with_pagination(request, response)
-        .represent(@pipelines),
-      count: {
-        all: @pipelines.count
+    ::Gitlab::Database.allow_cross_joins_across_databases(url: 'https://gitlab.com/gitlab-org/gitlab/-/issues/336891') do
+      render json: {
+        pipelines: PipelineSerializer
+          .new(project: @project, current_user: @current_user)
+          .with_pagination(request, response)
+          .represent(@pipelines),
+        count: {
+            all: @pipelines.count
+          }
       }
-    }
+    end
   end
 
   def sast_reports
@@ -208,8 +218,6 @@ class Projects::MergeRequestsController < Projects::MergeRequests::ApplicationCo
   end
 
   def context_commits
-    return render_404 unless project.context_commits_enabled?
-
     # Get commits from repository
     # or from cache if already merged
     commits = ContextCommitsFinder.new(project, @merge_request, { search: params[:search], limit: params[:limit], offset: params[:offset] }).execute
@@ -278,7 +286,7 @@ class Projects::MergeRequestsController < Projects::MergeRequests::ApplicationCo
         if merge_request.errors.present?
           render json: @merge_request.errors, status: :bad_request
         else
-          render json: serializer.represent(@merge_request, serializer: 'basic')
+          render json: serializer.represent(@merge_request, serializer: params[:serializer] || 'basic')
         end
       end
     end
@@ -374,7 +382,7 @@ class Projects::MergeRequestsController < Projects::MergeRequests::ApplicationCo
     IssuableExportCsvWorker.perform_async(:merge_request, current_user.id, project.id, finder_options.to_h) # rubocop:disable CodeReuse/Worker
 
     index_path = project_merge_requests_path(project)
-    message = _('Your CSV export has started. It will be emailed to %{email} when complete.') % { email: current_user.notification_email }
+    message = _('Your CSV export has started. It will be emailed to %{email} when complete.') % { email: current_user.notification_email_or_default }
     redirect_to(index_path, notice: message)
   end
 
@@ -496,6 +504,8 @@ class Projects::MergeRequestsController < Projects::MergeRequests::ApplicationCo
       .can_push_to_branch?(@merge_request.source_branch)
 
     access_denied! unless access_check
+
+    access_denied! unless merge_request.permits_force_push?
   end
 
   def merge_access_check
@@ -539,12 +549,7 @@ class Projects::MergeRequestsController < Projects::MergeRequests::ApplicationCo
   end
 
   def endpoint_metadata_url(project, merge_request)
-    params = request.query_parameters
-    params[:view] = "inline"
-
-    if Feature.enabled?(:default_merge_ref_for_diffs, project, default_enabled: :yaml)
-      params = params.merge(diff_head: true)
-    end
+    params = request.query_parameters.merge(view: 'inline', diff_head: true)
 
     diffs_metadata_project_json_merge_request_path(project, merge_request, 'json', params)
   end

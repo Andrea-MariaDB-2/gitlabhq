@@ -1,8 +1,8 @@
-import { GlButton, GlLink } from '@gitlab/ui';
+import { GlButton, GlLink, GlIcon } from '@gitlab/ui';
 import { shallowMount } from '@vue/test-utils';
-import ExperimentTracking from '~/experimentation/experiment_tracking';
 import InviteMembersTrigger from '~/invite_members/components/invite_members_trigger.vue';
 import eventHub from '~/invite_members/event_hub';
+import { TRIGGER_ELEMENT_BUTTON, TRIGGER_ELEMENT_SIDE_NAV } from '~/invite_members/constants';
 
 jest.mock('~/experimentation/experiment_tracking');
 
@@ -15,6 +15,7 @@ let findButton;
 const triggerComponent = {
   button: GlButton,
   anchor: GlLink,
+  'side-nav': GlLink,
 };
 
 const createComponent = (props = {}) => {
@@ -27,9 +28,23 @@ const createComponent = (props = {}) => {
   });
 };
 
-describe.each(['button', 'anchor'])('with triggerElement as %s', (triggerElement) => {
-  triggerProps = { triggerElement, triggerSource };
-  findButton = () => wrapper.findComponent(triggerComponent[triggerElement]);
+const triggerItems = [
+  {
+    triggerElement: TRIGGER_ELEMENT_BUTTON,
+  },
+  {
+    triggerElement: 'anchor',
+  },
+  {
+    triggerElement: TRIGGER_ELEMENT_SIDE_NAV,
+    icon: 'plus',
+  },
+];
+
+describe.each(triggerItems)('with triggerElement as %s', (triggerItem) => {
+  triggerProps = { ...triggerItem, triggerSource };
+
+  findButton = () => wrapper.findComponent(triggerComponent[triggerItem.triggerElement]);
 
   afterEach(() => {
     wrapper.destroy();
@@ -56,38 +71,35 @@ describe.each(['button', 'anchor'])('with triggerElement as %s', (triggerElement
       findButton().vm.$emit('click');
 
       expect(spy).toHaveBeenCalledWith('openModal', {
-        inviteeType: 'members',
         source: triggerSource,
       });
     });
   });
 
   describe('tracking', () => {
-    it('tracks on mounting', () => {
-      createComponent({ trackExperiment: '_track_experiment_' });
-
-      expect(ExperimentTracking).toHaveBeenCalledWith('_track_experiment_');
-      expect(ExperimentTracking.prototype.event).toHaveBeenCalledWith('comment_invite_shown');
-    });
-
-    it('does not track on mounting', () => {
-      createComponent();
-
-      expect(ExperimentTracking).not.toHaveBeenCalledWith('_track_experiment_');
-    });
-
     it('does not add tracking attributes', () => {
       createComponent();
 
-      expect(findButton().attributes('data-track-event')).toBeUndefined();
+      expect(findButton().attributes('data-track-action')).toBeUndefined();
       expect(findButton().attributes('data-track-label')).toBeUndefined();
     });
 
     it('adds tracking attributes', () => {
       createComponent({ label: '_label_', event: '_event_' });
 
-      expect(findButton().attributes('data-track-event')).toBe('_event_');
+      expect(findButton().attributes('data-track-action')).toBe('_event_');
       expect(findButton().attributes('data-track-label')).toBe('_label_');
     });
+  });
+});
+
+describe('side-nav with icon', () => {
+  it('includes the specified icon with correct size when triggerElement is link', () => {
+    const findIcon = () => wrapper.findComponent(GlIcon);
+
+    createComponent({ triggerElement: TRIGGER_ELEMENT_SIDE_NAV, icon: 'plus' });
+
+    expect(findIcon().exists()).toBe(true);
+    expect(findIcon().props('name')).toBe('plus');
   });
 });

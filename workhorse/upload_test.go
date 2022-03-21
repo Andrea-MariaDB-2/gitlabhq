@@ -14,7 +14,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dgrijalva/jwt-go"
+	"github.com/golang-jwt/jwt/v4"
 	"github.com/stretchr/testify/require"
 
 	"gitlab.com/gitlab-org/gitlab/workhorse/internal/api"
@@ -83,7 +83,7 @@ func uploadTestServer(t *testing.T, authorizeTests func(r *http.Request), extraT
 
 		require.NoError(t, r.ParseMultipartForm(100000))
 
-		const nValues = 10 // file name, path, remote_url, remote_id, size, md5, sha1, sha256, sha512, gitlab-workhorse-upload for just the upload (no metadata because we are not POSTing a valid zip file)
+		const nValues = 11 // file name, path, remote_url, remote_id, size, md5, sha1, sha256, sha512, upload_duration, gitlab-workhorse-upload for just the upload (no metadata because we are not POSTing a valid zip file)
 		require.Len(t, r.MultipartForm.Value, nValues)
 
 		require.Empty(t, r.MultipartForm.File, "multipart form files")
@@ -123,6 +123,8 @@ func TestAcceleratedUpload(t *testing.T) {
 		{"POST", `/api/v4/projects/group%2Fproject/wikis/attachments`, false},
 		{"POST", `/api/v4/projects/group%2Fsubgroup%2Fproject/wikis/attachments`, false},
 		{"POST", `/api/graphql`, false},
+		{"POST", `/api/v4/topics`, false},
+		{"PUT", `/api/v4/topics`, false},
 		{"PUT", "/api/v4/projects/9001/packages/nuget/v1/files", true},
 		{"PUT", "/api/v4/projects/group%2Fproject/packages/nuget/v1/files", true},
 		{"PUT", "/api/v4/projects/group%2Fsubgroup%2Fproject/packages/nuget/v1/files", true},
@@ -139,6 +141,7 @@ func TestAcceleratedUpload(t *testing.T) {
 		{"POST", `/api/v4/projects/group%2Fsubgroup%2Fproject/packages/pypi`, true},
 		{"POST", `/api/v4/projects/9001/issues/30/metric_images`, true},
 		{"POST", `/api/v4/projects/group%2Fproject/issues/30/metric_images`, true},
+		{"POST", `/api/v4/projects/9001/alert_management_alerts/30/metric_images`, true},
 		{"POST", `/api/v4/projects/group%2Fsubgroup%2Fproject/issues/30/metric_images`, true},
 		{"POST", `/my/project/-/requirements_management/requirements/import_csv`, true},
 		{"POST", `/my/project/-/requirements_management/requirements/import_csv/`, true},

@@ -1,5 +1,5 @@
 <script>
-import { GlButton, GlDrawer, GlLabel } from '@gitlab/ui';
+import { GlButton, GlDrawer, GlLabel, GlModal, GlModalDirective } from '@gitlab/ui';
 import { MountingPortal } from 'portal-vue';
 import { mapActions, mapState, mapGetters } from 'vuex';
 import { LIST, ListType, ListTypeTitles } from '~/boards/constants';
@@ -11,8 +11,14 @@ import glFeatureFlagMixin from '~/vue_shared/mixins/gl_feature_flags_mixin';
 
 export default {
   listSettingsText: __('List settings'),
+  i18n: {
+    modalAction: __('Remove list'),
+    modalCopy: __('Are you sure you want to remove this list?'),
+    modalCancel: __('Cancel'),
+  },
   components: {
     GlButton,
+    GlModal,
     GlDrawer,
     GlLabel,
     MountingPortal,
@@ -20,6 +26,9 @@ export default {
       import('ee_component/boards/components/board_settings_wip_limit.vue'),
     BoardSettingsListTypes: () =>
       import('ee_component/boards/components/board_settings_list_types.vue'),
+  },
+  directives: {
+    GlModal: GlModalDirective,
   },
   mixins: [glFeatureFlagMixin(), Tracking.mixin()],
   inject: ['canAdminList', 'scopedLabelsAvailable'],
@@ -29,6 +38,7 @@ export default {
       ListType,
     };
   },
+  modalId: 'board-settings-sidebar-modal',
   computed: {
     ...mapGetters(['isSidebarOpen', 'isEpicBoard']),
     ...mapState(['activeId', 'sidebarType', 'boardLists']),
@@ -36,7 +46,7 @@ export default {
       return this.glFeatures.wipLimits && !this.isEpicBoard;
     },
     activeList() {
-      return this.boardLists[this.activeId];
+      return this.boardLists[this.activeId] || {};
     },
     activeListLabel() {
       return this.activeList.label;
@@ -59,16 +69,16 @@ export default {
   },
   methods: {
     ...mapActions(['unsetActiveId', 'removeList']),
+    handleModalPrimary() {
+      this.deleteBoard();
+    },
     showScopedLabels(label) {
       return this.scopedLabelsAvailable && isScopedLabel(label);
     },
     deleteBoard() {
-      // eslint-disable-next-line no-alert
-      if (window.confirm(__('Are you sure you want to remove this list?'))) {
-        this.track('click_button', { label: 'remove_list' });
-        this.removeList(this.activeId);
-        this.unsetActiveId();
-      }
+      this.track('click_button', { label: 'remove_list' });
+      this.removeList(this.activeId);
+      this.unsetActiveId();
     },
   },
 };
@@ -81,9 +91,25 @@ export default {
       v-bind="$attrs"
       class="js-board-settings-sidebar gl-absolute"
       :open="isSidebarOpen"
+      variant="sidebar"
       @close="unsetActiveId"
     >
-      <template #title>{{ $options.listSettingsText }}</template>
+      <template #title>
+        <h2 class="gl-my-0 gl-font-size-h2 gl-line-height-24">
+          {{ $options.listSettingsText }}
+        </h2>
+      </template>
+      <template #header>
+        <div v-if="canAdminList && activeList.id" class="gl-mt-3">
+          <gl-button
+            v-gl-modal="$options.modalId"
+            variant="danger"
+            category="secondary"
+            size="small"
+            >{{ __('Remove list') }}
+          </gl-button>
+        </div>
+      </template>
       <template v-if="isSidebarOpen">
         <div v-if="boardListType === ListType.label">
           <label class="js-list-label gl-display-block">{{ listTypeTitle }}</label>
@@ -103,17 +129,23 @@ export default {
           v-if="isWipLimitsOn"
           :max-issue-count="activeList.maxIssueCount"
         />
-        <div v-if="canAdminList && !activeList.preset && activeList.id" class="gl-mt-4">
-          <gl-button
-            variant="danger"
-            category="secondary"
-            icon="remove"
-            data-testid="remove-list"
-            @click.stop="deleteBoard"
-            >{{ __('Remove list') }}
-          </gl-button>
-        </div>
       </template>
     </gl-drawer>
+    <gl-modal
+      :modal-id="$options.modalId"
+      :title="$options.i18n.modalAction"
+      size="sm"
+      :action-primary="{
+        text: $options.i18n.modalAction,
+        attributes: [{ variant: 'danger' }],
+      }"
+      :action-secondary="{
+        text: $options.i18n.modalCancel,
+        attributes: [{ variant: 'default' }],
+      }"
+      @primary="handleModalPrimary"
+    >
+      <p>{{ $options.i18n.modalCopy }}</p>
+    </gl-modal>
   </mounting-portal>
 </template>

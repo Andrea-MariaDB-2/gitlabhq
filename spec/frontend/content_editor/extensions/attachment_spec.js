@@ -4,7 +4,9 @@ import Attachment from '~/content_editor/extensions/attachment';
 import Image from '~/content_editor/extensions/image';
 import Link from '~/content_editor/extensions/link';
 import Loading from '~/content_editor/extensions/loading';
+import { VARIANT_DANGER } from '~/flash';
 import httpStatus from '~/lib/utils/http_status';
+import eventHubFactory from '~/helpers/event_hub_factory';
 import { createTestEditor, createDocBuilder } from '../test_utils';
 
 const PROJECT_WIKI_ATTACHMENT_IMAGE_HTML = `<p data-sourcepos="1:1-1:27" dir="auto">
@@ -25,6 +27,7 @@ describe('content_editor/extensions/attachment', () => {
   let link;
   let renderMarkdown;
   let mock;
+  let eventHub;
 
   const uploadsPath = '/uploads/';
   const imageFile = new File(['foo'], 'test-file.png', { type: 'image/png' });
@@ -50,9 +53,15 @@ describe('content_editor/extensions/attachment', () => {
 
   beforeEach(() => {
     renderMarkdown = jest.fn();
+    eventHub = eventHubFactory();
 
     tiptapEditor = createTestEditor({
-      extensions: [Loading, Link, Image, Attachment.configure({ renderMarkdown, uploadsPath })],
+      extensions: [
+        Loading,
+        Link,
+        Image,
+        Attachment.configure({ renderMarkdown, uploadsPath, eventHub }),
+      ],
     });
 
     ({
@@ -74,10 +83,10 @@ describe('content_editor/extensions/attachment', () => {
   });
 
   it.each`
-    eventType  | propName         | eventData                                         | output
-    ${'paste'} | ${'handlePaste'} | ${{ clipboardData: { files: [attachmentFile] } }} | ${true}
-    ${'paste'} | ${'handlePaste'} | ${{ clipboardData: { files: [] } }}               | ${undefined}
-    ${'drop'}  | ${'handleDrop'}  | ${{ dataTransfer: { files: [attachmentFile] } }}  | ${true}
+    eventType  | propName         | eventData                                                             | output
+    ${'paste'} | ${'handlePaste'} | ${{ clipboardData: { getData: jest.fn(), files: [attachmentFile] } }} | ${true}
+    ${'paste'} | ${'handlePaste'} | ${{ clipboardData: { getData: jest.fn(), files: [] } }}               | ${undefined}
+    ${'drop'}  | ${'handleDrop'}  | ${{ dataTransfer: { getData: jest.fn(), files: [attachmentFile] } }}  | ${true}
   `('handles $eventType properly', ({ eventType, propName, eventData, output }) => {
     const event = Object.assign(new Event(eventType), eventData);
     const handled = tiptapEditor.view.someProp(propName, (eventHandler) => {
@@ -157,11 +166,12 @@ describe('content_editor/extensions/attachment', () => {
           });
         });
 
-        it('emits an error event that includes an error message', (done) => {
+        it('emits an alert event that includes an error message', (done) => {
           tiptapEditor.commands.uploadAttachment({ file: imageFile });
 
-          tiptapEditor.on('error', ({ error }) => {
-            expect(error).toBe('An error occurred while uploading the image. Please try again.');
+          eventHub.$on('alert', ({ message, variant }) => {
+            expect(variant).toBe(VARIANT_DANGER);
+            expect(message).toBe('An error occurred while uploading the image. Please try again.');
             done();
           });
         });
@@ -233,11 +243,12 @@ describe('content_editor/extensions/attachment', () => {
           });
         });
 
-        it('emits an error event that includes an error message', (done) => {
+        it('emits an alert event that includes an error message', (done) => {
           tiptapEditor.commands.uploadAttachment({ file: attachmentFile });
 
-          tiptapEditor.on('error', ({ error }) => {
-            expect(error).toBe('An error occurred while uploading the file. Please try again.');
+          eventHub.$on('alert', ({ message, variant }) => {
+            expect(variant).toBe(VARIANT_DANGER);
+            expect(message).toBe('An error occurred while uploading the file. Please try again.');
             done();
           });
         });

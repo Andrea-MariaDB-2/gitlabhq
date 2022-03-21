@@ -38,7 +38,6 @@ RSpec.describe 'Service Desk Setting', :js, :clean_gitlab_redis_cache do
       expect(project.service_desk_enabled).to be_truthy
       expect(project.service_desk_address).to be_present
       expect(find('[data-testid="incoming-email"]').value).to eq(project.service_desk_incoming_address)
-      expect(page).not_to have_selector('#service-desk-project-suffix')
     end
   end
 
@@ -55,7 +54,7 @@ RSpec.describe 'Service Desk Setting', :js, :clean_gitlab_redis_cache do
       wait_for_requests
 
       project.reload
-      expect(find('[data-testid="incoming-email"]').value).to eq(project.service_desk_incoming_address)
+      expect(find('[data-testid="incoming-email"]').value).to eq(project.service_desk_custom_address)
 
       page.within '#js-service-desk' do
         fill_in('service-desk-project-suffix', with: 'foo')

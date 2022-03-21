@@ -49,7 +49,7 @@ RSpec.describe Emails::Profile do
 
   describe 'for users that signed up, the email' do
     let(:example_site_path) { root_path }
-    let(:new_user) { create(:user, email: new_user_address, password: "securePassword") }
+    let(:new_user) { create(:user, email: new_user_address, password: Gitlab::Password.test_default) }
 
     subject { Notify.new_user_email(new_user.id) }
 
@@ -120,6 +120,39 @@ RSpec.describe Emails::Profile do
 
     context 'with GPG key that does not exist' do
       it { expect { Notify.new_gpg_key_email('foo') }.not_to raise_error }
+    end
+  end
+
+  describe 'user personal access token has been created' do
+    let_it_be(:user) { create(:user) }
+    let_it_be(:token) { create(:personal_access_token, user: user) }
+
+    context 'when valid' do
+      subject { Notify.access_token_created_email(user, token.name) }
+
+      it_behaves_like 'an email sent from GitLab'
+      it_behaves_like 'it should not have Gmail Actions links'
+      it_behaves_like 'a user cannot unsubscribe through footer link'
+
+      it 'is sent to the user' do
+        is_expected.to deliver_to user.email
+      end
+
+      it 'has the correct subject' do
+        is_expected.to have_subject /^A new personal access token has been created$/i
+      end
+
+      it 'provides the names of the token' do
+        is_expected.to have_body_text /#{token.name}/
+      end
+
+      it 'includes a link to personal access tokens page' do
+        is_expected.to have_body_text /#{profile_personal_access_tokens_path}/
+      end
+
+      it 'includes the email reason' do
+        is_expected.to have_body_text /You're receiving this email because of your account on localhost/
+      end
     end
   end
 
@@ -381,6 +414,29 @@ RSpec.describe Emails::Profile do
 
     it 'includes a link to two-factor authentication settings page' do
       is_expected.to have_body_text /#{profile_two_factor_auth_path}/
+    end
+  end
+
+  describe 'added a new email address' do
+    let_it_be(:user) { create(:user) }
+    let_it_be(:email) { create(:email, user: user) }
+
+    subject { Notify.new_email_address_added_email(user, email) }
+
+    it_behaves_like 'an email sent from GitLab'
+    it_behaves_like 'it should not have Gmail Actions links'
+    it_behaves_like 'a user cannot unsubscribe through footer link'
+
+    it 'is sent to the user' do
+      is_expected.to deliver_to user.email
+    end
+
+    it 'has the correct subject' do
+      is_expected.to have_subject /^New email address added$/i
+    end
+
+    it 'includes a link to the email address page' do
+      is_expected.to have_body_text /#{profile_emails_path}/
     end
   end
 end

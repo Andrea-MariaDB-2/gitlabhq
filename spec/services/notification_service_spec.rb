@@ -7,7 +7,7 @@ RSpec.describe NotificationService, :mailer do
   include ExternalAuthorizationServiceHelpers
   include NotificationHelpers
 
-  let_it_be_with_refind(:project) { create(:project, :public) }
+  let_it_be_with_refind(:project, reload: true) { create(:project, :public) }
   let_it_be_with_refind(:assignee) { create(:user) }
 
   let(:notification) { described_class.new }
@@ -258,6 +258,27 @@ RSpec.describe NotificationService, :mailer do
   end
 
   describe 'AccessToken' do
+    describe '#access_token_created' do
+      let_it_be(:user) { create(:user) }
+      let_it_be(:pat) { create(:personal_access_token, user: user) }
+
+      subject(:notification_service) { notification.access_token_created(user, pat.name) }
+
+      it 'sends email to the token owner' do
+        expect { notification_service }.to have_enqueued_email(user, pat.name, mail: "access_token_created_email")
+      end
+
+      context 'when user is not allowed to receive notifications' do
+        before do
+          user.block!
+        end
+
+        it 'does not send email to the token owner' do
+          expect { notification_service }.not_to have_enqueued_email(user, pat.name, mail: "access_token_created_email")
+        end
+      end
+    end
+
     describe '#access_token_about_to_expire' do
       let_it_be(:user) { create(:user) }
       let_it_be(:pat) { create(:personal_access_token, user: user, expires_at: 5.days.from_now) }
@@ -352,6 +373,17 @@ RSpec.describe NotificationService, :mailer do
 
     it 'sends email to the user' do
       expect { subject }.to have_enqueued_email(user, mail: 'disabled_two_factor_email')
+    end
+  end
+
+  describe '#new_email_address_added' do
+    let_it_be(:user) { create(:user) }
+    let_it_be(:email) { create(:email, user: user) }
+
+    subject { notification.new_email_address_added(user, email) }
+
+    it 'sends email to the user' do
+      expect { subject }.to have_enqueued_email(user, email, mail: 'new_email_address_added_email')
     end
   end
 
@@ -1051,6 +1083,7 @@ RSpec.describe NotificationService, :mailer do
     end
 
     before do
+      project.reload
       add_user_subscriptions(issue)
       reset_delivered_emails!
       update_custom_notification(:new_issue, @u_guest_custom, resource: project)
@@ -2425,6 +2458,45 @@ RSpec.describe NotificationService, :mailer do
         let(:notification_trigger) { notification.review_requested_of_merge_request(merge_request, current_user, reviewer) }
       end
     end
+
+    describe '#attention_requested_of_merge_request' do
+      let_it_be(:current_user) { create(:user) }
+      let_it_be(:reviewer) { create(:user) }
+      let_it_be(:merge_request) { create(:merge_request, source_project: project, reviewers: [reviewer]) }
+
+      it 'sends email to reviewer', :aggregate_failures do
+        notification.attention_requested_of_merge_request(merge_request, current_user, reviewer)
+
+        merge_request.reviewers.each { |reviewer| should_email(reviewer) }
+        should_not_email(merge_request.author)
+        should_not_email(@u_watcher)
+        should_not_email(@u_participant_mentioned)
+        should_not_email(@subscriber)
+        should_not_email(@watcher_and_subscriber)
+        should_not_email(@u_guest_watcher)
+        should_not_email(@u_guest_custom)
+        should_not_email(@u_custom_global)
+        should_not_email(@unsubscriber)
+        should_not_email(@u_participating)
+        should_not_email(@u_disabled)
+        should_not_email(@u_lazy_participant)
+      end
+
+      it 'adds "attention requested" reason' do
+        notification.attention_requested_of_merge_request(merge_request, current_user, [reviewer])
+
+        merge_request.reviewers.each do |reviewer|
+          email = find_email_for(reviewer)
+
+          expect(email).to have_header('X-GitLab-NotificationReason', NotificationReason::ATTENTION_REQUESTED)
+        end
+      end
+
+      it_behaves_like 'project emails are disabled' do
+        let(:notification_target)  { merge_request }
+        let(:notification_trigger) { notification.attention_requested_of_merge_request(merge_request, current_user, reviewer) }
+      end
+    end
   end
 
   describe 'Projects', :deliver_mails_inline do
@@ -2623,7 +2695,7 @@ RSpec.describe NotificationService, :mailer do
     let_it_be(:user) { create(:user) }
 
     it 'sends the user an email' do
-      notification.user_deactivated(user.name, user.notification_email)
+      notification.user_deactivated(user.name, user.notification_email_or_default)
 
       should_only_email(user)
     end
@@ -2846,7 +2918,7 @@ RSpec.describe NotificationService, :mailer do
       let(:member) { create(:user) }
 
       before do
-        project.add_developer(member, current_user: project.owner)
+        project.add_developer(member, current_user: project.first_owner)
       end
 
       it do
@@ -3040,7 +3112,7 @@ RSpec.describe NotificationService, :mailer do
           it 'emails only the creator' do
             notification.pipeline_finished(pipeline)
 
-            should_only_email(u_custom_notification_enabled, kind: :bcc)
+            should_only_email(u_custom_notification_enabled)
           end
 
           it_behaves_like 'project emails are disabled' do
@@ -3063,7 +3135,7 @@ RSpec.describe NotificationService, :mailer do
             it 'sends to group notification email' do
               notification.pipeline_finished(pipeline)
 
-              expect(email_recipients(kind: :bcc).first).to eq(group_notification_email)
+              expect(email_recipients.first).to eq(group_notification_email)
             end
           end
         end
@@ -3076,7 +3148,7 @@ RSpec.describe NotificationService, :mailer do
           it 'emails only the creator' do
             notification.pipeline_finished(pipeline)
 
-            should_only_email(u_member, kind: :bcc)
+            should_only_email(u_member)
           end
 
           it_behaves_like 'project emails are disabled' do
@@ -3098,7 +3170,7 @@ RSpec.describe NotificationService, :mailer do
             it 'sends to group notification email' do
               notification.pipeline_finished(pipeline)
 
-              expect(email_recipients(kind: :bcc).first).to eq(group_notification_email)
+              expect(email_recipients.first).to eq(group_notification_email)
             end
           end
         end
@@ -3110,7 +3182,7 @@ RSpec.describe NotificationService, :mailer do
           end
 
           it 'emails only the creator' do
-            should_only_email(u_watcher, kind: :bcc)
+            should_only_email(u_watcher)
           end
         end
 
@@ -3121,7 +3193,7 @@ RSpec.describe NotificationService, :mailer do
           end
 
           it 'emails only the creator' do
-            should_only_email(u_custom_notification_unset, kind: :bcc)
+            should_only_email(u_custom_notification_unset)
           end
         end
 
@@ -3143,7 +3215,7 @@ RSpec.describe NotificationService, :mailer do
           end
 
           it 'emails only the creator' do
-            should_only_email(u_custom_notification_enabled, kind: :bcc)
+            should_only_email(u_custom_notification_enabled)
           end
         end
 
@@ -3155,7 +3227,7 @@ RSpec.describe NotificationService, :mailer do
             notification.pipeline_finished(pipeline)
           end
 
-          it 'does not send emails' do
+          it 'does not send emails', :sidekiq_inline do
             should_not_email_anyone
           end
         end
@@ -3170,7 +3242,7 @@ RSpec.describe NotificationService, :mailer do
           it 'emails only the creator' do
             notification.pipeline_finished(pipeline, ref_status: ref_status)
 
-            should_only_email(u_member, kind: :bcc)
+            should_only_email(u_member)
           end
 
           it_behaves_like 'project emails are disabled' do
@@ -3192,7 +3264,7 @@ RSpec.describe NotificationService, :mailer do
             it 'sends to group notification email' do
               notification.pipeline_finished(pipeline, ref_status: ref_status)
 
-              expect(email_recipients(kind: :bcc).first).to eq(group_notification_email)
+              expect(email_recipients.first).to eq(group_notification_email)
             end
           end
         end
@@ -3204,7 +3276,7 @@ RSpec.describe NotificationService, :mailer do
           end
 
           it 'emails only the creator' do
-            should_only_email(u_watcher, kind: :bcc)
+            should_only_email(u_watcher)
           end
         end
 
@@ -3215,7 +3287,7 @@ RSpec.describe NotificationService, :mailer do
           end
 
           it 'emails only the creator' do
-            should_only_email(u_custom_notification_unset, kind: :bcc)
+            should_only_email(u_custom_notification_unset)
           end
         end
 
@@ -3236,7 +3308,7 @@ RSpec.describe NotificationService, :mailer do
 
             notification.pipeline_finished(pipeline, ref_status: ref_status)
 
-            should_only_email(u_custom_notification_enabled, kind: :bcc)
+            should_only_email(u_custom_notification_enabled)
           end
         end
       end
@@ -3248,7 +3320,7 @@ RSpec.describe NotificationService, :mailer do
     let_it_be(:domain, reload: true) { create(:pages_domain, project: project) }
     let_it_be(:u_blocked) { create(:user, :blocked) }
     let_it_be(:u_silence) { create_user_with_notification(:disabled, 'silent', project) }
-    let_it_be(:u_owner) { project.owner }
+    let_it_be(:u_owner) { project.first_owner }
     let_it_be(:u_maintainer1) { create(:user) }
     let_it_be(:u_maintainer2) { create(:user) }
     let_it_be(:u_developer) { create(:user) }
@@ -3273,7 +3345,7 @@ RSpec.describe NotificationService, :mailer do
       describe "##{sym}" do
         subject(:notify!) { notification.send(sym, domain) }
 
-        it 'emails current watching maintainers' do
+        it 'emails current watching maintainers and owners' do
           expect(Notify).to receive(:"#{sym}_email").at_least(:once).and_call_original
 
           notify!
@@ -3356,7 +3428,7 @@ RSpec.describe NotificationService, :mailer do
       let(:remote_mirror) { create(:remote_mirror, project: project) }
       let(:u_blocked) { create(:user, :blocked) }
       let(:u_silence) { create_user_with_notification(:disabled, 'silent-maintainer', project) }
-      let(:u_owner)   { project.owner }
+      let(:u_owner)   { project.first_owner }
       let(:u_maintainer1) { create(:user) }
       let(:u_maintainer2) { create(:user) }
       let(:u_developer) { create(:user) }
@@ -3371,7 +3443,7 @@ RSpec.describe NotificationService, :mailer do
         reset_delivered_emails!
       end
 
-      it 'emails current watching maintainers' do
+      it 'emails current watching maintainers and owners' do
         notification.remote_mirror_update_failed(remote_mirror)
 
         should_only_email(u_maintainer1, u_maintainer2, u_owner)
@@ -3450,7 +3522,7 @@ RSpec.describe NotificationService, :mailer do
 
     it 'sends the email to owners and masters' do
       expect(Notify).to receive(:prometheus_alert_fired_email).with(project, master, alert).and_call_original
-      expect(Notify).to receive(:prometheus_alert_fired_email).with(project, project.owner, alert).and_call_original
+      expect(Notify).to receive(:prometheus_alert_fired_email).with(project, project.first_owner, alert).and_call_original
       expect(Notify).not_to receive(:prometheus_alert_fired_email).with(project, developer, alert)
 
       subject.prometheus_alerts_fired(project, [alert])

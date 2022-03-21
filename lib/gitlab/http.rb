@@ -9,13 +9,14 @@ module Gitlab
     BlockedUrlError = Class.new(StandardError)
     RedirectionTooDeep = Class.new(StandardError)
     ReadTotalTimeout = Class.new(Net::ReadTimeout)
+    HeaderReadTimeout = Class.new(Net::ReadTimeout)
 
     HTTP_TIMEOUT_ERRORS = [
       Net::OpenTimeout, Net::ReadTimeout, Net::WriteTimeout, Gitlab::HTTP::ReadTotalTimeout
     ].freeze
     HTTP_ERRORS = HTTP_TIMEOUT_ERRORS + [
       EOFError, SocketError, OpenSSL::SSL::SSLError, OpenSSL::OpenSSLError,
-      Errno::ECONNRESET, Errno::ECONNREFUSED, Errno::EHOSTUNREACH,
+      Errno::ECONNRESET, Errno::ECONNREFUSED, Errno::EHOSTUNREACH, Errno::ENETUNREACH,
       Gitlab::HTTP::BlockedUrlError, Gitlab::HTTP::RedirectionTooDeep
     ].freeze
 
@@ -24,7 +25,7 @@ module Gitlab
       read_timeout: 20,
       write_timeout: 30
     }.freeze
-    DEFAULT_READ_TOTAL_TIMEOUT = 20.seconds
+    DEFAULT_READ_TOTAL_TIMEOUT = 30.seconds
 
     include HTTParty # rubocop:disable Gitlab/HTTParty
 
@@ -49,11 +50,12 @@ module Gitlab
         return httparty_perform_request(http_method, path, options_with_timeouts, &block)
       end
 
-      start_time = Gitlab::Metrics::System.monotonic_time
+      start_time = nil
       read_total_timeout = options.fetch(:timeout, DEFAULT_READ_TOTAL_TIMEOUT)
       tracked_timeout_error = false
 
       httparty_perform_request(http_method, path, options_with_timeouts) do |fragment|
+        start_time ||= Gitlab::Metrics::System.monotonic_time
         elapsed = Gitlab::Metrics::System.monotonic_time - start_time
 
         if elapsed > read_total_timeout

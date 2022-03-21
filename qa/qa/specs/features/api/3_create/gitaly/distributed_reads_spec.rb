@@ -16,10 +16,16 @@ module QA
         end
 
         before do
+          praefect_manager.start_all_nodes
           praefect_manager.wait_for_replication(project.id)
         end
 
-        it 'reads from each node', testcase: 'https://gitlab.com/gitlab-org/quality/testcases/-/quality/test_cases/1264' do
+        after do
+          # Leave the cluster in a suitable state for subsequent tests
+          praefect_manager.start_all_nodes
+        end
+
+        it 'reads from each node', testcase: 'https://gitlab.com/gitlab-org/gitlab/-/quality/test_cases/347833' do
           pre_read_data = praefect_manager.query_read_distribution
 
           wait_for_reads_to_increase(project, number_of_reads_per_loop, pre_read_data)
@@ -36,18 +42,17 @@ module QA
 
         context 'when a node is unhealthy' do
           before do
+            praefect_manager.start_all_nodes
             praefect_manager.stop_secondary_node
             praefect_manager.wait_for_secondary_node_health_check_failure
           end
 
           after do
             # Leave the cluster in a suitable state for subsequent tests
-            praefect_manager.start_secondary_node
-            praefect_manager.wait_for_health_check_all_nodes
-            praefect_manager.wait_for_reliable_connection
+            praefect_manager.start_all_nodes
           end
 
-          it 'does not read from the unhealthy node', testcase: 'https://gitlab.com/gitlab-org/quality/testcases/-/quality/test_cases/1263' do
+          it 'does not read from the unhealthy node', testcase: 'https://gitlab.com/gitlab-org/gitlab/-/quality/test_cases/347834' do
             pre_read_data = praefect_manager.query_read_distribution
 
             read_from_project(project, number_of_reads_per_loop * 10)

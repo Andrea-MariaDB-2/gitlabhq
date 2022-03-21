@@ -76,7 +76,7 @@ module Integrations
           name: 'google_iap_audience_client_id',
           title: 'Google IAP Audience Client ID',
           placeholder: s_('PrometheusService|IAP_CLIENT_ID.apps.googleusercontent.com'),
-          help: s_('PrometheusService|PrometheusService|The ID of the IAP-secured resource.'),
+          help: s_('PrometheusService|The ID of the IAP-secured resource.'),
           autocomplete: 'off',
           required: false
         },
@@ -115,7 +115,6 @@ module Integrations
     end
 
     def prometheus_available?
-      return false if template?
       return false unless project
 
       project.all_clusters.enabled.eager_load(:integration_prometheus).any? do |cluster|

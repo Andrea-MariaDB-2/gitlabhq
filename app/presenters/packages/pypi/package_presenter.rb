@@ -36,7 +36,9 @@ module Packages
         refs = []
 
         @packages.map do |package|
-          package.package_files.each do |file|
+          package_files = package.installable_package_files
+
+          package_files.each do |file|
             url = build_pypi_package_path(file)
 
             refs << package_link(url, package.pypi_metadatum.required_python, file.file_name)

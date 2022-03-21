@@ -244,13 +244,15 @@ RSpec.describe Gitlab::Workhorse do
           GitalyServer: {
             features: { 'gitaly-feature-enforce-requests-limits' => 'true' },
             address: Gitlab::GitalyClient.address('default'),
-            token: Gitlab::GitalyClient.token('default')
+            token: Gitlab::GitalyClient.token('default'),
+            sidechannel: false
           }
         }
       end
 
       before do
         allow(Gitlab.config.gitaly).to receive(:enabled).and_return(true)
+        stub_feature_flags(workhorse_use_sidechannel: false)
       end
 
       it 'includes a Repository param' do
@@ -331,6 +333,46 @@ RSpec.describe Gitlab::Workhorse do
         let(:action) { 'download' }
 
         it { expect { subject }.to raise_exception('Unsupported action: download') }
+      end
+
+      context 'when workhorse_use_sidechannel flag is set' do
+        context 'when a feature flag is set globally' do
+          before do
+            stub_feature_flags(workhorse_use_sidechannel: true)
+          end
+
+          it 'sets the flag to true' do
+            response = described_class.git_http_ok(repository, Gitlab::GlRepository::PROJECT, user, action)
+
+            expect(response.dig(:GitalyServer, :sidechannel)).to eq(true)
+          end
+        end
+
+        context 'when a feature flag is set for a single project' do
+          before do
+            stub_feature_flags(workhorse_use_sidechannel: project)
+          end
+
+          it 'sets the flag to true for that project' do
+            response = described_class.git_http_ok(repository, Gitlab::GlRepository::PROJECT, user, action)
+
+            expect(response.dig(:GitalyServer, :sidechannel)).to eq(true)
+          end
+
+          it 'sets the flag to false for other projects' do
+            other_project = create(:project, :public, :repository)
+            response = described_class.git_http_ok(other_project.repository, Gitlab::GlRepository::PROJECT, user, action)
+
+            expect(response.dig(:GitalyServer, :sidechannel)).to eq(false)
+          end
+
+          it 'sets the flag to false when there is no project' do
+            snippet = create(:personal_snippet, :repository)
+            response = described_class.git_http_ok(snippet.repository, Gitlab::GlRepository::SNIPPET, user, action)
+
+            expect(response.dig(:GitalyServer, :sidechannel)).to eq(false)
+          end
+        end
       end
     end
 
@@ -466,6 +508,24 @@ RSpec.describe Gitlab::Workhorse do
         'Location' => location,
         'Width' => width,
         'ContentType' => content_type
+      }.deep_stringify_keys)
+    end
+  end
+
+  describe '.send_dependency' do
+    let(:headers) { { Accept: 'foo', Authorization: 'Bearer asdf1234' } }
+    let(:url) { 'https://foo.bar.com/baz' }
+
+    subject { described_class.send_dependency(headers, url) }
+
+    it 'sets the header correctly', :aggregate_failures do
+      key, command, params = decode_workhorse_header(subject)
+
+      expect(key).to eq("Gitlab-Workhorse-Send-Data")
+      expect(command).to eq("send-dependency")
+      expect(params).to eq({
+        'Header' => headers,
+        'Url' => url
       }.deep_stringify_keys)
     end
   end

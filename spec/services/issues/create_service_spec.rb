@@ -5,10 +5,19 @@ require 'spec_helper'
 RSpec.describe Issues::CreateService do
   include AfterNextHelpers
 
-  let_it_be_with_reload(:project) { create(:project) }
+  let_it_be(:group) { create(:group, :crm_enabled) }
+  let_it_be_with_reload(:project) { create(:project, group: group) }
   let_it_be(:user) { create(:user) }
 
   let(:spam_params) { double }
+
+  it_behaves_like 'rate limited service' do
+    let(:key) { :issues_create }
+    let(:key_scope) { %i[project current_user external_author] }
+    let(:application_limit_key) { :issues_create_limit }
+    let(:created_model) { Issue }
+    let(:service) { described_class.new(project: project, current_user: user, params: { title: 'title' }, spam_params: double) }
+  end
 
   describe '#execute' do
     let_it_be(:assignee) { create(:user) }
@@ -42,11 +51,25 @@ RSpec.describe Issues::CreateService do
         expect(Issuable::CommonSystemNotesService).to receive_message_chain(:new, :execute)
 
         expect(issue).to be_persisted
+        expect(issue).to be_a(::Issue)
         expect(issue.title).to eq('Awesome issue')
-        expect(issue.assignees).to eq [assignee]
-        expect(issue.labels).to match_array labels
-        expect(issue.milestone).to eq milestone
-        expect(issue.due_date).to eq Date.tomorrow
+        expect(issue.assignees).to eq([assignee])
+        expect(issue.labels).to match_array(labels)
+        expect(issue.milestone).to eq(milestone)
+        expect(issue.due_date).to eq(Date.tomorrow)
+        expect(issue.work_item_type.base_type).to eq('issue')
+      end
+
+      context 'when a build_service is provided' do
+        let(:issue) { described_class.new(project: project, current_user: user, params: opts, spam_params: spam_params, build_service: build_service).execute }
+
+        let(:issue_from_builder) { WorkItem.new(project: project, title: 'Issue from builder') }
+        let(:build_service) { double(:build_service, execute: issue_from_builder) }
+
+        it 'uses the provided service to build the issue' do
+          expect(issue).to be_persisted
+          expect(issue).to be_a(WorkItem)
+        end
       end
 
       context 'when skip_system_notes is true' do
@@ -59,39 +82,72 @@ RSpec.describe Issues::CreateService do
         end
       end
 
+      context 'when setting a position' do
+        let(:issue_before) { create(:issue, project: project, relative_position: 10) }
+        let(:issue_after) { create(:issue, project: project, relative_position: 50) }
+
+        before do
+          opts.merge!(move_between_ids: [issue_before.id, issue_after.id])
+        end
+
+        it 'sets the correct relative position' do
+          expect(issue).to be_persisted
+          expect(issue.relative_position).to be_present
+          expect(issue.relative_position).to be_between(issue_before.relative_position, issue_after.relative_position)
+        end
+      end
+
       it_behaves_like 'not an incident issue'
 
-      context 'issue is incident type' do
+      context 'when issue is incident type' do
         before do
           opts.merge!(issue_type: 'incident')
         end
 
         let(:current_user) { user }
-        let(:incident_label_attributes) { attributes_for(:label, :incident) }
 
         subject { issue }
 
-        it_behaves_like 'incident issue'
-        it_behaves_like 'has incident label'
+        context 'as reporter' do
+          let_it_be(:reporter) { create(:user) }
 
-        it 'does create an incident label' do
-          expect { subject }
-            .to change { Label.where(incident_label_attributes).count }.by(1)
+          let(:user) { reporter }
+
+          before_all do
+            project.add_reporter(reporter)
+          end
+
+          it_behaves_like 'incident issue'
+
+          it 'calls IncidentManagement::Incidents::CreateEscalationStatusService' do
+            expect_next(::IncidentManagement::IssuableEscalationStatuses::CreateService, a_kind_of(Issue))
+              .to receive(:execute)
+
+            issue
+          end
+
+          context 'when invalid' do
+            before do
+              opts.merge!(title: '')
+            end
+
+            it 'does not apply an incident label prematurely' do
+              expect { subject }.to not_change(LabelLink, :count).and not_change(Issue, :count)
+            end
+          end
         end
 
-        context 'when invalid' do
-          before do
-            opts.merge!(title: '')
-          end
-
-          it 'does not apply an incident label prematurely' do
-            expect { subject }.to not_change(LabelLink, :count).and not_change(Issue, :count)
-          end
+        context 'as guest' do
+          it_behaves_like 'not an incident issue'
         end
       end
 
       it 'refreshes the number of open issues', :use_clean_rails_memory_store_caching do
-        expect { issue }.to change { project.open_issues_count }.from(0).to(1)
+        expect do
+          issue
+
+          BatchLoader::Executor.clear_current
+        end.to change { project.open_issues_count }.from(0).to(1)
       end
 
       context 'when current user cannot set issue metadata in the project' do
@@ -117,7 +173,7 @@ RSpec.describe Issues::CreateService do
       end
 
       it 'moves the issue to the end, in an asynchronous worker' do
-        expect(IssuePlacementWorker).to receive(:perform_async).with(be_nil, Integer)
+        expect(Issues::PlacementWorker).to receive(:perform_async).with(be_nil, Integer)
 
         described_class.new(project: project, current_user: user, params: opts, spam_params: spam_params).execute
       end
@@ -355,25 +411,29 @@ RSpec.describe Issues::CreateService do
     end
 
     context 'Quick actions' do
-      context 'with assignee and milestone in params and command' do
+      context 'with assignee, milestone, and contact in params and command' do
+        let_it_be(:contact) { create(:contact, group: group) }
+
         let(:opts) do
           {
             assignee_ids: [create(:user).id],
             milestone_id: 1,
             title: 'Title',
-            description: %(/assign @#{assignee.username}\n/milestone %"#{milestone.name}")
+            description: %(/assign @#{assignee.username}\n/milestone %"#{milestone.name}"),
+            add_contacts: [contact.email]
           }
         end
 
         before_all do
-          project.add_maintainer(user)
+          group.add_maintainer(user)
           project.add_maintainer(assignee)
         end
 
-        it 'assigns and sets milestone to issuable from command' do
+        it 'assigns, sets milestone, and sets contact to issuable from command' do
           expect(issue).to be_persisted
           expect(issue.assignees).to eq([assignee])
           expect(issue.milestone).to eq(milestone)
+          expect(issue.issue_customer_relations_contacts.last.contact).to eq(contact)
         end
       end
     end
@@ -462,6 +522,31 @@ RSpec.describe Issues::CreateService do
 
           expect(issue.description).to be_nil
           expect(issue.title).to be_nil
+        end
+      end
+    end
+
+    context 'add related issue' do
+      let_it_be(:related_issue) { create(:issue, project: project) }
+
+      let(:opts) do
+        { title: 'A new issue', add_related_issue: related_issue }
+      end
+
+      it 'ignores related issue if not accessible' do
+        expect { issue }.not_to change { IssueLink.count }
+        expect(issue).to be_persisted
+      end
+
+      context 'when user has access to the related issue' do
+        before do
+          project.add_developer(user)
+        end
+
+        it 'adds a link to the issue' do
+          expect { issue }.to change { IssueLink.count }.by(1)
+          expect(issue).to be_persisted
+          expect(issue.related_issues(user)).to eq([related_issue])
         end
       end
     end

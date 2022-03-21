@@ -244,65 +244,27 @@ RSpec.describe ProjectMember do
         project.add_user(user, Gitlab::Access::GUEST)
       end
 
-      it 'changes access level' do
+      it 'changes access level', :sidekiq_inline do
         expect { action }.to change { user.can?(:guest_access, project) }.from(true).to(false)
       end
 
-      it_behaves_like 'calls AuthorizedProjectUpdate::ProjectRecalculatePerUserService to recalculate authorizations'
+      it 'calls AuthorizedProjectUpdate::ProjectRecalculatePerUserWorker to recalculate authorizations' do
+        expect(AuthorizedProjectUpdate::ProjectRecalculatePerUserWorker).to receive(:perform_async).with(project.id, user.id)
+
+        action
+      end
+
       it_behaves_like 'calls AuthorizedProjectUpdate::UserRefreshFromReplicaWorker with a delay to update project authorizations'
     end
+  end
 
-    context 'when the feature flag `specialized_service_for_project_member_auth_refresh` is disabled' do
-      before do
-        stub_feature_flags(specialized_service_for_project_member_auth_refresh: false)
-      end
+  describe '#set_member_namespace_id' do
+    let(:project) { create(:project) }
+    let(:member) { create(:project_member, project: project) }
 
-      shared_examples_for 'calls UserProjectAccessChangedService to recalculate authorizations' do
-        it 'calls UserProjectAccessChangedService' do
-          expect_next_instance_of(UserProjectAccessChangedService, user.id) do |service|
-            expect(service).to receive(:execute)
-          end
-
-          action
-        end
-      end
-
-      context 'on create' do
-        let(:action) { project.add_user(user, Gitlab::Access::GUEST) }
-
-        it 'changes access level' do
-          expect { action }.to change { user.can?(:guest_access, project) }.from(false).to(true)
-        end
-
-        it_behaves_like 'calls UserProjectAccessChangedService to recalculate authorizations'
-      end
-
-      context 'on update' do
-        let(:action) { project.members.find_by(user: user).update!(access_level: Gitlab::Access::DEVELOPER) }
-
-        before do
-          project.add_user(user, Gitlab::Access::GUEST)
-        end
-
-        it 'changes access level' do
-          expect { action }.to change { user.can?(:developer_access, project) }.from(false).to(true)
-        end
-
-        it_behaves_like 'calls UserProjectAccessChangedService to recalculate authorizations'
-      end
-
-      context 'on destroy' do
-        let(:action) { project.members.find_by(user: user).destroy! }
-
-        before do
-          project.add_user(user, Gitlab::Access::GUEST)
-        end
-
-        it 'changes access level' do
-          expect { action }.to change { user.can?(:guest_access, project) }.from(true).to(false)
-        end
-
-        it_behaves_like 'calls UserProjectAccessChangedService to recalculate authorizations'
+    context 'on create' do
+      it 'sets the member_namespace_id' do
+        expect(member.member_namespace_id).to eq project.project_namespace_id
       end
     end
   end

@@ -4,25 +4,32 @@ require 'spec_helper'
 
 RSpec.describe 'New/edit issue', :js do
   include ActionView::Helpers::JavaScriptHelper
-  include FormHelper
 
-  let_it_be(:project)   { create(:project) }
-  let_it_be(:user)      { create(:user)}
-  let_it_be(:user2)     { create(:user)}
+  let_it_be(:project)   { create(:project, :repository) }
+  let_it_be(:user)      { create(:user) }
+  let_it_be(:user2)     { create(:user) }
+  let_it_be(:guest)     { create(:user) }
   let_it_be(:milestone) { create(:milestone, project: project) }
   let_it_be(:label)     { create(:label, project: project) }
   let_it_be(:label2)    { create(:label, project: project) }
   let_it_be(:issue)     { create(:issue, project: project, assignees: [user], milestone: milestone) }
+  let_it_be(:confidential_issue) { create(:issue, project: project, assignees: [user], milestone: milestone, confidential: true) }
+
+  let(:current_user) { user }
+
+  before_all do
+    project.add_maintainer(user)
+    project.add_maintainer(user2)
+    project.add_guest(guest)
+  end
 
   before do
     stub_licensed_features(multiple_issue_assignees: false, issue_weights: false)
 
-    project.add_maintainer(user)
-    project.add_maintainer(user2)
-    sign_in(user)
+    sign_in(current_user)
   end
 
-  context 'new issue' do
+  describe 'new issue' do
     before do
       visit new_project_issue_path(project)
     end
@@ -180,6 +187,14 @@ RSpec.describe 'New/edit issue', :js do
       end
     end
 
+    it 'displays an error message when submitting an invalid form' do
+      click_button 'Create issue'
+
+      page.within('[data-testid="issue-title-input-field"]') do
+        expect(page).to have_text(_('This field is required.'))
+      end
+    end
+
     it 'correctly updates the dropdown toggle when removing a label' do
       click_button 'Labels'
 
@@ -235,29 +250,61 @@ RSpec.describe 'New/edit issue', :js do
     end
 
     describe 'displays issue type options in the dropdown' do
+      shared_examples 'type option is visible' do |label:, identifier:|
+        it "shows #{identifier} option", :aggregate_failures do
+          page.within('[data-testid="issue-type-select-dropdown"]') do
+            expect(page).to have_selector(%([data-testid="issue-type-#{identifier}-icon"]))
+            expect(page).to have_content(label)
+          end
+        end
+      end
+
+      shared_examples 'type option is missing' do |label:, identifier:|
+        it "does not show #{identifier} option", :aggregate_failures do
+          page.within('[data-testid="issue-type-select-dropdown"]') do
+            expect(page).not_to have_selector(%([data-testid="issue-type-#{identifier}-icon"]))
+            expect(page).not_to have_content(label)
+          end
+        end
+      end
+
       before do
         page.within('.issue-form') do
           click_button 'Issue'
         end
       end
 
-      it 'correctly displays the Issue type option with an icon', :aggregate_failures do
-        page.within('[data-testid="issue-type-select-dropdown"]') do
-          expect(page).to have_selector('[data-testid="issue-type-issue-icon"]')
-          expect(page).to have_content('Issue')
+      context 'when user is guest' do
+        let_it_be(:guest) { create(:user) }
+
+        let(:current_user) { guest }
+
+        before_all do
+          project.add_guest(guest)
         end
+
+        it_behaves_like 'type option is visible', label: 'Issue', identifier: :issue
+        it_behaves_like 'type option is missing', label: 'Incident', identifier: :incident
       end
 
-      it 'correctly displays the Incident type option with an icon', :aggregate_failures do
-        page.within('[data-testid="issue-type-select-dropdown"]') do
-          expect(page).to have_selector('[data-testid="issue-type-incident-icon"]')
-          expect(page).to have_content('Incident')
+      context 'when user is reporter' do
+        let_it_be(:reporter) { create(:user) }
+
+        let(:current_user) { reporter }
+
+        before_all do
+          project.add_reporter(reporter)
         end
+
+        it_behaves_like 'type option is visible', label: 'Issue', identifier: :issue
+        it_behaves_like 'type option is visible', label: 'Incident', identifier: :incident
       end
     end
 
     describe 'milestone' do
-      let!(:milestone) { create(:milestone, title: '">&lt;img src=x onerror=alert(document.domain)&gt;', project: project) }
+      let!(:milestone) do
+        create(:milestone, title: '">&lt;img src=x onerror=alert(document.domain)&gt;', project: project)
+      end
 
       it 'escapes milestone' do
         click_button 'Milestone'
@@ -274,7 +321,109 @@ RSpec.describe 'New/edit issue', :js do
     end
   end
 
-  context 'edit issue' do
+  describe 'new issue with query parameters' do
+    before do
+      project.repository.create_file(
+        current_user,
+        '.gitlab/issue_templates/test_template.md',
+        'description from template',
+        message: 'Add test_template.md',
+        branch_name: project.default_branch_or_main
+      )
+    end
+
+    after do
+      project.repository.delete_file(
+        current_user,
+        '.gitlab/issue_templates/test_template.md',
+        message: 'Remove test_template.md',
+        branch_name: project.default_branch_or_main
+      )
+    end
+
+    it 'leaves the description blank if no query parameters are specified' do
+      visit new_project_issue_path(project)
+
+      expect(find('#issue_description').value).to be_empty
+    end
+
+    it 'fills the description from the issue[description] query parameter' do
+      visit new_project_issue_path(project, issue: { description: 'description from query parameter' })
+
+      expect(find('#issue_description').value).to match('description from query parameter')
+    end
+
+    it 'fills the description from the issuable_template query parameter' do
+      visit new_project_issue_path(project, issuable_template: 'test_template')
+      wait_for_requests
+
+      expect(find('#issue_description').value).to match('description from template')
+    end
+
+    it 'fills the description from the issuable_template and issue[description] query parameters' do
+      visit new_project_issue_path(project, issuable_template: 'test_template', issue: { description: 'description from query parameter' })
+      wait_for_requests
+
+      expect(find('#issue_description').value).to match('description from template\ndescription from query parameter')
+    end
+  end
+
+  describe 'new issue from related issue' do
+    it 'does not offer to link the new issue to any other issues if the URL parameter is absent' do
+      visit new_project_issue_path(project)
+      expect(page).not_to have_selector '#add_related_issue'
+      expect(page).not_to have_text "Relate to"
+    end
+
+    context 'guest' do
+      let(:current_user) { guest }
+
+      it 'does not offer to link the new issue to an issue that the user does not have access to' do
+        visit new_project_issue_path(project, { add_related_issue: confidential_issue.iid })
+        expect(page).not_to have_selector '#add_related_issue'
+        expect(page).not_to have_text "Relate to"
+      end
+    end
+
+    it 'links the new issue and the issue of origin' do
+      visit new_project_issue_path(project, { add_related_issue: issue.iid })
+      expect(page).to have_selector '#add_related_issue'
+      expect(page).to have_text "Relate to issue \##{issue.iid}"
+      expect(page).to have_text 'Adds this issue as related to the issue it was created from'
+      fill_in 'issue_title', with: 'title'
+      click_button 'Create issue'
+      page.within '#related-issues' do
+        expect(page).to have_text "\##{issue.iid}"
+      end
+    end
+
+    it 'links the new incident and the incident of origin' do
+      incident = create(:incident, project: project)
+      visit new_project_issue_path(project, { add_related_issue: incident.iid })
+      expect(page).to have_selector '#add_related_issue'
+      expect(page).to have_text "Relate to incident \##{incident.iid}"
+      expect(page).to have_text 'Adds this incident as related to the incident it was created from'
+      fill_in 'issue_title', with: 'title'
+      click_button 'Create issue'
+      page.within '#related-issues' do
+        expect(page).to have_text "\##{incident.iid}"
+      end
+    end
+
+    it 'does not link the new issue to any other issues if the checkbox is not checked' do
+      visit new_project_issue_path(project, { add_related_issue: issue.iid })
+      expect(page).to have_selector '#add_related_issue'
+      expect(page).to have_text "Relate to issue \##{issue.iid}"
+      uncheck "Relate to issue \##{issue.iid}"
+      fill_in 'issue_title', with: 'title'
+      click_button 'Create issue'
+      page.within '#related-issues' do
+        expect(page).not_to have_text "\##{issue.iid}"
+      end
+    end
+  end
+
+  describe 'edit issue' do
     before do
       visit edit_project_issue_path(project, issue)
     end
@@ -329,7 +478,7 @@ RSpec.describe 'New/edit issue', :js do
     end
   end
 
-  context 'inline edit' do
+  describe 'inline edit' do
     before do
       visit project_issue_path(project, issue)
     end

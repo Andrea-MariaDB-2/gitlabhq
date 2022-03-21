@@ -7,7 +7,7 @@ RSpec.describe Projects::MergeRequestsController, '(JavaScript fixtures)', type:
 
   let(:namespace) { create(:namespace, name: 'frontend-fixtures' )}
   let(:project) { create(:project, :repository, namespace: namespace, path: 'merge-requests-project') }
-  let(:user) { project.owner }
+  let(:user) { project.first_owner }
 
   # rubocop: disable Layout/TrailingWhitespace
   let(:description) do
@@ -48,10 +48,6 @@ RSpec.describe Projects::MergeRequestsController, '(JavaScript fixtures)', type:
   end
 
   render_views
-
-  before(:all) do
-    clean_frontend_fixtures('merge_requests/')
-  end
 
   before do
     sign_in(user)
@@ -120,6 +116,36 @@ RSpec.describe Projects::MergeRequestsController, '(JavaScript fixtures)', type:
 
     it 'merge_requests/merge_request_with_mentions.html' do
       render_merge_request(merge_request)
+    end
+  end
+
+  it 'merge_requests/merge_request_list.html' do
+    create(:merge_request, source_project: project, target_project: project)
+
+    get :index, params: {
+      namespace_id: project.namespace.to_param,
+      project_id: project
+    }
+
+    expect(response).to be_successful
+  end
+
+  describe GraphQL::Query, type: :request do
+    include ApiHelpers
+    include GraphqlHelpers
+
+    context 'merge request in state readyToMerge query' do
+      base_input_path = 'vue_merge_request_widget/queries/states/'
+      base_output_path = 'graphql/merge_requests/states/'
+      query_name = 'ready_to_merge.query.graphql'
+
+      it "#{base_output_path}#{query_name}.json" do
+        query = get_graphql_query_as_string("#{base_input_path}#{query_name}", ee: Gitlab.ee?)
+
+        post_graphql(query, current_user: user, variables: { projectPath: project.full_path, iid: merge_request.iid.to_s })
+
+        expect_graphql_errors_to_be_empty
+      end
     end
   end
 

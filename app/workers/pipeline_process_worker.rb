@@ -14,15 +14,13 @@ class PipelineProcessWorker
   loggable_arguments 1
 
   idempotent!
-  deduplicate :until_executing, feature_flag: :ci_idempotent_pipeline_process_worker
+  deduplicate :until_executing
 
-  # rubocop: disable CodeReuse/ActiveRecord
   def perform(pipeline_id)
-    Ci::Pipeline.find_by(id: pipeline_id).try do |pipeline|
+    Ci::Pipeline.find_by_id(pipeline_id).try do |pipeline|
       Ci::ProcessPipelineService
         .new(pipeline)
         .execute
     end
   end
-  # rubocop: enable CodeReuse/ActiveRecord
 end

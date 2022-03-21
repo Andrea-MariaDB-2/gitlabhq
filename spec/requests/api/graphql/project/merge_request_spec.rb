@@ -76,6 +76,24 @@ RSpec.describe 'getting merge request information nested in a project' do
     end
   end
 
+  context 'when the merge_request has committers' do
+    let(:mr_fields) do
+      <<~SELECT
+      committers { nodes { id username } }
+      SELECT
+    end
+
+    it 'includes committers' do
+      expected = merge_request.committers.map do |r|
+        a_hash_including('id' => global_id_of(r), 'username' => r.username)
+      end
+
+      post_graphql(query, current_user: current_user)
+
+      expect(graphql_data_at(:project, :merge_request, :committers, :nodes)).to match_array(expected)
+    end
+  end
+
   describe 'diffStats' do
     let(:mr_fields) do
       <<~FIELDS
@@ -347,7 +365,7 @@ RSpec.describe 'getting merge request information nested in a project' do
         expect(interaction_data).to contain_exactly a_hash_including(
           'canMerge' => false,
           'canUpdate' => can_update,
-          'reviewState' => unreviewed,
+          'reviewState' => attention_requested,
           'reviewed' => false,
           'approved' => false
         )
@@ -380,8 +398,8 @@ RSpec.describe 'getting merge request information nested in a project' do
     describe 'scalability' do
       let_it_be(:other_users) { create_list(:user, 3) }
 
-      let(:unreviewed) do
-        { 'reviewState' => 'UNREVIEWED' }
+      let(:attention_requested) do
+        { 'reviewState' => 'ATTENTION_REQUESTED' }
       end
 
       let(:reviewed) do
@@ -413,9 +431,9 @@ RSpec.describe 'getting merge request information nested in a project' do
           expect { post_graphql(query) }.not_to exceed_query_limit(baseline)
 
           expect(interaction_data).to contain_exactly(
-            include(unreviewed),
-            include(unreviewed),
-            include(unreviewed),
+            include(attention_requested),
+            include(attention_requested),
+            include(attention_requested),
             include(reviewed)
           )
         end
@@ -444,7 +462,7 @@ RSpec.describe 'getting merge request information nested in a project' do
 
   it_behaves_like 'when requesting information about MR interactions' do
     let(:field) { :reviewers }
-    let(:unreviewed) { 'UNREVIEWED' }
+    let(:attention_requested) { 'ATTENTION_REQUESTED' }
     let(:can_update) { false }
 
     def assign_user(user)
@@ -454,7 +472,7 @@ RSpec.describe 'getting merge request information nested in a project' do
 
   it_behaves_like 'when requesting information about MR interactions' do
     let(:field) { :assignees }
-    let(:unreviewed) { nil }
+    let(:attention_requested) { nil }
     let(:can_update) { true } # assignees can update MRs
 
     def assign_user(user)

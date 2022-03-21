@@ -8,6 +8,13 @@ module API
 
     before { authenticate! }
 
+    urgency :low, [
+      '/projects/:id/merge_requests/:noteable_id/discussions',
+      '/projects/:id/merge_requests/:noteable_id/discussions/:discussion_id',
+      '/projects/:id/merge_requests/:noteable_id/discussions/:discussion_id/notes',
+      '/projects/:id/merge_requests/:noteable_id/discussions/:discussion_id/notes/:note_id'
+    ]
+
     Helpers::DiscussionsHelpers.feature_category_per_noteable_type.each do |noteable_type, feature_category|
       parent_type = noteable_type.parent_class.to_s.underscore
       noteables_str = noteable_type.to_s.underscore.pluralize
@@ -239,13 +246,13 @@ module API
       # rubocop: disable CodeReuse/ActiveRecord
       def readable_discussion_notes(noteable, discussion_ids)
         notes = noteable.notes
-          .where(discussion_id: discussion_ids)
+          .with_discussion_ids(discussion_ids)
           .inc_relations_for_view
           .includes(:noteable)
           .fresh
 
         # Without RendersActions#prepare_notes_for_rendering,
-        # Note#system_note_with_references_visible_for? will attempt to render
+        # Note#system_note_visible_for? will attempt to render
         # Markdown references mentioned in the note to see whether they
         # should be redacted. For notes that reference a commit, this
         # would also incur a Gitaly call to verify the commit exists.

@@ -1,11 +1,10 @@
+import Vue, { nextTick } from 'vue';
 import { GlForm } from '@gitlab/ui';
-import { createLocalVue, mount } from '@vue/test-utils';
-import { nextTick } from 'vue';
 import VueApollo from 'vue-apollo';
 import createMockApollo from 'helpers/mock_apollo_helper';
-import { extendedWrapper } from 'helpers/vue_test_utils_helper';
+import { mountExtended } from 'helpers/vue_test_utils_helper';
 import waitForPromises from 'helpers/wait_for_promises';
-import createFlash, { FLASH_TYPES } from '~/flash';
+import { createAlert, VARIANT_SUCCESS } from '~/flash';
 import RunnerUpdateForm from '~/runner/components/runner_update_form.vue';
 import {
   INSTANCE_TYPE,
@@ -14,7 +13,7 @@ import {
   ACCESS_LEVEL_REF_PROTECTED,
   ACCESS_LEVEL_NOT_PROTECTED,
 } from '~/runner/constants';
-import runnerUpdateMutation from '~/runner/graphql/runner_update.mutation.graphql';
+import runnerUpdateMutation from '~/runner/graphql/details/runner_update.mutation.graphql';
 import { captureException } from '~/runner/sentry_utils';
 import { runnerData } from '../mock_data';
 
@@ -23,8 +22,7 @@ jest.mock('~/runner/sentry_utils');
 
 const mockRunner = runnerData.data.runner;
 
-const localVue = createLocalVue();
-localVue.use(VueApollo);
+Vue.use(VueApollo);
 
 describe('RunnerUpdateForm', () => {
   let wrapper;
@@ -61,16 +59,13 @@ describe('RunnerUpdateForm', () => {
   });
 
   const createComponent = ({ props } = {}) => {
-    wrapper = extendedWrapper(
-      mount(RunnerUpdateForm, {
-        localVue,
-        propsData: {
-          runner: mockRunner,
-          ...props,
-        },
-        apolloProvider: createMockApollo([[runnerUpdateMutation, runnerUpdateHandler]]),
-      }),
-    );
+    wrapper = mountExtended(RunnerUpdateForm, {
+      propsData: {
+        runner: mockRunner,
+        ...props,
+      },
+      apolloProvider: createMockApollo([[runnerUpdateMutation, runnerUpdateHandler]]),
+    });
   };
 
   const expectToHaveSubmittedRunnerContaining = (submittedRunner) => {
@@ -79,9 +74,9 @@ describe('RunnerUpdateForm', () => {
       input: expect.objectContaining(submittedRunner),
     });
 
-    expect(createFlash).toHaveBeenLastCalledWith({
+    expect(createAlert).toHaveBeenLastCalledWith({
       message: expect.stringContaining('saved'),
-      type: FLASH_TYPES.SUCCESS,
+      variant: VARIANT_SUCCESS,
     });
 
     expect(findSubmitDisabledAttr()).toBeUndefined();
@@ -126,8 +121,21 @@ describe('RunnerUpdateForm', () => {
   it('Updates runner with no changes', async () => {
     await submitFormAndWait();
 
-    // Some fields are not submitted
-    const { ipAddress, runnerType, ...submitted } = mockRunner;
+    // Some read-only fields are not submitted
+    const {
+      __typename,
+      ipAddress,
+      runnerType,
+      createdAt,
+      status,
+      editAdminUrl,
+      contactedAt,
+      userPermissions,
+      version,
+      groups,
+      jobCount,
+      ...submitted
+    } = mockRunner;
 
     expectToHaveSubmittedRunnerContaining(submitted);
   });
@@ -238,12 +246,12 @@ describe('RunnerUpdateForm', () => {
 
       await submitFormAndWait();
 
-      expect(createFlash).toHaveBeenLastCalledWith({
-        message: `Network error: ${mockErrorMsg}`,
+      expect(createAlert).toHaveBeenLastCalledWith({
+        message: mockErrorMsg,
       });
       expect(captureException).toHaveBeenCalledWith({
         component: 'RunnerUpdateForm',
-        error: new Error(`Network error: ${mockErrorMsg}`),
+        error: new Error(mockErrorMsg),
       });
       expect(findSubmitDisabledAttr()).toBeUndefined();
     });
@@ -262,7 +270,7 @@ describe('RunnerUpdateForm', () => {
 
       await submitFormAndWait();
 
-      expect(createFlash).toHaveBeenLastCalledWith({
+      expect(createAlert).toHaveBeenLastCalledWith({
         message: mockErrorMsg,
       });
       expect(captureException).not.toHaveBeenCalled();

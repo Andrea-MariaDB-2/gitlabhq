@@ -268,7 +268,7 @@ RSpec.describe ProjectsHelper do
     end
   end
 
-  describe '#link_to_set_password' do
+  describe '#no_password_message' do
     let(:user) { create(:user, password_automatically_set: true) }
 
     before do
@@ -276,18 +276,18 @@ RSpec.describe ProjectsHelper do
     end
 
     context 'password authentication is enabled for Git' do
-      it 'returns link to set a password' do
+      it 'returns message prompting user to set password or set up a PAT' do
         stub_application_setting(password_authentication_enabled_for_git?: true)
 
-        expect(helper.link_to_set_password).to match %r{<a href="#{edit_profile_password_path}">set a password</a>}
+        expect(helper.no_password_message).to eq('Your account is authenticated with SSO or SAML. To <a href="/help/gitlab-basics/start-using-git#pull-and-push" target="_blank" rel="noopener noreferrer">push and pull</a> over HTTP with Git using this account, you must <a href="/-/profile/password/edit">set a password</a> or <a href="/-/profile/personal_access_tokens">set up a Personal Access Token</a> to use instead of a password. For more information, see <a href="/help/gitlab-basics/start-using-git#clone-with-https" target="_blank" rel="noopener noreferrer">Clone with HTTPS</a>.')
       end
     end
 
     context 'password authentication is disabled for Git' do
-      it 'returns link to create a personal access token' do
+      it 'returns message prompting user to set up a PAT' do
         stub_application_setting(password_authentication_enabled_for_git?: false)
 
-        expect(helper.link_to_set_password).to match %r{<a href="#{profile_personal_access_tokens_path}">create a personal access token</a>}
+        expect(helper.no_password_message).to eq('Your account is authenticated with SSO or SAML. To <a href="/help/gitlab-basics/start-using-git#pull-and-push" target="_blank" rel="noopener noreferrer">push and pull</a> over HTTP with Git using this account, you must <a href="/-/profile/personal_access_tokens">set up a Personal Access Token</a> to use instead of a password. For more information, see <a href="/help/gitlab-basics/start-using-git#clone-with-https" target="_blank" rel="noopener noreferrer">Clone with HTTPS</a>.')
       end
     end
   end
@@ -314,13 +314,13 @@ RSpec.describe ProjectsHelper do
     end
 
     it 'returns image tag for member avatar' do
-      expect(helper).to receive(:image_tag).with(expected, { width: 16, class: %w[avatar avatar-inline s16], alt: "", "data-src" => anything })
+      expect(helper).to receive(:image_tag).with(expected, { width: 16, class: %w[avatar avatar-inline s16], alt: "" })
 
       helper.link_to_member_avatar(user)
     end
 
     it 'returns image tag with avatar class' do
-      expect(helper).to receive(:image_tag).with(expected, { width: 16, class: %w[avatar avatar-inline s16 any-avatar-class], alt: "", "data-src" => anything })
+      expect(helper).to receive(:image_tag).with(expected, { width: 16, class: %w[avatar avatar-inline s16 any-avatar-class], alt: "" })
 
       helper.link_to_member_avatar(user, avatar_class: "any-avatar-class")
     end
@@ -343,6 +343,14 @@ RSpec.describe ProjectsHelper do
 
         expect(link).to include(ERB::Util.html_escape(user.name))
         expect(link).not_to include(user.name)
+      end
+    end
+
+    context 'when user is nil' do
+      it 'returns "(deleted)"' do
+        link = helper.link_to_member(project, nil)
+
+        expect(link).to eq("(deleted)")
       end
     end
   end
@@ -904,6 +912,14 @@ RSpec.describe ProjectsHelper do
 
         it { is_expected.to be_falsey }
       end
+
+      context 'the :show_terraform_banner feature flag is disabled' do
+        before do
+          stub_feature_flags(show_terraform_banner: false)
+        end
+
+        it { is_expected.to be_falsey }
+      end
     end
   end
 
@@ -952,5 +968,100 @@ RSpec.describe ProjectsHelper do
         containerRegistryAccessLevel: project.project_feature.container_registry_access_level
       )
     end
+  end
+
+  describe '#project_classes' do
+    subject { helper.project_classes(project) }
+
+    it { is_expected.to be_a(String) }
+
+    context 'PUC highlighting enabled' do
+      before do
+        project.warn_about_potentially_unwanted_characters = true
+      end
+
+      it { is_expected.to include('project-highlight-puc') }
+    end
+
+    context 'PUC highlighting disabled' do
+      before do
+        project.warn_about_potentially_unwanted_characters = false
+      end
+
+      it { is_expected.not_to include('project-highlight-puc') }
+    end
+  end
+
+  describe "#delete_confirm_phrase" do
+    subject { helper.delete_confirm_phrase(project) }
+
+    it 'includes the project path with namespace' do
+      expect(subject).to eq(project.path_with_namespace)
+    end
+  end
+
+  describe '#fork_button_disabled_tooltip' do
+    using RSpec::Parameterized::TableSyntax
+
+    subject { helper.fork_button_disabled_tooltip(project) }
+
+    where(:has_user, :can_fork_project, :can_create_fork, :expected) do
+      false | false | false | nil
+      true | true | true | nil
+      true | false | true | 'You don\'t have permission to fork this project'
+      true | true | false | 'You have reached your project limit'
+    end
+
+    with_them do
+      before do
+        current_user = user if has_user
+
+        allow(helper).to receive(:current_user).and_return(current_user)
+        allow(user).to receive(:can?).with(:fork_project, project).and_return(can_fork_project)
+        allow(user).to receive(:can?).with(:create_fork).and_return(can_create_fork)
+      end
+
+      it 'returns tooltip text when user lacks privilege' do
+        expect(subject).to eq(expected)
+      end
+    end
+  end
+
+  shared_examples 'configure import method modal' do
+    before do
+      allow(helper).to receive(:current_user).and_return(user)
+    end
+
+    context 'as a user' do
+      it 'returns a link to contact an administrator' do
+        allow(user).to receive(:admin?).and_return(false)
+
+        expect(subject).to have_text("To enable importing projects from #{import_method}, ask your GitLab administrator to configure OAuth integration")
+      end
+    end
+
+    context 'as an administrator' do
+      it 'returns a link to configure bitbucket' do
+        allow(user).to receive(:admin?).and_return(true)
+
+        expect(subject).to have_text("To enable importing projects from #{import_method}, as administrator you need to configure OAuth integration")
+      end
+    end
+  end
+
+  describe '#import_from_bitbucket_message' do
+    let(:import_method) { 'Bitbucket' }
+
+    subject { helper.import_from_bitbucket_message }
+
+    it_behaves_like 'configure import method modal'
+  end
+
+  describe '#import_from_gitlab_message' do
+    let(:import_method) { 'GitLab.com' }
+
+    subject { helper.import_from_gitlab_message }
+
+    it_behaves_like 'configure import method modal'
   end
 end

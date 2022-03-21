@@ -71,6 +71,10 @@ export default {
       type: Boolean,
       required: true,
     },
+    canPushToBranch: {
+      type: Boolean,
+      required: true,
+    },
     emptyRepo: {
       type: Boolean,
       required: true,
@@ -83,7 +87,7 @@ export default {
       fields: {
         // fields key must match case of form name for validation directive to work
         commit_message: initFormField({ value: this.commitMessage }),
-        branch_name: initFormField({ value: this.targetBranch }),
+        branch_name: initFormField({ value: this.targetBranch, skipValidation: !this.canPushCode }),
       },
     };
     return {
@@ -116,15 +120,14 @@ export default {
         ],
       };
     },
-    /* eslint-disable dot-notation */
     showCreateNewMrToggle() {
-      return this.canPushCode && this.form.fields['branch_name'].value !== this.originalBranch;
+      return this.canPushCode && this.form.fields.branch_name.value !== this.originalBranch;
     },
     formCompleted() {
-      return this.form.fields['commit_message'].value && this.form.fields['branch_name'].value;
+      return this.form.fields.commit_message.value && this.form.fields.branch_name.value;
     },
     showHint() {
-      const splitCommitMessageByLineBreak = this.form.fields['commit_message'].value
+      const splitCommitMessageByLineBreak = this.form.fields.commit_message.value
         .trim()
         .split('\n');
       const [firstLine, ...otherLines] = splitCommitMessageByLineBreak;
@@ -136,13 +139,16 @@ export default {
         otherLines.some((text) => text.length > COMMIT_MESSAGE_BODY_MAX_LENGTH);
 
       return (
-        !this.form.fields['commit_message'].feedback &&
+        !this.form.fields.commit_message.feedback &&
         (hasFirstLineExceedMaxLength || hasOtherLineExceedMaxLength)
       );
     },
     /* eslint-enable dot-notation */
   },
   methods: {
+    show() {
+      this.$refs[this.modalId].show();
+    },
     submitForm(e) {
       e.preventDefault(); // Prevent modal from closing
       this.form.showValidation = true;
@@ -161,6 +167,7 @@ export default {
 
 <template>
   <gl-modal
+    :ref="modalId"
     v-bind="$attrs"
     data-testid="modal-delete"
     :modal-id="modalId"
@@ -173,15 +180,16 @@ export default {
       <input type="hidden" name="_method" value="delete" />
       <input :value="$options.csrf.token" type="hidden" name="authenticity_token" />
       <template v-if="emptyRepo">
-        <!-- Once "empty_repo_upload_experiment" is made available, will need to add class 'js-branch-name'
-          Follow-up issue: https://gitlab.com/gitlab-org/gitlab/-/issues/335721 -->
-        <input type="hidden" name="branch_name" :value="originalBranch" />
+        <input type="hidden" name="branch_name" :value="originalBranch" class="js-branch-name" />
       </template>
       <template v-else>
         <input type="hidden" name="original_branch" :value="originalBranch" />
-        <!-- Once "push to branch" permission is made available, will need to add to conditional
-          Follow-up issue: https://gitlab.com/gitlab-org/gitlab/-/issues/335462 -->
-        <input v-if="createNewMr" type="hidden" name="create_merge_request" value="1" />
+        <input
+          v-if="createNewMr || !canPushToBranch"
+          type="hidden"
+          name="create_merge_request"
+          value="1"
+        />
         <gl-form-group
           :label="$options.i18n.COMMIT_LABEL"
           label-for="commit_message"
@@ -191,6 +199,7 @@ export default {
             v-model="form.fields['commit_message'].value"
             v-validation:[form.showValidation]
             name="commit_message"
+            data-qa-selector="commit_message_field"
             :state="form.fields['commit_message'].state"
             :disabled="loading"
             required

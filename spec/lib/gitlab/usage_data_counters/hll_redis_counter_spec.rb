@@ -47,7 +47,13 @@ RSpec.describe Gitlab::UsageDataCounters::HLLRedisCounter, :clean_gitlab_redis_s
         'epics_usage',
         'epic_boards_usage',
         'secure',
-        'network_policies'
+        'importer',
+        'network_policies',
+        'geo',
+        'growth',
+        'work_items',
+        'ci_users',
+        'error_tracking'
       )
     end
   end
@@ -461,6 +467,8 @@ RSpec.describe Gitlab::UsageDataCounters::HLLRedisCounter, :clean_gitlab_redis_s
     before do
       allow(described_class).to receive(:known_events).and_return(known_events)
       allow(described_class).to receive(:categories).and_return(%w(category1 category2))
+
+      stub_const('Gitlab::UsageDataCounters::HLLRedisCounter::CATEGORIES_FOR_TOTALS', %w(category1 category2))
 
       described_class.track_event('event1_slot', values: entity1, time: 2.days.ago)
       described_class.track_event('event2_slot', values: entity2, time: 2.days.ago)

@@ -1,8 +1,12 @@
+import { GlToast } from '@gitlab/ui';
 import Vue from 'vue';
 import VueApollo from 'vue-apollo';
 import createDefaultClient from '~/lib/graphql';
+import { visitUrl } from '~/lib/utils/url_utility';
+import { updateOutdatedUrl } from '~/runner/runner_search_utils';
 import AdminRunnersApp from './admin_runners_app.vue';
 
+Vue.use(GlToast);
 Vue.use(VueApollo);
 
 export const initAdminRunners = (selector = '#js-admin-runners') => {
@@ -12,17 +16,19 @@ export const initAdminRunners = (selector = '#js-admin-runners') => {
     return null;
   }
 
-  // TODO `activeRunnersCount` should be implemented using a GraphQL API
-  // https://gitlab.com/gitlab-org/gitlab/-/issues/333806
-  const { activeRunnersCount, registrationToken, runnerInstallHelpPage } = el.dataset;
+  // Redirect outdated URLs
+  const updatedUrlQuery = updateOutdatedUrl();
+  if (updatedUrlQuery) {
+    visitUrl(updatedUrlQuery);
+
+    // Prevent mounting the rest of the app, redirecting now.
+    return null;
+  }
+
+  const { runnerInstallHelpPage, registrationToken } = el.dataset;
 
   const apolloProvider = new VueApollo({
-    defaultClient: createDefaultClient(
-      {},
-      {
-        assumeImmutableResults: true,
-      },
-    ),
+    defaultClient: createDefaultClient(),
   });
 
   return new Vue({
@@ -34,7 +40,6 @@ export const initAdminRunners = (selector = '#js-admin-runners') => {
     render(h) {
       return h(AdminRunnersApp, {
         props: {
-          activeRunnersCount: parseInt(activeRunnersCount, 10),
           registrationToken,
         },
       });

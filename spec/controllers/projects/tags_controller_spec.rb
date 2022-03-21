@@ -4,7 +4,7 @@ require 'spec_helper'
 
 RSpec.describe Projects::TagsController do
   let(:project) { create(:project, :public, :repository) }
-  let!(:release) { create(:release, project: project) }
+  let!(:release) { create(:release, project: project, tag: "v1.1.0") }
   let!(:invalid_release) { create(:release, project: project, tag: 'does-not-exist') }
   let(:user) { create(:user) }
 
@@ -15,6 +15,34 @@ RSpec.describe Projects::TagsController do
       subject
 
       expect(assigns(:tags).map(&:name)).to include('v1.1.0', 'v1.0.0')
+    end
+
+    context 'default sort for tags' do
+      it 'sorts tags by recently updated' do
+        subject
+
+        expect(assigns(:sort)).to eq('updated_desc')
+      end
+    end
+
+    context 'when Gitaly is unavailable' do
+      where(:format) do
+        [:html, :atom]
+      end
+
+      with_them do
+        it 'returns 503 status code' do
+          expect_next_instance_of(TagsFinder) do |finder|
+            expect(finder).to receive(:execute).and_raise(Gitlab::Git::CommandError)
+          end
+
+          get :index, params: { namespace_id: project.namespace.to_param, project_id: project }, format: format
+
+          expect(assigns(:tags)).to eq([])
+          expect(assigns(:releases)).to eq([])
+          expect(response).to have_gitlab_http_status(:service_unavailable)
+        end
+      end
     end
 
     it 'returns releases matching those tags' do
@@ -95,28 +123,6 @@ RSpec.describe Projects::TagsController do
       let(:id) { 'latest' }
 
       it { is_expected.to respond_with(:not_found) }
-    end
-  end
-
-  context 'private project with token authentication' do
-    let(:private_project) { create(:project, :repository, :private) }
-
-    it_behaves_like 'authenticates sessionless user', :index, :atom, ignore_incrementing: true do
-      before do
-        default_params.merge!(project_id: private_project, namespace_id: private_project.namespace)
-
-        private_project.add_maintainer(user)
-      end
-    end
-  end
-
-  context 'public project with token authentication' do
-    let(:public_project) { create(:project, :repository, :public) }
-
-    it_behaves_like 'authenticates sessionless user', :index, :atom, public: true do
-      before do
-        default_params.merge!(project_id: public_project, namespace_id: public_project.namespace)
-      end
     end
   end
 

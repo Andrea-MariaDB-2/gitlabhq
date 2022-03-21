@@ -42,6 +42,7 @@ module Gitlab
             'reference' => author.to_reference(full: true),
             'contributor' => @config.contributor?(author)
           }
+          entry['author']['credit'] = entry['author']['contributor'] || @config.always_credit_author?(author)
         end
 
         if merge_request
@@ -66,7 +67,7 @@ module Gitlab
         markdown =
           begin
             @config.template.evaluate(state, data).strip
-          rescue TemplateParser::ParseError => e
+          rescue TemplateParser::Error => e
             raise Error, e.message
           end
 

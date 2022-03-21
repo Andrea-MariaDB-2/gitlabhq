@@ -12,6 +12,29 @@ RSpec.describe Gitlab::SidekiqStatus, :clean_gitlab_redis_queues, :clean_gitlab_
       Sidekiq.redis do |redis|
         expect(redis.exists(key)).to eq(true)
         expect(redis.ttl(key) > 0).to eq(true)
+        expect(redis.get(key)).to eq('1')
+      end
+    end
+
+    it 'allows overriding the expiration time' do
+      described_class.set('123', described_class::DEFAULT_EXPIRATION * 2)
+
+      key = described_class.key_for('123')
+
+      Sidekiq.redis do |redis|
+        expect(redis.exists(key)).to eq(true)
+        expect(redis.ttl(key) > described_class::DEFAULT_EXPIRATION).to eq(true)
+        expect(redis.get(key)).to eq('1')
+      end
+    end
+
+    it 'does not store anything with a nil expiry' do
+      described_class.set('123', nil)
+
+      key = described_class.key_for('123')
+
+      Sidekiq.redis do |redis|
+        expect(redis.exists(key)).to eq(false)
       end
     end
   end
@@ -88,7 +111,7 @@ RSpec.describe Gitlab::SidekiqStatus, :clean_gitlab_redis_queues, :clean_gitlab_
     end
   end
 
-  describe 'completed' do
+  describe '.completed_jids' do
     it 'returns the completed job' do
       expect(described_class.completed_jids(%w(123))).to eq(['123'])
     end
@@ -98,6 +121,20 @@ RSpec.describe Gitlab::SidekiqStatus, :clean_gitlab_redis_queues, :clean_gitlab_
       described_class.set('456')
 
       expect(described_class.completed_jids(%w(123 456 789))).to eq(['789'])
+    end
+  end
+
+  describe '.job_status' do
+    it 'returns an array of boolean values' do
+      described_class.set('123')
+      described_class.set('456')
+      described_class.unset('123')
+
+      expect(described_class.job_status(%w(123 456 789))).to eq([false, true, false])
+    end
+
+    it 'handles an empty array' do
+      expect(described_class.job_status([])).to eq([])
     end
   end
 end

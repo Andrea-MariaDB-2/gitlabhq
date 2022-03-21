@@ -11,7 +11,7 @@ RSpec.describe 'shared/access_tokens/_table.html.haml' do
 
   let_it_be(:user) { create(:user) }
   let_it_be(:tokens) { [create(:personal_access_token, user: user)] }
-  let_it_be(:project) { false }
+  let_it_be(:resource) { false }
 
   before do
     stub_licensed_features(enforce_personal_access_token_expiration: true)
@@ -19,10 +19,9 @@ RSpec.describe 'shared/access_tokens/_table.html.haml' do
 
     allow(view).to receive(:personal_access_token_expiration_enforced?).and_return(token_expiry_enforced?)
     allow(view).to receive(:show_profile_token_expiry_notification?).and_return(true)
-    allow(view).to receive(:distance_of_time_in_words_to_now).and_return('4 days')
 
-    if project
-      project.add_maintainer(user)
+    if resource
+      resource.add_maintainer(user)
     end
 
     # Forcibly removing scopes from one token as it's not possible to do with the current modal on creation
@@ -35,7 +34,7 @@ RSpec.describe 'shared/access_tokens/_table.html.haml' do
       type: type,
       type_plural: type_plural,
       active_tokens: tokens,
-      project: project,
+      resource: resource,
       impersonation: impersonation,
       revoke_route_helper: ->(token) { 'path/' }
     }
@@ -81,10 +80,22 @@ RSpec.describe 'shared/access_tokens/_table.html.haml' do
     end
   end
 
-  context 'if project' do
-    let_it_be(:project) { create(:project) }
+  context 'if resource is project' do
+    let_it_be(:resource) { create(:project) }
 
     it 'shows the project content', :aggregate_failures do
+      expect(rendered).to have_selector 'th', text: 'Role'
+      expect(rendered).to have_selector 'td', text: 'Maintainer'
+
+      expect(rendered).not_to have_content 'Personal access tokens are not revoked upon expiration.'
+      expect(rendered).not_to have_content 'To see all the user\'s personal access tokens you must impersonate them first.'
+    end
+  end
+
+  context 'if resource is group' do
+    let_it_be(:resource) { create(:group) }
+
+    it 'shows the group content', :aggregate_failures do
       expect(rendered).to have_selector 'th', text: 'Role'
       expect(rendered).to have_selector 'td', text: 'Maintainer'
 
@@ -140,7 +151,6 @@ RSpec.describe 'shared/access_tokens/_table.html.haml' do
 
       # Expiry
       expect(rendered).to have_content 'Expired', count: 2
-      expect(rendered).to have_content 'In 4 days'
 
       # Revoke buttons
       expect(rendered).to have_link 'Revoke', href: 'path/', class: 'btn-danger-secondary', count: 1

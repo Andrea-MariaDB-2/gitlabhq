@@ -1,4 +1,5 @@
-import { shallowMount, createLocalVue } from '@vue/test-utils';
+import { shallowMount } from '@vue/test-utils';
+import Vue, { nextTick } from 'vue';
 import { cloneDeep } from 'lodash';
 import Vuex from 'vuex';
 
@@ -7,7 +8,7 @@ import { mockTracking, triggerEvent } from 'helpers/tracking_helper';
 import DiffFileHeader from '~/diffs/components/diff_file_header.vue';
 import { DIFF_FILE_AUTOMATIC_COLLAPSE, DIFF_FILE_MANUAL_COLLAPSE } from '~/diffs/constants';
 import { reviewFile } from '~/diffs/store/actions';
-import { SET_MR_FILE_REVIEWS } from '~/diffs/store/mutation_types';
+import { SET_DIFF_FILE_VIEWED, SET_MR_FILE_REVIEWS } from '~/diffs/store/mutation_types';
 import { diffViewerModes } from '~/ide/constants';
 import { scrollToElement } from '~/lib/utils/common_utils';
 import { truncateSha } from '~/lib/utils/text_utility';
@@ -23,6 +24,7 @@ jest.mock('~/lib/utils/common_utils');
 const diffFile = Object.freeze(
   Object.assign(diffDiscussionsMockData.diff_file, {
     id: '123',
+    file_hash: 'xyz',
     file_identifier_hash: 'abc',
     edit_path: 'link:/to/edit/path',
     blob: {
@@ -36,8 +38,7 @@ const diffFile = Object.freeze(
   }),
 );
 
-const localVue = createLocalVue();
-localVue.use(Vuex);
+Vue.use(Vuex);
 
 describe('DiffFileHeader component', () => {
   let wrapper;
@@ -58,7 +59,7 @@ describe('DiffFileHeader component', () => {
           toggleFileDiscussions: jest.fn(),
           toggleFileDiscussionWrappers: jest.fn(),
           toggleFullDiff: jest.fn(),
-          toggleActiveFileByHash: jest.fn(),
+          setCurrentFileHash: jest.fn(),
           setFileCollapsedByUser: jest.fn(),
           reviewFile: jest.fn(),
         },
@@ -81,7 +82,7 @@ describe('DiffFileHeader component', () => {
   const findExpandButton = () => wrapper.find({ ref: 'expandDiffToFullFileButton' });
   const findFileActions = () => wrapper.find('.file-actions');
   const findModeChangedLine = () => wrapper.find({ ref: 'fileMode' });
-  const findLfsLabel = () => wrapper.find('.label-lfs');
+  const findLfsLabel = () => wrapper.find('[data-testid="label-lfs"]');
   const findToggleDiscussionsButton = () => wrapper.find({ ref: 'toggleDiscussionsButton' });
   const findExternalLink = () => wrapper.find({ ref: 'externalLink' });
   const findReplacedFileButton = () => wrapper.find({ ref: 'replacedFileButton' });
@@ -102,7 +103,6 @@ describe('DiffFileHeader component', () => {
         ...props,
       },
       ...options,
-      localVue,
       store,
     });
   };
@@ -125,30 +125,27 @@ describe('DiffFileHeader component', () => {
     expect(findCollapseIcon().props('name')).toBe(icon);
   });
 
-  it('when header is clicked emits toggleFile', () => {
+  it('when header is clicked emits toggleFile', async () => {
     createComponent();
     findHeader().trigger('click');
 
-    return wrapper.vm.$nextTick().then(() => {
-      expect(wrapper.emitted().toggleFile).toBeDefined();
-    });
+    await nextTick();
+    expect(wrapper.emitted().toggleFile).toBeDefined();
   });
 
-  it('when collapseIcon is clicked emits toggleFile', () => {
+  it('when collapseIcon is clicked emits toggleFile', async () => {
     createComponent({ props: { collapsible: true } });
     findCollapseIcon().vm.$emit('click', new Event('click'));
-    return wrapper.vm.$nextTick().then(() => {
-      expect(wrapper.emitted().toggleFile).toBeDefined();
-    });
+    await nextTick();
+    expect(wrapper.emitted().toggleFile).toBeDefined();
   });
 
-  it('when other element in header is clicked does not emits toggleFile', () => {
+  it('when other element in header is clicked does not emits toggleFile', async () => {
     createComponent({ props: { collapsible: true } });
     findTitleLink().trigger('click');
 
-    return wrapper.vm.$nextTick().then(() => {
-      expect(wrapper.emitted().toggleFile).not.toBeDefined();
-    });
+    await nextTick();
+    expect(wrapper.emitted().toggleFile).not.toBeDefined();
   });
 
   describe('copy to clipboard', () => {
@@ -240,18 +237,19 @@ describe('DiffFileHeader component', () => {
   });
 
   describe('for any file', () => {
-    const otherModes = Object.keys(diffViewerModes).filter((m) => m !== 'mode_changed');
+    const allModes = Object.keys(diffViewerModes).map((m) => [m]);
 
-    it('for mode_changed file mode displays mode changes', () => {
+    it.each(allModes)('for %s file mode displays mode changes', (mode) => {
       createComponent({
         props: {
           diffFile: {
             ...diffFile,
+            mode_changed: true,
             a_mode: 'old-mode',
             b_mode: 'new-mode',
             viewer: {
               ...diffFile.viewer,
-              name: diffViewerModes.mode_changed,
+              name: diffViewerModes[mode],
             },
           },
         },
@@ -259,13 +257,14 @@ describe('DiffFileHeader component', () => {
       expect(findModeChangedLine().text()).toMatch(/old-mode.+new-mode/);
     });
 
-    it.each(otherModes.map((m) => [m]))(
+    it.each(allModes.filter((m) => m[0] !== 'mode_changed'))(
       'for %s file mode does not display mode changes',
       (mode) => {
         createComponent({
           props: {
             diffFile: {
               ...diffFile,
+              mode_changed: false,
               a_mode: 'old-mode',
               b_mode: 'new-mode',
               viewer: {
@@ -553,7 +552,13 @@ describe('DiffFileHeader component', () => {
         reviewFile,
         { file, reviewed: true },
         {},
-        [{ type: SET_MR_FILE_REVIEWS, payload: { [file.file_identifier_hash]: [file.id] } }],
+        [
+          { type: SET_DIFF_FILE_VIEWED, payload: { id: file.file_hash, seen: true } },
+          {
+            type: SET_MR_FILE_REVIEWS,
+            payload: { [file.file_identifier_hash]: [file.id, `hash:${file.file_hash}`] },
+          },
+        ],
         [],
       );
     });

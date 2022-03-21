@@ -1,8 +1,9 @@
 import $ from 'jquery';
 import '~/lib/utils/jquery_at_who';
-import { escape, sortBy, template } from 'lodash';
+import { escape as lodashEscape, sortBy, template, escapeRegExp } from 'lodash';
 import * as Emoji from '~/emoji';
 import axios from '~/lib/utils/axios_utils';
+import { loadingIconForLegacyJS } from '~/loading_icon_for_legacy_js';
 import { s__, __, sprintf } from '~/locale';
 import { isUserBusy } from '~/set_status_modal/utils';
 import SidebarMediator from '~/sidebar/sidebar_mediator';
@@ -11,8 +12,21 @@ import { spriteIcon } from './lib/utils/common_utils';
 import { parsePikadayDate } from './lib/utils/datetime_utility';
 import glRegexp from './lib/utils/regexp';
 
-function sanitize(str) {
-  return str.replace(/<(?:.|\n)*?>/gm, '');
+/**
+ * Escapes user input before we pass it to at.js, which
+ * renders it as HTML in the autocomplete dropdown.
+ *
+ * at.js allows you to reference data using `${}` syntax
+ * (e.g. ${search}) which it replaces with the actual data
+ * before rendering it in the autocomplete dropdown.
+ * To prevent user input from executing this `${}` syntax,
+ * we also need to escape the $ character.
+ *
+ * @param string user input
+ * @return {string} escaped user input
+ */
+function escape(string) {
+  return lodashEscape(string).replace(/\$/g, '&dollar;');
 }
 
 function createMemberSearchString(member) {
@@ -44,13 +58,24 @@ export function membersBeforeSave(members) {
     return {
       username: member.username,
       avatarTag: autoCompleteAvatar.length === 1 ? txtAvatar : imgAvatar,
-      title: sanitize(title),
-      search: sanitize(createMemberSearchString(member)),
+      title,
+      search: createMemberSearchString(member),
       icon: avatarIcon,
       availability: member?.availability,
     };
   });
 }
+
+export const highlighter = (li, query) => {
+  // override default behaviour to escape dot character
+  // see https://github.com/ichord/At.js/pull/576
+  if (!query) {
+    return li;
+  }
+  const escapedQuery = escapeRegExp(query);
+  const regexp = new RegExp(`>\\s*([^<]*?)(${escapedQuery})([^<]*)\\s*<`, 'ig');
+  return li.replace(regexp, (str, $1, $2, $3) => `> ${$1}<strong>${$2}</strong>${$3} <`);
+};
 
 export const defaultAutocompleteConfig = {
   emojis: true,
@@ -62,6 +87,7 @@ export const defaultAutocompleteConfig = {
   labels: true,
   snippets: true,
   vulnerabilities: true,
+  contacts: true,
 };
 
 class GfmAutoComplete {
@@ -103,6 +129,7 @@ class GfmAutoComplete {
     if (this.enableMap.mergeRequests) this.setupMergeRequests($input);
     if (this.enableMap.labels) this.setupLabels($input);
     if (this.enableMap.snippets) this.setupSnippets($input);
+    if (this.enableMap.contacts) this.setupContacts($input);
 
     $input.filter('[data-supports-quick-actions="true"]').atwho({
       at: '/',
@@ -150,9 +177,16 @@ class GfmAutoComplete {
         let tpl = '/${name} ';
         let referencePrefix = null;
         if (value.params.length > 0) {
-          [[referencePrefix]] = value.params;
-          if (/^[@%~]/.test(referencePrefix)) {
+          const regexp = /\[[a-z]+:/;
+          const match = regexp.exec(value.params);
+          if (match) {
+            [referencePrefix] = match;
             tpl += '<%- referencePrefix %>';
+          } else {
+            [[referencePrefix]] = value.params;
+            if (/^[@%~]/.test(referencePrefix)) {
+              tpl += '<%- referencePrefix %>';
+            }
           }
         }
         return template(tpl, { interpolate: /<%=([\s\S]+?)%>/g })({ referencePrefix });
@@ -242,6 +276,8 @@ class GfmAutoComplete {
       UNASSIGN_REVIEWER: '/unassign_reviewer',
       REASSIGN: '/reassign',
       CC: '/cc',
+      ATTENTION: '/attention',
+      REMOVE_ATTENTION: '/remove_attention',
     };
     let assignees = [];
     let reviewers = [];
@@ -320,6 +356,23 @@ class GfmAutoComplete {
           } else if (command === MEMBER_COMMAND.UNASSIGN_REVIEWER) {
             // Only include members which are not assigned as a reviewer to Issuable currently
             return data.filter((member) => reviewers.includes(member.search));
+          } else if (
+            command === MEMBER_COMMAND.ATTENTION ||
+            command === MEMBER_COMMAND.REMOVE_ATTENTION
+          ) {
+            const attentionUsers = [
+              ...(SidebarMediator.singleton?.store?.assignees || []),
+              ...(SidebarMediator.singleton?.store?.reviewers || []),
+            ];
+            const attentionRequested = command === MEMBER_COMMAND.REMOVE_ATTENTION;
+
+            return data.filter((member) =>
+              attentionUsers.find(
+                (u) =>
+                  createMemberSearchString(u).includes(member.search) &&
+                  u.attention_requested === attentionRequested,
+              ),
+            );
           }
 
           return data;
@@ -366,7 +419,7 @@ class GfmAutoComplete {
             }
             return {
               id: i.iid,
-              title: sanitize(i.title),
+              title: i.title,
               reference: i.reference,
               search: `${i.iid} ${i.title}`,
             };
@@ -404,7 +457,7 @@ class GfmAutoComplete {
 
             return {
               id: m.iid,
-              title: sanitize(m.title),
+              title: m.title,
               search: m.title,
               expired,
               dueDate,
@@ -456,7 +509,7 @@ class GfmAutoComplete {
             }
             return {
               id: m.iid,
-              title: sanitize(m.title),
+              title: m.title,
               reference: m.reference,
               search: `${m.iid} ${m.title}`,
             };
@@ -492,7 +545,7 @@ class GfmAutoComplete {
         beforeSave(merges) {
           if (GfmAutoComplete.isLoading(merges)) return merges;
           return $.map(merges, (m) => ({
-            title: sanitize(m.title),
+            title: m.title,
             color: m.color,
             search: m.title,
             set: m.set,
@@ -520,6 +573,10 @@ class GfmAutoComplete {
           if (labels) {
             if (!subtext.includes(flag)) {
               // Do not match if there is no `~` before the cursor
+              return null;
+            }
+            if (subtext.endsWith('~~')) {
+              // Do not match if there are two consecutive `~` characters (strikethrough) before the cursor
               return null;
             }
             const lastCandidate = subtext.split(flag).pop();
@@ -586,8 +643,44 @@ class GfmAutoComplete {
             }
             return {
               id: m.id,
-              title: sanitize(m.title),
+              title: m.title,
               search: `${m.id} ${m.title}`,
+            };
+          });
+        },
+      },
+    });
+  }
+
+  setupContacts($input) {
+    $input.atwho({
+      at: '[contact:',
+      suffix: ']',
+      alias: 'contacts',
+      searchKey: 'search',
+      displayTpl(value) {
+        let tmpl = GfmAutoComplete.Loading.template;
+        if (value.email != null) {
+          tmpl = GfmAutoComplete.Contacts.templateFunction(value);
+        }
+        return tmpl;
+      },
+      data: GfmAutoComplete.defaultLoadingData,
+      // eslint-disable-next-line no-template-curly-in-string
+      insertTpl: '${atwho-at}${email}',
+      callbacks: {
+        ...this.getDefaultCallbacks(),
+        beforeSave(contacts) {
+          return $.map(contacts, (m) => {
+            if (m.email == null) {
+              return m;
+            }
+            return {
+              id: m.id,
+              email: m.email,
+              firstName: m.first_name,
+              lastName: m.last_name,
+              search: `${m.email}`,
             };
           });
         },
@@ -651,16 +744,7 @@ class GfmAutoComplete {
         }
         return null;
       },
-      highlighter(li, query) {
-        // override default behaviour to escape dot character
-        // see https://github.com/ichord/At.js/pull/576
-        if (!query) {
-          return li;
-        }
-        const escapedQuery = query.replace(/[.+]/, '\\$&');
-        const regexp = new RegExp(`>\\s*([^<]*?)(${escapedQuery})([^<]*)\\s*<`, 'ig');
-        return li.replace(regexp, (str, $1, $2, $3) => `> ${$1}<strong>${$2}</strong>${$3} <`);
-      },
+      highlighter,
     };
   }
 
@@ -775,6 +859,7 @@ GfmAutoComplete.atTypeMap = {
   '/': 'commands',
   '[vulnerability:': 'vulnerabilities',
   $: 'snippets',
+  '[contact:': 'contacts',
 };
 
 GfmAutoComplete.typesWithBackendFiltering = ['vulnerabilities'];
@@ -868,9 +953,19 @@ GfmAutoComplete.Milestones = {
     return `<li>${escape(title)}</li>`;
   },
 };
+GfmAutoComplete.Contacts = {
+  templateFunction({ email, firstName, lastName }) {
+    return `<li><small>${firstName} ${lastName}</small> ${escape(email)}</li>`;
+  },
+};
+
+const loadingSpinner = loadingIconForLegacyJS({
+  inline: true,
+  classes: ['gl-mr-2'],
+}).outerHTML;
+
 GfmAutoComplete.Loading = {
-  template:
-    '<li style="pointer-events: none;"><span class="spinner align-text-bottom mr-1"></span>Loading...</li>',
+  template: `<li style="pointer-events: none;">${loadingSpinner}Loading...</li>`,
 };
 
 export default GfmAutoComplete;

@@ -1,11 +1,12 @@
-import { GlSearchBoxByType, GlDropdown } from '@gitlab/ui';
-import { shallowMount, createLocalVue } from '@vue/test-utils';
-import { nextTick } from 'vue';
+import { GlSearchBoxByType } from '@gitlab/ui';
+import { shallowMount } from '@vue/test-utils';
+import Vue, { nextTick } from 'vue';
+
 import VueApollo from 'vue-apollo';
 import createMockApollo from 'helpers/mock_apollo_helper';
 import waitForPromises from 'helpers/wait_for_promises';
 import createFlash from '~/flash';
-import { IssuableType } from '~/issue_show/constants';
+import { IssuableType } from '~/issues/constants';
 import SidebarAssigneesRealtime from '~/sidebar/components/assignees/assignees_realtime.vue';
 import IssuableAssignees from '~/sidebar/components/assignees/issuable_assignees.vue';
 import SidebarAssigneesWidget from '~/sidebar/components/assignees/sidebar_assignees_widget.vue';
@@ -23,8 +24,7 @@ const updateIssueAssigneesMutationSuccess = jest
   .mockResolvedValue(updateIssueAssigneesMutationResponse);
 const mockError = jest.fn().mockRejectedValue('Error!');
 
-const localVue = createLocalVue();
-localVue.use(VueApollo);
+Vue.use(VueApollo);
 
 const initialAssignees = [
   {
@@ -59,7 +59,6 @@ describe('Sidebar assignees widget', () => {
       [updateIssueAssigneesMutation, updateIssueAssigneesMutationHandler],
     ]);
     wrapper = shallowMount(SidebarAssigneesWidget, {
-      localVue,
       apolloProvider: fakeApollo,
       propsData: {
         iid: '1',
@@ -77,7 +76,16 @@ describe('Sidebar assignees widget', () => {
         SidebarEditableItem,
         UserSelect,
         GlSearchBoxByType,
-        GlDropdown,
+        GlDropdown: {
+          template: `
+            <div>
+              <slot name="footer"></slot>
+            </div>
+          `,
+          methods: {
+            show: jest.fn(),
+          },
+        },
       },
     });
   };
@@ -138,9 +146,17 @@ describe('Sidebar assignees widget', () => {
       createComponent();
       await waitForPromises();
 
-      expect(findAssignees().props('users')).toEqual(
-        issuableQueryResponse.data.workspace.issuable.assignees.nodes,
-      );
+      expect(findAssignees().props('users')).toEqual([
+        {
+          id: 'gid://gitlab/User/2',
+          avatarUrl:
+            'https://www.gravatar.com/avatar/a95e5b71488f4b9d69ce5ff58bfd28d6?s=80\u0026d=identicon',
+          name: 'Jacki Kub',
+          username: 'francina.skiles',
+          webUrl: '/franc',
+          status: null,
+        },
+      ]);
     });
 
     it('renders an error when issuable query is rejected', async () => {
@@ -196,7 +212,7 @@ describe('Sidebar assignees widget', () => {
           {
             assignees: [
               {
-                __typename: 'User',
+                __typename: 'UserCore',
                 avatarUrl:
                   'https://www.gravatar.com/avatar/e64c7d89f26bd1972efa854d13d7dd61?s=80&d=identicon',
                 id: 'gid://gitlab/User/1',
@@ -206,7 +222,7 @@ describe('Sidebar assignees widget', () => {
                 status: null,
               },
             ],
-            id: 1,
+            id: 'gid://gitlab/Issue/1',
           },
         ],
       ]);
@@ -322,9 +338,10 @@ describe('Sidebar assignees widget', () => {
   });
 
   describe('when user is not signed in', () => {
-    beforeEach(() => {
+    beforeEach(async () => {
       gon.current_username = undefined;
       createComponent();
+      await waitForPromises();
     });
 
     it('passes signedIn prop as false to IssuableAssignees', () => {
@@ -332,20 +349,8 @@ describe('Sidebar assignees widget', () => {
     });
   });
 
-  it('when realtime feature flag is disabled', async () => {
+  it('includes the real-time assignees component', async () => {
     createComponent();
-    await waitForPromises();
-    expect(findRealtimeAssignees().exists()).toBe(false);
-  });
-
-  it('when realtime feature flag is enabled', async () => {
-    createComponent({
-      provide: {
-        glFeatures: {
-          realTimeIssueSidebar: true,
-        },
-      },
-    });
     await waitForPromises();
     expect(findRealtimeAssignees().exists()).toBe(true);
   });
@@ -353,6 +358,7 @@ describe('Sidebar assignees widget', () => {
   describe('when making changes to participants list', () => {
     beforeEach(async () => {
       createComponent();
+      await waitForPromises();
     });
 
     it('passes falsy `isDirty` prop to editable item if no changes to selected users were made', () => {

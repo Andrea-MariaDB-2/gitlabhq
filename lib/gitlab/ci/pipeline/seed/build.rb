@@ -7,15 +7,13 @@ module Gitlab
         class Build < Seed::Base
           include Gitlab::Utils::StrongMemoize
 
-          EnvironmentCreationFailure = Class.new(StandardError)
-
           delegate :dig, to: :@seed_attributes
 
-          def initialize(context, attributes, previous_stages, current_stage)
+          def initialize(context, attributes, stages_for_needs_lookup = [])
             @context = context
             @pipeline = context.pipeline
             @seed_attributes = attributes
-            @stages_for_needs_lookup = (previous_stages + [current_stage]).compact
+            @stages_for_needs_lookup = stages_for_needs_lookup.compact
             @needs_attributes = dig(:needs_attributes)
             @resource_group_key = attributes.delete(:resource_group_key)
             @job_variables = @seed_attributes.delete(:job_variables)
@@ -30,7 +28,7 @@ module Gitlab
             @except = Gitlab::Ci::Build::Policy
               .fabricate(attributes.delete(:except))
             @rules = Gitlab::Ci::Build::Rules
-              .new(attributes.delete(:rules), default_when: 'on_success')
+              .new(attributes.delete(:rules), default_when: attributes[:when])
             @cache = Gitlab::Ci::Build::Cache
               .new(attributes.delete(:cache), @pipeline)
 
@@ -43,12 +41,14 @@ module Gitlab
 
           def included?
             strong_memoize(:inclusion) do
-              if @using_rules
-                rules_result.pass?
-              elsif @using_only || @using_except
-                all_of_only? && none_of_except?
-              else
-                true
+              logger.instrument(:pipeline_seed_build_inclusion) do
+                if @using_rules
+                  rules_result.pass?
+                elsif @using_only || @using_except
+                  all_of_only? && none_of_except?
+                else
+                  true
+                end
               end
             end
           end
@@ -79,9 +79,7 @@ module Gitlab
 
           def to_resource
             strong_memoize(:resource) do
-              processable = initialize_processable
-              assign_resource_group(processable)
-              processable
+              initialize_processable
             end
           end
 
@@ -89,46 +87,13 @@ module Gitlab
             if bridge?
               ::Ci::Bridge.new(attributes)
             else
-              ::Ci::Build.new(attributes).tap do |build|
-                build.assign_attributes(self.class.environment_attributes_for(build))
-              end
+              ::Ci::Build.new(attributes)
             end
-          end
-
-          def assign_resource_group(processable)
-            processable.resource_group =
-              Seed::Processable::ResourceGroup.new(processable, @resource_group_key)
-                                              .to_resource
-          end
-
-          def self.environment_attributes_for(build)
-            return {} unless build.has_environment?
-
-            environment = Seed::Environment.new(build).to_resource
-
-            # If there is a validation error on environment creation, such as
-            # the name contains invalid character, the build falls back to a
-            # non-environment job.
-            unless environment.persisted?
-              Gitlab::ErrorTracking.track_exception(
-                EnvironmentCreationFailure.new,
-                project_id: build.project_id,
-                reason: environment.errors.full_messages.to_sentence)
-
-              return { environment: nil }
-            end
-
-            build.persisted_environment = environment
-
-            {
-              deployment: Seed::Deployment.new(build, environment).to_resource,
-              metadata_attributes: {
-                expanded_environment_name: environment.name
-              }
-            }
           end
 
           private
+
+          delegate :logger, to: :@context
 
           def all_of_only?
             @only.all? { |spec| spec.satisfied_by?(@pipeline, evaluate_context) }
@@ -168,7 +133,7 @@ module Gitlab
           end
 
           def variable_expansion_errors
-            expanded_collection = evaluate_context.variables.sort_and_expand_all(@pipeline.project)
+            expanded_collection = evaluate_context.variables.sort_and_expand_all
             errors = expanded_collection.errors
             ["#{name}: #{errors}"] if errors
           end
@@ -210,12 +175,14 @@ module Gitlab
           end
 
           def runner_tags
-            { tag_list: evaluate_runner_tags }.compact
+            strong_memoize(:runner_tags) do
+              { tag_list: evaluate_runner_tags }.compact
+            end
           end
 
           def evaluate_runner_tags
-            @seed_attributes[:tag_list]&.map do |tag|
-              ExpandVariables.expand_existing(tag, evaluate_context.variables)
+            @seed_attributes.delete(:tag_list)&.map do |tag|
+              ExpandVariables.expand_existing(tag, -> { evaluate_context.variables_hash })
             end
           end
 
@@ -239,5 +206,3 @@ module Gitlab
     end
   end
 end
-
-Gitlab::Ci::Pipeline::Seed::Build.prepend_mod_with('Gitlab::Ci::Pipeline::Seed::Build')

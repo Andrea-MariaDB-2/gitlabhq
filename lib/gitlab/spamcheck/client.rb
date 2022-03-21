@@ -5,6 +5,7 @@ module Gitlab
   module Spamcheck
     class Client
       include ::Spam::SpamConstants
+
       DEFAULT_TIMEOUT_SECS = 2
 
       VERDICT_MAPPING = {
@@ -20,19 +21,16 @@ module Gitlab
         update: ::Spamcheck::Action::UPDATE
       }.freeze
 
+      URL_SCHEME_REGEX = %r{^grpc://|^tls://}.freeze
+
       def initialize
         @endpoint_url = Gitlab::CurrentSettings.current_application_settings.spam_check_endpoint_url
 
-        # remove the `grpc://` as it's only useful to ensure we're expecting to
-        # connect with Spamcheck
-        @endpoint_url = @endpoint_url.gsub(%r(^grpc:\/\/), '')
+        @creds = client_creds(@endpoint_url)
 
-        @creds =
-          if Rails.env.development? || Rails.env.test?
-            :this_channel_is_insecure
-          else
-            GRPC::Core::ChannelCredentials.new
-          end
+        # remove the `grpc://` or 'tls://' as it's only useful to ensure we're expecting to
+        # connect with Spamcheck
+        @endpoint_url = @endpoint_url.sub(URL_SCHEME_REGEX, '')
       end
 
       def issue_spam?(spam_issue:, user:, context: {})
@@ -73,6 +71,8 @@ module Gitlab
         user_pb.emails << build_email(user.email, user.confirmed?)
 
         user.emails.each do |email|
+          next if email.user_primary_email?
+
           user_pb.emails << build_email(email.email, email.confirmed?)
         end
 
@@ -96,6 +96,14 @@ module Gitlab
       def convert_to_pb_timestamp(ar_timestamp)
         Google::Protobuf::Timestamp.new(seconds: ar_timestamp.to_time.to_i,
                                         nanos: ar_timestamp.to_time.nsec)
+      end
+
+      def client_creds(url)
+        if URI(url).scheme == 'tls'
+          GRPC::Core::ChannelCredentials.new(::Gitlab::X509::Certificate.ca_certs_bundle)
+        else
+          :this_channel_is_insecure
+        end
       end
 
       def grpc_client

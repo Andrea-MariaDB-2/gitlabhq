@@ -3,12 +3,13 @@
 module Mutations
   module Issues
     class Create < BaseMutation
-      include FindsProject
       graphql_name 'CreateIssue'
 
-      authorize :create_issue
-
+      include Mutations::SpamProtection
+      include FindsProject
       include CommonMutationArguments
+
+      authorize :create_issue
 
       argument :project_path, GraphQL::Types::ID,
                required: true,
@@ -50,6 +51,14 @@ module Mutations
                required: false,
                description: 'Array of user IDs to assign to the issue.'
 
+      argument :move_before_id, ::Types::GlobalIDType[::Issue],
+               required: false,
+               description: 'Global ID of issue that should be placed before the current issue.'
+
+      argument :move_after_id, ::Types::GlobalIDType[::Issue],
+               required: false,
+               description: 'Global ID of issue that should be placed after the current issue.'
+
       field :issue,
             Types::IssueType,
             null: true,
@@ -71,14 +80,12 @@ module Mutations
 
       def resolve(project_path:, **attributes)
         project = authorized_find!(project_path)
-        params = build_create_issue_params(attributes.merge(author_id: current_user.id))
+        params = build_create_issue_params(attributes.merge(author_id: current_user.id), project)
 
         spam_params = ::Spam::SpamParams.new_from_request(request: context[:request])
         issue = ::Issues::CreateService.new(project: project, current_user: current_user, params: params, spam_params: spam_params).execute
 
-        if issue.spam?
-          issue.errors.add(:base, 'Spam detected.')
-        end
+        check_spam_action_response!(issue)
 
         {
           issue: issue.valid? ? issue : nil,
@@ -88,10 +95,18 @@ module Mutations
 
       private
 
-      def build_create_issue_params(params)
+      # _project argument is unused here, but it is necessary on the EE version of the method
+      def build_create_issue_params(params, _project)
         params[:milestone_id] &&= params[:milestone_id]&.model_id
         params[:assignee_ids] &&= params[:assignee_ids].map { |assignee_id| assignee_id&.model_id }
         params[:label_ids] &&= params[:label_ids].map { |label_id| label_id&.model_id }
+
+        if params[:move_before_id].present? || params[:move_after_id].present?
+          params[:move_between_ids] = [
+            params.delete(:move_before_id)&.model_id,
+            params.delete(:move_after_id)&.model_id
+          ]
+        end
 
         params
       end

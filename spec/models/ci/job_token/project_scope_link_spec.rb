@@ -9,6 +9,11 @@ RSpec.describe Ci::JobToken::ProjectScopeLink do
 
   let_it_be(:project) { create(:project) }
 
+  it_behaves_like 'cleanup by a loose foreign key' do
+    let!(:parent) { create(:user) }
+    let!(:model) { create(:ci_job_token_project_scope_link, added_by: parent) }
+  end
+
   describe 'unique index' do
     let!(:link) { create(:ci_job_token_project_scope_link) }
 
@@ -81,6 +86,20 @@ RSpec.describe Ci::JobToken::ProjectScopeLink do
       let(:target_project) { create(:project) }
 
       it { is_expected.to be_nil }
+    end
+  end
+
+  context 'loose foreign key on ci_job_token_project_scope_links.source_project_id' do
+    it_behaves_like 'cleanup by a loose foreign key' do
+      let!(:parent) { create(:project) }
+      let!(:model) { create(:ci_job_token_project_scope_link, source_project: parent) }
+    end
+  end
+
+  context 'loose foreign key on ci_job_token_project_scope_links.target_project_id' do
+    it_behaves_like 'cleanup by a loose foreign key' do
+      let!(:parent) { create(:project) }
+      let!(:model) { create(:ci_job_token_project_scope_link, target_project: parent) }
     end
   end
 end

@@ -1,6 +1,6 @@
 ---
 stage: Manage
-group: Access
+group: Authentication and Authorization
 info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
 type: reference
 ---
@@ -40,7 +40,8 @@ User claims and attributes:
 
 SCIM mapping:
 
-![Azure AD SCIM](img/AzureAD-scim_attribute_mapping.png)
+![Azure AD SCIM Provisioning](img/AzureAD-scim_provisioning.png)
+![Azure AD SCIM Attribute Mapping](img/AzureAD-scim_attribute_mapping.png)
 
 Group Sync:
 
@@ -71,6 +72,10 @@ Sign on settings:
 Self-managed instance example:
 
 ![Okta admin panel view](img/okta_admin_panel_v13_9.png)
+
+Setting the username for the newly provisioned users when assigning them the SCIM app:
+
+![Assigning SCIM app to users on Okta](img/okta_setting_username.png)
 
 ## OneLogin
 

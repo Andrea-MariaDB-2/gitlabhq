@@ -28,7 +28,7 @@ RSpec.describe Quality::TestLevel do
     context 'when level is unit' do
       it 'returns a pattern' do
         expect(subject.pattern(:unit))
-          .to eq("spec/{bin,channels,config,db,dependencies,elastic,elastic_integration,experiments,factories,finders,frontend,graphql,haml_lint,helpers,initializers,javascripts,lib,models,policies,presenters,rack_servers,replicators,routing,rubocop,serializers,services,sidekiq,spam,support_specs,tasks,uploaders,validators,views,workers,tooling}{,/**/}*_spec.rb")
+          .to eq("spec/{bin,channels,config,db,dependencies,elastic,elastic_integration,experiments,events,factories,finders,frontend,graphql,haml_lint,helpers,initializers,javascripts,lib,metrics_server,models,policies,presenters,rack_servers,replicators,routing,rubocop,scripts,serializers,services,sidekiq,sidekiq_cluster,spam,support_specs,tasks,uploaders,validators,views,workers,tooling,component}{,/**/}*_spec.rb")
       end
     end
 
@@ -49,7 +49,7 @@ RSpec.describe Quality::TestLevel do
     context 'when level is integration' do
       it 'returns a pattern' do
         expect(subject.pattern(:integration))
-          .to eq("spec/{controllers,mailers,requests}{,/**/}*_spec.rb")
+          .to eq("spec/{commands,controllers,mailers,requests}{,/**/}*_spec.rb")
       end
     end
 
@@ -63,7 +63,14 @@ RSpec.describe Quality::TestLevel do
     context 'with a prefix' do
       it 'returns a pattern' do
         expect(described_class.new('ee/').pattern(:system))
-          .to eq("ee/spec/{features}{,/**/}*_spec.rb")
+          .to eq("{ee/}spec/{features}{,/**/}*_spec.rb")
+      end
+    end
+
+    context 'with several prefixes' do
+      it 'returns a pattern' do
+        expect(described_class.new(['', 'ee/', 'jh/']).pattern(:system))
+          .to eq("{,ee/,jh/}spec/{features}{,/**/}*_spec.rb")
       end
     end
 
@@ -103,7 +110,7 @@ RSpec.describe Quality::TestLevel do
     context 'when level is unit' do
       it 'returns a regexp' do
         expect(subject.regexp(:unit))
-          .to eq(%r{spec/(bin|channels|config|db|dependencies|elastic|elastic_integration|experiments|factories|finders|frontend|graphql|haml_lint|helpers|initializers|javascripts|lib|models|policies|presenters|rack_servers|replicators|routing|rubocop|serializers|services|sidekiq|spam|support_specs|tasks|uploaders|validators|views|workers|tooling)})
+          .to eq(%r{spec/(bin|channels|config|db|dependencies|elastic|elastic_integration|experiments|events|factories|finders|frontend|graphql|haml_lint|helpers|initializers|javascripts|lib|metrics_server|models|policies|presenters|rack_servers|replicators|routing|rubocop|scripts|serializers|services|sidekiq|sidekiq_cluster|spam|support_specs|tasks|uploaders|validators|views|workers|tooling|component)})
       end
     end
 
@@ -124,7 +131,7 @@ RSpec.describe Quality::TestLevel do
     context 'when level is integration' do
       it 'returns a regexp' do
         expect(subject.regexp(:integration))
-          .to eq(%r{spec/(controllers|mailers|requests)})
+          .to eq(%r{spec/(commands|controllers|mailers|requests)})
       end
     end
 
@@ -138,7 +145,14 @@ RSpec.describe Quality::TestLevel do
     context 'with a prefix' do
       it 'returns a regexp' do
         expect(described_class.new('ee/').regexp(:system))
-          .to eq(%r{ee/spec/(features)})
+          .to eq(%r{(ee/)spec/(features)})
+      end
+    end
+
+    context 'with several prefixes' do
+      it 'returns a regexp' do
+        expect(described_class.new(['', 'ee/', 'jh/']).regexp(:system))
+          .to eq(%r{(|ee/|jh/)spec/(features)})
       end
     end
 
@@ -188,6 +202,10 @@ RSpec.describe Quality::TestLevel do
 
     it 'returns the correct level for an integration test' do
       expect(subject.level_for('spec/mailers/abuse_report_mailer_spec.rb')).to eq(:integration)
+    end
+
+    it 'returns the correct level for an integration test in a subfolder' do
+      expect(subject.level_for('spec/commands/sidekiq_cluster/cli.rb')).to eq(:integration)
     end
 
     it 'returns the correct level for a system test' do

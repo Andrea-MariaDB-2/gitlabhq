@@ -1,23 +1,19 @@
 <script>
-import { mergeUrlParams, redirectTo } from '~/lib/utils/url_utility';
 import { __, s__, sprintf } from '~/locale';
 import {
   COMMIT_ACTION_CREATE,
   COMMIT_ACTION_UPDATE,
   COMMIT_FAILURE,
   COMMIT_SUCCESS,
+  COMMIT_SUCCESS_WITH_REDIRECT,
 } from '../../constants';
 import commitCIFile from '../../graphql/mutations/commit_ci_file.mutation.graphql';
-import updateCurrentBranchMutation from '../../graphql/mutations/update_current_branch.mutation.graphql';
-import updateLastCommitBranchMutation from '../../graphql/mutations/update_last_commit_branch.mutation.graphql';
-import getCurrentBranch from '../../graphql/queries/client/current_branch.graphql';
-import getIsNewCiConfigFile from '../../graphql/queries/client/is_new_ci_config_file.graphql';
-import getPipelineEtag from '../../graphql/queries/client/pipeline_etag.graphql';
+import updateCurrentBranchMutation from '../../graphql/mutations/client/update_current_branch.mutation.graphql';
+import updateLastCommitBranchMutation from '../../graphql/mutations/client/update_last_commit_branch.mutation.graphql';
+import updatePipelineEtag from '../../graphql/mutations/client/update_pipeline_etag.mutation.graphql';
+import getCurrentBranch from '../../graphql/queries/client/current_branch.query.graphql';
 
 import CommitForm from './commit_form.vue';
-
-const MR_SOURCE_BRANCH = 'merge_request[source_branch]';
-const MR_TARGET_BRANCH = 'merge_request[target_branch]';
 
 export default {
   alertTexts: {
@@ -30,7 +26,7 @@ export default {
   components: {
     CommitForm,
   },
-  inject: ['projectFullPath', 'ciConfigPath', 'newMergeRequestPath'],
+  inject: ['projectFullPath', 'ciConfigPath'],
   props: {
     ciFileContent: {
       type: String,
@@ -41,20 +37,33 @@ export default {
       required: false,
       default: '',
     },
+    hasUnsavedChanges: {
+      type: Boolean,
+      required: true,
+    },
+    isNewCiConfigFile: {
+      type: Boolean,
+      required: false,
+      default: false,
+    },
+    scrollToCommitForm: {
+      type: Boolean,
+      required: false,
+      default: false,
+    },
   },
   data() {
     return {
       commit: {},
-      isNewCiConfigFile: false,
       isSaving: false,
     };
   },
   apollo: {
-    isNewCiConfigFile: {
-      query: getIsNewCiConfigFile,
-    },
     currentBranch: {
       query: getCurrentBranch,
+      update(data) {
+        return data.workBranches.current.name;
+      },
     },
   },
   computed: {
@@ -66,23 +75,13 @@ export default {
     },
   },
   methods: {
-    redirectToNewMergeRequest(sourceBranch) {
-      const url = mergeUrlParams(
-        {
-          [MR_SOURCE_BRANCH]: sourceBranch,
-          [MR_TARGET_BRANCH]: this.currentBranch,
-        },
-        this.newMergeRequestPath,
-      );
-      redirectTo(url);
-    },
     async onCommitSubmit({ message, targetBranch, openMergeRequest }) {
       this.isSaving = true;
 
       try {
         const {
           data: {
-            commitCreate: { errors },
+            commitCreate: { errors, commitPipelinePath: pipelineEtag },
           },
         } = await this.$apollo.mutate({
           mutation: commitCIFile,
@@ -96,22 +95,33 @@ export default {
             content: this.ciFileContent,
             lastCommitId: this.commitSha,
           },
-          update(store, { data }) {
-            const pipelineEtag = data?.commitCreate?.commit?.commitPipelinePath;
-            if (pipelineEtag) {
-              store.writeQuery({ query: getPipelineEtag, data: { pipelineEtag } });
-            }
-          },
         });
+
+        if (pipelineEtag) {
+          this.updatePipelineEtag(pipelineEtag);
+        }
 
         if (errors?.length) {
           this.$emit('showError', { type: COMMIT_FAILURE, reasons: errors });
-        } else if (openMergeRequest) {
-          this.redirectToNewMergeRequest(targetBranch);
         } else {
-          this.$emit('commit', { type: COMMIT_SUCCESS });
+          const commitBranch = targetBranch;
+          const params = openMergeRequest
+            ? {
+                type: COMMIT_SUCCESS_WITH_REDIRECT,
+                params: {
+                  sourceBranch: commitBranch,
+                  targetBranch: this.currentBranch,
+                },
+              }
+            : { type: COMMIT_SUCCESS };
+
+          this.$emit('commit', {
+            ...params,
+          });
+
           this.updateLastCommitBranch(targetBranch);
           this.updateCurrentBranch(targetBranch);
+
           if (this.currentBranch === targetBranch) {
             this.$emit('updateCommitSha');
           }
@@ -121,9 +131,6 @@ export default {
       } finally {
         this.isSaving = false;
       }
-    },
-    onCommitCancel() {
-      this.$emit('resetContent');
     },
     updateCurrentBranch(currentBranch) {
       this.$apollo.mutate({
@@ -137,6 +144,9 @@ export default {
         variables: { lastCommitBranch },
       });
     },
+    updatePipelineEtag(pipelineEtag) {
+      this.$apollo.mutate({ mutation: updatePipelineEtag, variables: { pipelineEtag } });
+    },
   },
 };
 </script>
@@ -145,8 +155,11 @@ export default {
   <commit-form
     :current-branch="currentBranch"
     :default-message="defaultCommitMessage"
+    :has-unsaved-changes="hasUnsavedChanges"
+    :is-new-ci-config-file="isNewCiConfigFile"
     :is-saving="isSaving"
-    @cancel="onCommitCancel"
+    :scroll-to-commit-form="scrollToCommitForm"
+    v-on="$listeners"
     @submit="onCommitSubmit"
   />
 </template>

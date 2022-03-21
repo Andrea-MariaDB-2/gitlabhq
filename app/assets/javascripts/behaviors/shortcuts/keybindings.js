@@ -19,7 +19,7 @@ export const LOCAL_STORAGE_KEY = 'gl-keyboard-shortcuts-customizations';
  */
 export const getCustomizations = memoize(() => {
   let parsedCustomizations = {};
-  const localStorageIsSafe = AccessorUtilities.isLocalStorageAccessSafe();
+  const localStorageIsSafe = AccessorUtilities.canUseLocalStorage();
 
   if (localStorageIsSafe) {
     try {
@@ -128,6 +128,13 @@ export const ITALIC_TEXT = {
   id: 'editing.italicText',
   description: __('Italic text'),
   defaultKeys: ['mod+i'],
+  customizable: false,
+};
+
+export const STRIKETHROUGH_TEXT = {
+  id: 'editing.strikethroughText',
+  description: __('Strikethrough text'),
+  defaultKeys: ['mod+shift+x'],
   customizable: false,
 };
 
@@ -304,6 +311,12 @@ export const GO_TO_PROJECT_WIKI = {
   id: 'project.goToWiki',
   description: __('Go to wiki'),
   defaultKeys: ['g w'], // eslint-disable-line @gitlab/require-i18n-strings
+};
+
+export const GO_TO_PROJECT_WEBIDE = {
+  id: 'project.goToWebIDE',
+  description: __('Open in Web IDE'),
+  defaultKeys: ['.'],
 };
 
 export const PROJECT_FILES_MOVE_SELECTION_UP = {
@@ -505,7 +518,14 @@ export const GLOBAL_SHORTCUTS_GROUP = {
 export const EDITING_SHORTCUTS_GROUP = {
   id: 'editing',
   name: __('Editing'),
-  keybindings: [BOLD_TEXT, ITALIC_TEXT, LINK_TEXT, TOGGLE_MARKDOWN_PREVIEW, EDIT_RECENT_COMMENT],
+  keybindings: [
+    BOLD_TEXT,
+    ITALIC_TEXT,
+    STRIKETHROUGH_TEXT,
+    LINK_TEXT,
+    TOGGLE_MARKDOWN_PREVIEW,
+    EDIT_RECENT_COMMENT,
+  ],
 };
 
 export const WIKI_SHORTCUTS_GROUP = {
@@ -549,6 +569,7 @@ export const PROJECT_SHORTCUTS_GROUP = {
     GO_TO_PROJECT_KUBERNETES,
     GO_TO_PROJECT_SNIPPETS,
     GO_TO_PROJECT_WIKI,
+    GO_TO_PROJECT_WEBIDE,
   ],
 };
 

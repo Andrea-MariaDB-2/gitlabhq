@@ -1,10 +1,13 @@
+variables:
+  AUTO_BUILD_IMAGE_VERSION: 'v1.9.1'
+
 build:
   stage: build
-  image: 'registry.gitlab.com/gitlab-org/cluster-integration/auto-build-image:v1.0.0'
+  image: 'registry.gitlab.com/gitlab-org/cluster-integration/auto-build-image:${AUTO_BUILD_IMAGE_VERSION}'
   variables:
     DOCKER_TLS_CERTDIR: ''
   services:
-    - name: 'docker:20.10.6-dind'
+    - name: 'docker:20.10.12-dind'
       command: ['--tls=false', '--host=tcp://0.0.0.0:2375']
   script:
     - |
@@ -16,6 +19,9 @@ build:
         export CI_APPLICATION_TAG=${CI_APPLICATION_TAG:-$CI_COMMIT_TAG}
       fi
     - /build/build.sh
+  artifacts:
+    reports:
+      dotenv: gl-auto-build-variables.env
   rules:
     - if: '$BUILD_DISABLED'
       when: never

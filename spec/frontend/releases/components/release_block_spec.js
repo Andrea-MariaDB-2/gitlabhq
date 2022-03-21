@@ -1,6 +1,7 @@
 import { mount } from '@vue/test-utils';
 import $ from 'jquery';
-import { getJSONFixture } from 'helpers/fixtures';
+import { nextTick } from 'vue';
+import originalRelease from 'test_fixtures/api/releases/release.json';
 import * as commonUtils from '~/lib/utils/common_utils';
 import * as urlUtility from '~/lib/utils/url_utility';
 import EvidenceBlock from '~/releases/components/evidence_block.vue';
@@ -9,13 +10,11 @@ import ReleaseBlockFooter from '~/releases/components/release_block_footer.vue';
 import { BACK_URL_PARAM } from '~/releases/constants';
 import timeagoMixin from '~/vue_shared/mixins/timeago';
 
-const originalRelease = getJSONFixture('api/releases/release.json');
-
 describe('Release block', () => {
   let wrapper;
   let release;
 
-  const factory = (releaseProp, featureFlags = {}) => {
+  const factory = async (releaseProp, featureFlags = {}) => {
     wrapper = mount(ReleaseBlock, {
       propsData: {
         release: releaseProp,
@@ -27,7 +26,7 @@ describe('Release block', () => {
       },
     });
 
-    return wrapper.vm.$nextTick();
+    await nextTick();
   };
 
   const milestoneListLabel = () => wrapper.find('.js-milestone-list-label');

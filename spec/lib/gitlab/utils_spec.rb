@@ -7,7 +7,7 @@ RSpec.describe Gitlab::Utils do
 
   delegate :to_boolean, :boolean_to_yes_no, :slugify, :random_string, :which,
            :ensure_array_from_string, :to_exclusive_sentence, :bytes_to_megabytes,
-           :append_path, :check_path_traversal!, :allowlisted?, :check_allowed_absolute_path!, :decode_path, :ms_to_round_sec, to: :described_class
+           :append_path, :check_path_traversal!, :allowlisted?, :check_allowed_absolute_path!, :decode_path, :ms_to_round_sec, :check_allowed_absolute_path_and_path_traversal!, to: :described_class
 
   describe '.check_path_traversal!' do
     it 'detects path traversal in string without any separators' do
@@ -53,8 +53,77 @@ RSpec.describe Gitlab::Utils do
       expect(check_path_traversal!('dir/.foo.rb')).to eq('dir/.foo.rb')
     end
 
+    it 'logs potential path traversal attempts' do
+      expect(Gitlab::AppLogger).to receive(:warn).with(message: "Potential path traversal attempt detected", path: "..")
+      expect { check_path_traversal!('..') }.to raise_error(/Invalid path/)
+    end
+
+    it 'logs does nothing for a safe string' do
+      expect(Gitlab::AppLogger).not_to receive(:warn).with(message: "Potential path traversal attempt detected", path: "dir/.foo.rb")
+      expect(check_path_traversal!('dir/.foo.rb')).to eq('dir/.foo.rb')
+    end
+
     it 'does nothing for a non-string' do
       expect(check_path_traversal!(nil)).to be_nil
+    end
+  end
+
+  describe '.check_allowed_absolute_path_and_path_traversal!' do
+    let(:allowed_paths) { %w[/home/foo ./foo .test/foo ..test/foo dir/..foo.rb dir/.foo.rb] }
+
+    it 'detects path traversal in string without any separators' do
+      expect { check_allowed_absolute_path_and_path_traversal!('.', allowed_paths) }.to raise_error(/Invalid path/)
+      expect { check_allowed_absolute_path_and_path_traversal!('..', allowed_paths) }.to raise_error(/Invalid path/)
+    end
+
+    it 'detects path traversal at the start of the string' do
+      expect { check_allowed_absolute_path_and_path_traversal!('../foo', allowed_paths) }.to raise_error(/Invalid path/)
+      expect { check_allowed_absolute_path_and_path_traversal!('..\\foo', allowed_paths) }.to raise_error(/Invalid path/)
+    end
+
+    it 'detects path traversal at the start of the string, even to just the subdirectory' do
+      expect { check_allowed_absolute_path_and_path_traversal!('../', allowed_paths) }.to raise_error(/Invalid path/)
+      expect { check_allowed_absolute_path_and_path_traversal!('..\\', allowed_paths) }.to raise_error(/Invalid path/)
+      expect { check_allowed_absolute_path_and_path_traversal!('/../', allowed_paths) }.to raise_error(/Invalid path/)
+      expect { check_allowed_absolute_path_and_path_traversal!('\\..\\', allowed_paths) }.to raise_error(/Invalid path/)
+    end
+
+    it 'detects path traversal in the middle of the string' do
+      expect { check_allowed_absolute_path_and_path_traversal!('foo/../../bar', allowed_paths) }.to raise_error(/Invalid path/)
+      expect { check_allowed_absolute_path_and_path_traversal!('foo\\..\\..\\bar', allowed_paths) }.to raise_error(/Invalid path/)
+      expect { check_allowed_absolute_path_and_path_traversal!('foo/..\\bar', allowed_paths) }.to raise_error(/Invalid path/)
+      expect { check_allowed_absolute_path_and_path_traversal!('foo\\../bar', allowed_paths) }.to raise_error(/Invalid path/)
+      expect { check_allowed_absolute_path_and_path_traversal!('foo/..\\..\\..\\..\\../bar', allowed_paths) }.to raise_error(/Invalid path/)
+    end
+
+    it 'detects path traversal at the end of the string when slash-terminates' do
+      expect { check_allowed_absolute_path_and_path_traversal!('foo/../', allowed_paths) }.to raise_error(/Invalid path/)
+      expect { check_allowed_absolute_path_and_path_traversal!('foo\\..\\', allowed_paths) }.to raise_error(/Invalid path/)
+    end
+
+    it 'detects path traversal at the end of the string' do
+      expect { check_allowed_absolute_path_and_path_traversal!('foo/..', allowed_paths) }.to raise_error(/Invalid path/)
+      expect { check_allowed_absolute_path_and_path_traversal!('foo\\..', allowed_paths) }.to raise_error(/Invalid path/)
+    end
+
+    it 'does not return errors for a safe string' do
+      expect(check_allowed_absolute_path_and_path_traversal!('./foo', allowed_paths)).to be_nil
+      expect(check_allowed_absolute_path_and_path_traversal!('.test/foo', allowed_paths)).to be_nil
+      expect(check_allowed_absolute_path_and_path_traversal!('..test/foo', allowed_paths)).to be_nil
+      expect(check_allowed_absolute_path_and_path_traversal!('dir/..foo.rb', allowed_paths)).to be_nil
+      expect(check_allowed_absolute_path_and_path_traversal!('dir/.foo.rb', allowed_paths)).to be_nil
+    end
+
+    it 'raises error for a non-string' do
+      expect {check_allowed_absolute_path_and_path_traversal!(nil, allowed_paths)}.to raise_error(StandardError)
+    end
+
+    it 'raises an exception if an absolute path is not allowed' do
+      expect { check_allowed_absolute_path!('/etc/passwd', allowed_paths) }.to raise_error(StandardError)
+    end
+
+    it 'does nothing for an allowed absolute path' do
+      expect(check_allowed_absolute_path!('/home/foo', allowed_paths)).to be_nil
     end
   end
 
@@ -249,10 +318,16 @@ RSpec.describe Gitlab::Utils do
   end
 
   describe '.which' do
-    it 'finds the full path to an executable binary' do
-      expect(File).to receive(:executable?).with('/bin/sh').and_return(true)
+    before do
+      stub_env('PATH', '/sbin:/usr/bin:/home/joe/bin')
+    end
 
-      expect(which('sh', 'PATH' => '/bin')).to eq('/bin/sh')
+    it 'finds the full path to an executable binary in order of appearance' do
+      expect(File).to receive(:executable?).with('/sbin/tool').ordered.and_return(false)
+      expect(File).to receive(:executable?).with('/usr/bin/tool').ordered.and_return(true)
+      expect(File).not_to receive(:executable?).with('/home/joe/bin/tool')
+
+      expect(which('tool')).to eq('/usr/bin/tool')
     end
   end
 
@@ -430,6 +505,23 @@ RSpec.describe Gitlab::Utils do
 
     it 'returns nil with invalid parameter' do
       expect(described_class.parse_url(1)).to be nil
+    end
+  end
+
+  describe '.add_url_parameters' do
+    subject { described_class.add_url_parameters(url, params) }
+
+    where(:url, :params, :expected_url) do
+      nil                          | nil                | ''
+      nil                          | { b: 3, a: 2 }     | '?a=2&b=3'
+      'https://gitlab.com'         | nil                | 'https://gitlab.com'
+      'https://gitlab.com'         | { b: 3, a: 2 }     | 'https://gitlab.com?a=2&b=3'
+      'https://gitlab.com?a=1#foo' | { b: 3, 'a': 2 }   | 'https://gitlab.com?a=2&b=3#foo'
+      'https://gitlab.com?a=1#foo' | [[:b, 3], [:a, 2]] | 'https://gitlab.com?a=2&b=3#foo'
+    end
+
+    with_them do
+      it { is_expected.to eq(expected_url) }
     end
   end
 

@@ -1,11 +1,13 @@
 # frozen_string_literal: true
 
 module IssuesHelper
+  include Issues::IssueTypeHelpers
+
   def issue_css_classes(issue)
     classes = ["issue"]
     classes << "closed" if issue.closed?
     classes << "today" if issue.new?
-    classes << "user-can-drag" if @sort == 'relative_position'
+    classes << "gl-cursor-grab" if @sort == 'relative_position'
     classes.join(' ')
   end
 
@@ -49,7 +51,7 @@ module IssuesHelper
   end
 
   def work_item_type_icon(issue_type)
-    if WorkItem::Type.base_types.include?(issue_type)
+    if WorkItems::Type.base_types.include?(issue_type)
       "issue-type-#{issue_type.to_s.dasherize}"
     else
       'issue-type-issue'
@@ -61,7 +63,7 @@ module IssuesHelper
   end
 
   def issue_hidden?(issue)
-    Feature.enabled?(:ban_user_feature_flag) && issue.hidden?
+    Feature.enabled?(:ban_user_feature_flag, default_enabled: :yaml) && issue.hidden?
   end
 
   def hidden_issue_icon(issue)
@@ -166,23 +168,8 @@ module IssuesHelper
     issue.moved_from.project.service_desk_enabled? && !issue.project.service_desk_enabled?
   end
 
-  def use_startup_call?
-    request.query_parameters.empty? && @sort == 'created_date'
-  end
-
-  def startup_call_params
-    {
-      state: 'opened',
-      with_labels_details: 'true',
-      page: 1,
-      per_page: 20,
-      order_by: 'created_at',
-      sort: 'desc'
-    }
-  end
-
   def issue_header_actions_data(project, issuable, current_user)
-    new_issuable_params = { issue: { description: _('Related to #%{issue_id}.') % { issue_id: issuable.iid } + "\n\n" } }
+    new_issuable_params = { issue: {}, add_related_issue: issuable.iid }
     if issuable.incident?
       new_issuable_params[:issuable_template] = 'incident'
       new_issuable_params[:issue][:issue_type] = 'incident'
@@ -190,11 +177,14 @@ module IssuesHelper
 
     {
       can_create_issue: show_new_issue_link?(project).to_s,
+      can_create_incident: create_issue_type_allowed?(project, :incident).to_s,
+      can_destroy_issue: can?(current_user, :"destroy_#{issuable.to_ability_name}", issuable).to_s,
       can_reopen_issue: can?(current_user, :reopen_issue, issuable).to_s,
       can_report_spam: issuable.submittable_as_spam_by?(current_user).to_s,
       can_update_issue: can?(current_user, :update_issue, issuable).to_s,
       iid: issuable.iid,
       is_issue_author: (issuable.author == current_user).to_s,
+      issue_path: issuable_path(issuable),
       issue_type: issuable_display_type(issuable),
       new_issue_path: new_project_issue_path(project, new_issuable_params),
       project_path: project.full_path,
@@ -203,34 +193,50 @@ module IssuesHelper
     }
   end
 
-  def issues_list_data(project, current_user, finder)
+  def common_issues_list_data(namespace, current_user)
     {
       autocomplete_award_emojis_path: autocomplete_award_emojis_path,
       calendar_path: url_for(safe_params.merge(calendar_url_options)),
+      empty_state_svg_path: image_path('illustrations/issues.svg'),
+      full_path: namespace.full_path,
+      initial_sort: current_user&.user_preference&.issues_sort,
+      is_anonymous_search_disabled: Feature.enabled?(:disable_anonymous_search, type: :ops).to_s,
+      is_issue_repositioning_disabled: issue_repositioning_disabled?.to_s,
+      is_signed_in: current_user.present?.to_s,
+      jira_integration_path: help_page_url('integration/jira/issues', anchor: 'view-jira-issues'),
+      rss_path: url_for(safe_params.merge(rss_url_options)),
+      sign_in_path: new_user_session_path
+    }
+  end
+
+  def project_issues_list_data(project, current_user)
+    common_issues_list_data(project, current_user).merge(
       can_bulk_update: can?(current_user, :admin_issue, project).to_s,
       can_edit: can?(current_user, :admin_project, project).to_s,
       can_import_issues: can?(current_user, :import_issues, @project).to_s,
-      email: current_user&.notification_email,
+      email: current_user&.notification_email_or_default,
       emails_help_page_path: help_page_path('development/emails', anchor: 'email-namespace'),
-      empty_state_svg_path: image_path('illustrations/issues.svg'),
       export_csv_path: export_csv_project_issues_path(project),
-      full_path: project.full_path,
       has_any_issues: project_issues(project).exists?.to_s,
       import_csv_issues_path: import_csv_namespace_project_issues_path,
       initial_email: project.new_issuable_address(current_user, 'issue'),
-      is_signed_in: current_user.present?.to_s,
-      issues_path: project_issues_path(project),
-      jira_integration_path: help_page_url('integration/jira/issues', anchor: 'view-jira-issues'),
+      is_project: true.to_s,
       markdown_help_path: help_page_path('user/markdown'),
       max_attachment_size: number_to_human_size(Gitlab::CurrentSettings.max_attachment_size.megabytes),
-      new_issue_path: new_project_issue_path(project, issue: { milestone_id: finder.milestones.first.try(:id) }),
+      new_issue_path: new_project_issue_path(project),
       project_import_jira_path: project_import_jira_path(project),
       quick_actions_help_path: help_page_path('user/project/quick_actions'),
+      releases_path: project_releases_path(project, format: :json),
       reset_path: new_issuable_address_project_path(project, issuable_type: 'issue'),
-      rss_path: url_for(safe_params.merge(rss_url_options)),
-      show_new_issue_link: show_new_issue_link?(project).to_s,
-      sign_in_path: new_user_session_path
-    }
+      show_new_issue_link: show_new_issue_link?(project).to_s
+    )
+  end
+
+  def group_issues_list_data(group, current_user)
+    common_issues_list_data(group, current_user).merge(
+      has_any_issues: @has_issues.to_s,
+      has_any_projects: @has_projects.to_s
+    )
   end
 
   # Overridden in EE

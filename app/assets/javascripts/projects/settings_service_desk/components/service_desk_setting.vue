@@ -1,7 +1,18 @@
 <script>
-import { GlButton, GlFormSelect, GlToggle, GlLoadingIcon, GlSprintf } from '@gitlab/ui';
+import {
+  GlButton,
+  GlToggle,
+  GlLoadingIcon,
+  GlSprintf,
+  GlFormInputGroup,
+  GlFormGroup,
+  GlFormInput,
+  GlLink,
+} from '@gitlab/ui';
+import { helpPagePath } from '~/helpers/help_page_helper';
 import { __ } from '~/locale';
 import ClipboardButton from '~/vue_shared/components/clipboard_button.vue';
+import ServiceDeskTemplateDropdown from './service_desk_template_dropdown.vue';
 
 export default {
   i18n: {
@@ -10,10 +21,14 @@ export default {
   components: {
     ClipboardButton,
     GlButton,
-    GlFormSelect,
     GlToggle,
     GlLoadingIcon,
     GlSprintf,
+    GlFormInput,
+    GlFormGroup,
+    GlFormInputGroup,
+    GlLink,
+    ServiceDeskTemplateDropdown,
   },
   props: {
     isEnabled: {
@@ -39,6 +54,11 @@ export default {
       required: false,
       default: '',
     },
+    initialSelectedFileTemplateProjectId: {
+      type: Number,
+      required: false,
+      default: null,
+    },
     initialOutgoingName: {
       type: String,
       required: false,
@@ -63,14 +83,14 @@ export default {
   data() {
     return {
       selectedTemplate: this.initialSelectedTemplate,
+      selectedFileTemplateProjectId: this.initialSelectedFileTemplateProjectId,
       outgoingName: this.initialOutgoingName || __('GitLab Support Bot'),
       projectKey: this.initialProjectKey,
+      searchTerm: '',
+      projectKeyError: null,
     };
   },
   computed: {
-    templateOptions() {
-      return [''].concat(this.templates);
-    },
     hasProjectKeySupport() {
       return Boolean(this.customEmailEnabled);
     },
@@ -79,6 +99,16 @@ export default {
     },
     hasCustomEmail() {
       return this.customEmail && this.customEmail !== this.incomingEmail;
+    },
+    emailSuffixHelpUrl() {
+      return helpPagePath('user/project/service_desk.html', {
+        anchor: 'configuring-a-custom-email-address-suffix',
+      });
+    },
+    customEmailAddressHelpUrl() {
+      return helpPagePath('user/project/service_desk.html', {
+        anchor: 'using-a-custom-email-address',
+      });
     },
   },
   methods: {
@@ -90,7 +120,20 @@ export default {
         selectedTemplate: this.selectedTemplate,
         outgoingName: this.outgoingName,
         projectKey: this.projectKey,
+        fileTemplateProjectId: this.selectedFileTemplateProjectId,
       });
+    },
+    templateChange({ selectedFileTemplateProjectId, selectedTemplate }) {
+      this.selectedFileTemplateProjectId = selectedFileTemplateProjectId;
+      this.selectedTemplate = selectedTemplate;
+    },
+    validateProjectKey() {
+      if (this.projectKey && !new RegExp(/^[a-z0-9_]+$/).test(this.projectKey)) {
+        this.projectKeyError = __('Only use lowercase letters, numbers, and underscores.');
+        return;
+      }
+
+      this.projectKeyError = null;
     },
   },
 };
@@ -111,75 +154,127 @@ export default {
     </label>
     <div v-if="isEnabled" class="row mt-3">
       <div class="col-md-9 mb-0">
-        <strong
-          id="incoming-email-describer"
-          class="gl-display-block gl-mb-1"
-          data-testid="incoming-email-describer"
+        <gl-form-group
+          :label="__('Email address to use for Support Desk')"
+          label-for="incoming-email"
+          data-testid="incoming-email-label"
         >
-          {{ __('Email address to use for Support Desk') }}
-        </strong>
-        <template v-if="email">
-          <div class="input-group">
-            <input
+          <gl-form-input-group v-if="email">
+            <gl-form-input
+              id="incoming-email"
               ref="service-desk-incoming-email"
               type="text"
-              class="form-control"
               data-testid="incoming-email"
               :placeholder="__('Incoming email')"
               :aria-label="__('Incoming email')"
               aria-describedby="incoming-email-describer"
               :value="email"
-              disabled="true"
+              :disabled="true"
             />
-            <div class="input-group-append">
+            <template #append>
               <clipboard-button :title="__('Copy')" :text="email" css-class="input-group-text" />
-            </div>
-          </div>
-          <span v-if="hasCustomEmail" class="form-text text-muted">
-            <gl-sprintf :message="__('Emails sent to %{email} are also supported.')">
-              <template #email>
-                <code>{{ incomingEmail }}</code>
+            </template>
+          </gl-form-input-group>
+          <template v-if="email && hasCustomEmail" #description>
+            <span class="gl-mt-2 d-inline-block">
+              <gl-sprintf :message="__('Emails sent to %{email} are also supported.')">
+                <template #email>
+                  <code>{{ incomingEmail }}</code>
+                </template>
+              </gl-sprintf>
+            </span>
+          </template>
+          <template v-if="!email">
+            <gl-loading-icon size="sm" :inline="true" />
+            <span class="sr-only">{{ __('Fetching incoming email') }}</span>
+          </template>
+        </gl-form-group>
+
+        <gl-form-group :label="__('Email address suffix')" :state="!projectKeyError">
+          <gl-form-input
+            v-if="hasProjectKeySupport"
+            id="service-desk-project-suffix"
+            v-model.trim="projectKey"
+            data-testid="project-suffix"
+            @blur="validateProjectKey"
+          />
+
+          <template v-if="hasProjectKeySupport" #description>
+            <gl-sprintf
+              :message="
+                __('Add a suffix to Service Desk email address. %{linkStart}Learn more.%{linkEnd}')
+              "
+            >
+              <template #link="{ content }">
+                <gl-link
+                  :href="emailSuffixHelpUrl"
+                  target="_blank"
+                  class="gl-text-blue-600 font-size-inherit"
+                  >{{ content }}
+                </gl-link>
               </template>
             </gl-sprintf>
-          </span>
-        </template>
-        <template v-else>
-          <gl-loading-icon size="sm" :inline="true" />
-          <span class="sr-only">{{ __('Fetching incoming email') }}</span>
-        </template>
+          </template>
+          <template v-else #description>
+            <gl-sprintf
+              :message="
+                __(
+                  'To add a custom suffix, set up a Service Desk email address. %{linkStart}Learn more.%{linkEnd}',
+                )
+              "
+            >
+              <template #link="{ content }">
+                <gl-link
+                  :href="customEmailAddressHelpUrl"
+                  target="_blank"
+                  class="gl-text-blue-600 font-size-inherit"
+                  >{{ content }}
+                </gl-link>
+              </template>
+            </gl-sprintf>
+          </template>
 
-        <template v-if="hasProjectKeySupport">
-          <label for="service-desk-project-suffix" class="mt-3">
-            {{ __('Project name suffix') }}
-          </label>
-          <input id="service-desk-project-suffix" v-model.trim="projectKey" class="form-control" />
-          <span class="form-text text-muted">
-            {{
-              __('A string appended to the project path to form the Service Desk email address.')
-            }}
-          </span>
-        </template>
+          <template v-if="hasProjectKeySupport && projectKeyError" #invalid-feedback>
+            {{ projectKeyError }}
+          </template>
+        </gl-form-group>
 
-        <label for="service-desk-template-select" class="mt-3">
-          {{ __('Template to append to all Service Desk issues') }}
-        </label>
-        <gl-form-select
-          id="service-desk-template-select"
-          v-model="selectedTemplate"
-          data-qa-selector="service_desk_template_dropdown"
-          :options="templateOptions"
-        />
-        <label for="service-desk-email-from-name" class="mt-3">
-          {{ __('Email display name') }}
-        </label>
-        <input id="service-desk-email-from-name" v-model.trim="outgoingName" class="form-control" />
-        <span class="form-text text-muted">
-          {{ __('Emails sent from Service Desk have this name.') }}
-        </span>
+        <gl-form-group
+          :label="__('Template to append to all Service Desk issues')"
+          :state="!projectKeyError"
+          class="mt-3"
+        >
+          <service-desk-template-dropdown
+            :selected-template="selectedTemplate"
+            :selected-file-template-project-id="selectedFileTemplateProjectId"
+            :templates="templates"
+            @change="templateChange"
+          />
+        </gl-form-group>
+
+        <gl-form-group
+          :label="__('Email display name')"
+          label-for="service-desk-email-from-name"
+          :state="!projectKeyError"
+          class="mt-3"
+        >
+          <gl-form-input
+            v-if="hasProjectKeySupport"
+            id="service-desk-email-from-name"
+            v-model.trim="outgoingName"
+            data-testid="email-from-name"
+          />
+
+          <template v-if="hasProjectKeySupport" #description>
+            {{ __('Emails sent from Service Desk have this name.') }}
+          </template>
+        </gl-form-group>
+
         <div class="gl-display-flex gl-justify-content-end">
           <gl-button
             variant="success"
             class="gl-mt-5"
+            data-testid="save_service_desk_settings_button"
             data-qa-selector="save_service_desk_settings_button"
             :disabled="isTemplateSaving"
             @click="onSaveTemplate"

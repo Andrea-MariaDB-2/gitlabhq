@@ -14,13 +14,13 @@ RSpec.describe Packages::Package, type: :model do
     it { is_expected.to have_many(:dependency_links).inverse_of(:package) }
     it { is_expected.to have_many(:tags).inverse_of(:package) }
     it { is_expected.to have_many(:build_infos).inverse_of(:package) }
-    it { is_expected.to have_many(:pipelines).through(:build_infos) }
     it { is_expected.to have_one(:conan_metadatum).inverse_of(:package) }
     it { is_expected.to have_one(:maven_metadatum).inverse_of(:package) }
     it { is_expected.to have_one(:debian_publication).inverse_of(:package).class_name('Packages::Debian::Publication') }
     it { is_expected.to have_one(:debian_distribution).through(:debian_publication).source(:distribution).inverse_of(:packages).class_name('Packages::Debian::ProjectDistribution') }
     it { is_expected.to have_one(:nuget_metadatum).inverse_of(:package) }
     it { is_expected.to have_one(:rubygems_metadatum).inverse_of(:package) }
+    it { is_expected.to have_one(:npm_metadatum).inverse_of(:package) }
   end
 
   describe '.with_debian_codename' do
@@ -289,7 +289,6 @@ RSpec.describe Packages::Package, type: :model do
         it { is_expected.to allow_value('1.1-beta-2').for(:version) }
         it { is_expected.to allow_value('1.2-SNAPSHOT').for(:version) }
         it { is_expected.to allow_value('12.1.2-2-1').for(:version) }
-        it { is_expected.to allow_value('1.2.3..beta').for(:version) }
         it { is_expected.to allow_value('1.2.3-beta').for(:version) }
         it { is_expected.to allow_value('10.2.3-beta').for(:version) }
         it { is_expected.to allow_value('2.0.0.v200706041905-7C78EK9E_EkMNfNOd2d8qq').for(:version) }
@@ -297,6 +296,7 @@ RSpec.describe Packages::Package, type: :model do
         it { is_expected.to allow_value('703220b4e2cea9592caeb9f3013f6b1e5335c293').for(:version) }
         it { is_expected.to allow_value('RELEASE').for(:version) }
         it { is_expected.not_to allow_value('..1.2.3').for(:version) }
+        it { is_expected.not_to allow_value('1.2.3..beta').for(:version) }
         it { is_expected.not_to allow_value('  1.2.3').for(:version) }
         it { is_expected.not_to allow_value("1.2.3  \r\t").for(:version) }
         it { is_expected.not_to allow_value("\r\t 1.2.3").for(:version) }
@@ -413,9 +413,17 @@ RSpec.describe Packages::Package, type: :model do
       it_behaves_like 'validating version to be SemVer compliant for', :terraform_module_package
 
       context 'nuget package' do
-        it_behaves_like 'validating version to be SemVer compliant for', :nuget_package
+        subject { build_stubbed(:nuget_package) }
 
+        it { is_expected.to allow_value('1.2').for(:version) }
+        it { is_expected.to allow_value('1.2.3').for(:version) }
         it { is_expected.to allow_value('1.2.3.4').for(:version) }
+        it { is_expected.to allow_value('1.2.3-beta').for(:version) }
+        it { is_expected.to allow_value('1.2.3-alpha.3').for(:version) }
+        it { is_expected.not_to allow_value('1').for(:version) }
+        it { is_expected.not_to allow_value('1./2.3').for(:version) }
+        it { is_expected.not_to allow_value('../../../../../1.2.3').for(:version) }
+        it { is_expected.not_to allow_value('%2e%2e%2f1.2.3').for(:version) }
       end
     end
 
@@ -467,6 +475,15 @@ RSpec.describe Packages::Package, type: :model do
           end
         end
 
+        shared_examples 'validating both if the first package is pending destruction' do
+          before do
+            package.status = :pending_destruction
+          end
+
+          it_behaves_like 'validating the first package'
+          it_behaves_like 'validating the second package'
+        end
+
         context 'following the naming convention' do
           let(:name) { "@#{group.path}/test" }
 
@@ -495,6 +512,7 @@ RSpec.describe Packages::Package, type: :model do
 
               it_behaves_like 'validating the first package'
               it_behaves_like 'not validating the second package', field_with_error: :name
+              it_behaves_like 'validating both if the first package is pending destruction'
             end
           end
 
@@ -523,6 +541,7 @@ RSpec.describe Packages::Package, type: :model do
 
               it_behaves_like 'validating the first package'
               it_behaves_like 'not validating the second package', field_with_error: :base
+              it_behaves_like 'validating both if the first package is pending destruction'
             end
           end
         end
@@ -555,6 +574,7 @@ RSpec.describe Packages::Package, type: :model do
 
               it_behaves_like 'validating the first package'
               it_behaves_like 'not validating the second package', field_with_error: :name
+              it_behaves_like 'validating both if the first package is pending destruction'
             end
           end
 
@@ -583,6 +603,7 @@ RSpec.describe Packages::Package, type: :model do
 
               it_behaves_like 'validating the first package'
               it_behaves_like 'validating the second package'
+              it_behaves_like 'validating both if the first package is pending destruction'
             end
           end
         end
@@ -590,18 +611,52 @@ RSpec.describe Packages::Package, type: :model do
     end
 
     context "recipe uniqueness for conan packages" do
-      let!(:package) { create('conan_package') }
+      let_it_be(:package) { create(:conan_package) }
 
       it "will allow a conan package with same project, name, version and package_type" do
-        new_package = build('conan_package', project: package.project, name: package.name, version: package.version)
+        new_package = build(:conan_package, project: package.project, name: package.name, version: package.version)
         new_package.conan_metadatum.package_channel = 'beta'
         expect(new_package).to be_valid
       end
 
       it "will not allow a conan package with same recipe (name, version, metadatum.package_channel, metadatum.package_username, and package_type)" do
-        new_package = build('conan_package', project: package.project, name: package.name, version: package.version)
+        new_package = build(:conan_package, project: package.project, name: package.name, version: package.version)
         expect(new_package).not_to be_valid
         expect(new_package.errors.to_a).to include("Package recipe already exists")
+      end
+
+      context 'with pending destruction package' do
+        let_it_be(:package) { create(:conan_package, :pending_destruction) }
+
+        it 'will allow a conan package with same recipe (name, version, metadatum.package_channel, metadatum.package_username, and package_type)' do
+          new_package = build(:conan_package, project: package.project, name: package.name, version: package.version)
+          expect(new_package).to be_valid
+        end
+      end
+    end
+
+    describe '#valid_composer_global_name' do
+      let_it_be(:package) { create(:composer_package) }
+
+      context 'with different name and different project' do
+        let(:new_package) { build(:composer_package, name: 'different_name') }
+
+        it { expect(new_package).to be_valid }
+      end
+
+      context 'with same name and different project' do
+        let(:new_package) { build(:composer_package, name: package.name) }
+
+        it 'will not validate second package' do
+          expect(new_package).not_to be_valid
+          expect(new_package.errors.to_a).to include('Name is already taken by another project')
+        end
+
+        context 'with pending destruction package' do
+          let_it_be(:package) { create(:composer_package, :pending_destruction) }
+
+          it { expect(new_package).to be_valid }
+        end
       end
     end
 
@@ -623,6 +678,16 @@ RSpec.describe Packages::Package, type: :model do
       it "will allow a Debian package with same project, name, version, but no distribution" do
         new_package = build(:debian_package, project: package.project, name: package.name, version: package.version, published_in: nil)
         expect(new_package).to be_valid
+      end
+
+      context 'with pending_destruction package' do
+        let!(:package) { create(:debian_package, :pending_destruction) }
+
+        it "will allow a Debian package with same project, name, version and distribution" do
+          new_package = build(:debian_package, project: package.project, name: package.name, version: package.version)
+          new_package.debian_publication.distribution = package.debian_publication.distribution
+          expect(new_package).to be_valid
+        end
       end
     end
 
@@ -839,6 +904,7 @@ RSpec.describe Packages::Package, type: :model do
     end
 
     context 'status scopes' do
+      let_it_be(:default_package) { create(:maven_package, :default) }
       let_it_be(:hidden_package) { create(:maven_package, :hidden) }
       let_it_be(:processing_package) { create(:maven_package, :processing) }
       let_it_be(:error_package) { create(:maven_package, :error) }
@@ -856,10 +922,14 @@ RSpec.describe Packages::Package, type: :model do
       describe '.installable' do
         subject { described_class.installable }
 
-        it 'does not include non-displayable packages', :aggregate_failures do
+        it 'does not include non-installable packages', :aggregate_failures do
           is_expected.not_to include(error_package)
-          is_expected.not_to include(hidden_package)
           is_expected.not_to include(processing_package)
+        end
+
+        it 'includes installable packages', :aggregate_failures do
+          is_expected.to include(default_package)
+          is_expected.to include(hidden_package)
         end
       end
 
@@ -996,6 +1066,28 @@ RSpec.describe Packages::Package, type: :model do
       it 'returns the pipeline' do
         expect(package.pipeline).to eq(pipeline)
       end
+    end
+  end
+
+  describe '#pipelines' do
+    let_it_be_with_refind(:package) { create(:maven_package) }
+
+    subject { package.pipelines }
+
+    context 'package without pipeline' do
+      it { is_expected.to be_empty }
+    end
+
+    context 'package with pipeline' do
+      let_it_be(:pipeline) { create(:ci_pipeline) }
+      let_it_be(:pipeline2) { create(:ci_pipeline) }
+
+      before do
+        package.build_infos.create!(pipeline: pipeline)
+        package.build_infos.create!(pipeline: pipeline2)
+      end
+
+      it { is_expected.to contain_exactly(pipeline, pipeline2) }
     end
   end
 
@@ -1166,6 +1258,30 @@ RSpec.describe Packages::Package, type: :model do
     end
   end
 
+  describe '#mark_package_files_for_destruction' do
+    let_it_be(:package) { create(:npm_package, :pending_destruction) }
+
+    subject { package.mark_package_files_for_destruction }
+
+    it 'enqueues a sync worker job' do
+      expect(::Packages::MarkPackageFilesForDestructionWorker)
+        .to receive(:perform_async).with(package.id)
+
+      subject
+    end
+
+    context 'for a package non pending destruction' do
+      let_it_be(:package) { create(:npm_package) }
+
+      it 'does not enqueues a sync worker job' do
+        expect(::Packages::MarkPackageFilesForDestructionWorker)
+        .not_to receive(:perform_async).with(package.id)
+
+        subject
+      end
+    end
+  end
+
   describe '#create_build_infos!' do
     let_it_be(:package) { create(:package) }
     let_it_be(:pipeline) { create(:ci_pipeline) }
@@ -1184,7 +1300,7 @@ RSpec.describe Packages::Package, type: :model do
       end
 
       context 'with an already existing build info' do
-        let_it_be(:build_info) { create(:packages_build_info, package: package, pipeline: pipeline) }
+        let_it_be(:build_info) { create(:package_build_info, package: package, pipeline: pipeline) }
 
         it 'does not create a build info' do
           expect { subject }.not_to change { ::Packages::BuildInfo.count }
@@ -1205,6 +1321,18 @@ RSpec.describe Packages::Package, type: :model do
 
       it 'does not create a build info' do
         expect { subject }.not_to change { ::Packages::BuildInfo.count }
+      end
+    end
+  end
+
+  context 'with identical pending destruction package' do
+    described_class.package_types.keys.each do |package_format|
+      context "for package format #{package_format}" do
+        let_it_be(:package_pending_destruction) { create("#{package_format}_package", :pending_destruction) }
+
+        let(:new_package) { build("#{package_format}_package", name: package_pending_destruction.name, version: package_pending_destruction.version, project: package_pending_destruction.project) }
+
+        it { expect(new_package).to be_valid }
       end
     end
   end

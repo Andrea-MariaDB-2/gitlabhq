@@ -1,5 +1,5 @@
 <script>
-import { GlLoadingIcon, GlPagination, GlSprintf } from '@gitlab/ui';
+import { GlLoadingIcon, GlPagination, GlSprintf, GlAlert } from '@gitlab/ui';
 import { GlBreakpointInstance as bp } from '@gitlab/ui/dist/utils';
 import Mousetrap from 'mousetrap';
 import { mapState, mapGetters, mapActions } from 'vuex';
@@ -19,16 +19,15 @@ import { updateHistory } from '~/lib/utils/url_utility';
 import { __ } from '~/locale';
 import MrWidgetHowToMergeModal from '~/vue_merge_request_widget/components/mr_widget_how_to_merge_modal.vue';
 import PanelResizer from '~/vue_shared/components/panel_resizer.vue';
+import glFeatureFlagsMixin from '~/vue_shared/mixins/gl_feature_flags_mixin';
 
 import notesEventHub from '../../notes/event_hub';
 import {
   TREE_LIST_WIDTH_STORAGE_KEY,
   INITIAL_TREE_WIDTH,
   MIN_TREE_WIDTH,
-  MAX_TREE_WIDTH,
   TREE_HIDE_STATS_WIDTH,
   MR_TREE_SHOW_KEY,
-  CENTERED_LIMITED_CONTAINER_CLASSES,
   ALERT_OVERFLOW_HIDDEN,
   ALERT_MERGE_CONFLICT,
   ALERT_COLLAPSED_FILES,
@@ -46,7 +45,6 @@ import {
 import diffsEventHub from '../event_hub';
 import { reviewStatuses } from '../utils/file_reviews';
 import { diffsApp } from '../utils/performance';
-import { fileByFile } from '../utils/preferences';
 import { queueRedisHllEvents } from '../utils/queue_events';
 import CollapsedFilesWarning from './collapsed_files_warning.vue';
 import CommitWidget from './commit_widget.vue';
@@ -55,6 +53,7 @@ import DiffFile from './diff_file.vue';
 import HiddenFilesWarning from './hidden_files_warning.vue';
 import NoChanges from './no_changes.vue';
 import TreeList from './tree_list.vue';
+import VirtualScrollerScrollSync from './virtual_scroller_scroll_sync';
 
 export default {
   name: 'DiffsApp',
@@ -64,8 +63,7 @@ export default {
     DynamicScrollerItem: () =>
       import('vendor/vue-virtual-scroller').then(({ DynamicScrollerItem }) => DynamicScrollerItem),
     PreRenderer: () => import('./pre_renderer.vue').then((PreRenderer) => PreRenderer),
-    VirtualScrollerScrollSync: () =>
-      import('./virtual_scroller_scroll_sync').then((VSSSync) => VSSSync),
+    VirtualScrollerScrollSync,
     CompareVersions,
     DiffFile,
     NoChanges,
@@ -78,7 +76,9 @@ export default {
     GlPagination,
     GlSprintf,
     MrWidgetHowToMergeModal,
+    GlAlert,
   },
+  mixins: [glFeatureFlagsMixin()],
   alerts: {
     ALERT_OVERFLOW_HIDDEN,
     ALERT_MERGE_CONFLICT,
@@ -200,7 +200,6 @@ export default {
     ...mapState('diffs', [
       'showTreeList',
       'isLoading',
-      'isBatchLoading',
       'diffFiles',
       'diffViewType',
       'commit',
@@ -227,8 +226,9 @@ export default {
       'isParallelView',
       'currentDiffIndex',
       'isVirtualScrollingEnabled',
+      'isBatchLoading',
+      'isBatchLoadingError',
     ]),
-    ...mapGetters('batchComments', ['draftsCount']),
     ...mapGetters(['isNotesFetched', 'getNoteableData']),
     diffs() {
       if (!this.viewDiffsFileByFile) {
@@ -250,9 +250,6 @@ export default {
     },
     hideFileStats() {
       return this.treeWidth <= TREE_HIDE_STATS_WIDTH;
-    },
-    isLimitedContainer() {
-      return !this.renderFileTree && !this.isParallelView && !this.isFluidLayout;
     },
     isFullChangeset() {
       return this.startVersion === null && this.latestDiff;
@@ -331,7 +328,7 @@ export default {
       projectPath: this.projectPath,
       dismissEndpoint: this.dismissEndpoint,
       showSuggestPopover: this.showSuggestPopover,
-      viewDiffsFileByFile: fileByFile(this.fileByFileUserPreference),
+      viewDiffsFileByFile: this.fileByFileUserPreference || false,
       defaultSuggestionCommitMessage: this.defaultSuggestionCommitMessage,
       mrReviews: this.rehydratedMrReviews,
     });
@@ -389,8 +386,6 @@ export default {
     this.adjustView();
     this.subscribeToEvents();
 
-    this.CENTERED_LIMITED_CONTAINER_CLASSES = CENTERED_LIMITED_CONTAINER_CLASSES;
-
     this.unwatchDiscussions = this.$watch(
       () => `${this.diffFiles.length}:${this.$store.state.notes.discussions.length}`,
       () => this.setDiscussions(),
@@ -411,10 +406,8 @@ export default {
     this.unsubscribeFromEvents();
     this.removeEventListeners();
 
-    if (window.gon?.features?.diffsVirtualScrolling) {
-      diffsEventHub.$off('scrollToFileHash', this.scrollVirtualScrollerToFileHash);
-      diffsEventHub.$off('scrollToIndex', this.scrollVirtualScrollerToIndex);
-    }
+    diffsEventHub.$off('scrollToFileHash', this.scrollVirtualScrollerToFileHash);
+    diffsEventHub.$off('scrollToIndex', this.scrollVirtualScrollerToIndex);
   },
   methods: {
     ...mapActions(['startTaskList']),
@@ -527,32 +520,27 @@ export default {
         );
       }
 
-      if (
-        window.gon?.features?.diffsVirtualScrolling ||
-        window.gon?.features?.diffSearchingUsageData
-      ) {
-        let keydownTime;
-        Mousetrap.bind(['mod+f', 'mod+g'], () => {
-          keydownTime = new Date().getTime();
-        });
+      let keydownTime;
+      Mousetrap.bind(['mod+f', 'mod+g'], () => {
+        keydownTime = new Date().getTime();
+      });
 
-        window.addEventListener('blur', () => {
-          if (keydownTime) {
-            const delta = new Date().getTime() - keydownTime;
+      window.addEventListener('blur', () => {
+        if (keydownTime) {
+          const delta = new Date().getTime() - keydownTime;
 
-            // To make sure the user is using the find function we need to wait for blur
-            // and max 1000ms to be sure it the search box is filtered
-            if (delta >= 0 && delta < 1000) {
-              this.disableVirtualScroller();
+          // To make sure the user is using the find function we need to wait for blur
+          // and max 1000ms to be sure it the search box is filtered
+          if (delta >= 0 && delta < 1000) {
+            this.disableVirtualScroller();
 
-              if (window.gon?.features?.diffSearchingUsageData) {
-                api.trackRedisHllUserEvent('i_code_review_user_searches_diff');
-                api.trackRedisCounterEvent('diff_searches');
-              }
+            if (window.gon?.features?.usageDataDiffSearches) {
+              api.trackRedisHllUserEvent('i_code_review_user_searches_diff');
+              api.trackRedisCounterEvent('diff_searches');
             }
           }
-        });
-      }
+        }
+      });
     },
     removeEventListeners() {
       Mousetrap.unbind(keysFor(MR_PREVIOUS_FILE_IN_DIFF));
@@ -564,7 +552,7 @@ export default {
     jumpToFile(step) {
       const targetIndex = this.currentDiffIndex + step;
       if (targetIndex >= 0 && targetIndex < this.diffFiles.length) {
-        this.scrollToFile(this.diffFiles[targetIndex].file_path);
+        this.scrollToFile({ path: this.diffFiles[targetIndex].file_path });
       }
     },
     setTreeDisplay() {
@@ -594,8 +582,6 @@ export default {
       this.virtualScrollCurrentIndex = -1;
     },
     scrollVirtualScrollerToDiffNote() {
-      if (!window.gon?.features?.diffsVirtualScrolling) return;
-
       const id = window?.location?.hash;
 
       if (id.startsWith('#note_')) {
@@ -610,20 +596,19 @@ export default {
       }
     },
     subscribeToVirtualScrollingEvents() {
-      if (
-        window.gon?.features?.diffsVirtualScrolling &&
-        this.shouldShow &&
-        !this.subscribedToVirtualScrollingEvents
-      ) {
+      if (this.shouldShow && !this.subscribedToVirtualScrollingEvents) {
         diffsEventHub.$on('scrollToFileHash', this.scrollVirtualScrollerToFileHash);
         diffsEventHub.$on('scrollToIndex', this.scrollVirtualScrollerToIndex);
 
         this.subscribedToVirtualScrollingEvents = true;
       }
     },
+    reloadPage() {
+      window.location.reload();
+    },
   },
   minTreeWidth: MIN_TREE_WIDTH,
-  maxTreeWidth: MAX_TREE_WIDTH,
+  maxTreeWidth: window.innerWidth / 2,
   howToMergeDocsPath: helpPagePath('user/project/merge_requests/reviews/index.md', {
     anchor: 'checkout-merge-requests-locally-through-the-head-ref',
   }),
@@ -634,22 +619,18 @@ export default {
   <div v-show="shouldShow">
     <div v-if="isLoading || !isTreeLoaded" class="loading"><gl-loading-icon size="lg" /></div>
     <div v-else id="diffs" :class="{ active: shouldShow }" class="diffs tab-pane">
-      <compare-versions
-        :is-limited-container="isLimitedContainer"
-        :diff-files-count-text="numTotalFiles"
-      />
+      <compare-versions :diff-files-count-text="numTotalFiles" />
 
-      <hidden-files-warning
-        v-if="visibleWarning == $options.alerts.ALERT_OVERFLOW_HIDDEN"
-        :visible="numVisibleFiles"
-        :total="numTotalFiles"
-        :plain-diff-path="plainDiffPath"
-        :email-patch-path="emailPatchPath"
-      />
-      <collapsed-files-warning
-        v-if="visibleWarning == $options.alerts.ALERT_COLLAPSED_FILES"
-        :limited="isLimitedContainer"
-      />
+      <template v-if="!isBatchLoadingError">
+        <hidden-files-warning
+          v-if="visibleWarning == $options.alerts.ALERT_OVERFLOW_HIDDEN"
+          :visible="numVisibleFiles"
+          :total="numTotalFiles"
+          :plain-diff-path="plainDiffPath"
+          :email-patch-path="emailPatchPath"
+        />
+        <collapsed-files-warning v-if="visibleWarning == $options.alerts.ALERT_COLLAPSED_FILES" />
+      </template>
 
       <div
         :data-can-create-note="getNoteableData.current_user.can_create_note"
@@ -658,8 +639,7 @@ export default {
         <div
           v-if="renderFileTree"
           :style="{ width: `${treeWidth}px` }"
-          :class="{ 'review-bar-visible': draftsCount > 0 }"
-          class="diff-tree-list js-diff-tree-list px-3 pr-md-0"
+          class="diff-tree-list js-diff-tree-list gl-px-5"
         >
           <panel-resizer
             :size.sync="treeWidth"
@@ -671,14 +651,20 @@ export default {
           />
           <tree-list :hide-file-stats="hideFileStats" />
         </div>
-        <div
-          class="col-12 col-md-auto diff-files-holder"
-          :class="{
-            [CENTERED_LIMITED_CONTAINER_CLASSES]: isLimitedContainer,
-          }"
-        >
+        <div class="col-12 col-md-auto diff-files-holder">
           <commit-widget v-if="commit" :commit="commit" :collapsible="false" />
-          <div v-if="isBatchLoading" class="loading"><gl-loading-icon size="lg" /></div>
+          <gl-alert
+            v-if="isBatchLoadingError"
+            variant="danger"
+            :dismissible="false"
+            :primary-button-text="__('Reload page')"
+            @primaryAction="reloadPage"
+          >
+            {{ __("Error: Couldn't load some or all of the changes.") }}
+          </gl-alert>
+          <div v-if="isBatchLoading && !isBatchLoadingError" class="loading">
+            <gl-loading-icon size="lg" />
+          </div>
           <template v-else-if="renderDiffFiles">
             <dynamic-scroller
               v-if="isVirtualScrollingEnabled"
@@ -754,7 +740,10 @@ export default {
             </div>
             <gl-loading-icon v-else-if="retrievingBatches" size="lg" />
           </template>
-          <no-changes v-else :changes-empty-state-illustration="changesEmptyStateIllustration" />
+          <no-changes
+            v-else-if="!isBatchLoadingError"
+            :changes-empty-state-illustration="changesEmptyStateIllustration"
+          />
         </div>
       </div>
       <mr-widget-how-to-merge-modal

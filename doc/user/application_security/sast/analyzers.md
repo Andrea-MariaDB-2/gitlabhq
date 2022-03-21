@@ -6,8 +6,7 @@ info: To determine the technical writer assigned to the Stage/Group associated w
 
 # SAST Analyzers **(FREE)**
 
-> - [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/3775) in [GitLab Ultimate](https://about.gitlab.com/pricing/) 10.3.
-> - [Moved](https://gitlab.com/groups/gitlab-org/-/epics/2098) to GitLab Free in 13.3.
+> [Moved](https://gitlab.com/groups/gitlab-org/-/epics/2098) from GitLab Ultimate to GitLab Free in 13.3.
 
 SAST relies on underlying third party tools that are wrapped into what we call
 "Analyzers". An analyzer is a
@@ -59,14 +58,14 @@ support the following features:
 ## Official default analyzers
 
 Any custom change to the official analyzers can be achieved by using a
-[CI/CD variable in your `.gitlab-ci.yml`](index.md#customizing-the-sast-settings).
+[CI/CD variable in your `.gitlab-ci.yml`](index.md#available-cicd-variables).
 
 ### Using a custom Docker mirror
 
 You can switch to a custom Docker registry that provides the official analyzer
 images under a different prefix. For instance, the following instructs
-SAST to pull `my-docker-registry/gl-images/bandit`
-instead of `registry.gitlab.com/gitlab-org/security-products/analyzers/bandit`.
+SAST to pull `my-docker-registry/gl-images/sast/bandit`
+instead of `registry.gitlab.com/security-products/sast/bandit`.
 In `.gitlab-ci.yml` define:
 
 ```yaml

@@ -12,6 +12,26 @@ RSpec.describe Ci::ArchiveTraceService, '#execute' do
       expect { subject }.not_to raise_error
 
       expect(job.reload.job_artifacts_trace).to be_exist
+      expect(job.trace_metadata.trace_artifact).to eq(job.job_artifacts_trace)
+    end
+
+    context 'integration hooks' do
+      it do
+        stub_feature_flags(datadog_integration_logs_collection: [job.project])
+
+        expect(job.project).to receive(:execute_integrations) do |data, hook_type|
+          expect(data).to eq Gitlab::DataBuilder::ArchiveTrace.build(job)
+          expect(hook_type).to eq :archive_trace_hooks
+        end
+        expect { subject }.not_to raise_error
+      end
+
+      it 'with feature flag disabled' do
+        stub_feature_flags(datadog_integration_logs_collection: false)
+
+        expect(job.project).not_to receive(:execute_integrations)
+        expect { subject }.not_to raise_error
+      end
     end
 
     context 'when trace is already archived' do
@@ -27,7 +47,7 @@ RSpec.describe Ci::ArchiveTraceService, '#execute' do
 
       context 'when live trace chunks still exist' do
         before do
-          create(:ci_build_trace_chunk, build: job)
+          create(:ci_build_trace_chunk, build: job, chunk_index: 0)
         end
 
         it 'removes the trace chunks' do
@@ -39,8 +59,14 @@ RSpec.describe Ci::ArchiveTraceService, '#execute' do
             job.job_artifacts_trace.file.remove!
           end
 
-          it 'removes the trace artifact' do
-            expect { subject }.to change { job.reload.job_artifacts_trace }.to(nil)
+          it 'removes the trace artifact and builds a new one' do
+            existing_trace = job.job_artifacts_trace
+            expect(existing_trace).to receive(:destroy!).and_call_original
+
+            subject
+
+            expect(job.reload.job_artifacts_trace).to be_present
+            expect(job.reload.job_artifacts_trace.file.file).to be_present
           end
         end
       end
@@ -53,6 +79,80 @@ RSpec.describe Ci::ArchiveTraceService, '#execute' do
         expect(Sidekiq.logger).to receive(:warn).with(
           class: Ci::ArchiveTraceWorker.name,
           message: 'The job does not have live trace but going to be archived.',
+          job_id: job.id)
+
+        subject
+      end
+    end
+
+    context 'when the job is out of archival attempts' do
+      before do
+        create(:ci_build_trace_metadata,
+          build: job,
+          archival_attempts: Ci::BuildTraceMetadata::MAX_ATTEMPTS + 1,
+          last_archival_attempt_at: 1.week.ago)
+      end
+
+      it 'skips archiving' do
+        expect(job.trace).not_to receive(:archive!)
+
+        subject
+      end
+
+      it 'leaves a warning message in sidekiq log' do
+        expect(Sidekiq.logger).to receive(:warn).with(
+          class: Ci::ArchiveTraceWorker.name,
+          message: 'The job is out of archival attempts.',
+          job_id: job.id)
+
+        subject
+      end
+
+      context 'job has archive and chunks' do
+        let(:job) { create(:ci_build, :success, :trace_artifact) }
+
+        before do
+          create(:ci_build_trace_chunk, build: job, chunk_index: 0)
+        end
+
+        context 'archive is not completed' do
+          before do
+            job.job_artifacts_trace.file.remove!
+          end
+
+          it 'cleanups any stale archive data' do
+            expect(job.job_artifacts_trace).to be_present
+
+            subject
+
+            expect(job.reload.job_artifacts_trace).to be_nil
+          end
+        end
+
+        it 'removes trace chunks' do
+          expect { subject }.to change { job.trace_chunks.count }.to(0)
+        end
+      end
+    end
+
+    context 'when the archival process is backed off' do
+      before do
+        create(:ci_build_trace_metadata,
+          build: job,
+          archival_attempts: Ci::BuildTraceMetadata::MAX_ATTEMPTS - 1,
+          last_archival_attempt_at: 1.hour.ago)
+      end
+
+      it 'skips archiving' do
+        expect(job.trace).not_to receive(:archive!)
+
+        subject
+      end
+
+      it 'leaves a warning message in sidekiq log' do
+        expect(Sidekiq.logger).to receive(:warn).with(
+          class: Ci::ArchiveTraceWorker.name,
+          message: 'The job can not be archived right now.',
           job_id: job.id)
 
         subject
@@ -98,6 +198,7 @@ RSpec.describe Ci::ArchiveTraceService, '#execute' do
         .and_call_original
 
       expect { subject }.not_to raise_error
+      expect(job.trace_metadata.archival_attempts).to eq(1)
     end
   end
 end

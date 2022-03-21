@@ -82,12 +82,24 @@ export default class SidebarStore {
     }
   }
 
-  updateReviewer(id) {
+  updateAssignee(id, stateKey) {
+    const assignee = this.findAssignee({ id });
+
+    if (assignee) {
+      assignee[stateKey] = !assignee[stateKey];
+    }
+  }
+
+  updateReviewer(id, stateKey) {
     const reviewer = this.findReviewer({ id });
 
     if (reviewer) {
-      reviewer.reviewed = false;
+      reviewer[stateKey] = !reviewer[stateKey];
     }
+  }
+
+  overwrite(key, newData) {
+    this[key] = newData;
   }
 
   findAssignee(findAssignee) {

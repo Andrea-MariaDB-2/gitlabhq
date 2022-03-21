@@ -3,9 +3,9 @@
 module Types
   module Terraform
     class StateVersionType < BaseObject
-      include ::API::Helpers::RelatedResourcesHelpers
-
       graphql_name 'TerraformStateVersion'
+
+      include ::API::Helpers::RelatedResourcesHelpers
 
       authorize :read_terraform_state
 
@@ -23,7 +23,8 @@ module Types
 
       field :job, Types::Ci::JobType,
             null: true,
-            description: 'Job that created this version.'
+            description: 'Job that created this version.',
+            authorize: :read_commit_status
 
       field :serial, GraphQL::Types::Int,
             null: true,

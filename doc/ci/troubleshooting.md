@@ -16,12 +16,15 @@ This guide also lists common issues and possible solutions.
 An early source of problems can be incorrect syntax. The pipeline shows a `yaml invalid`
 badge and does not start running if any syntax or formatting problems are found.
 
-### Edit `gitlab-ci.yml` with the Web IDE
+### Edit `gitlab-ci.yml` with the pipeline editor
 
-The [GitLab Web IDE](../user/project/web_ide/index.md) offers advanced authoring tools,
-including syntax highlighting for the `.gitlab-ci.yml`, and is the recommended editing
-experience (rather than the single file editor). It offers code completion suggestions
-that ensure you are only using accepted keywords.
+The [pipeline editor](pipeline_editor/index.md) is the recommended editing
+experience (rather than the single file editor or the Web IDE). It includes:
+
+- Code completion suggestions that ensure you are only using accepted keywords.
+- Automatic syntax highlighting and validation.
+- The [CI/CD configuration visualization](pipeline_editor/index.md#visualize-ci-configuration),
+  a graphical representation of your `.gitlab-ci.yml` file.
 
 If you prefer to use another editor, you can use a schema like [the Schemastore `gitlab-ci` schema](https://json.schemastore.org/gitlab-ci)
 with your editor of choice.
@@ -33,7 +36,7 @@ file is correct. Paste in full `.gitlab-ci.yml` files or individual jobs configu
 to verify the basic syntax.
 
 When a `.gitlab-ci.yml` file is present in a project, you can also use the CI Lint
-tool to [simulate the creation of a full pipeline](lint.md#pipeline-simulation).
+tool to [simulate the creation of a full pipeline](lint.md#simulate-a-pipeline).
 It does deeper verification of the configuration syntax.
 
 ## Verify variables
@@ -50,7 +53,7 @@ and check if their values are what you expect.
 ## GitLab CI/CD documentation
 
 The [complete `.gitlab-ci.yml` reference](yaml/index.md) contains a full list of
-every keyword you may need to use to configure your pipelines.
+every keyword you can use to configure your pipelines.
 
 You can also look at a large number of pipeline configuration [examples](examples/index.md)
 and [templates](examples/index.md#cicd-templates).
@@ -66,17 +69,17 @@ if you are using that type:
   and run separate pipelines in the same project. You can also
   [dynamically generate the child pipeline's configuration](pipelines/parent_child_pipelines.md#dynamic-child-pipelines)
   at runtime.
-- [Pipelines for Merge Requests](pipelines/merge_request_pipelines.md): Run a pipeline
+- [Merge request pipelines](pipelines/merge_request_pipelines.md): Run a pipeline
   in the context of a merge request.
-  - [Pipelines for Merge Results](pipelines/pipelines_for_merged_results.md):
-    Pipelines for merge requests that run on the combined source and target branch
-  - [Merge Trains](pipelines/merge_trains.md):
-    Multiple pipelines for merged results that queue and run automatically before
+  - [Merged results pipelines](pipelines/merged_results_pipelines.md):
+    Merge request pipelines that run on the combined source and target branch
+  - [Merge trains](pipelines/merge_trains.md):
+    Multiple merged results pipelines that queue and run automatically before
     changes are merged.
 
 ### Troubleshooting Guides for CI/CD features
 
-There are troubleshooting guides available for some CI/CD features and related topics:
+Troubleshooting guides are available for some CI/CD features and related topics:
 
 - [Container Registry](../user/packages/container_registry/index.md#troubleshooting-the-gitlab-container-registry)
 - [GitLab Runner](https://docs.gitlab.com/runner/faq/)
@@ -118,7 +121,7 @@ Two pipelines can run when pushing a commit to a branch that has an open merge r
 associated with it. Usually one pipeline is a merge request pipeline, and the other
 is a branch pipeline.
 
-This is usually caused by the `rules` configuration, and there are several ways to
+This situation is usually caused by the `rules` configuration, and there are several ways to
 [prevent duplicate pipelines](jobs/job_control.md#avoid-duplicate-pipelines).
 
 #### A job is not in the pipeline
@@ -168,10 +171,10 @@ a branch to its remote repository. To illustrate the problem, suppose you've had
 1. A new pipeline starts running on the `example` branch again, however,
    the previous pipeline (2) fails because of `fatal: reference is not a tree:` error.
 
-This is because the previous pipeline cannot find a checkout-SHA (which is associated with the pipeline record)
+This occurs because the previous pipeline cannot find a checkout-SHA (which is associated with the pipeline record)
 from the `example` branch that the commit history has already been overwritten by the force-push.
-Similarly, [Pipelines for merged results](pipelines/pipelines_for_merged_results.md)
-might have failed intermittently due to [the same reason](pipelines/pipelines_for_merged_results.md#intermittently-pipelines-fail-by-fatal-reference-is-not-a-tree-error).
+Similarly, [Merged results pipelines](pipelines/merged_results_pipelines.md)
+might have failed intermittently due to [the same reason](pipelines/merged_results_pipelines.md#pipelines-fail-intermittently-with-a-fatal-reference-is-not-a-tree-error).
 
 As of GitLab 12.4, we've improved this behavior by persisting pipeline refs exclusively.
 To illustrate its life cycle:
@@ -189,6 +192,21 @@ To illustrate its life cycle:
 The merge request pipeline widget shows information about the pipeline status in
 a merge request. It's displayed above the [ability to merge status widget](#merge-request-status-messages).
 
+#### "Checking ability to merge automatically" message
+
+There is a [known issue](https://gitlab.com/gitlab-org/gitlab/-/issues/229352)
+where a merge request can be stuck with the `Checking ability to merge automatically`
+message.
+
+If your merge request has this message and it does not disappear after a few minutes,
+you can try one of these workarounds:
+
+- Refresh the merge request page.
+- Close & Re-open the merge request.
+- Rebase the merge request with the `/rebase` [quick action](../user/project/quick_actions.md).
+- If you have already confirmed the merge request is ready to be merged, you can merge
+  it with the `/merge` quick action.
+
 #### "Checking pipeline status" message
 
 This message is shown when the merge request has no pipeline associated with the
@@ -199,6 +217,7 @@ latest commit yet. This might be because:
 - You are not using CI/CD pipelines in your project.
 - You are using CI/CD pipelines in your project, but your configuration prevented a pipeline from running on the source branch for your merge request.
 - The latest pipeline was deleted (this is a [known issue](https://gitlab.com/gitlab-org/gitlab/-/issues/214323)).
+- The source branch of the merge request is on a private fork.
 
 After the pipeline is created, the message updates with the pipeline status.
 
@@ -222,10 +241,10 @@ This also applies if the pipeline has not been created yet, or if you are waitin
 for an external CI service. If you don't use pipelines for your project, then you
 should disable **Pipelines must succeed** so you can accept merge requests.
 
-### "The pipeline for this merge request did not complete. Push a new commit to fix the failure or check the troubleshooting documentation to see other possible actions." message
+#### "Merge blocked: pipeline must succeed. Push a new commit that fixes the failure" message
 
 This message is shown if the [merge request pipeline](pipelines/merge_request_pipelines.md),
-[merged results pipeline](pipelines/pipelines_for_merged_results.md),
+[merged results pipeline](pipelines/merged_results_pipelines.md),
 or [merge train pipeline](pipelines/merge_trains.md)
 has failed or been canceled.
 
@@ -245,6 +264,39 @@ If the merge train pipeline was canceled before the merge request was merged, wi
 
 - Add it to the train again.
 
+### Project `group/project` not found or access denied
+
+This message is shown if configuration is added with [`include`](yaml/index.md#include) and one of the following:
+
+- The configuration refers to a project that can't be found.
+- The user that is running the pipeline is unable to access any included projects.
+
+To resolve this, check that:
+
+- The path of the project is in the format `my-group/my-project` and does not include
+  any folders in the repository.
+- The user running the pipeline is a [member of the projects](../user/project/members/index.md#add-users-to-a-project)
+  that contain the included files. Users must also have the [permission](../user/permissions.md#job-permissions)
+  to run CI/CD jobs in the same projects.
+
+### "The parsed YAML is too big" message
+
+This message displays when the YAML configuration is too large or nested too deeply.
+YAML files with a large number of includes, and thousands of lines overall, are
+more likely to hit this memory limit. For example, a YAML file that is 200kb is
+likely to hit the default memory limit.
+
+To reduce the configuration size, you can:
+
+- Check the length of the expanded CI/CD configuration in the pipeline editor's
+  [merged YAML](pipeline_editor/index.md#view-expanded-configuration) tab. Look for
+  duplicated configuration that can be removed or simplified.
+- Move long or repeated `script` sections into standalone scripts in the project.
+- Use [parent and child pipelines](pipelines/parent_child_pipelines.md) to move some
+  work to jobs in an independent child pipeline.
+
+On a self-managed instance, you can [increase the size limits](../administration/instance_limits.md#maximum-size-and-depth-of-cicd-configuration-yaml-files).
+
 ## Pipeline warnings
 
 Pipeline configuration warnings are shown when you:
@@ -254,7 +306,7 @@ Pipeline configuration warnings are shown when you:
 
 ### "Job may allow multiple pipelines to run for a single action" warning
 
-When you use [`rules`](yaml/index.md#rules) with a `when:` clause without an `if:`
+When you use [`rules`](yaml/index.md#rules) with a `when` clause without an `if`
 clause, multiple pipelines may run. Usually this occurs when you push a commit to
 a branch that has an open merge request associated with it.
 
@@ -262,7 +314,7 @@ To [prevent duplicate pipelines](jobs/job_control.md#avoid-duplicate-pipelines),
 [`workflow: rules`](yaml/index.md#workflow) or rewrite your rules to control
 which pipelines can run.
 
-### Console workaround if job using resource_group gets stuck
+### Console workaround if job using resource_group gets stuck **(FREE SELF)**
 
 ```ruby
 # find resource group by name

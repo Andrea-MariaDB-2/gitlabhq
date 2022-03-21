@@ -2,7 +2,7 @@
 
 module QA
   RSpec.describe 'Create' do
-    describe 'SSH key support' do
+    describe 'SSH key support', :skip_fips_env do
       # Note: If you run these tests against GDK make sure you've enabled sshd
       # See: https://gitlab.com/gitlab-org/gitlab-qa/blob/master/docs/run_qa_against_gdk.md
 
@@ -26,7 +26,7 @@ module QA
         Flow::Login.sign_in
       end
 
-      it 'pushes code to the repository via SSH', :smoke, testcase: 'https://gitlab.com/gitlab-org/quality/testcases/-/quality/test_cases/1283' do
+      it 'pushes code to the repository via SSH', :smoke, testcase: 'https://gitlab.com/gitlab-org/gitlab/-/quality/test_cases/347825' do
         Resource::Repository::ProjectPush.fabricate! do |push|
           push.project = project
           push.ssh_key = @key
@@ -41,7 +41,7 @@ module QA
         end
       end
 
-      it 'pushes multiple branches and tags together', :smoke, testcase: 'https://gitlab.com/gitlab-org/quality/testcases/-/quality/test_cases/1282' do
+      it 'pushes multiple branches and tags together', :smoke, testcase: 'https://gitlab.com/gitlab-org/gitlab/-/quality/test_cases/347826' do
         branches = []
         tags = []
         Git::Repository.perform do |repository|

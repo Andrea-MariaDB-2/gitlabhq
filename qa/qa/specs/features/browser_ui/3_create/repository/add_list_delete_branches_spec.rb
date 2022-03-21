@@ -24,8 +24,6 @@ module QA
           proj.initialize_with_readme = true
         end
 
-        Runtime::Feature.enable(:delete_branch_confirmation_modals, project: project)
-
         master_branch = project.default_branch
 
         Git::Repository.perform do |repository|
@@ -61,7 +59,7 @@ module QA
         project.visit!
       end
 
-      it 'lists branches correctly after CRUD operations', testcase: 'https://gitlab.com/gitlab-org/quality/testcases/-/quality/test_cases/1588' do
+      it 'lists branches correctly after CRUD operations', testcase: 'https://gitlab.com/gitlab-org/gitlab/-/quality/test_cases/347740' do
         Page::Project::Menu.perform(&:go_to_repository_branches)
 
         expect(page).to have_content(master_branch)

@@ -1,63 +1,29 @@
 import { memoize } from 'lodash';
+import { createNodeDict } from '../utils';
+import { EXPLICIT_NEEDS_PROPERTY, NEEDS_PROPERTY } from '../constants';
 import { createSankey } from './dag/drawing_utils';
 
 /*
-    The following functions are the main engine in transforming the data as
-    received from the endpoint into the format the d3 graph expects.
+  A peformant alternative to lodash's isEqual. Because findIndex always finds
+  the first instance of a match, if the found index is not the first, we know
+  it is in fact a duplicate.
+*/
+const deduplicate = (item, itemIndex, arr) => {
+  const foundIdx = arr.findIndex((test) => {
+    return test.source === item.source && test.target === item.target;
+  });
 
-    Input is of the form:
-    [nodes]
-      nodes: [{category, name, jobs, size}]
-        category is the stage name
-        name is a group name; in the case that the group has one job, it is
-          also the job name
-        size is the number of parallel jobs
-        jobs: [{ name, needs}]
-          job name is either the same as the group name or group x/y
-          needs: [job-names]
-          needs is an array of job-name strings
-
-    Output is of the form:
-    { nodes: [node], links: [link] }
-      node: { name, category }, + unused info passed through
-      link: { source, target, value }, with source & target being node names
-        and value being a constant
-
-    We create nodes in the GraphQL update function, and then here we create the node dictionary,
-    then create links, and then dedupe the links, so that in the case where
-    job 4 depends on job 1 and job 2, and job 2 depends on job 1, we show only a single link
-    from job 1 to job 2 then another from job 2 to job 4.
-
-    CREATE LINKS
-    nodes.name -> target
-    nodes.name.needs.each -> source (source is the name of the group, not the parallel job)
-    10 -> value (constant)
-  */
-
-export const createNodeDict = (nodes) => {
-  return nodes.reduce((acc, node) => {
-    const newNode = {
-      ...node,
-      needs: node.jobs.map((job) => job.needs || []).flat(),
-    };
-
-    if (node.size > 1) {
-      node.jobs.forEach((job) => {
-        acc[job.name] = newNode;
-      });
-    }
-
-    acc[node.name] = newNode;
-    return acc;
-  }, {});
+  return foundIdx === itemIndex;
 };
 
-export const makeLinksFromNodes = (nodes, nodeDict) => {
+export const makeLinksFromNodes = (nodes, nodeDict, { needsKey = NEEDS_PROPERTY } = {}) => {
   const constantLinkValue = 10; // all links are the same weight
   return nodes
     .map(({ jobs, name: groupName }) =>
-      jobs.map(({ needs = [] }) =>
-        needs.reduce((acc, needed) => {
+      jobs.map((job) => {
+        const needs = job[needsKey] || [];
+
+        return needs.reduce((acc, needed) => {
           // It's possible that we have an optional job, which
           // is being needed by another job. In that scenario,
           // the needed job doesn't exist, so we don't want to
@@ -71,8 +37,8 @@ export const makeLinksFromNodes = (nodes, nodeDict) => {
           }
 
           return acc;
-        }, []),
-      ),
+        }, []);
+      }),
     )
     .flat(2);
 };
@@ -83,7 +49,8 @@ export const getAllAncestors = (nodes, nodeDict) => {
       return nodeDict[node]?.needs || '';
     })
     .flat()
-    .filter(Boolean);
+    .filter(Boolean)
+    .filter(deduplicate);
 
   if (needs.length) {
     return [...needs, ...getAllAncestors(needs, nodeDict)];
@@ -108,29 +75,15 @@ export const filterByAncestors = (links, nodeDict) =>
     const targetNode = target;
     const targetNodeNeeds = nodeDict[targetNode].needs;
     const targetNodeNeedsMinusSource = targetNodeNeeds.filter((need) => need !== source);
-
     const allAncestors = getAllAncestors(targetNodeNeedsMinusSource, nodeDict);
     return !allAncestors.includes(source);
   });
 
-/*
-  A peformant alternative to lodash's isEqual. Because findIndex always finds
-  the first instance of a match, if the found index is not the first, we know
-  it is in fact a duplicate.
-*/
-const deduplicate = (item, itemIndex, arr) => {
-  const foundIdx = arr.findIndex((test) => {
-    return test.source === item.source && test.target === item.target;
-  });
-
-  return foundIdx === itemIndex;
-};
-
-export const parseData = (nodes) => {
-  const nodeDict = createNodeDict(nodes);
-  const allLinks = makeLinksFromNodes(nodes, nodeDict);
-  const filteredLinks = filterByAncestors(allLinks, nodeDict);
-  const links = filteredLinks.filter(deduplicate);
+export const parseData = (nodes, { needsKey = NEEDS_PROPERTY } = {}) => {
+  const nodeDict = createNodeDict(nodes, { needsKey });
+  const allLinks = makeLinksFromNodes(nodes, nodeDict, { needsKey });
+  const filteredLinks = allLinks.filter(deduplicate);
+  const links = filterByAncestors(filteredLinks, nodeDict);
 
   return { nodes, links };
 };
@@ -173,7 +126,8 @@ export const removeOrphanNodes = (sankeyfiedNodes) => {
 export const listByLayers = ({ stages }) => {
   const arrayOfJobs = stages.flatMap(({ groups }) => groups);
   const parsedData = parseData(arrayOfJobs);
-  const dataWithLayers = createSankey()(parsedData);
+  const explicitParsedData = parseData(arrayOfJobs, { needsKey: EXPLICIT_NEEDS_PROPERTY });
+  const dataWithLayers = createSankey()(explicitParsedData);
 
   const pipelineLayers = dataWithLayers.nodes.reduce((acc, { layer, name }) => {
     /* sort groups by layer */

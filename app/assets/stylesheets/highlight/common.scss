@@ -28,8 +28,24 @@
     border-bottom: 1px solid $border;
   }
 
-  a {
+  button {
     color: $link;
+    border: 0;
+    background: transparent;
+
+    &[disabled] {
+      color: desaturate($link, 100%);
+      opacity: 0.5;
+      cursor: default;
+    }
+
+    &:hover:not([disabled]) {
+      text-decoration: underline;
+    }
+
+    &:not(:focus-visible) {
+      outline: 0;
+    }
   }
 }
 
@@ -37,20 +53,20 @@
   transition: border-left 0.1s ease-out;
 
   &.coverage {
-    border-left: 4px solid $coverage;
+    border-left: 2px solid $coverage;
   }
 
   &.no-coverage {
-    border-left: 2px solid $no-coverage;
+    border-left: 4px solid $no-coverage;
   }
 }
 
-@mixin line-number-hover($color) {
-  background-color: $color;
-  border-color: darken($color, 5%);
+@mixin line-number-hover {
+  background-color: $purple-100;
+  border-color: $purple-200;
 
   a {
-    color: darken($color, 15%);
+    color: $gray-600;
   }
 }
 
@@ -96,9 +112,10 @@
 }
 
 @mixin line-number-link($color) {
+  min-width: $gl-spacing-scale-9;
+
   &::before {
-    @include gl-visibility-hidden;
-    @include gl-display-inline-block;
+    @include gl-display-none;
     @include gl-align-self-center;
     @include gl-mt-2;
     @include gl-mr-2;
@@ -114,10 +131,10 @@
   }
 
   &:hover::before {
-    @include gl-visibility-visible;
+    @include gl-display-inline-block;
   }
 
   &:focus::before {
-    @include gl-visibility-visible;
+    @include gl-display-inline-block;
   }
 }

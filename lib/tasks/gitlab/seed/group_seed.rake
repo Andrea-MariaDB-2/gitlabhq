@@ -125,7 +125,7 @@ class GroupSeeder
       name: FFaker::Name.name,
       email: FFaker::Internet.email,
       confirmed_at: DateTime.now,
-      password: Devise.friendly_token
+      password: Gitlab::Password.test_default
     )
   end
 
@@ -184,7 +184,7 @@ class GroupSeeder
       group = Group.find(group_id)
 
       @resource_count.times do |i|
-        _, project_path = PROJECT_URL.split('/')[-2..-1]
+        _, project_path = PROJECT_URL.split('/')[-2..]
 
         project_path.gsub!('.git', '')
 

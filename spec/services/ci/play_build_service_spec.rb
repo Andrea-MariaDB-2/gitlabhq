@@ -79,10 +79,20 @@ RSpec.describe Ci::PlayBuildService, '#execute' do
          { key: 'second', secret_value: 'second' }]
       end
 
+      subject { service.execute(build, job_variables) }
+
       it 'assigns the variables to the build' do
-        service.execute(build, job_variables)
+        subject
 
         expect(build.reload.job_variables.map(&:key)).to contain_exactly('first', 'second')
+      end
+
+      context 'when variables are invalid' do
+        let(:job_variables) { [{}] }
+
+        it 'raises an error' do
+          expect { subject }.to raise_error(ActiveRecord::RecordInvalid)
+        end
       end
 
       context 'when user defined variables are restricted' do
@@ -96,7 +106,7 @@ RSpec.describe Ci::PlayBuildService, '#execute' do
           end
 
           it 'assigns the variables to the build' do
-            service.execute(build, job_variables)
+            subject
 
             expect(build.reload.job_variables.map(&:key)).to contain_exactly('first', 'second')
           end
@@ -104,8 +114,7 @@ RSpec.describe Ci::PlayBuildService, '#execute' do
 
         context 'when user is developer' do
           it 'raises an error' do
-            expect { service.execute(build, job_variables) }
-              .to raise_error Gitlab::Access::AccessDeniedError
+            expect { subject }.to raise_error Gitlab::Access::AccessDeniedError
           end
         end
       end
@@ -113,7 +122,7 @@ RSpec.describe Ci::PlayBuildService, '#execute' do
   end
 
   context 'when build is not a playable manual action' do
-    let(:build) { create(:ci_build, when: :manual, pipeline: pipeline) }
+    let(:build) { create(:ci_build, :success, pipeline: pipeline) }
     let!(:branch) { create(:protected_branch, :developers_can_merge, name: build.ref, project: project) }
 
     it 'duplicates the build' do
@@ -128,6 +137,18 @@ RSpec.describe Ci::PlayBuildService, '#execute' do
 
       expect(build.user).not_to eq user
       expect(duplicate.user).to eq user
+    end
+
+    context 'and is not retryable' do
+      let(:build) { create(:ci_build, :deployment_rejected, pipeline: pipeline) }
+
+      it 'does not duplicate the build' do
+        expect { service.execute(build) }.not_to change { Ci::Build.count }
+      end
+
+      it 'does not enqueue the build' do
+        expect { service.execute(build) }.not_to change { build.status }
+      end
     end
   end
 

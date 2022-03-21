@@ -6,8 +6,8 @@ info: To determine the technical writer assigned to the Stage/Group associated w
 
 # NuGet packages in the Package Registry **(FREE)**
 
-> - [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/20050) in GitLab Premium 12.8.
-> - [Moved](https://gitlab.com/gitlab-org/gitlab/-/issues/221259) to GitLab Free in 13.3.
+> - [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/20050) in GitLab 12.8.
+> - [Moved](https://gitlab.com/gitlab-org/gitlab/-/issues/221259) from GitLab Premium to GitLab Free in 13.3.
 > - Symbol package support [added](https://gitlab.com/gitlab-org/gitlab/-/issues/262081) in GitLab 14.1.
 
 Publish NuGet packages in your project's Package Registry. Then, install the
@@ -77,6 +77,8 @@ To use the GitLab endpoint for NuGet Packages, choose an option:
 
 Some features such as [publishing](#publish-a-nuget-package) a package are only available on the project-level endpoint.
 
+When asking for versions of a given NuGet package name, the GitLab Package Registry returns a maximum of 300 most recent versions.
+
 WARNING:
 Because of how NuGet handles credentials, the Package Registry rejects anonymous requests on the group-level endpoint.
 To work around this limitation, set up [authentication](#add-the-package-registry-as-a-source-for-nuget-packages).
@@ -105,6 +107,7 @@ You can now add a new source to NuGet with:
 - [NuGet CLI](#add-a-source-with-the-nuget-cli)
 - [Visual Studio](#add-a-source-with-visual-studio)
 - [.NET CLI](#add-a-source-with-the-net-cli)
+- [Configuration file](#add-a-source-with-a-configuration-file)
 
 ### Add a source with the NuGet CLI
 
@@ -213,6 +216,51 @@ If you get a warning, ensure that the **Location**, **Username**, and
 A project-level endpoint is required to publish NuGet packages to the Package Registry.
 A project-level endpoint is also required to install NuGet packages from a project.
 
+To use the [project-level](#use-the-gitlab-endpoint-for-nuget-packages)
+NuGet endpoint, add the Package Registry as a source with `nuget`:
+
+```shell
+dotnet nuget add source "https://gitlab.example.com/api/v4/projects/<your_project_id>/packages/nuget/index.json" --name <source_name> --username <gitlab_username or deploy_token_username> --password <gitlab_personal_access_token or deploy_token>
+```
+
+- `<source_name>` is the desired source name.
+- `--store-password-in-clear-text` might be necessary depending on your operating system.
+
+For example:
+
+```shell
+dotnet nuget add source "https://gitlab.example.com/api/v4/projects/10/packages/nuget/index.json" --name gitlab --username carol --password 12345678asdf
+```
+
+#### Group-level endpoint
+
+To install a NuGet package from a group, use a group-level endpoint.
+
+To use the [group-level](#use-the-gitlab-endpoint-for-nuget-packages)
+NuGet endpoint, add the Package Registry as a source with `nuget`:
+
+```shell
+dotnet nuget add source "https://gitlab.example.com/api/v4/groups/<your_group_id>/-/packages/nuget/index.json" --name <source_name> --username <gitlab_username or deploy_token_username> --password <gitlab_personal_access_token or deploy_token>
+```
+
+- `<source_name>` is the desired source name.
+- `--store-password-in-clear-text` might be necessary depending on your operating system.
+
+For example:
+
+```shell
+dotnet nuget add source "https://gitlab.example.com/api/v4/groups/23/-/packages/nuget/index.json" --name gitlab --username carol --password 12345678asdf
+```
+
+### Add a source with a configuration file
+
+#### Project-level endpoint
+
+A project-level endpoint is required to:
+
+- Publish NuGet packages to the Package Registry.
+- Install NuGet packages from a project.
+
 To use the [project-level](#use-the-gitlab-endpoint-for-nuget-packages) Package Registry as a source for .NET:
 
 1. In the root of your project, create a file named `nuget.config`.
@@ -227,11 +275,18 @@ To use the [project-level](#use-the-gitlab-endpoint-for-nuget-packages) Package 
     </packageSources>
     <packageSourceCredentials>
         <gitlab>
-            <add key="Username" value="<gitlab_username or deploy_token_username>" />
-            <add key="ClearTextPassword" value="<gitlab_personal_access_token or deploy_token>" />
+            <add key="Username" value="%GITLAB_PACKAGE_REGISTRY_USERNAME%" />
+            <add key="ClearTextPassword" value="%GITLAB_PACKAGE_REGISTRY_PASSWORD%" />
         </gitlab>
     </packageSourceCredentials>
    </configuration>
+   ```
+
+1. Configure the necessary environment variables:
+
+   ```shell
+   export GITLAB_PACKAGE_REGISTRY_USERNAME=<gitlab_username or deploy_token_username>
+   export GITLAB_PACKAGE_REGISTRY_PASSWORD=<gitlab_personal_access_token or deploy_token>
    ```
 
 #### Group-level endpoint
@@ -252,11 +307,18 @@ To use the [group-level](#use-the-gitlab-endpoint-for-nuget-packages) Package Re
     </packageSources>
     <packageSourceCredentials>
         <gitlab>
-            <add key="Username" value="<gitlab_username or deploy_token_username>" />
-            <add key="ClearTextPassword" value="<gitlab_personal_access_token or deploy_token>" />
+            <add key="Username" value="%GITLAB_PACKAGE_REGISTRY_USERNAME%" />
+            <add key="ClearTextPassword" value="%GITLAB_PACKAGE_REGISTRY_PASSWORD%" />
         </gitlab>
     </packageSourceCredentials>
    </configuration>
+   ```
+
+1. Configure the necessary environment variables:
+
+   ```shell
+   export GITLAB_PACKAGE_REGISTRY_USERNAME=<gitlab_username or deploy_token_username>
+   export GITLAB_PACKAGE_REGISTRY_PASSWORD=<gitlab_personal_access_token or deploy_token>
    ```
 
 ## Publish a NuGet package
@@ -352,11 +414,11 @@ the existing package is overwritten.
 
 ## Install packages
 
-To install a NuGet package from the Package Registry, you must first
-[add a project-level or group-level endpoint](#add-the-package-registry-as-a-source-for-nuget-packages).
-
 If multiple packages have the same name and version, when you install
 a package, the most recently-published package is retrieved.
+
+To install a NuGet package from the Package Registry, you must first
+[add a project-level or group-level endpoint](#add-the-package-registry-as-a-source-for-nuget-packages).
 
 ### Install a package with the NuGet CLI
 

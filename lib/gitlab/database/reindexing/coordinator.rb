@@ -31,6 +31,25 @@ module Gitlab
           end
         end
 
+        def drop
+          try_obtain_lease do
+            Gitlab::AppLogger.info("Removing index #{index.identifier} which is a leftover, temporary index from previous reindexing activity")
+
+            retries = Gitlab::Database::WithLockRetriesOutsideTransaction.new(
+              connection: index.connection,
+              timing_configuration: REMOVE_INDEX_RETRY_CONFIG,
+              klass: self.class,
+              logger: Gitlab::AppLogger
+            )
+
+            retries.run(raise_on_exhaustion: false) do
+              index.connection.tap do |conn|
+                conn.execute("DROP INDEX CONCURRENTLY IF EXISTS #{conn.quote_table_name(index.schema)}.#{conn.quote_table_name(index.name)}")
+              end
+            end
+          end
+        end
+
         private
 
         def with_notifications(action)
@@ -52,6 +71,10 @@ module Gitlab
 
         def lease_timeout
           TIMEOUT_PER_ACTION
+        end
+
+        def lease_key
+          [super, index.connection_db_config.name].join('/')
         end
       end
     end

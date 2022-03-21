@@ -1,13 +1,12 @@
 import { GlSprintf } from '@gitlab/ui';
-import { shallowMount, createLocalVue } from '@vue/test-utils';
-import { nextTick } from 'vue';
+import Vue, { nextTick } from 'vue';
 import Vuex from 'vuex';
+import { shallowMountExtended } from 'helpers/vue_test_utils_helper';
 import NoteHeader from '~/notes/components/note_header.vue';
 import { AVAILABILITY_STATUS } from '~/set_status_modal/utils';
 import UserNameWithStatus from '~/sidebar/components/assignees/user_name_with_status.vue';
 
-const localVue = createLocalVue();
-localVue.use(Vuex);
+Vue.use(Vuex);
 
 const actions = {
   setTargetNoteHash: jest.fn(),
@@ -17,11 +16,12 @@ describe('NoteHeader component', () => {
   let wrapper;
 
   const findActionsWrapper = () => wrapper.find({ ref: 'discussionActions' });
+  const findToggleThreadButton = () => wrapper.findByTestId('thread-toggle');
   const findChevronIcon = () => wrapper.find({ ref: 'chevronIcon' });
   const findActionText = () => wrapper.find({ ref: 'actionText' });
   const findTimestampLink = () => wrapper.find({ ref: 'noteTimestampLink' });
   const findTimestamp = () => wrapper.find({ ref: 'noteTimestamp' });
-  const findConfidentialIndicator = () => wrapper.find('[data-testid="confidentialIndicator"]');
+  const findConfidentialIndicator = () => wrapper.findByTestId('confidentialIndicator');
   const findSpinner = () => wrapper.find({ ref: 'spinner' });
   const findAuthorStatus = () => wrapper.find({ ref: 'authorStatus' });
 
@@ -41,8 +41,7 @@ describe('NoteHeader component', () => {
   };
 
   const createComponent = (props) => {
-    wrapper = shallowMount(NoteHeader, {
-      localVue,
+    wrapper = shallowMountExtended(NoteHeader, {
       store: new Vuex.Store({
         actions,
       }),
@@ -99,6 +98,19 @@ describe('NoteHeader component', () => {
       });
 
       expect(findChevronIcon().props('name')).toBe('chevron-down');
+    });
+
+    it.each`
+      text                          | expanded
+      ${NoteHeader.i18n.showThread} | ${false}
+      ${NoteHeader.i18n.hideThread} | ${true}
+    `('toggle button has text $text is expanded is $expanded', ({ text, expanded }) => {
+      createComponent({
+        includeToggle: true,
+        expanded,
+      });
+
+      expect(findToggleThreadButton().text()).toBe(text);
     });
   });
 

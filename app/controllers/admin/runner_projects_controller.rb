@@ -8,19 +8,20 @@ class Admin::RunnerProjectsController < Admin::ApplicationController
   def create
     @runner = Ci::Runner.find(params[:runner_project][:runner_id])
 
-    if @runner.assign_to(@project, current_user)
-      redirect_to admin_runner_path(@runner)
+    if ::Ci::Runners::AssignRunnerService.new(@runner, @project, current_user).execute
+      redirect_to edit_admin_runner_url(@runner), notice: s_('Runners|Runner assigned to project.')
     else
-      redirect_to admin_runner_path(@runner), alert: 'Failed adding runner to project'
+      redirect_to edit_admin_runner_url(@runner), alert: 'Failed adding runner to project'
     end
   end
 
   def destroy
     rp = Ci::RunnerProject.find(params[:id])
     runner = rp.runner
-    rp.destroy
 
-    redirect_to admin_runner_path(runner), status: :found
+    ::Ci::Runners::UnassignRunnerService.new(rp, current_user).execute
+
+    redirect_to edit_admin_runner_url(runner), status: :found, notice: s_('Runners|Runner unassigned from project.')
   end
 
   private

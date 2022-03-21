@@ -3,47 +3,33 @@
 require 'spec_helper'
 
 RSpec.describe 'Project > Members > Invite group', :js do
-  include Select2Helper
   include ActionView::Helpers::DateHelper
   include Spec::Support::Helpers::Features::MembersHelpers
   include Spec::Support::Helpers::Features::InviteMembersModalHelper
 
-  let(:maintainer) { create(:user) }
+  let_it_be(:maintainer) { create(:user) }
 
-  using RSpec::Parameterized::TableSyntax
+  it 'displays the invite group button' do
+    project = create(:project, namespace: create(:group))
 
-  where(:invite_members_group_modal_enabled, :expected_invite_group_selector) do
-    true  | 'button[data-qa-selector="invite_a_group_button"]' # rubocop:disable QA/SelectorUsage
-    false | '#invite-group-tab'
+    project.add_maintainer(maintainer)
+    sign_in(maintainer)
+
+    visit project_project_members_path(project)
+
+    expect(page).to have_selector('button[data-test-id="invite-group-button"]')
   end
 
-  with_them do
-    before do
-      stub_feature_flags(invite_members_group_modal: invite_members_group_modal_enabled)
-    end
+  it 'does not display  the  button when visiting the page not signed in' do
+    project = create(:project, namespace: create(:group))
 
-    it 'displays either the invite group button or the form with tabs based on the feature flag' do
-      project = create(:project, namespace: create(:group))
+    visit project_project_members_path(project)
 
-      project.add_maintainer(maintainer)
-      sign_in(maintainer)
-
-      visit project_project_members_path(project)
-
-      expect(page).to have_selector(expected_invite_group_selector)
-    end
-
-    it 'does not display either the form or the button when visiting the page not signed in' do
-      project = create(:project, namespace: create(:group))
-
-      visit project_project_members_path(project)
-
-      expect(page).not_to have_selector(expected_invite_group_selector)
-    end
+    expect(page).not_to have_selector('button[data-test-id="invite-group-button"]')
   end
 
   describe 'Share with group lock' do
-    let(:invite_group_selector) { 'button[data-qa-selector="invite_a_group_button"]' } # rubocop:disable QA/SelectorUsage
+    let(:invite_group_selector) { 'button[data-test-id="invite-group-button"]' }
 
     shared_examples 'the project can be shared with groups' do
       it 'the "Invite a group" button exists' do
@@ -72,27 +58,7 @@ RSpec.describe 'Project > Members > Invite group', :js do
       context 'when the group has "Share with group lock" disabled' do
         it_behaves_like 'the project can be shared with groups'
 
-        it 'the project can be shared with another group when the feature flag invite_members_group_modal is disabled' do
-          stub_feature_flags(invite_members_group_modal: false)
-
-          visit project_project_members_path(project)
-
-          expect(page).not_to have_link 'Groups'
-
-          click_on 'invite-group-tab'
-
-          select2 group_to_share_with.id, from: '#link_group_id'
-          page.find('body').click
-          find('.btn-confirm').click
-
-          click_link 'Groups'
-
-          expect(members_table).to have_content(group_to_share_with.name)
-        end
-
-        it 'the project can be shared with another group when the feature flag invite_members_group_modal is enabled' do
-          stub_feature_flags(invite_members_group_modal: true)
-
+        it 'the project can be shared with another group' do
           visit project_project_members_path(project)
 
           expect(page).not_to have_link 'Groups'
@@ -165,6 +131,8 @@ RSpec.describe 'Project > Members > Invite group', :js do
     let(:project) { create(:project) }
     let!(:group) { create(:group) }
 
+    let_it_be(:expiration_date) { 5.days.from_now.to_date }
+
     around do |example|
       freeze_time { example.run }
     end
@@ -176,68 +144,84 @@ RSpec.describe 'Project > Members > Invite group', :js do
 
       visit project_project_members_path(project)
 
-      invite_group(group.name, role: 'Guest', expires_at: 5.days.from_now)
+      invite_group(group.name, role: 'Guest', expires_at: expiration_date)
     end
 
     it 'the group link shows the expiration time with a warning class' do
       setup
       click_link 'Groups'
 
-      expect(find_group_row(group)).to have_content(/in \d days/)
-      expect(find_group_row(group)).to have_selector('.gl-text-orange-500')
+      expect(page).to have_field('Expiration date', with: expiration_date)
     end
   end
 
   describe 'the groups dropdown' do
-    context 'with multiple groups to choose from' do
-      let(:project) { create(:project) }
+    let_it_be(:parent_group) { create(:group, :public) }
+    let_it_be(:project_group) { create(:group, :public, parent: parent_group) }
+    let_it_be(:public_sub_subgroup) { create(:group, :public, parent: project_group) }
+    let_it_be(:public_sibbling_group) { create(:group, :public, parent: parent_group) }
+    let_it_be(:private_sibbling_group) { create(:group, :private, parent: parent_group) }
+    let_it_be(:private_membership_group) { create(:group, :private) }
+    let_it_be(:public_membership_group) { create(:group, :public) }
+    let_it_be(:project) { create(:project, group: project_group) }
 
-      it 'includes multiple groups' do
-        project.add_maintainer(maintainer)
-        sign_in(maintainer)
+    before do
+      private_membership_group.add_guest(maintainer)
+      public_membership_group.add_maintainer(maintainer)
 
-        group1 = create(:group)
-        group1.add_owner(maintainer)
-        group2 = create(:group)
-        group2.add_owner(maintainer)
-
-        visit project_project_members_path(project)
-
-        click_on 'Invite a group'
-        click_on 'Select a group'
-        wait_for_requests
-
-        expect(page).to have_button(group1.name)
-        expect(page).to have_button(group2.name)
-      end
+      sign_in(maintainer)
     end
 
     context 'for a project in a nested group' do
-      let(:group) { create(:group) }
-      let!(:nested_group) { create(:group, parent: group) }
-      let!(:group_to_share_with) { create(:group) }
-      let!(:project) { create(:project, namespace: nested_group) }
-
-      before do
+      it 'does not show the groups inherited from projects' do
         project.add_maintainer(maintainer)
-        sign_in(maintainer)
-        group.add_maintainer(maintainer)
-        group_to_share_with.add_maintainer(maintainer)
-      end
+        public_sibbling_group.add_maintainer(maintainer)
 
-      # This behavior should be changed to exclude the ancestor and project
-      # group from the options once issue is fixed for the modal:
-      # https://gitlab.com/gitlab-org/gitlab/-/issues/329835
-      it 'the groups dropdown does show ancestors and the project group' do
         visit project_project_members_path(project)
 
         click_on 'Invite a group'
         click_on 'Select a group'
         wait_for_requests
 
-        expect(page).to have_button(group_to_share_with.name)
-        expect(page).to have_button(group.name)
-        expect(page).to have_button(nested_group.name)
+        page.within('[data-testid="group-select-dropdown"]') do
+          expect_to_have_group(public_membership_group)
+          expect_to_have_group(public_sibbling_group)
+          expect_to_have_group(private_membership_group)
+
+          expect_not_to_have_group(public_sub_subgroup)
+          expect_not_to_have_group(private_sibbling_group)
+          expect_not_to_have_group(parent_group)
+          expect_not_to_have_group(project_group)
+        end
+      end
+
+      it 'does not show the ancestors or project group', :aggregate_failures do
+        parent_group.add_maintainer(maintainer)
+
+        visit project_project_members_path(project)
+
+        click_on 'Invite a group'
+        click_on 'Select a group'
+        wait_for_requests
+
+        page.within('[data-testid="group-select-dropdown"]') do
+          expect_to_have_group(public_membership_group)
+          expect_to_have_group(public_sibbling_group)
+          expect_to_have_group(private_membership_group)
+          expect_to_have_group(public_sub_subgroup)
+          expect_to_have_group(private_sibbling_group)
+
+          expect_not_to_have_group(parent_group)
+          expect_not_to_have_group(project_group)
+        end
+      end
+
+      def expect_to_have_group(group)
+        expect(page).to have_selector("[entity-id='#{group.id}']")
+      end
+
+      def expect_not_to_have_group(group)
+        expect(page).not_to have_selector("[entity-id='#{group.id}']")
       end
     end
   end

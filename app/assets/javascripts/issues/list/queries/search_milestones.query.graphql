@@ -1,0 +1,31 @@
+#import "./milestone.fragment.graphql"
+
+query searchMilestones($fullPath: ID!, $search: String, $isProject: Boolean = false) {
+  group(fullPath: $fullPath) @skip(if: $isProject) {
+    id
+    milestones(
+      searchTitle: $search
+      includeAncestors: true
+      includeDescendants: true
+      sort: EXPIRED_LAST_DUE_DATE_ASC
+      state: active
+    ) {
+      nodes {
+        ...Milestone
+      }
+    }
+  }
+  project(fullPath: $fullPath) @include(if: $isProject) {
+    id
+    milestones(
+      searchTitle: $search
+      includeAncestors: true
+      sort: EXPIRED_LAST_DUE_DATE_ASC
+      state: active
+    ) {
+      nodes {
+        ...Milestone
+      }
+    }
+  }
+}

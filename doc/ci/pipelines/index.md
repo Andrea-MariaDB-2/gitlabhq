@@ -38,7 +38,7 @@ A typical pipeline might consist of four stages, executed in the following order
 - A `production` stage, with a job called `deploy-to-prod`.
 
 NOTE:
-If you have a [mirrored repository that GitLab pulls from](../../user/project/repository/repository_mirroring.md#pull-from-a-remote-repository),
+If you have a [mirrored repository that GitLab pulls from](../../user/project/repository/mirror/pull.md),
 you may need to enable pipeline triggering in your project's
 **Settings > Repository > Pull from a remote repository > Trigger pipelines for mirror updates**.
 
@@ -50,17 +50,51 @@ Pipelines can be configured in many different ways:
   followed by the next stage.
 - [Directed Acyclic Graph Pipeline (DAG) pipelines](../directed_acyclic_graph/index.md) are based on relationships
   between jobs and can run more quickly than basic pipelines.
-- [Multi-project pipelines](multi_project_pipelines.md) combine pipelines for different projects together.
-- [Parent-Child pipelines](parent_child_pipelines.md) break down complex pipelines
-  into one parent pipeline that can trigger multiple child sub-pipelines, which all
-  run in the same project and with the same SHA. This pipeline architecture is commonly used for mono-repos.
-- [Pipelines for Merge Requests](../pipelines/merge_request_pipelines.md) run for merge
+- [Merge request pipelines](../pipelines/merge_request_pipelines.md) run for merge
   requests only (rather than for every commit).
-- [Pipelines for Merged Results](../pipelines/pipelines_for_merged_results.md)
+- [Merged results pipelines](../pipelines/merged_results_pipelines.md)
   are merge request pipelines that act as though the changes from the source branch have
   already been merged into the target branch.
-- [Merge Trains](../pipelines/merge_trains.md)
-  use pipelines for merged results to queue merges one after the other.
+- [Merge trains](../pipelines/merge_trains.md)
+  use merged results pipelines to queue merges one after the other.
+- [Parent-child pipelines](parent_child_pipelines.md) break down complex pipelines
+  into one parent pipeline that can trigger multiple child sub-pipelines, which all
+  run in the same project and with the same SHA. This pipeline architecture is commonly used for mono-repos.
+- [Multi-project pipelines](multi_project_pipelines.md) combine pipelines for different projects together.
+
+### How parent-child pipelines compare to multi-project pipelines
+
+Parent-child pipelines and multi-project pipelines can sometimes be used for similar
+purposes, but there are some key differences:
+
+Parent-child pipelines:
+
+- Run under the same project, ref, and commit SHA as the parent pipeline.
+- Affect the overall status of the ref the pipeline runs against. For example,
+  if a pipeline fails for the main branch, it's common to say that "main is broken".
+  The status of child pipelines don't directly affect the status of the ref, unless the child
+  pipeline is triggered with [`strategy:depend`](../yaml/index.md#triggerstrategy).
+- Are automatically canceled if the pipeline is configured with [`interruptible`](../yaml/index.md#interruptible)
+  when a new pipeline is created for the same ref.
+- Display only the parent pipelines in the pipeline index page. Child pipelines are
+  visible when visiting their parent pipeline's page.
+- Are limited to 2 levels of nesting. A parent pipeline can trigger multiple child pipelines,
+  and those child pipeline can trigger multiple child pipelines (`A -> B -> C`).
+
+Multi-project pipelines:
+
+- Are triggered from another pipeline, but the upstream (triggering) pipeline does
+  not have much control over the downstream (triggered) pipeline. However, it can
+  choose the ref of the downstream pipeline, and pass CI/CD variables to it.
+- Affect the overall status of the ref of the project it runs in, but does not
+  affect the status of the triggering pipeline's ref, unless it was triggered with
+  [`strategy:depend`](../yaml/index.md#triggerstrategy).
+- Are not automatically canceled in the downstream project when using [`interruptible`](../yaml/index.md#interruptible)
+  if a new pipeline runs for the same ref in the upstream pipeline. They can be
+  automatically canceled if a new pipeline is triggered for the same ref on the downstream project.
+- Multi-project pipelines are standalone pipelines because they are normal pipelines
+  that happened to be triggered by an external project. They are all visible on the pipeline index page.
+- Are independent, so there are no nesting limits.
 
 ## Configure a pipeline
 
@@ -77,7 +111,7 @@ You can also configure specific aspects of your pipelines through the GitLab UI.
 - [Pipeline schedules](schedules.md).
 - [Custom CI/CD variables](../variables/index.md#custom-cicd-variables).
 
-### Ref Specs for Runners
+### Ref specs for runners
 
 When a runner picks a pipeline job, GitLab provides that job's metadata. This includes the [Git refspecs](https://git-scm.com/book/en/v2/Git-Internals-The-Refspec),
 which indicate which ref (branch, tag, and so on) and commit (SHA1) are checked out from your
@@ -87,9 +121,9 @@ This table lists the refspecs injected for each pipeline type:
 
 | Pipeline type                                                      | Refspecs                                                                                       |
 |---------------                                                     |----------------------------------------                                                        |
-| Pipeline for Branches                                              | `+<sha>:refs/pipelines/<id>` and `+refs/heads/<name>:refs/remotes/origin/<name>` |
-| pipeline for Tags                                                  | `+<sha>:refs/pipelines/<id>` and `+refs/tags/<name>:refs/tags/<name>`            |
-| [Pipeline for Merge Requests](../pipelines/merge_request_pipelines.md) | `+<sha>:refs/pipelines/<id>`                                                     |
+| pipeline for branches                                              | `+<sha>:refs/pipelines/<id>` and `+refs/heads/<name>:refs/remotes/origin/<name>` |
+| pipeline for tags                                                  | `+<sha>:refs/pipelines/<id>` and `+refs/tags/<name>:refs/tags/<name>`            |
+| [merge request pipeline](../pipelines/merge_request_pipelines.md) | `+<sha>:refs/pipelines/<id>`                                                     |
 
 The refs `refs/heads/<name>` and `refs/tags/<name>` exist in your
 project repository. GitLab generates the special ref `refs/pipelines/<id>` during a
@@ -106,7 +140,7 @@ to its **Pipelines** tab.
 
 ![Pipelines index page](img/pipelines_index_v13_0.png)
 
-Click a pipeline to open the **Pipeline Details** page and show
+Select a pipeline to open the **Pipeline Details** page and show
 the jobs that were run for that pipeline. From here you can cancel a running pipeline,
 retry jobs on a failed pipeline, or [delete a pipeline](#delete-a-pipeline).
 
@@ -126,6 +160,11 @@ you can filter the pipeline list by:
 
 [Starting in GitLab 14.2](https://gitlab.com/gitlab-org/gitlab/-/issues/26621), you can change the
 pipeline column to display the pipeline ID or the pipeline IID.
+
+If you use VS Code to edit your GitLab CI/CD configuration, the
+[GitLab Workflow VS Code extension](../../user/project/repository/vscode.md) helps you
+[validate your configuration](https://marketplace.visualstudio.com/items?itemName=GitLab.gitlab-workflow#validate-gitlab-ci-configuration)
+and [view your pipeline status](https://marketplace.visualstudio.com/items?itemName=GitLab.gitlab-workflow#information-about-your-branch-pipelines-mr-closing-issue).
 
 ### Run a pipeline manually
 
@@ -148,9 +187,9 @@ The pipeline now executes the jobs as configured.
 
 #### Prefill variables in manual pipelines
 
-> [Introduced in](https://gitlab.com/gitlab-org/gitlab/-/issues/30101) GitLab 13.7.
+> [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/30101) in GitLab 13.7.
 
-You can use the [`value` and `description`](../yaml/index.md#prefill-variables-in-manual-pipelines)
+You can use the [`value` and `description`](../yaml/index.md#variablesdescription)
 keywords to define
 [pipeline-level (global) variables](../variables/index.md#create-a-custom-cicd-variable-in-the-gitlab-ciyml-file)
 that are prefilled when running a pipeline manually.
@@ -159,7 +198,7 @@ In pipelines triggered manually, the **Run pipelines** page displays all top-lev
 with a `description` and `value` defined in the `.gitlab-ci.yml` file. The values
 can then be modified if needed, which overrides the value for that single pipeline run.
 
-The description is displayed below the variable. It can be used to explain what
+The description is displayed next to the variable. It can be used to explain what
 the variable is used for, what the acceptable values are, and so on:
 
 ```yaml
@@ -170,9 +209,6 @@ variables:
 ```
 
 You cannot set job-level variables to be pre-filled when you run a pipeline manually.
-
-Pre-filled variables do not show up when the CI/CD configuration is [external to the project](settings.md#specify-a-custom-cicd-configuration-file).
-See the [related issue](https://gitlab.com/gitlab-org/gitlab/-/issues/336184) for more details.
 
 ### Run a pipeline by using a URL query string
 
@@ -210,21 +246,21 @@ For each `var` or `file_var`, a key and value are required.
 [Manual jobs](../jobs/job_control.md#create-a-job-that-must-be-run-manually),
 allow you to require manual interaction before moving forward in the pipeline.
 
-You can do this straight from the pipeline graph. Just click the play button
+You can do this straight from the pipeline graph. Just select the play button
 to execute that particular job.
 
-For example, your pipeline might start automatically, but it requires manual action to
-[deploy to production](../environments/index.md#configure-manual-deployments). In the example below, the `production`
-stage has a job with a manual action.
+For example, your pipeline can start automatically, but require a manual action to
+[deploy to production](../environments/index.md#configure-manual-deployments).
+In the example below, the `production` stage has a job with a manual action:
 
-![Pipelines example](img/pipelines.png)
+![Pipelines example](img/manual_pipeline_v14_2.png)
 
 #### Start multiple manual actions in a stage
 
 > [Introduced](https://gitlab.com/gitlab-org/gitlab-foss/-/merge_requests/27188) in GitLab 11.11.
 
-Multiple manual actions in a single stage can be started at the same time using the "Play all manual" button.
-After you click this button, each individual manual action is triggered and refreshed
+Multiple manual actions in a single stage can be started at the same time using the "Play all manual"
+After you select this action, each individual manual action is triggered and refreshed
 to an updated status.
 
 This functionality is only available:
@@ -232,28 +268,56 @@ This functionality is only available:
 - For users with at least the Developer role.
 - If the stage contains [manual actions](#add-manual-interaction-to-your-pipeline).
 
+### Skip a pipeline
+
+To push a commit without triggering a pipeline, add `[ci skip]` or `[skip ci]`, using any
+capitalization, to your commit message.
+
+Alternatively, if you are using Git 2.10 or later, use the `ci.skip` [Git push option](../../user/project/push_options.md#push-options-for-gitlab-cicd).
+The `ci.skip` push option does not skip merge request
+pipelines.
+
 ### Delete a pipeline
 
 > [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/24851) in GitLab 12.7.
 
-Users with the [Owner role](../../user/permissions.md) in a project can delete a pipeline
+Users with the Owner role for a project can delete a pipeline
 by clicking on the pipeline in the **CI/CD > Pipelines** to get to the **Pipeline Details**
-page, then using the **Delete** button.
+page, then selecting **Delete**.
 
-![Pipeline Delete Button](img/pipeline-delete.png)
+![Pipeline Delete](img/pipeline-delete.png)
 
 WARNING:
 Deleting a pipeline expires all pipeline caches, and deletes all related objects,
 such as builds, logs, artifacts, and triggers. **This action cannot be undone.**
 
-### Pipeline quotas
+### Pipeline security on protected branches
 
-Each user has a personal pipeline quota that tracks the usage of shared runners in all personal projects.
-Each group has a [usage quota](../../subscriptions/gitlab_com/index.md#ci-pipeline-minutes) that tracks the usage of shared runners for all projects created within the group.
+A strict security model is enforced when pipelines are executed on
+[protected branches](../../user/project/protected_branches.md).
 
-When a pipeline is triggered, regardless of who triggered it, the pipeline quota for the project owner's [namespace](../../user/group/index.md#namespaces) is used. In this case, the namespace can be the user or group that owns the project.
+The following actions are allowed on protected branches only if the user is
+[allowed to merge or push](../../user/project/protected_branches.md)
+on that specific branch:
 
-#### How pipeline duration is calculated
+- Run manual pipelines (using the [Web UI](#run-a-pipeline-manually) or [pipelines API](#pipelines-api)).
+- Run scheduled pipelines.
+- Run pipelines using triggers.
+- Run on-demand DAST scan.
+- Trigger manual actions on existing pipelines.
+- Retry or cancel existing jobs (using the Web UI or pipelines API).
+
+**Variables** marked as **protected** are accessible only to jobs that
+run on protected branches, preventing untrusted users getting unintended access to
+sensitive information like deployment credentials and tokens.
+
+**Runners** marked as **protected** can run jobs only on protected
+branches, preventing untrusted code from executing on the protected runner and
+preserving deployment keys and other credentials from being unintentionally
+accessed. To ensure that jobs intended to be executed on protected
+runners do not use regular runners, they must be tagged accordingly.
+
+### How pipeline duration is calculated
 
 Total running time for a given pipeline excludes retries and pending
 (queued) time.
@@ -290,44 +354,6 @@ The union of A, B, and C is (1, 4) and (6, 7). Therefore, the total running time
 (4 - 1) + (7 - 6) => 4
 ```
 
-#### How pipeline quota usage is calculated
-
-Pipeline quota usage is calculated as the sum of the duration of each individual job. This is slightly different to how pipeline _duration_ is [calculated](#how-pipeline-duration-is-calculated). Pipeline quota usage doesn't consider any overlap of jobs running in parallel.
-
-For example, a pipeline consists of the following jobs:
-
-- Job A takes 3 minutes.
-- Job B takes 3 minutes.
-- Job C takes 2 minutes.
-
-The pipeline quota usage is the sum of each job's duration. In this example, 8 runner minutes would be used, calculated as: 3 + 3 + 2.
-
-### Pipeline security on protected branches
-
-A strict security model is enforced when pipelines are executed on
-[protected branches](../../user/project/protected_branches.md).
-
-The following actions are allowed on protected branches only if the user is
-[allowed to merge or push](../../user/project/protected_branches.md)
-on that specific branch:
-
-- Run manual pipelines (using the [Web UI](#run-a-pipeline-manually) or [pipelines API](#pipelines-api)).
-- Run scheduled pipelines.
-- Run pipelines using triggers.
-- Run on-demand DAST scan.
-- Trigger manual actions on existing pipelines.
-- Retry or cancel existing jobs (using the Web UI or pipelines API).
-
-**Variables** marked as **protected** are accessible only to jobs that
-run on protected branches, preventing untrusted users getting unintended access to
-sensitive information like deployment credentials and tokens.
-
-**Runners** marked as **protected** can run jobs only on protected
-branches, preventing untrusted code from executing on the protected runner and
-preserving deployment keys and other credentials from being unintentionally
-accessed. In order to ensure that jobs intended to be executed on protected
-runners do not use regular runners, they must be tagged accordingly.
-
 ## Visualize pipelines
 
 Pipelines can be complex structures with many sequential and parallel jobs.
@@ -342,22 +368,28 @@ GitLab capitalizes the stages' names in the pipeline graphs.
 
 ### View full pipeline graph
 
-> - [Visualization improvements introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/276949) in GitLab 13.11.
+> - Visualization improvements [introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/276949) in GitLab 13.11.
 
 The [pipeline details page](#view-pipelines) displays the full pipeline graph of
 all the jobs in the pipeline.
 
 You can group the jobs by:
 
-- Stage, which arranges jobs in the same stage together in the same column.
+- Stage, which arranges jobs in the same stage together in the same column:
 
-  ![jobs grouped by stage](img/pipelines_graph_stage_view_v13_12.png)
+  ![jobs grouped by stage](img/pipelines_graph_stage_view_v14_2.png)
 
 - [Job dependencies](#view-job-dependencies-in-the-pipeline-graph), which arranges
   jobs based on their [`needs`](../yaml/index.md#needs) dependencies.
 
 [Multi-project pipeline graphs](multi_project_pipelines.md#multi-project-pipeline-visualization) help
 you visualize the entire pipeline, including all cross-project inter-dependencies. **(PREMIUM)**
+
+If a stage contains more than 100 jobs, only the first 100 jobs are listed in the
+pipeline graph. The remaining jobs still run as normal. To see the jobs:
+
+- Select the pipeline, and the jobs are listed on the right side of the pipeline details page.
+- On the left sidebar, select **CI/CD > Jobs**.
 
 ### View job dependencies in the pipeline graph
 
@@ -394,6 +426,7 @@ be found when you go to:
 - The pipelines index page.
 - A single commit page.
 - A merge request page.
+- The [pipeline editor](../pipeline_editor/index.md), [in GitLab 14.5](https://gitlab.com/gitlab-org/gitlab/-/issues/337514) and later.
 
 Pipeline mini graphs allow you to see all related jobs for a single commit and the net result
 of each stage of your pipeline. This allows you to quickly see what failed and
@@ -401,7 +434,7 @@ fix it.
 
 Pipeline mini graphs only display jobs by stage.
 
-Stages in pipeline mini graphs are collapsible. Hover your mouse over them and click to expand their jobs.
+Stages in pipeline mini graphs are expandable. Hover your mouse over each stage to see the name and status, and select a stage to expand its jobs list.
 
 | Mini graph                                                   | Mini graph expanded                                            |
 |:-------------------------------------------------------------|:---------------------------------------------------------------|

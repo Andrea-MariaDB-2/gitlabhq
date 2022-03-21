@@ -1,8 +1,6 @@
 # frozen_string_literal: true
 
 require 'fast_spec_helper'
-require 'support/helpers/stub_feature_flags'
-require_dependency 'active_model'
 
 RSpec.describe Gitlab::Ci::Config::Entry::Policy do
   let(:entry) { described_class.new(config) }
@@ -47,28 +45,10 @@ RSpec.describe Gitlab::Ci::Config::Entry::Policy do
         end
 
         context 'when using unsafe regexp' do
-          include StubFeatureFlags
-
           let(:config) { ['/^(?!master).+/'] }
 
-          context 'when allow_unsafe_ruby_regexp is disabled' do
-            before do
-              stub_feature_flags(allow_unsafe_ruby_regexp: false)
-            end
-
-            it 'is not valid' do
-              expect(entry).not_to be_valid
-            end
-          end
-
-          context 'when allow_unsafe_ruby_regexp is enabled' do
-            before do
-              stub_feature_flags(allow_unsafe_ruby_regexp: true)
-            end
-
-            it 'is valid' do
-              expect(entry).to be_valid
-            end
+          it 'is not valid' do
+            expect(entry).not_to be_valid
           end
         end
 
@@ -89,7 +69,7 @@ RSpec.describe Gitlab::Ci::Config::Entry::Policy do
         describe '#errors' do
           it 'saves errors' do
             expect(entry.errors)
-              .to include /policy config should be an array of strings or regexps/
+              .to include /policy config should be an array of strings or regular expressions/
           end
         end
       end
@@ -107,28 +87,10 @@ RSpec.describe Gitlab::Ci::Config::Entry::Policy do
     end
 
     context 'when using unsafe regexp' do
-      include StubFeatureFlags
-
       let(:config) { { refs: ['/^(?!master).+/'] } }
 
-      context 'when allow_unsafe_ruby_regexp is disabled' do
-        before do
-          stub_feature_flags(allow_unsafe_ruby_regexp: false)
-        end
-
-        it 'is not valid' do
-          expect(entry).not_to be_valid
-        end
-      end
-
-      context 'when allow_unsafe_ruby_regexp is enabled' do
-        before do
-          stub_feature_flags(allow_unsafe_ruby_regexp: true)
-        end
-
-        it 'is valid' do
-          expect(entry).to be_valid
-        end
+      it 'is not valid' do
+        expect(entry).not_to be_valid
       end
     end
 

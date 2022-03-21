@@ -9,7 +9,6 @@ import {
 } from '@gitlab/ui';
 import { capitalize, lowerCase, isEmpty } from 'lodash';
 import { mapGetters } from 'vuex';
-import eventHub from '../event_hub';
 
 export default {
   name: 'DynamicField',
@@ -61,11 +60,23 @@ export default {
       required: false,
       default: null,
     },
+    /**
+     * The label that is displayed inline with the checkbox.
+     */
+    checkboxLabel: {
+      type: String,
+      required: false,
+      default: null,
+    },
+    isValidated: {
+      type: Boolean,
+      required: false,
+      default: false,
+    },
   },
   data() {
     return {
       model: this.value,
-      validated: false,
     };
   },
   computed: {
@@ -114,22 +125,13 @@ export default {
       };
     },
     valid() {
-      return !this.required || !isEmpty(this.model) || this.isNonEmptyPassword || !this.validated;
+      return !this.required || !isEmpty(this.model) || this.isNonEmptyPassword || !this.isValidated;
     },
   },
   created() {
     if (this.isNonEmptyPassword) {
       this.model = null;
     }
-    eventHub.$on('validateForm', this.validateForm);
-  },
-  beforeDestroy() {
-    eventHub.$off('validateForm', this.validateForm);
-  },
-  methods: {
-    validateForm() {
-      this.validated = true;
-    },
   },
   helpHtmlConfig: {
     ADD_ATTR: ['target'], // allow external links, can be removed after https://gitlab.com/gitlab-org/gitlab-ui/-/issues/1427 is implemented
@@ -144,14 +146,17 @@ export default {
     :invalid-feedback="__('This field is required.')"
     :state="valid"
   >
-    <template #description>
+    <template v-if="!isCheckbox" #description>
       <span v-safe-html:[$options.helpHtmlConfig]="help"></span>
     </template>
 
     <template v-if="isCheckbox">
       <input :name="fieldName" type="hidden" :value="model || false" />
       <gl-form-checkbox :id="fieldId" v-model="model" :disabled="isInheriting">
-        {{ humanizedTitle }}
+        {{ checkboxLabel || humanizedTitle }}
+        <template #help>
+          <span v-safe-html:[$options.helpHtmlConfig]="help"></span>
+        </template>
       </gl-form-checkbox>
     </template>
     <template v-else-if="isSelect">

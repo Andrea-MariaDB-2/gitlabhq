@@ -1,17 +1,12 @@
-import { GlLoadingIcon } from '@gitlab/ui';
 import { EditorContent } from '@tiptap/vue-2';
-import { nextTick } from 'vue';
 import { shallowMountExtended } from 'helpers/vue_test_utils_helper';
 import ContentEditor from '~/content_editor/components/content_editor.vue';
-import ContentEditorError from '~/content_editor/components/content_editor_error.vue';
+import ContentEditorAlert from '~/content_editor/components/content_editor_alert.vue';
 import ContentEditorProvider from '~/content_editor/components/content_editor_provider.vue';
 import EditorStateObserver from '~/content_editor/components/editor_state_observer.vue';
+import FormattingBubbleMenu from '~/content_editor/components/formatting_bubble_menu.vue';
 import TopToolbar from '~/content_editor/components/top_toolbar.vue';
-import {
-  LOADING_CONTENT_EVENT,
-  LOADING_SUCCESS_EVENT,
-  LOADING_ERROR_EVENT,
-} from '~/content_editor/constants';
+import LoadingIndicator from '~/content_editor/components/loading_indicator.vue';
 import { emitEditorEvent } from '../test_utils';
 
 jest.mock('~/emoji');
@@ -24,8 +19,6 @@ describe('ContentEditor', () => {
 
   const findEditorElement = () => wrapper.findByTestId('content-editor');
   const findEditorContent = () => wrapper.findComponent(EditorContent);
-  const findLoadingIcon = () => wrapper.findComponent(GlLoadingIcon);
-
   const createWrapper = (propsData = {}) => {
     renderMarkdown = jest.fn();
 
@@ -109,67 +102,21 @@ describe('ContentEditor', () => {
     ]);
   });
 
-  it('renders content_editor_error component', () => {
+  it('renders content_editor_alert component', () => {
     createWrapper();
 
-    expect(wrapper.findComponent(ContentEditorError).exists()).toBe(true);
+    expect(wrapper.findComponent(ContentEditorAlert).exists()).toBe(true);
   });
 
-  describe('when loading content', () => {
-    beforeEach(async () => {
-      createWrapper();
+  it('renders loading indicator component', () => {
+    createWrapper();
 
-      contentEditor.emit(LOADING_CONTENT_EVENT);
-
-      await nextTick();
-    });
-
-    it('displays loading indicator', () => {
-      expect(findLoadingIcon().exists()).toBe(true);
-    });
-
-    it('hides EditorContent component', () => {
-      expect(findEditorContent().exists()).toBe(false);
-    });
+    expect(wrapper.findComponent(LoadingIndicator).exists()).toBe(true);
   });
 
-  describe('when loading content succeeds', () => {
-    beforeEach(async () => {
-      createWrapper();
+  it('renders formatting bubble menu', () => {
+    createWrapper();
 
-      contentEditor.emit(LOADING_CONTENT_EVENT);
-      await nextTick();
-      contentEditor.emit(LOADING_SUCCESS_EVENT);
-      await nextTick();
-    });
-
-    it('hides loading indicator', () => {
-      expect(findLoadingIcon().exists()).toBe(false);
-    });
-
-    it('displays EditorContent component', () => {
-      expect(findEditorContent().exists()).toBe(true);
-    });
-  });
-
-  describe('when loading content fails', () => {
-    const error = 'error';
-
-    beforeEach(async () => {
-      createWrapper();
-
-      contentEditor.emit(LOADING_CONTENT_EVENT);
-      await nextTick();
-      contentEditor.emit(LOADING_ERROR_EVENT, error);
-      await nextTick();
-    });
-
-    it('hides loading indicator', () => {
-      expect(findLoadingIcon().exists()).toBe(false);
-    });
-
-    it('displays EditorContent component', () => {
-      expect(findEditorContent().exists()).toBe(true);
-    });
+    expect(wrapper.findComponent(FormattingBubbleMenu).exists()).toBe(true);
   });
 });

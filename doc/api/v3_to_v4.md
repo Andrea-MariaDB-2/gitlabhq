@@ -1,18 +1,11 @@
 ---
-stage: Ecosystem
-group: Integrations
-info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
+redirect_to: 'https://gitlab.com/gitlab-org/gitlab-foss/-/blob/11-0-stable/doc/api/v3_to_v4.md'
+remove_date: '2023-01-31'
 ---
 
-# API V3 to API V4
+This document was moved to [another location](https://gitlab.com/gitlab-org/gitlab-foss/-/blob/11-0-stable/doc/api/v3_to_v4.md).
 
-WARNING:
-The GitLab API v3 was removed in [GitLab 11.0](https://gitlab.com/gitlab-org/gitlab-foss/-/issues/36819).
-
-For information about the current version of the GitLab API, read the [API documentation](index.md).
-
-## Related links
-
-- [GitLab v3 API documentation](https://gitlab.com/gitlab-org/gitlab-foss/-/blob/8-16-stable/doc/api/index.md)
-- [Migration guide](https://gitlab.com/gitlab-org/gitlab-foss/-/blob/11-0-stable/doc/api/v3_to_v4.md) from
-  v3 to v4
+<!-- This redirect file can be deleted after <2023-01-31>. -->
+<!-- Redirects that point to other docs in the same project expire in three months. -->
+<!-- Redirects that point to docs in a different project or site (for example, link is not relative and starts with `https:`) expire in one year. -->
+<!-- Before deletion, see: https://docs.gitlab.com/ee/development/documentation/redirects.html -->

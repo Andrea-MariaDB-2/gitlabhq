@@ -1,9 +1,13 @@
-import { GlBadge, GlLink, GlIcon } from '@gitlab/ui';
+import { GlBadge, GlLink, GlIcon, GlIntersectionObserver } from '@gitlab/ui';
 import { shallowMount, RouterLinkStub } from '@vue/test-utils';
+import { nextTick } from 'vue';
 import { createMockDirective, getBinding } from 'helpers/vue_mock_directive';
 import TableRow from '~/repository/components/table/row.vue';
 import FileIcon from '~/vue_shared/components/file_icon.vue';
 import { FILE_SYMLINK_MODE } from '~/vue_shared/constants';
+import { ROW_APPEAR_DELAY } from '~/repository/constants';
+
+const COMMIT_MOCK = { lockLabel: 'Locked by Root', committedDate: '2019-01-01' };
 
 let vm;
 let $router;
@@ -15,17 +19,19 @@ function factory(propsData = {}) {
 
   vm = shallowMount(TableRow, {
     propsData: {
+      commitInfo: COMMIT_MOCK,
       ...propsData,
       name: propsData.path,
       projectPath: 'gitlab-org/gitlab-ce',
       url: `https://test.com`,
       totalEntries: 10,
+      rowNumber: 123,
     },
     directives: {
       GlHoverLoad: createMockDirective(),
     },
     provide: {
-      glFeatures: { refactorBlobViewer: true },
+      glFeatures: { refactorBlobViewer: true, lazyLoadCommits: true },
     },
     mocks: {
       $router,
@@ -35,17 +41,20 @@ function factory(propsData = {}) {
     },
   });
 
+  // setData usage is discouraged. See https://gitlab.com/groups/gitlab-org/-/epics/7330 for details
+  // eslint-disable-next-line no-restricted-syntax
   vm.setData({ escapedRef: 'main' });
 }
 
 describe('Repository table row component', () => {
   const findRouterLink = () => vm.find(RouterLinkStub);
+  const findIntersectionObserver = () => vm.findComponent(GlIntersectionObserver);
 
   afterEach(() => {
     vm.destroy();
   });
 
-  it('renders table row', () => {
+  it('renders table row', async () => {
     factory({
       id: '1',
       sha: '123',
@@ -54,12 +63,11 @@ describe('Repository table row component', () => {
       currentPath: '/',
     });
 
-    return vm.vm.$nextTick().then(() => {
-      expect(vm.element).toMatchSnapshot();
-    });
+    await nextTick();
+    expect(vm.element).toMatchSnapshot();
   });
 
-  it('renders a symlink table row', () => {
+  it('renders a symlink table row', async () => {
     factory({
       id: '1',
       sha: '123',
@@ -69,12 +77,11 @@ describe('Repository table row component', () => {
       mode: FILE_SYMLINK_MODE,
     });
 
-    return vm.vm.$nextTick().then(() => {
-      expect(vm.element).toMatchSnapshot();
-    });
+    await nextTick();
+    expect(vm.element).toMatchSnapshot();
   });
 
-  it('renders table row for path with special character', () => {
+  it('renders table row for path with special character', async () => {
     factory({
       id: '1',
       sha: '123',
@@ -83,9 +90,8 @@ describe('Repository table row component', () => {
       currentPath: 'test$',
     });
 
-    return vm.vm.$nextTick().then(() => {
-      expect(vm.element).toMatchSnapshot();
-    });
+    await nextTick();
+    expect(vm.element).toMatchSnapshot();
   });
 
   it('renders a gl-hover-load directive', () => {
@@ -108,7 +114,7 @@ describe('Repository table row component', () => {
     ${'tree'}   | ${RouterLinkStub} | ${'RouterLink'}
     ${'blob'}   | ${RouterLinkStub} | ${'RouterLink'}
     ${'commit'} | ${'a'}            | ${'hyperlink'}
-  `('renders a $componentName for type $type', ({ type, component }) => {
+  `('renders a $componentName for type $type', async ({ type, component }) => {
     factory({
       id: '1',
       sha: '123',
@@ -117,16 +123,15 @@ describe('Repository table row component', () => {
       currentPath: '/',
     });
 
-    return vm.vm.$nextTick().then(() => {
-      expect(vm.find(component).exists()).toBe(true);
-    });
+    await nextTick();
+    expect(vm.find(component).exists()).toBe(true);
   });
 
   it.each`
     path
     ${'test#'}
     ${'Änderungen'}
-  `('renders link for $path', ({ path }) => {
+  `('renders link for $path', async ({ path }) => {
     factory({
       id: '1',
       sha: '123',
@@ -135,14 +140,13 @@ describe('Repository table row component', () => {
       currentPath: '/',
     });
 
-    return vm.vm.$nextTick().then(() => {
-      expect(vm.find({ ref: 'link' }).props('to')).toEqual({
-        path: `/-/tree/main/${encodeURIComponent(path)}`,
-      });
+    await nextTick();
+    expect(vm.find({ ref: 'link' }).props('to')).toEqual({
+      path: `/-/tree/main/${encodeURIComponent(path)}`,
     });
   });
 
-  it('renders link for directory with hash', () => {
+  it('renders link for directory with hash', async () => {
     factory({
       id: '1',
       sha: '123',
@@ -151,12 +155,11 @@ describe('Repository table row component', () => {
       currentPath: '/',
     });
 
-    return vm.vm.$nextTick().then(() => {
-      expect(vm.find('.tree-item-link').props('to')).toEqual({ path: '/-/tree/main/test%23' });
-    });
+    await nextTick();
+    expect(vm.find('.tree-item-link').props('to')).toEqual({ path: '/-/tree/main/test%23' });
   });
 
-  it('renders commit ID for submodule', () => {
+  it('renders commit ID for submodule', async () => {
     factory({
       id: '1',
       sha: '123',
@@ -165,12 +168,11 @@ describe('Repository table row component', () => {
       currentPath: '/',
     });
 
-    return vm.vm.$nextTick().then(() => {
-      expect(vm.find('.commit-sha').text()).toContain('1');
-    });
+    await nextTick();
+    expect(vm.find('.commit-sha').text()).toContain('1');
   });
 
-  it('renders link with href', () => {
+  it('renders link with href', async () => {
     factory({
       id: '1',
       sha: '123',
@@ -180,12 +182,11 @@ describe('Repository table row component', () => {
       currentPath: '/',
     });
 
-    return vm.vm.$nextTick().then(() => {
-      expect(vm.find('a').attributes('href')).toEqual('https://test.com');
-    });
+    await nextTick();
+    expect(vm.find('a').attributes('href')).toEqual('https://test.com');
   });
 
-  it('renders LFS badge', () => {
+  it('renders LFS badge', async () => {
     factory({
       id: '1',
       sha: '123',
@@ -195,12 +196,11 @@ describe('Repository table row component', () => {
       lfsOid: '1',
     });
 
-    return vm.vm.$nextTick().then(() => {
-      expect(vm.find(GlBadge).exists()).toBe(true);
-    });
+    await nextTick();
+    expect(vm.find(GlBadge).exists()).toBe(true);
   });
 
-  it('renders commit and web links with href for submodule', () => {
+  it('renders commit and web links with href for submodule', async () => {
     factory({
       id: '1',
       sha: '123',
@@ -211,13 +211,12 @@ describe('Repository table row component', () => {
       currentPath: '/',
     });
 
-    return vm.vm.$nextTick().then(() => {
-      expect(vm.find('a').attributes('href')).toEqual('https://test.com');
-      expect(vm.find(GlLink).attributes('href')).toEqual('https://test.com/commit');
-    });
+    await nextTick();
+    expect(vm.find('a').attributes('href')).toEqual('https://test.com');
+    expect(vm.find(GlLink).attributes('href')).toEqual('https://test.com/commit');
   });
 
-  it('renders lock icon', () => {
+  it('renders lock icon', async () => {
     factory({
       id: '1',
       sha: '123',
@@ -226,12 +225,9 @@ describe('Repository table row component', () => {
       currentPath: '/',
     });
 
-    vm.setData({ commit: { lockLabel: 'Locked by Root', committedDate: '2019-01-01' } });
-
-    return vm.vm.$nextTick().then(() => {
-      expect(vm.find(GlIcon).exists()).toBe(true);
-      expect(vm.find(GlIcon).props('name')).toBe('lock');
-    });
+    await nextTick();
+    expect(vm.find(GlIcon).exists()).toBe(true);
+    expect(vm.find(GlIcon).props('name')).toBe('lock');
   });
 
   it('renders loading icon when path is loading', () => {
@@ -245,5 +241,32 @@ describe('Repository table row component', () => {
     });
 
     expect(vm.find(FileIcon).props('loading')).toBe(true);
+  });
+
+  describe('row visibility', () => {
+    beforeAll(() => jest.useFakeTimers());
+
+    beforeEach(() => {
+      factory({
+        id: '1',
+        sha: '1',
+        path: 'test',
+        type: 'tree',
+        currentPath: '/',
+        commitInfo: null,
+      });
+    });
+
+    afterAll(() => jest.useRealTimers());
+
+    it('emits a `row-appear` event', async () => {
+      findIntersectionObserver().vm.$emit('appear');
+
+      jest.runAllTimers();
+
+      expect(setTimeout).toHaveBeenCalledTimes(1);
+      expect(setTimeout).toHaveBeenLastCalledWith(expect.any(Function), ROW_APPEAR_DELAY);
+      expect(vm.emitted('row-appear')).toEqual([[123]]);
+    });
   });
 });

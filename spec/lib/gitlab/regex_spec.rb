@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-require 'fast_spec_helper'
+require 'spec_helper'
 
 RSpec.describe Gitlab::Regex do
   shared_examples_for 'project/group name chars regex' do
@@ -12,8 +12,15 @@ RSpec.describe Gitlab::Regex do
     it { is_expected.to match('Dash – is this') }
   end
 
-  shared_examples_for 'project/group name regex' do
+  shared_examples_for 'group name regex' do
     it_behaves_like 'project/group name chars regex'
+    it { is_expected.not_to match('?gitlab') }
+    it { is_expected.not_to match("Users's something") }
+  end
+
+  shared_examples_for 'project name regex' do
+    it_behaves_like 'project/group name chars regex'
+    it { is_expected.to match("Gitlab++") }
     it { is_expected.not_to match('?gitlab') }
     it { is_expected.not_to match("Users's something") }
   end
@@ -21,13 +28,13 @@ RSpec.describe Gitlab::Regex do
   describe '.project_name_regex' do
     subject { described_class.project_name_regex }
 
-    it_behaves_like 'project/group name regex'
+    it_behaves_like 'project name regex'
   end
 
   describe '.group_name_regex' do
     subject { described_class.group_name_regex }
 
-    it_behaves_like 'project/group name regex'
+    it_behaves_like 'group name regex'
 
     it 'allows parenthesis' do
       is_expected.to match('Group One (Test)')
@@ -51,7 +58,7 @@ RSpec.describe Gitlab::Regex do
   describe '.project_name_regex_message' do
     subject { described_class.project_name_regex_message }
 
-    it { is_expected.to eq("can contain only letters, digits, emojis, '_', '.', dash, space. It must start with letter, digit, emoji or '_'.") }
+    it { is_expected.to eq("can contain only letters, digits, emojis, '_', '.', '+', dashes, or spaces. It must start with a letter, digit, emoji, or '_'.") }
   end
 
   describe '.group_name_regex_message' do
@@ -257,23 +264,37 @@ RSpec.describe Gitlab::Regex do
     it { is_expected.not_to match('1.2.3') }
   end
 
-  describe '.conan_recipe_component_regex' do
-    subject { described_class.conan_recipe_component_regex }
+  context 'conan recipe components' do
+    shared_examples 'accepting valid recipe components values' do
+      let(:fifty_one_characters) { 'f_a' * 17}
 
-    let(:fifty_one_characters) { 'f_a' * 17}
+      it { is_expected.to match('foobar') }
+      it { is_expected.to match('foo_bar') }
+      it { is_expected.to match('foo+bar') }
+      it { is_expected.to match('_foo+bar-baz+1.0') }
+      it { is_expected.to match('1.0.0') }
+      it { is_expected.not_to match('-foo_bar') }
+      it { is_expected.not_to match('+foo_bar') }
+      it { is_expected.not_to match('.foo_bar') }
+      it { is_expected.not_to match('foo@bar') }
+      it { is_expected.not_to match('foo/bar') }
+      it { is_expected.not_to match('!!()()') }
+      it { is_expected.not_to match(fifty_one_characters) }
+    end
 
-    it { is_expected.to match('foobar') }
-    it { is_expected.to match('foo_bar') }
-    it { is_expected.to match('foo+bar') }
-    it { is_expected.to match('_foo+bar-baz+1.0') }
-    it { is_expected.to match('1.0.0') }
-    it { is_expected.not_to match('-foo_bar') }
-    it { is_expected.not_to match('+foo_bar') }
-    it { is_expected.not_to match('.foo_bar') }
-    it { is_expected.not_to match('foo@bar') }
-    it { is_expected.not_to match('foo/bar') }
-    it { is_expected.not_to match('!!()()') }
-    it { is_expected.not_to match(fifty_one_characters) }
+    describe '.conan_recipe_component_regex' do
+      subject { described_class.conan_recipe_component_regex }
+
+      it_behaves_like 'accepting valid recipe components values'
+      it { is_expected.not_to match('_') }
+    end
+
+    describe '.conan_recipe_user_channel_regex' do
+      subject { described_class.conan_recipe_user_channel_regex }
+
+      it_behaves_like 'accepting valid recipe components values'
+      it { is_expected.to match('_') }
+    end
   end
 
   describe '.package_name_regex' do
@@ -337,6 +358,18 @@ RSpec.describe Gitlab::Regex do
   describe '.maven_version_regex' do
     subject { described_class.maven_version_regex }
 
+    it 'has no ReDoS issues with long strings' do
+      Timeout.timeout(5) do
+        expect(subject).to match("aaaaaaaa.aaaaaaaaa+aa-111111.11111111111111111111111111111111111111111111111111111111.11111111111111111111111111111111111111111111111111111111.11111111111111111111111111111111111111111111111111111111.11111111111111111111111111111111111111111111111111111111.11111111111111111111111111111111111111111111111111111111.11111111111111111111111111111111111111111111111111111111.11111111111111111111111111111111111111111111111111111111.11111111111111111111111111111111111111111111111111111111.11111111111111111111111111111111111111111111111111111111.11111111111111111111111111111111111111111111111111111111.11111111111111111111111111111111111111111111111111111111.11111111111111111111111111111111111111111111111111111111.11111111111111111111111111111111111111111111111111111111.11111111111111111111111111111111111111111111111111111111.11111111111111111111111111111111111111111111111111111111.11111111111111111111111111111111111111111111111111111111.11111111111111111111111111111111111111111111111111111111.11111111111111111111111111111111111111111111111111111111")
+      end
+    end
+
+    it 'has no ReDos issues with long strings ending with an exclamation mark' do
+      Timeout.timeout(5) do
+        expect(subject).not_to match('a' * 50000 + '!')
+      end
+    end
+
     it { is_expected.to match('0')}
     it { is_expected.to match('1') }
     it { is_expected.to match('03') }
@@ -357,6 +390,7 @@ RSpec.describe Gitlab::Regex do
     it { is_expected.to match('703220b4e2cea9592caeb9f3013f6b1e5335c293') }
     it { is_expected.to match('RELEASE') }
     it { is_expected.not_to match('..1.2.3') }
+    it { is_expected.not_to match('1.2.3..beta') }
     it { is_expected.not_to match('  1.2.3') }
     it { is_expected.not_to match("1.2.3  \r\t") }
     it { is_expected.not_to match("\r\t 1.2.3") }
@@ -399,6 +433,7 @@ RSpec.describe Gitlab::Regex do
   describe '.nuget_version_regex' do
     subject { described_class.nuget_version_regex }
 
+    it { is_expected.to match('1.2') }
     it { is_expected.to match('1.2.3') }
     it { is_expected.to match('1.2.3.4') }
     it { is_expected.to match('1.2.3.4-stable.1') }
@@ -406,7 +441,6 @@ RSpec.describe Gitlab::Regex do
     it { is_expected.to match('1.2.3-alpha.3') }
     it { is_expected.to match('1.0.7+r3456') }
     it { is_expected.not_to match('1') }
-    it { is_expected.not_to match('1.2') }
     it { is_expected.not_to match('1./2.3') }
     it { is_expected.not_to match('../../../../../1.2.3') }
     it { is_expected.not_to match('%2e%2e%2f1.2.3') }
@@ -646,13 +680,24 @@ RSpec.describe Gitlab::Regex do
 
     it { is_expected.to match('release') }
     it { is_expected.to match('my-repo') }
-    it { is_expected.to match('my-repo42') }
+    it { is_expected.to match('My-Re_po') }
+    it { is_expected.to match('my_repo42') }
+    it { is_expected.to match('1.2.3') }
+    it { is_expected.to match('v1.2.3-beta-12') }
+    it { is_expected.to match('renovate_https-github.com-operator-framework-operator-lifecycle-manager.git-0.x') }
 
     # Do not allow empty
     it { is_expected.not_to match('') }
 
     # Do not allow Unicode
     it { is_expected.not_to match('hé') }
+
+    it { is_expected.not_to match('.1.23') }
+    it { is_expected.not_to match('1..23') }
+    it { is_expected.not_to match('1.2.3.') }
+    it { is_expected.not_to match('1..2.3.') }
+    it { is_expected.not_to match('1/../2.3.') }
+    it { is_expected.not_to match('1/..%2F2.3.') }
   end
 
   describe '.helm_package_regex' do
@@ -923,5 +968,41 @@ RSpec.describe Gitlab::Regex do
     it { is_expected.not_to match('/api/v4/groups/1234/packages/debian/dists/stable/Release') }
     it { is_expected.not_to match('/api/v4/groups/1234/packages/debian/dists/stable/Release.gpg') }
     it { is_expected.not_to match('/api/v4/groups/1234/packages/debian/pool/compon/a/pkg/file.name') }
+  end
+
+  describe '.composer_package_version_regex' do
+    subject { described_class.composer_package_version_regex }
+
+    it { is_expected.to match('v1.2.3') }
+    it { is_expected.to match('v1.2.x') }
+    it { is_expected.to match('v1.2.X') }
+    it { is_expected.to match('1.2.3') }
+    it { is_expected.to match('1') }
+    it { is_expected.to match('v1') }
+    it { is_expected.to match('1.2') }
+    it { is_expected.to match('v1.2') }
+    it { is_expected.not_to match('1.2.3-beta') }
+    it { is_expected.not_to match('1.2.x-beta') }
+    it { is_expected.not_to match('1.2.X-beta') }
+    it { is_expected.not_to match('1.2.3-alpha.3') }
+    it { is_expected.not_to match('1./2.3') }
+    it { is_expected.not_to match('v1./2.3') }
+    it { is_expected.not_to match('../../../../../1.2.3') }
+    it { is_expected.not_to match('%2e%2e%2f1.2.3') }
+  end
+
+  describe '.saved_reply_name_regex' do
+    subject { described_class.saved_reply_name_regex }
+
+    it { is_expected.to match('test') }
+    it { is_expected.to match('test123') }
+    it { is_expected.to match('test-test') }
+    it { is_expected.to match('test-test_0123') }
+    it { is_expected.not_to match('test test') }
+    it { is_expected.not_to match('test-') }
+    it { is_expected.not_to match('/z/test_') }
+    it { is_expected.not_to match('.xtest_') }
+    it { is_expected.not_to match('.xt.est_') }
+    it { is_expected.not_to match('0test1') }
   end
 end

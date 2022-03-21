@@ -1,6 +1,12 @@
-query GroupBoardMilestones($fullPath: ID!, $searchTerm: String) {
+query GroupBoardMilestones($fullPath: ID!, $searchTerm: String, $state: MilestoneStateEnum) {
   group(fullPath: $fullPath) {
-    milestones(includeAncestors: true, searchTitle: $searchTerm) {
+    id
+    milestones(
+      includeAncestors: true
+      searchTitle: $searchTerm
+      state: $state
+      sort: EXPIRED_LAST_DUE_DATE_ASC
+    ) {
       nodes {
         id
         title

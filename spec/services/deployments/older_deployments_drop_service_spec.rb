@@ -70,6 +70,8 @@ RSpec.describe Deployments::OlderDeploymentsDropService do
             let(:older_deployment) { create(:deployment, :created, environment: environment, deployable: build) }
             let(:build) { create(:ci_build, :manual) }
 
+            # Manual jobs should not be accounted as outdated deployment jobs.
+            # See https://gitlab.com/gitlab-org/gitlab/-/issues/255978 for more information.
             it 'does not drop any builds nor track the exception' do
               expect(Gitlab::ErrorTracking).not_to receive(:track_exception)
 
@@ -84,7 +86,7 @@ RSpec.describe Deployments::OlderDeploymentsDropService do
 
             it 'does not drop an older deployment and tracks the exception' do
               expect(Gitlab::ErrorTracking).to receive(:track_exception)
-                .with(kind_of(RuntimeError), subject_id: deployment.id, deployment_id: older_deployment.id)
+                .with(kind_of(RuntimeError), subject_id: deployment.id, build_id: older_deployment.deployable_id)
 
               expect { subject }.not_to change { Ci::Build.failed.count }
             end

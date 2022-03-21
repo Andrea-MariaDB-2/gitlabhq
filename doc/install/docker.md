@@ -4,7 +4,7 @@ group: Distribution
 info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
 ---
 
-# GitLab Docker images
+# GitLab Docker images **(FREE SELF)**
 
 The GitLab Docker images are monolithic images of GitLab running all the
 necessary services in a single container. If you instead want to install GitLab
@@ -27,7 +27,7 @@ WARNING:
 Docker for Windows is not officially supported. There are known issues with volume
 permissions, and potentially other unknown issues. If you are trying to run on Docker
 for Windows, see the [getting help page](https://about.gitlab.com/get-help/) for links
-to community resources (IRC, forum, etc.) to seek help from other users.
+to community resources (such as IRC or forums) to seek help from other users.
 
 ## Prerequisites
 
@@ -81,6 +81,7 @@ sudo docker run --detach \
   --volume $GITLAB_HOME/config:/etc/gitlab \
   --volume $GITLAB_HOME/logs:/var/log/gitlab \
   --volume $GITLAB_HOME/data:/var/opt/gitlab \
+  --shm-size 256m \
   gitlab/gitlab-ee:latest
 ```
 
@@ -99,11 +100,12 @@ sudo docker run --detach \
   --volume $GITLAB_HOME/config:/etc/gitlab:Z \
   --volume $GITLAB_HOME/logs:/var/log/gitlab:Z \
   --volume $GITLAB_HOME/data:/var/opt/gitlab:Z \
+  --shm-size 256m \
   gitlab/gitlab-ee:latest
 ```
 
 This will ensure that the Docker process has enough permissions to create the
-config files in the mounted volumes.
+configuration files in the mounted volumes.
 
 If you're using the [Kerberos integration](../integration/kerberos.md) **(PREMIUM ONLY)**,
 you must also publish your Kerberos port (for example, `--publish 8443:8443`).
@@ -139,22 +141,25 @@ install, and upgrade your Docker-based GitLab installation:
 1. Create a `docker-compose.yml` file (or [download an example](https://gitlab.com/gitlab-org/omnibus-gitlab/raw/master/docker/docker-compose.yml)):
 
    ```yaml
-   web:
-     image: 'gitlab/gitlab-ee:latest'
-     restart: always
-     hostname: 'gitlab.example.com'
-     environment:
-       GITLAB_OMNIBUS_CONFIG: |
-         external_url 'https://gitlab.example.com'
-         # Add any other gitlab.rb configuration here, each on its own line
-     ports:
-       - '80:80'
-       - '443:443'
-       - '22:22'
-     volumes:
-       - '$GITLAB_HOME/config:/etc/gitlab'
-       - '$GITLAB_HOME/logs:/var/log/gitlab'
-       - '$GITLAB_HOME/data:/var/opt/gitlab'
+   version: '3.6'
+   services:
+     web:
+       image: 'gitlab/gitlab-ee:latest'
+       restart: always
+       hostname: 'gitlab.example.com'
+       environment:
+         GITLAB_OMNIBUS_CONFIG: |
+           external_url 'https://gitlab.example.com'
+           # Add any other gitlab.rb configuration here, each on its own line
+       ports:
+         - '80:80'
+         - '443:443'
+         - '22:22'
+       volumes:
+         - '$GITLAB_HOME/config:/etc/gitlab'
+         - '$GITLAB_HOME/logs:/var/log/gitlab'
+         - '$GITLAB_HOME/data:/var/opt/gitlab'
+       shm_size: '256m'
    ```
 
 1. Make sure you are in the same directory as `docker-compose.yml` and start
@@ -173,24 +178,27 @@ HTTP and SSH port. Notice how the `GITLAB_OMNIBUS_CONFIG` variables match the
 `ports` section:
 
 ```yaml
-web:
-  image: 'gitlab/gitlab-ee:latest'
-  restart: always
-  hostname: 'gitlab.example.com'
-  environment:
-    GITLAB_OMNIBUS_CONFIG: |
-      external_url 'http://gitlab.example.com:8929'
-      gitlab_rails['gitlab_shell_ssh_port'] = 2224
-  ports:
-    - '8929:8929'
-    - '2224:22'
-  volumes:
-    - '$GITLAB_HOME/config:/etc/gitlab'
-    - '$GITLAB_HOME/logs:/var/log/gitlab'
-    - '$GITLAB_HOME/data:/var/opt/gitlab'
+version: '3.6'
+services:
+  web:
+    image: 'gitlab/gitlab-ee:latest'
+    restart: always
+    hostname: 'gitlab.example.com'
+    environment:
+      GITLAB_OMNIBUS_CONFIG: |
+        external_url 'http://gitlab.example.com:8929'
+        gitlab_rails['gitlab_shell_ssh_port'] = 2224
+    ports:
+      - '8929:80'
+      - '2224:22'
+    volumes:
+      - '$GITLAB_HOME/config:/etc/gitlab'
+      - '$GITLAB_HOME/logs:/var/log/gitlab'
+      - '$GITLAB_HOME/data:/var/opt/gitlab'
+    shm_size: '256m'
 ```
 
-This is the same as using `--publish 8929:8929 --publish 2224:22`.
+This is the same as using `--publish 8929:80 --publish 2224:22`.
 
 ### Install GitLab using Docker swarm mode
 
@@ -199,11 +207,11 @@ configure and deploy your
 Docker-based GitLab installation in a swarm cluster.
 
 In swarm mode you can leverage [Docker secrets](https://docs.docker.com/engine/swarm/secrets/)
-and [Docker configs](https://docs.docker.com/engine/swarm/configs/) to efficiently and securely deploy your GitLab instance.
+and [Docker configurations](https://docs.docker.com/engine/swarm/configs/) to efficiently and securely deploy your GitLab instance.
 Secrets can be used to securely pass your initial root password without exposing it as an environment variable.
-Configs can help you to keep your GitLab image as generic as possible.
+Configurations can help you to keep your GitLab image as generic as possible.
 
-Here's an example that deploys GitLab with four runners as a [stack](https://docs.docker.com/get-started/part5/), using secrets and configs:
+Here's an example that deploys GitLab with four runners as a [stack](https://docs.docker.com/get-started/part5/), using secrets and configurations:
 
 1. [Set up a Docker swarm](https://docs.docker.com/engine/swarm/swarm-tutorial/).
 1. Create a `docker-compose.yml` file:
@@ -221,6 +229,7 @@ Here's an example that deploys GitLab with four runners as a [stack](https://doc
          - $GITLAB_HOME/data:/var/opt/gitlab
          - $GITLAB_HOME/logs:/var/log/gitlab
          - $GITLAB_HOME/config:/etc/gitlab
+       shm_size: '256m'
        environment:
          GITLAB_OMNIBUS_CONFIG: "from_file('/omnibus_config.rb')"
        configs:
@@ -325,6 +334,7 @@ sudo docker run --detach \
   --volume $GITLAB_HOME/config:/etc/gitlab \
   --volume $GITLAB_HOME/logs:/var/log/gitlab \
   --volume $GITLAB_HOME/data:/var/opt/gitlab \
+  --shm-size 256m \
   gitlab/gitlab-ee:latest
 ```
 
@@ -361,6 +371,7 @@ sudo docker run --detach \
   --volume $GITLAB_HOME/config:/etc/gitlab \
   --volume $GITLAB_HOME/logs:/var/log/gitlab \
   --volume $GITLAB_HOME/data:/var/opt/gitlab \
+  --shm-size 256m \
   gitlab/gitlab-ee:latest
 ```
 
@@ -368,7 +379,7 @@ You can then access your GitLab instance at `http://198.51.100.1/` and `https://
 
 ### Expose GitLab on different ports
 
-GitLab will occupy [some ports](https://docs.gitlab.com/omnibus/package-information/defaults.html)
+GitLab will occupy [some ports](../administration/package_information/defaults.md)
 inside the container.
 
 If you want to use a different host port than `80` (HTTP) or `443` (HTTPS),
@@ -388,6 +399,7 @@ port `2289`:
      --volume $GITLAB_HOME/config:/etc/gitlab \
      --volume $GITLAB_HOME/logs:/var/log/gitlab \
      --volume $GITLAB_HOME/data:/var/opt/gitlab \
+     --shm-size 256m \
      gitlab/gitlab-ee:latest
    ```
 
@@ -477,6 +489,7 @@ To update GitLab that was [installed using Docker Engine](#install-gitlab-using-
    --volume $GITLAB_HOME/config:/etc/gitlab \
    --volume $GITLAB_HOME/logs:/var/log/gitlab \
    --volume $GITLAB_HOME/data:/var/opt/gitlab \
+   --shm-size 256m \
    gitlab/gitlab-ee:latest
    ```
 
@@ -499,6 +512,22 @@ To update GitLab that was [installed using Docker Compose](#install-gitlab-using
 
    If you have used [tags](#use-tagged-versions-of-gitlab) instead, you'll need
    to first edit `docker-compose.yml`.
+
+### Convert Community Edition to Enterprise Edition
+
+You can convert an existing Docker-based GitLab Community Edition (CE) container
+to a GitLab [Enterprise Edition](https://about.gitlab.com/pricing/) (EE) container
+using the same approach as [updating the version](#update).
+
+We recommend you convert from the same version of CE to EE (for example, CE 14.1 to EE 14.1).
+This is not explicitly necessary, and any standard upgrade (for example, CE 14.0 to EE 14.1) should work.
+The following steps assume that you are upgrading the same version.
+
+1. Take a [backup](#back-up-gitlab).
+1. Stop the current CE container, and remove or rename it.
+1. To create a new container with GitLab EE,
+   replace `ce` with `ee` in your `docker run` command or `docker-compose.yml` file.
+   However, reuse the CE container name, port and file mappings, and version.
 
 ## Back up GitLab
 
@@ -573,7 +602,7 @@ sudo docker restart gitlab
 
 This error occurs when using Docker Toolbox with VirtualBox on Windows or Mac,
 and making use of Docker volumes. The `/c/Users` volume is mounted as a
-VirtualBox Shared Folder, and does not support the all POSIX filesystem features.
+VirtualBox Shared Folder, and does not support the all POSIX file system features.
 The directory ownership and permissions cannot be changed without remounting, and
 GitLab fails.
 
@@ -643,4 +672,16 @@ purpose.
 
 ### Docker containers exhausts space due to the `json-file`
 
-Docker's [default logging driver is `json-file`](https://docs.docker.com/config/containers/logging/configure/#configure-the-default-logging-driver), which performs no log rotation by default. As a result of this lack of rotation, log files stored by the `json-file` driver can consume a significant amount of disk space for containers that generate a lot of output. This can lead to disk space exhaustion. To address this, use [journald](https://docs.docker.com/config/containers/logging/journald/) as the logging driver when available, or [another supported driver](https://docs.docker.com/config/containers/logging/configure/#supported-logging-drivers) with native rotation support.
+Docker's [default logging driver is `json-file`](https://docs.docker.com/config/containers/logging/configure/#configure-the-default-logging-driver), which performs no log rotation by default. As a result of this lack of rotation, log files stored by the `json-file` driver can consume a significant amount of disk space for containers that generate a lot of output. This can lead to disk space exhaustion. To address this, use [`journald`](https://docs.docker.com/config/containers/logging/journald/) as the logging driver when available, or [another supported driver](https://docs.docker.com/config/containers/logging/configure/#supported-logging-drivers) with native rotation support.
+
+### Buffer overflow error when starting Docker
+
+If you receive this buffer overflow error, you should purge old log files in
+`/var/log/gitlab`:
+
+```plaintext
+buffer overflow detected : terminated
+xargs: tail: terminated by signal 6
+```
+
+Removing old log files helps fix the error, and ensures a clean startup of the instance.

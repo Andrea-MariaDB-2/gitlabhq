@@ -4,59 +4,13 @@ group: Compliance
 info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
 ---
 
-# Events API
+# Events API **(FREE)**
 
 ## Filter parameters
 
-### Action Types
+### Actions
 
-Available types for the `action` parameter, and the resources that might be affected:
-
-- `approved`
-  - Merge request
-- `closed`
-  - Epic
-  - Issue
-  - Merge request
-  - Milestone
-- `commented` on any `Noteable` record.
-  - Alert
-  - Commit
-  - Design
-  - Issue
-  - Merge request
-  - Snippet
-- `created`
-  - Design
-  - Epic
-  - Issue
-  - Merge request
-  - Milestone
-  - Project
-  - Wiki page
-- `destroyed`
-  - Design
-  - Milestone
-  - Wiki page
-- `expired`
-  - Project membership
-- `joined`
-  - Project membership
-- `left`
-  - Project membership
-- `merged`
-  - Merge request
-- `pushed` commits to (or deleted commits from) a repository, individually or in bulk.
-  - Project
-- `reopened`
-  - Epic
-  - Issue
-  - Merge request
-  - Milestone
-- `updated`
-  - Design
-  - Wiki page
-
+See [User contribution events](../user/profile/index.md#user-contribution-events) for available types for the `action` parameter.
 These options are in lowercase.
 
 ### Target Types
@@ -72,6 +26,7 @@ Available target types for the `target_type` parameter are:
 - `user`
 
 These options are in lowercase.
+Events associated with epics are not available using the API.
 
 ### Date formatting
 
@@ -87,11 +42,8 @@ GitLab removes events older than 3 years from the events table for performance r
 
 ## List currently authenticated user's events
 
->**Notes:**
-> This endpoint was introduced in GitLab 9.3.
-> `read_user` access was introduced in GitLab 11.3.
-
 Get a list of events for the authenticated user. Scope `read_user` or `api` is required.
+Events associated with epics are not available using the API.
 
 ```plaintext
 GET /events
@@ -101,7 +53,7 @@ Parameters:
 
 | Attribute | Type | Required | Description |
 | --------- | ---- | -------- | ----------- |
-| `action` | string | no | Include only events of a particular [action type](#action-types) |
+| `action` | string | no | Include only events of a particular [action type](#actions) |
 | `target_type` | string | no | Include only events of a particular [target type](#target-types) |
 | `before` | date | no |  Include only events created before a particular date. [View how to format dates](#date-formatting). |
 | `after` | date | no |  Include only events created after a particular date. [View how to format dates](#date-formatting).  |
@@ -163,11 +115,8 @@ Example response:
 
 ### Get user contribution events
 
->**Notes:**
-> Documentation was formerly located in the [Users API pages](users.md).
-> `read_user` access was introduced in GitLab 11.3.
-
 Get the contribution events for the specified user, sorted from newest to oldest. Scope `read_user` or `api` is required.
+Events associated with epics are not available using API.
 
 ```plaintext
 GET /users/:id/events
@@ -178,7 +127,7 @@ Parameters:
 | Attribute | Type | Required | Description |
 | --------- | ---- | -------- | ----------- |
 | `id` | integer | yes | The ID or Username of the user |
-| `action` | string | no | Include only events of a particular [action type](#action-types) |
+| `action` | string | no | Include only events of a particular [action type](#actions) |
 | `target_type` | string | no | Include only events of a particular [target type](#target-types) |
 | `before` | date | no |  Include only events created before a particular date. [View how to format dates](#date-formatting). |
 | `after` | date | no |  Include only events created after a particular date. [View how to format dates](#date-formatting). |
@@ -316,7 +265,7 @@ Parameters:
 | Attribute | Type | Required | Description |
 | --------- | ---- | -------- | ----------- |
 | `project_id` | integer/string | yes | The ID or [URL-encoded path of the project](index.md#namespaced-path-encoding) |
-| `action` | string | no | Include only events of a particular [action type](#action-types) |
+| `action` | string | no | Include only events of a particular [action type](#actions) |
 | `target_type` | string | no | Include only events of a particular [target type](#target-types) |
 | `before` | date | no |  Include only events created before a particular date. [View how to format dates](#date-formatting). |
 | `after` | date | no |  Include only events created after a particular date. [View how to format dates](#date-formatting).  |

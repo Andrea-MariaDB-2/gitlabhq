@@ -54,15 +54,8 @@ module UsageDataHelpers
       clusters_platforms_eks
       clusters_platforms_gke
       clusters_platforms_user
-      clusters_applications_helm
-      clusters_applications_ingress
-      clusters_applications_cert_managers
-      clusters_applications_prometheus
-      clusters_applications_crossplane
-      clusters_applications_runner
-      clusters_applications_knative
-      clusters_applications_elastic_stack
-      clusters_applications_jupyter
+      clusters_integrations_elastic_stack
+      clusters_integrations_prometheus
       clusters_management_project
       in_review_folder
       grafana_integrated_projects
@@ -112,6 +105,7 @@ module UsageDataHelpers
       projects_with_expiration_policy_enabled_with_older_than_set_to_7d
       projects_with_expiration_policy_enabled_with_older_than_set_to_14d
       projects_with_expiration_policy_enabled_with_older_than_set_to_30d
+      projects_with_expiration_policy_enabled_with_older_than_set_to_60d
       projects_with_expiration_policy_enabled_with_older_than_set_to_90d
       projects_with_expiration_policy_enabled_with_cadence_set_to_1d
       projects_with_expiration_policy_enabled_with_cadence_set_to_7d
@@ -135,6 +129,7 @@ module UsageDataHelpers
       uploads
       web_hooks
       user_preferences_user_gitpod_enabled
+      service_usage_data_download_payload_click
     ).push(*SMAU_KEYS)
 
   USAGE_DATA_KEYS = %i(
@@ -168,6 +163,8 @@ module UsageDataHelpers
 
   def stub_usage_data_connections
     allow(ActiveRecord::Base.connection).to receive(:transaction_open?).and_return(false)
+    allow(::Ci::ApplicationRecord.connection).to receive(:transaction_open?).and_return(false) if ::Ci::ApplicationRecord.connection_class?
+
     allow(Gitlab::Prometheus::Internal).to receive(:prometheus_enabled?).and_return(false)
   end
 
@@ -185,6 +182,10 @@ module UsageDataHelpers
         body: [{}].to_json,
         headers: { 'Content-Type' => 'application/json' }
       )
+  end
+
+  def stub_database_flavor_check(flavor = nil)
+    allow(ApplicationRecord.database).to receive(:flavor).and_return(flavor)
   end
 
   def clear_memoized_values(values)

@@ -4,16 +4,20 @@ group: Configure
 info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
 ---
 
-# Group clusters API **(FREE)**
+# Group clusters API (certificate-based) (DEPRECATED) **(FREE)**
 
-> [Introduced](https://gitlab.com/gitlab-org/gitlab-foss/-/merge_requests/30213) in GitLab 12.1.
+> - [Introduced](https://gitlab.com/gitlab-org/gitlab-foss/-/merge_requests/30213) in GitLab 12.1.
+> - [Deprecated](https://gitlab.com/groups/gitlab-org/configure/-/epics/8) in GitLab 14.5.
+
+WARNING:
+This feature was [deprecated](https://gitlab.com/groups/gitlab-org/configure/-/epics/8) in GitLab 14.5.
 
 Similarly to [project-level](../user/project/clusters/index.md) and
 [instance-level](../user/instance/clusters/index.md) Kubernetes clusters,
 group-level Kubernetes clusters allow you to connect a Kubernetes cluster to
 your group, enabling you to use the same cluster across multiple projects.
 
-Users need at least the [Maintainer role](../user/permissions.md) for the group to use these endpoints.
+Users need at least the Maintainer role for the group to use these endpoints.
 
 ## List group clusters
 
@@ -250,7 +254,7 @@ Parameters:
 
 NOTE:
 `name`, `api_url`, `ca_cert` and `token` can only be updated if the cluster was added
-through the ["Add existing Kubernetes cluster"](../user/project/clusters/add_remove_clusters.md#add-existing-cluster) option or
+through the ["Add existing Kubernetes cluster"](../user/project/clusters/add_existing_cluster.md) option or
 through the ["Add existing cluster to group"](#add-existing-cluster-to-group) endpoint.
 
 Example request:

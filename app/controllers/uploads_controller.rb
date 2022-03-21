@@ -13,6 +13,7 @@ class UploadsController < ApplicationController
     "group"            => Group,
     "appearance"       => Appearance,
     "personal_snippet" => PersonalSnippet,
+    "projects/topic"   => Projects::Topic,
     nil                => PersonalSnippet
   }.freeze
 
@@ -36,40 +37,35 @@ class UploadsController < ApplicationController
   end
 
   def find_model
-    return unless params[:id]
-
     upload_model_class.find(params[:id])
   end
 
+  def authorized?
+    case model
+    when Note
+      can?(current_user, :read_project, model.project)
+    when Snippet, ProjectSnippet
+      can?(current_user, :read_snippet, model)
+    when User
+      # We validate the current user has enough (writing)
+      # access to itself when a secret is given.
+      # For instance, user avatars are readable by anyone,
+      # while temporary, user snippet uploads are not.
+      !secret? || can?(current_user, :update_user, model)
+    when Appearance
+      true
+    when Projects::Topic
+      true
+    else
+      can?(current_user, "read_#{model.class.underscore}".to_sym, model)
+    end
+  end
+
   def authorize_access!
-    return unless model
-
-    authorized =
-      case model
-      when Note
-        can?(current_user, :read_project, model.project)
-      when Snippet, ProjectSnippet
-        can?(current_user, :read_snippet, model)
-      when User
-        # We validate the current user has enough (writing)
-        # access to itself when a secret is given.
-        # For instance, user avatars are readable by anyone,
-        # while temporary, user snippet uploads are not.
-        !secret? || can?(current_user, :update_user, model)
-      when Appearance
-        true
-      else
-        permission = "read_#{model.class.underscore}".to_sym
-
-        can?(current_user, permission, model)
-      end
-
-    render_unauthorized unless authorized
+    render_unauthorized unless authorized?
   end
 
   def authorize_create_access!
-    return unless model
-
     authorized =
       case model
       when User
@@ -91,7 +87,7 @@ class UploadsController < ApplicationController
 
   def cache_settings
     case model
-    when User, Appearance
+    when User, Appearance, Projects::Topic
       [5.minutes, { public: true, must_revalidate: false }]
     when Project, Group
       [5.minutes, { private: true, must_revalidate: true }]

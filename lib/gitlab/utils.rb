@@ -5,6 +5,10 @@ module Gitlab
     extend self
     PathTraversalAttackError ||= Class.new(StandardError)
 
+    private_class_method def logger
+      @logger ||= Gitlab::AppLogger
+    end
+
     # Ensure that the relative path will not traverse outside the base directory
     # We url decode the path to avoid passing invalid paths forward in url encoded format.
     # Also see https://gitlab.com/gitlab-org/gitlab/-/merge_requests/24223#note_284122580
@@ -16,6 +20,7 @@ module Gitlab
       path_regex = %r{(\A(\.{1,2})\z|\A\.\.[/\\]|[/\\]\.\.\z|[/\\]\.\.[/\\]|\n)}
 
       if path.match?(path_regex)
+        logger.warn(message: "Potential path traversal attempt detected", path: "#{path}")
         raise PathTraversalAttackError, 'Invalid path'
       end
 
@@ -35,6 +40,13 @@ module Gitlab
       return if allowlisted?(path, allowlist)
 
       raise StandardError, "path #{path} is not allowed"
+    end
+
+    def check_allowed_absolute_path_and_path_traversal!(path, path_allowlist)
+      traversal_path = check_path_traversal!(path)
+      raise StandardError, "path is not a string!" unless traversal_path.is_a?(String)
+
+      check_allowed_absolute_path!(traversal_path, path_allowlist)
     end
 
     def decode_path(encoded_path)
@@ -120,18 +132,14 @@ module Gitlab
       Random.rand(Float::MAX.to_i).to_s(36)
     end
 
-    # See: http://stackoverflow.com/questions/2108727/which-in-ruby-checking-if-program-exists-in-path-from-ruby
-    # Cross-platform way of finding an executable in the $PATH.
+    # Behaves like `which` on Linux machines: given PATH, try to resolve the given
+    # executable name to an absolute path, or return nil.
     #
     #   which('ruby') #=> /usr/bin/ruby
-    def which(cmd, env = ENV)
-      exts = env['PATHEXT'] ? env['PATHEXT'].split(';') : ['']
-
-      env['PATH'].split(File::PATH_SEPARATOR).each do |path|
-        exts.each do |ext|
-          exe = File.join(path, "#{cmd}#{ext}")
-          return exe if File.executable?(exe) && !File.directory?(exe)
-        end
+    def which(filename)
+      ENV['PATH']&.split(File::PATH_SEPARATOR)&.each do |path|
+        full_path = File.join(path, filename)
+        return full_path if File.executable?(full_path)
       end
 
       nil
@@ -205,6 +213,13 @@ module Gitlab
     def parse_url(uri_string)
       Addressable::URI.parse(uri_string)
     rescue Addressable::URI::InvalidURIError, TypeError
+    end
+
+    def add_url_parameters(url, params)
+      uri = parse_url(url.to_s)
+      uri.query_values = uri.query_values.to_h.merge(params.to_h.stringify_keys)
+      uri.query_values = nil if uri.query_values.empty?
+      uri.to_s
     end
 
     def removes_sensitive_data_from_url(uri_string)

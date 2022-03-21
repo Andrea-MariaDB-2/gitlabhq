@@ -5,8 +5,6 @@ info: To determine the technical writer assigned to the Stage/Group associated w
 disqus_identifier: 'https://docs.gitlab.com/ee/articles/laravel_with_gitlab_and_envoy/index.html'
 author: Mehran Rasulian
 author_gitlab: mehranrasulian
-type: tutorial
-date: 2017-08-31
 ---
 
 <!-- vale off -->
@@ -17,7 +15,7 @@ date: 2017-08-31
 
 GitLab features our applications with Continuous Integration, and it is possible to easily deploy the new code changes to the production server whenever we want.
 
-In this tutorial, we'll show you how to initialize a [Laravel](https://laravel.com) application and set up our [Envoy](https://laravel.com/docs/master/envoy) tasks, then we'll jump into see how to test and deploy it with [GitLab CI/CD](../README.md) via [Continuous Delivery](https://about.gitlab.com/blog/2016/08/05/continuous-integration-delivery-and-deployment-with-gitlab/).
+In this tutorial, we'll show you how to initialize a [Laravel](https://laravel.com) application and set up our [Envoy](https://laravel.com/docs/master/envoy) tasks, then we'll jump into see how to test and deploy it with [GitLab CI/CD](../index.md) via [Continuous Delivery](https://about.gitlab.com/blog/2016/08/05/continuous-integration-delivery-and-deployment-with-gitlab/).
 
 We assume you have a basic experience with Laravel, Linux servers,
 and you know how to use GitLab.
@@ -380,7 +378,7 @@ Now, we would need to deploy our app by running `envoy run deploy`, but it won't
 
 Now it's time to commit [Envoy.blade.php](https://gitlab.com/mehranrasulian/laravel-sample/blob/master/Envoy.blade.php) and push it to the `main` branch.
 To keep things simple, we commit directly to `main`, without using [feature-branches](../../../topics/gitlab_flow.md#github-flow-as-a-simpler-alternative) since collaboration is beyond the scope of this tutorial.
-In a real world project, teams may use [Issue Tracker](../../../user/project/issues/index.md) and [Merge Requests](../../../user/project/merge_requests/index.md) to move their code across branches:
+In a real world project, teams may use [Issue Tracker](../../../user/project/issues/index.md) and [merge requests](../../../user/project/merge_requests/index.md) to move their code across branches:
 
 ```shell
 git add Envoy.blade.php
@@ -394,7 +392,7 @@ We have our app ready on GitLab, and we also can deploy it manually.
 But let's take a step forward to do it automatically with [Continuous Delivery](https://about.gitlab.com/blog/2016/08/05/continuous-integration-delivery-and-deployment-with-gitlab/#continuous-delivery) method.
 We need to check every commit with a set of automated tests to become aware of issues at the earliest, and then, we can deploy to the target environment if we are happy with the result of the tests.
 
-[GitLab CI/CD](../../README.md) allows us to use [Docker](https://www.docker.com) engine to handle the process of testing and deploying our app.
+[GitLab CI/CD](../../index.md) allows us to use [Docker](https://www.docker.com) engine to handle the process of testing and deploying our app.
 In case you're not familiar with Docker, refer to [Set up automated builds](https://docs.docker.com/get-started/).
 
 To be able to build, test, and deploy our app with GitLab CI/CD, we need to prepare our work environment.

@@ -12,7 +12,7 @@ Use this document to get started with [GitLab CI/CD](../index.md).
 Before you start, make sure you have:
 
 - A project in GitLab that you would like to use CI/CD for.
-- The [Maintainer or Owner role](../../user/permissions.md) for the project.
+- The Maintainer or Owner role for the project.
 
 If you are migrating from another CI/CD tool, view this documentation:
 
@@ -119,6 +119,11 @@ The pipeline starts when the commit is committed.
 
 #### `.gitlab-ci.yml` tips
 
+- After you create your first `.gitlab-ci.yml` file, use the [pipeline editor](../pipeline_editor/index.md)
+  for all future edits to the file. With the pipeline editor, you can:
+  - Edit the pipeline configuration with automatic syntax highlighting and validation.
+  - View the [CI/CD configuration visualization](../pipeline_editor/index.md#visualize-ci-configuration),
+    a graphical representation of your `.gitlab-ci.yml` file.
 - If you want the runner to [use a Docker container to run the jobs](../docker/using_docker_images.md),
   edit the `.gitlab-ci.yml` file
   to include an image name:
@@ -136,12 +141,8 @@ The pipeline starts when the commit is committed.
   Your application does not need to be built as a Docker container to
   run CI/CD jobs in Docker containers.
 
-- To validate your `.gitlab-ci.yml` file, use the
-  [CI Lint tool](../lint.md), which is available in every project.
-- You can also use [CI/CD configuration visualization](../pipeline_editor/index.md#visualize-ci-configuration) to
-  view a graphical representation of your `.gitlab-ci.yml` file.
 - Each job contains scripts and stages:
-  - The [`default`](../yaml/index.md#custom-default-keyword-values) keyword is for
+  - The [`default`](../yaml/index.md#default) keyword is for
     custom defaults, for example with [`before_script`](../yaml/index.md#before_script)
     and [`after_script`](../yaml/index.md#after_script).
   - [`stage`](../yaml/index.md#stage) describes the sequential execution of jobs.
@@ -152,7 +153,7 @@ The pipeline starts when the commit is committed.
   - Use the [`rules`](../yaml/index.md#rules) keyword to specify when to run or skip jobs.
     The `only` and `except` legacy keywords are still supported, but can't be used
     with `rules` in the same job.
-  - Keep information across jobs and stages persistent in a pipeline with [`cache`](../yaml/index.md#cache))
+  - Keep information across jobs and stages persistent in a pipeline with [`cache`](../yaml/index.md#cache)
     and [`artifacts`](../yaml/index.md#artifacts). These keywords are ways to store
     dependencies and job output, even when using ephemeral runners for each job.
 - For the complete `.gitlab-ci.yml` syntax, see [the full `.gitlab-ci.yml` reference topic](../yaml/index.md).

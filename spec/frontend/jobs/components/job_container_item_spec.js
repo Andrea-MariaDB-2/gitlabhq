@@ -1,12 +1,13 @@
 import { GlIcon, GlLink } from '@gitlab/ui';
 import { shallowMount } from '@vue/test-utils';
+import { nextTick } from 'vue';
+import delayedJobFixture from 'test_fixtures/jobs/delayed.json';
 import JobContainerItem from '~/jobs/components/job_container_item.vue';
 import CiIcon from '~/vue_shared/components/ci_icon.vue';
 import job from '../mock_data';
 
 describe('JobContainerItem', () => {
   let wrapper;
-  const delayedJobFixture = getJSONFixture('jobs/delayed.json');
 
   const findCiIconComponent = () => wrapper.findComponent(CiIcon);
   const findGlIconComponent = () => wrapper.findComponent(GlIcon);
@@ -87,7 +88,7 @@ describe('JobContainerItem', () => {
     });
 
     it('displays remaining time in tooltip', async () => {
-      await wrapper.vm.$nextTick();
+      await nextTick();
 
       const link = wrapper.findComponent(GlLink);
 

@@ -1,7 +1,8 @@
-import { GlButton, GlFormInput } from '@gitlab/ui';
+import { GlButton, GlFormInput, GlSprintf } from '@gitlab/ui';
 import { shallowMount } from '@vue/test-utils';
+import { nextTick } from 'vue';
 import DeleteUserModal from '~/admin/users/components/modals/delete_user_modal.vue';
-import OncallSchedulesList from '~/vue_shared/components/oncall_schedules_list.vue';
+import UserDeletionObstaclesList from '~/vue_shared/components/user_deletion_obstacles/user_deletion_obstacles_list.vue';
 import ModalStub from './stubs/modal_stub';
 
 const TEST_DELETE_USER_URL = 'delete-url';
@@ -25,7 +26,7 @@ describe('User Operation confirmation modal', () => {
   const getUsername = () => findUsernameInput().attributes('value');
   const getMethodParam = () => new FormData(findForm().element).get('_method');
   const getFormAction = () => findForm().attributes('action');
-  const findOnCallSchedulesList = () => wrapper.findComponent(OncallSchedulesList);
+  const findUserDeletionObstaclesList = () => wrapper.findComponent(UserDeletionObstaclesList);
 
   const setUsername = (username) => {
     findUsernameInput().vm.$emit('input', username);
@@ -33,9 +34,9 @@ describe('User Operation confirmation modal', () => {
 
   const username = 'username';
   const badUsername = 'bad_username';
-  const oncallSchedules = '["schedule1", "schedule2"]';
+  const userDeletionObstacles = '["schedule1", "policy1"]';
 
-  const createComponent = (props = {}) => {
+  const createComponent = (props = {}, stubs = {}) => {
     wrapper = shallowMount(DeleteUserModal, {
       propsData: {
         username,
@@ -46,11 +47,12 @@ describe('User Operation confirmation modal', () => {
         deleteUserUrl: TEST_DELETE_USER_URL,
         blockUserUrl: TEST_BLOCK_USER_URL,
         csrfToken: TEST_CSRF,
-        oncallSchedules,
+        userDeletionObstacles,
         ...props,
       },
       stubs: {
         GlModal: ModalStub,
+        ...stubs,
       },
     });
   };
@@ -81,11 +83,11 @@ describe('User Operation confirmation modal', () => {
   });
 
   describe('with incorrect username', () => {
-    beforeEach(() => {
+    beforeEach(async () => {
       createComponent();
       setUsername(badUsername);
 
-      return wrapper.vm.$nextTick();
+      await nextTick();
     });
 
     it('shows incorrect username', () => {
@@ -99,11 +101,11 @@ describe('User Operation confirmation modal', () => {
   });
 
   describe('with correct username', () => {
-    beforeEach(() => {
+    beforeEach(async () => {
       createComponent();
       setUsername(username);
 
-      return wrapper.vm.$nextTick();
+      await nextTick();
     });
 
     it('shows correct username', () => {
@@ -116,10 +118,10 @@ describe('User Operation confirmation modal', () => {
     });
 
     describe('when primary action is submitted', () => {
-      beforeEach(() => {
+      beforeEach(async () => {
         findPrimaryButton().vm.$emit('click');
 
-        return wrapper.vm.$nextTick();
+        await nextTick();
       });
 
       it('clears the input', () => {
@@ -135,10 +137,10 @@ describe('User Operation confirmation modal', () => {
     });
 
     describe('when secondary action is submitted', () => {
-      beforeEach(() => {
+      beforeEach(async () => {
         findSecondaryButton().vm.$emit('click');
 
-        return wrapper.vm.$nextTick();
+        await nextTick();
       });
 
       it('has correct form attributes and calls submit', () => {
@@ -150,18 +152,42 @@ describe('User Operation confirmation modal', () => {
     });
   });
 
-  describe('Related oncall-schedules list', () => {
-    it('does NOT render the list when user has no related schedules', () => {
-      createComponent({ oncallSchedules: '[]' });
-      expect(findOnCallSchedulesList().exists()).toBe(false);
+  describe("when user's name has leading and trailing whitespace", () => {
+    beforeEach(() => {
+      createComponent(
+        {
+          username: ' John Smith ',
+        },
+        { GlSprintf },
+      );
     });
 
-    it('renders the list when user has related schedules', () => {
+    it("displays user's name without whitespace", () => {
+      expect(wrapper.element).toMatchSnapshot();
+    });
+
+    it("shows enabled buttons when user's name is entered without whitespace", async () => {
+      setUsername('John Smith');
+
+      await nextTick();
+
+      expect(findPrimaryButton().attributes('disabled')).toBeUndefined();
+      expect(findSecondaryButton().attributes('disabled')).toBeUndefined();
+    });
+  });
+
+  describe('Related user-deletion-obstacles list', () => {
+    it('does NOT render the list when user has no related obstacles', () => {
+      createComponent({ userDeletionObstacles: '[]' });
+      expect(findUserDeletionObstaclesList().exists()).toBe(false);
+    });
+
+    it('renders the list when user has related obstalces', () => {
       createComponent();
 
-      const schedules = findOnCallSchedulesList();
-      expect(schedules.exists()).toBe(true);
-      expect(schedules.props('schedules')).toEqual(JSON.parse(oncallSchedules));
+      const obstacles = findUserDeletionObstaclesList();
+      expect(obstacles.exists()).toBe(true);
+      expect(obstacles.props('obstacles')).toEqual(JSON.parse(userDeletionObstacles));
     });
   });
 });

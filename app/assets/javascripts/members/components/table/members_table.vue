@@ -5,12 +5,21 @@ import MembersTableCell from 'ee_else_ce/members/components/table/members_table_
 import { canOverride, canRemove, canResend, canUpdate } from 'ee_else_ce/members/utils';
 import { mergeUrlParams } from '~/lib/utils/url_utility';
 import initUserPopovers from '~/user_popovers';
-import { FIELDS, ACTIVE_TAB_QUERY_PARAM_NAME } from '../../constants';
+import {
+  FIELD_KEY_ACTIONS,
+  FIELDS,
+  ACTIVE_TAB_QUERY_PARAM_NAME,
+  TAB_QUERY_PARAM_VALUES,
+  MEMBER_STATE_AWAITING,
+  MEMBER_STATE_ACTIVE,
+  USER_STATE_BLOCKED_PENDING_APPROVAL,
+  BADGE_LABELS_AWAITING_USER_SIGNUP,
+  BADGE_LABELS_PENDING_OWNER_APPROVAL,
+} from '../../constants';
 import RemoveGroupLinkModal from '../modals/remove_group_link_modal.vue';
 import RemoveMemberModal from '../modals/remove_member_modal.vue';
 import CreatedAt from './created_at.vue';
 import ExpirationDatepicker from './expiration_datepicker.vue';
-import ExpiresAt from './expires_at.vue';
 import MemberActionButtons from './member_action_buttons.vue';
 import MemberAvatar from './member_avatar.vue';
 import MemberSource from './member_source.vue';
@@ -24,7 +33,6 @@ export default {
     GlPagination,
     MemberAvatar,
     CreatedAt,
-    ExpiresAt,
     MembersTableCell,
     MemberSource,
     MemberActionButtons,
@@ -58,17 +66,10 @@ export default {
         return state[this.namespace].pagination;
       },
     }),
-    filteredFields() {
+    filteredAndModifiedFields() {
       return FIELDS.filter(
         (field) => this.tableFields.includes(field.key) && this.showField(field),
-      ).map((field) => {
-        const tdClassFunction = this[field.tdClassFunction];
-
-        return {
-          ...field,
-          ...(tdClassFunction && { tdClass: tdClassFunction }),
-        };
-      });
+      ).map(this.modifyFieldDefinition);
     },
     userIsLoggedIn() {
       return this.currentUserId !== null;
@@ -77,6 +78,9 @@ export default {
       const { paramName, currentPage, perPage, totalItems } = this.pagination;
 
       return paramName && currentPage && perPage && totalItems;
+    },
+    isInvitedUser() {
+      return this.tabQueryParamValue === TAB_QUERY_PARAM_VALUES.invite;
     },
   },
   mounted() {
@@ -92,20 +96,29 @@ export default {
       );
     },
     showField(field) {
-      if (!Object.prototype.hasOwnProperty.call(field, 'showFunction')) {
-        return true;
-      }
+      switch (field.key) {
+        case FIELD_KEY_ACTIONS:
+          if (!this.userIsLoggedIn) {
+            return false;
+          }
 
-      return this[field.showFunction]();
-    },
-    showActionsField() {
-      if (!this.userIsLoggedIn) {
-        return false;
+          return this.members.some((member) => this.hasActionButtons(member));
+        default:
+          return true;
       }
-
-      return this.members.some((member) => this.hasActionButtons(member));
     },
-    tdClassActions(value, key, member) {
+    modifyFieldDefinition(field) {
+      switch (field.key) {
+        case FIELD_KEY_ACTIONS:
+          return {
+            ...field,
+            tdClass: this.actionsFieldTdClass,
+          };
+        default:
+          return field;
+      }
+    },
+    actionsFieldTdClass(value, key, member) {
       if (this.hasActionButtons(member)) {
         return 'col-actions';
       }
@@ -131,6 +144,82 @@ export default {
         window.location.href,
       );
     },
+    /**
+     * Returns whether it's a new or existing user
+     *
+     * If memberInviteMetadata doesn't exist, it means we're adding an existing user
+     * to the Group/Project, so `isNewUser` should be false.
+     * If memberInviteMetadata exists but `userState` has content,
+     * the user has registered but is awaiting root approval
+     *
+     * @param {object} memberInviteMetadata - MemberEntity.invite
+     * @see {@link ~/app/serializers/member_entity.rb}
+     * @returns {boolean}
+     */
+    isNewUser(memberInviteMetadata, memberState) {
+      return (
+        memberInviteMetadata &&
+        !memberInviteMetadata.userState &&
+        memberState !== MEMBER_STATE_ACTIVE
+      );
+    },
+    /**
+     * Returns whether the user is awaiting root approval
+     *
+     * This checks User.state exposed via MemberEntity
+     *
+     * @param {object} memberInviteMetadata - MemberEntity.invite
+     * @see {@link ~/app/serializers/member_entity.rb}
+     * @returns {boolean}
+     */
+    isUserPendingRootApproval(memberInviteMetadata) {
+      return memberInviteMetadata?.userState === USER_STATE_BLOCKED_PENDING_APPROVAL;
+    },
+    /**
+     * Returns whether the member is awaiting owner approval
+     *
+     * This checks Member.state exposed via MemberEntity
+     *
+     * @param {Number} memberState - Member.state exposed via MemberEntity.state
+     * @see {@link ~/ee/app/models/ee/member.rb}
+     * @see {@link ~/app/serializers/member_entity.rb}
+     * @returns {boolean}
+     */
+    isMemberPendingOwnerApproval(memberState) {
+      return memberState === MEMBER_STATE_AWAITING;
+    },
+    isUserAwaiting(memberInviteMetadata, memberState) {
+      return (
+        this.isUserPendingRootApproval(memberInviteMetadata) ||
+        this.isMemberPendingOwnerApproval(memberState)
+      );
+    },
+    shouldAddPendingOwnerApprovalBadge(memberInviteMetadata, memberState) {
+      return (
+        this.isUserAwaiting(memberInviteMetadata, memberState) &&
+        !this.isNewUser(memberInviteMetadata)
+      );
+    },
+    /**
+     * Returns the string to be used in the invite badge
+     *
+     * @param {object} memberInviteMetadata - MemberEntity.invite
+     * @see {@link ~/app/serializers/member_entity.rb}
+     * @param {Number} memberState - Member.state exposed via MemberEntity.state
+     * @see {@link ~/ee/app/models/ee/member.rb}
+     * @returns {string}
+     */
+    inviteBadge(memberInviteMetadata, memberState) {
+      if (this.isNewUser(memberInviteMetadata, memberState)) {
+        return BADGE_LABELS_AWAITING_USER_SIGNUP;
+      }
+
+      if (this.shouldAddPendingOwnerApprovalBadge(memberInviteMetadata, memberState)) {
+        return BADGE_LABELS_PENDING_OWNER_APPROVAL;
+      }
+
+      return '';
+    },
   },
 };
 </script>
@@ -143,7 +232,7 @@ export default {
       data-testid="members-table"
       head-variant="white"
       stacked="lg"
-      :fields="filteredFields"
+      :fields="filteredAndModifiedFields"
       :items="members"
       primary-key="id"
       thead-class="border-bottom"
@@ -174,16 +263,15 @@ export default {
         <created-at :date="createdAt" :created-by="createdBy" />
       </template>
 
-      <template #cell(invited)="{ item: { createdAt, createdBy } }">
+      <template #cell(invited)="{ item: { createdAt, createdBy, invite, state } }">
         <created-at :date="createdAt" :created-by="createdBy" />
+        <gl-badge v-if="inviteBadge(invite, state)" data-testid="invited-badge">{{
+          inviteBadge(invite, state)
+        }}</gl-badge>
       </template>
 
       <template #cell(requested)="{ item: { createdAt } }">
         <created-at :date="createdAt" />
-      </template>
-
-      <template #cell(expires)="{ item: { expiresAt } }">
-        <expires-at :date="expiresAt" />
       </template>
 
       <template #cell(maxRole)="{ item: member }">
@@ -204,6 +292,7 @@ export default {
           <member-action-buttons
             :member-type="memberType"
             :is-current-user="isCurrentUser"
+            :is-invited-user="isInvitedUser"
             :permissions="permissions"
             :member="member"
           />

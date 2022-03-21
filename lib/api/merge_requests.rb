@@ -117,6 +117,9 @@ module API
 
         forbidden!('Cannot push to source branch') unless
           user_access.can_push_to_branch?(merge_request.source_branch)
+
+        forbidden!('Source branch is protected from force push') unless
+          merge_request.permits_force_push?
       end
 
       params :merge_requests_params do
@@ -134,8 +137,9 @@ module API
         use :merge_requests_params
         use :optional_scope_param
       end
-      get feature_category: :code_review do
+      get feature_category: :code_review, urgency: :low do
         authenticate! unless params[:scope] == 'all'
+        validate_anonymous_search_access! if params[:search].present?
         merge_requests = find_merge_requests
 
         present merge_requests, serializer_options_for(merge_requests)
@@ -154,7 +158,8 @@ module API
         optional :non_archived, type: Boolean, desc: 'Return merge requests from non archived projects',
         default: true
       end
-      get ":id/merge_requests", feature_category: :code_review do
+      get ":id/merge_requests", feature_category: :code_review, urgency: :low do
+        validate_anonymous_search_access! if declared_params[:search].present?
         merge_requests = find_merge_requests(group_id: user_group.id, include_subgroups: true)
 
         present merge_requests, serializer_options_for(merge_requests).merge(group: user_group)
@@ -193,19 +198,16 @@ module API
         use :merge_requests_params
         optional :iids, type: Array[Integer], coerce_with: ::API::Validations::Types::CommaSeparatedToIntegerArray.coerce, desc: 'The IID array of merge requests'
       end
-      get ":id/merge_requests", feature_category: :code_review do
+      get ":id/merge_requests", feature_category: :code_review, urgency: :low do
         authorize! :read_merge_request, user_project
+        validate_anonymous_search_access! if declared_params[:search].present?
 
         merge_requests = find_merge_requests(project_id: user_project.id)
 
         options = serializer_options_for(merge_requests).merge(project: user_project)
         options[:project] = user_project
 
-        if Feature.enabled?(:api_caching_merge_requests, user_project, type: :development, default_enabled: :yaml)
-          present_cached merge_requests, expires_in: 12.hours, **options
-        else
-          present merge_requests, options
-        end
+        present_cached merge_requests, expires_in: 2.days, **options
       end
 
       desc 'Create a merge request' do
@@ -219,7 +221,7 @@ module API
                                      desc: 'The target project of the merge request defaults to the :id of the project'
         use :optional_params
       end
-      post ":id/merge_requests", feature_category: :code_review do
+      post ":id/merge_requests", feature_category: :code_review, urgency: :low do
         Gitlab::QueryLimiting.disable!('https://gitlab.com/gitlab-org/gitlab/-/issues/20770')
 
         authorize! :create_merge_request_from, user_project
@@ -241,7 +243,7 @@ module API
       params do
         requires :merge_request_iid, type: Integer, desc: 'The IID of a merge request'
       end
-      delete ":id/merge_requests/:merge_request_iid", feature_category: :code_review do
+      delete ":id/merge_requests/:merge_request_iid", feature_category: :code_review, urgency: :low do
         merge_request = find_project_merge_request(params[:merge_request_iid])
 
         authorize!(:destroy_merge_request, merge_request)
@@ -260,9 +262,7 @@ module API
       desc 'Get a single merge request' do
         success Entities::MergeRequest
       end
-      get ':id/merge_requests/:merge_request_iid', feature_category: :code_review do
-        not_found!("Merge Request") unless can?(current_user, :read_merge_request, user_project)
-
+      get ':id/merge_requests/:merge_request_iid', feature_category: :code_review, urgency: :low do
         merge_request = find_merge_request_with_access(params[:merge_request_iid])
 
         present merge_request,
@@ -278,12 +278,10 @@ module API
       desc 'Get the participants of a merge request' do
         success Entities::UserBasic
       end
-      get ':id/merge_requests/:merge_request_iid/participants', feature_category: :code_review do
-        not_found!("Merge Request") unless can?(current_user, :read_merge_request, user_project)
-
+      get ':id/merge_requests/:merge_request_iid/participants', feature_category: :code_review, urgency: :low do
         merge_request = find_merge_request_with_access(params[:merge_request_iid])
 
-        participants = ::Kaminari.paginate_array(merge_request.participants)
+        participants = ::Kaminari.paginate_array(merge_request.visible_participants(current_user))
 
         present paginate(participants), with: Entities::UserBasic
       end
@@ -291,9 +289,7 @@ module API
       desc 'Get the commits of a merge request' do
         success Entities::Commit
       end
-      get ':id/merge_requests/:merge_request_iid/commits', feature_category: :code_review do
-        not_found!("Merge Request") unless can?(current_user, :read_merge_request, user_project)
-
+      get ':id/merge_requests/:merge_request_iid/commits', feature_category: :code_review, urgency: :low do
         merge_request = find_merge_request_with_access(params[:merge_request_iid])
 
         commits =
@@ -306,12 +302,8 @@ module API
       desc 'Get the context commits of a merge request' do
         success Entities::Commit
       end
-      get ':id/merge_requests/:merge_request_iid/context_commits', feature_category: :code_review do
+      get ':id/merge_requests/:merge_request_iid/context_commits', feature_category: :code_review, urgency: :high do
         merge_request = find_merge_request_with_access(params[:merge_request_iid])
-        project = merge_request.project
-
-        not_found! unless project.context_commits_enabled?
-
         context_commits =
           paginate(merge_request.merge_request_context_commits).map(&:to_commit)
 
@@ -332,9 +324,6 @@ module API
         end
 
         merge_request = find_merge_request_with_access(params[:merge_request_iid])
-        project = merge_request.project
-
-        not_found! unless project.context_commits_enabled?
 
         authorize!(:update_merge_request, merge_request)
 
@@ -355,9 +344,6 @@ module API
       delete ':id/merge_requests/:merge_request_iid/context_commits', feature_category: :code_review do
         commit_ids = params[:commits]
         merge_request = find_merge_request_with_access(params[:merge_request_iid])
-        project = merge_request.project
-
-        not_found! unless project.context_commits_enabled?
 
         authorize!(:destroy_merge_request, merge_request)
         project = merge_request.target_project
@@ -374,9 +360,7 @@ module API
       desc 'Show the merge request changes' do
         success Entities::MergeRequestChanges
       end
-      get ':id/merge_requests/:merge_request_iid/changes', feature_category: :code_review do
-        not_found!("Merge Request") unless can?(current_user, :read_merge_request, user_project)
-
+      get ':id/merge_requests/:merge_request_iid/changes', feature_category: :code_review, urgency: :low do
         merge_request = find_merge_request_with_access(params[:merge_request_iid])
 
         present merge_request,
@@ -391,8 +375,6 @@ module API
       end
       get ':id/merge_requests/:merge_request_iid/pipelines', feature_category: :continuous_integration do
         pipelines = merge_request_pipelines_with_access
-
-        not_found!("Merge Request") unless can?(current_user, :read_merge_request, user_project)
 
         present paginate(pipelines), with: Entities::Ci::PipelineBasic
       end
@@ -429,7 +411,7 @@ module API
         use :optional_params
         at_least_one_of(*::API::MergeRequests.update_params_at_least_one_of)
       end
-      put ':id/merge_requests/:merge_request_iid', feature_category: :code_review do
+      put ':id/merge_requests/:merge_request_iid', feature_category: :code_review, urgency: :low do
         Gitlab::QueryLimiting.disable!('https://gitlab.com/gitlab-org/gitlab/-/issues/20772')
 
         merge_request = find_merge_request_with_access(params.delete(:merge_request_iid), :update_merge_request)
@@ -461,7 +443,7 @@ module API
         optional :sha, type: String, desc: 'When present, must have the HEAD SHA of the source branch'
         optional :squash, type: Grape::API::Boolean, desc: 'When true, the commits will be squashed into a single commit on merge'
       end
-      put ':id/merge_requests/:merge_request_iid/merge', feature_category: :code_review do
+      put ':id/merge_requests/:merge_request_iid/merge', feature_category: :code_review, urgency: :low do
         Gitlab::QueryLimiting.disable!('https://gitlab.com/gitlab-org/gitlab/-/issues/4796')
 
         merge_request = find_project_merge_request(params[:merge_request_iid])
@@ -531,7 +513,7 @@ module API
       params do
         optional :skip_ci, type: Boolean, desc: 'Do not create CI pipeline'
       end
-      put ':id/merge_requests/:merge_request_iid/rebase', feature_category: :code_review do
+      put ':id/merge_requests/:merge_request_iid/rebase', feature_category: :code_review, urgency: :low do
         merge_request = find_project_merge_request(params[:merge_request_iid])
 
         authorize_push_to_merge_request!(merge_request)
@@ -550,7 +532,7 @@ module API
       params do
         use :pagination
       end
-      get ':id/merge_requests/:merge_request_iid/closes_issues', feature_category: :code_review do
+      get ':id/merge_requests/:merge_request_iid/closes_issues', feature_category: :code_review, urgency: :low do
         merge_request = find_merge_request_with_access(params[:merge_request_iid])
         issues = ::Kaminari.paginate_array(merge_request.visible_closing_issues_for(current_user))
         issues = paginate(issues)

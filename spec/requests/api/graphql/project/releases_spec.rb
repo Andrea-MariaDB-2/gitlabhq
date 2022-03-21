@@ -129,10 +129,12 @@ RSpec.describe 'Query.project(fullPath).releases()' do
       end
 
       it 'does not return data for fields that expose repository information' do
+        tag_name = release.tag
+        release_name = release.name
         expect(data).to eq(
-          'tagName' => nil,
+          'tagName' => tag_name,
           'tagPath' => nil,
-          'name' => "Release-#{release.id}",
+          'name' => release_name,
           'commit' => nil,
           'assets' => {
             'count' => release.assets_count(except: [:sources]),
@@ -143,7 +145,14 @@ RSpec.describe 'Query.project(fullPath).releases()' do
           'evidences' => {
             'nodes' => []
           },
-          'links' => nil
+          'links' => {
+            'closedIssuesUrl' => nil,
+            'closedMergeRequestsUrl' => nil,
+            'mergedMergeRequestsUrl' => nil,
+            'openedIssuesUrl' => nil,
+            'openedMergeRequestsUrl' => nil,
+            'selfUrl' => project_release_url(project, release)
+          }
         )
       end
     end
@@ -322,17 +331,17 @@ RSpec.describe 'Query.project(fullPath).releases()' do
 
       context 'when ascending' do
         it_behaves_like 'sorted paginated query' do
-          let(:sort_param)       { :RELEASED_AT_ASC }
-          let(:first_param)      { 2 }
-          let(:expected_results) { [release1.tag, release2.tag, release3.tag, release4.tag, release5.tag] }
+          let(:sort_param) { :RELEASED_AT_ASC }
+          let(:first_param) { 2 }
+          let(:all_records) { [release1.tag, release2.tag, release3.tag, release4.tag, release5.tag] }
         end
       end
 
       context 'when descending' do
         it_behaves_like 'sorted paginated query' do
-          let(:sort_param)       { :RELEASED_AT_DESC }
-          let(:first_param)      { 2 }
-          let(:expected_results) { [release5.tag, release4.tag, release3.tag, release2.tag, release1.tag] }
+          let(:sort_param) { :RELEASED_AT_DESC }
+          let(:first_param) { 2 }
+          let(:all_records) { [release5.tag, release4.tag, release3.tag, release2.tag, release1.tag] }
         end
       end
     end
@@ -346,17 +355,17 @@ RSpec.describe 'Query.project(fullPath).releases()' do
 
       context 'when ascending' do
         it_behaves_like 'sorted paginated query' do
-          let(:sort_param)       { :CREATED_ASC }
-          let(:first_param)      { 2 }
-          let(:expected_results) { [release1.tag, release2.tag, release3.tag, release4.tag, release5.tag] }
+          let(:sort_param) { :CREATED_ASC }
+          let(:first_param) { 2 }
+          let(:all_records) { [release1.tag, release2.tag, release3.tag, release4.tag, release5.tag] }
         end
       end
 
       context 'when descending' do
         it_behaves_like 'sorted paginated query' do
-          let(:sort_param)       { :CREATED_DESC }
-          let(:first_param)      { 2 }
-          let(:expected_results) { [release5.tag, release4.tag, release3.tag, release2.tag, release1.tag] }
+          let(:sort_param) { :CREATED_DESC }
+          let(:first_param) { 2 }
+          let(:all_records) { [release5.tag, release4.tag, release3.tag, release2.tag, release1.tag] }
         end
       end
     end

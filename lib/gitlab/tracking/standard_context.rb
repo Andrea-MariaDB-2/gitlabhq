@@ -3,13 +3,14 @@
 module Gitlab
   module Tracking
     class StandardContext
-      GITLAB_STANDARD_SCHEMA_URL = 'iglu:com.gitlab/gitlab_standard/jsonschema/1-0-5'
+      GITLAB_STANDARD_SCHEMA_URL = 'iglu:com.gitlab/gitlab_standard/jsonschema/1-0-8'
       GITLAB_RAILS_SOURCE = 'gitlab-rails'
 
       def initialize(namespace: nil, project: nil, user: nil, **extra)
         @namespace = namespace
         @plan = namespace&.actual_plan_name
         @project = project
+        @user = user
         @extra = extra
       end
 
@@ -35,23 +36,18 @@ module Gitlab
 
       private
 
-      attr_accessor :namespace, :project, :extra, :plan
+      attr_accessor :namespace, :project, :extra, :plan, :user
 
       def to_h
         {
           environment: environment,
           source: source,
           plan: plan,
-          extra: extra
-        }.merge(project_and_namespace)
-      end
-
-      def project_and_namespace
-        return {} unless ::Feature.enabled?(:add_namespace_and_project_to_snowplow_tracking, default_enabled: :yaml)
-
-        {
+          extra: extra,
+          user_id: user&.id,
           namespace_id: namespace&.id,
-          project_id: project_id
+          project_id: project_id,
+          context_generated_at: Time.current
         }
       end
 

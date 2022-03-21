@@ -18,7 +18,7 @@ module Members
       params[:email]
     end
 
-    def validate_invites!
+    def validate_invitable!
       super
 
       # we need the below due to add_users hitting Members::CreatorService.parse_users_list and ignoring invalid emails
@@ -37,6 +37,11 @@ module Members
     override :add_error_for_member
     def add_error_for_member(member)
       errors[invite_email(member)] = member.errors.full_messages.to_sentence
+    end
+
+    override :create_tasks_to_be_done
+    def create_tasks_to_be_done
+      # Only create task issues for existing users. Tasks for new users are created when they signup.
     end
 
     def invite_email(member)

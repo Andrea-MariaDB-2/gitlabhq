@@ -1,41 +1,52 @@
-import { createLocalVue, shallowMount, mount } from '@vue/test-utils';
+import Vue, { nextTick } from 'vue';
+import { GlButton, GlLink, GlToast } from '@gitlab/ui';
 import VueApollo from 'vue-apollo';
 import createMockApollo from 'helpers/mock_apollo_helper';
 import setWindowLocation from 'helpers/set_window_location_helper';
-import { extendedWrapper } from 'helpers/vue_test_utils_helper';
+import {
+  extendedWrapper,
+  shallowMountExtended,
+  mountExtended,
+} from 'helpers/vue_test_utils_helper';
 import waitForPromises from 'helpers/wait_for_promises';
-import createFlash from '~/flash';
+import { createAlert } from '~/flash';
+import { getIdFromGraphQLId } from '~/graphql_shared/utils';
 import { updateHistory } from '~/lib/utils/url_utility';
 
+import RunnerTypeTabs from '~/runner/components/runner_type_tabs.vue';
 import RunnerFilteredSearchBar from '~/runner/components/runner_filtered_search_bar.vue';
 import RunnerList from '~/runner/components/runner_list.vue';
-import RunnerManualSetupHelp from '~/runner/components/runner_manual_setup_help.vue';
+import RunnerStats from '~/runner/components/stat/runner_stats.vue';
+import RunnerActionsCell from '~/runner/components/cells/runner_actions_cell.vue';
+import RegistrationDropdown from '~/runner/components/registration/registration_dropdown.vue';
 import RunnerPagination from '~/runner/components/runner_pagination.vue';
-import RunnerTypeHelp from '~/runner/components/runner_type_help.vue';
 
 import {
   CREATED_ASC,
   CREATED_DESC,
   DEFAULT_SORT,
   INSTANCE_TYPE,
+  GROUP_TYPE,
+  PROJECT_TYPE,
   PARAM_KEY_STATUS,
-  PARAM_KEY_RUNNER_TYPE,
   STATUS_ACTIVE,
   RUNNER_PAGE_SIZE,
+  I18N_EDIT,
 } from '~/runner/constants';
-import getGroupRunnersQuery from '~/runner/graphql/get_group_runners.query.graphql';
+import getGroupRunnersQuery from '~/runner/graphql/list/group_runners.query.graphql';
+import getGroupRunnersCountQuery from '~/runner/graphql/list/group_runners_count.query.graphql';
 import GroupRunnersApp from '~/runner/group_runners/group_runners_app.vue';
 import { captureException } from '~/runner/sentry_utils';
 import FilteredSearch from '~/vue_shared/components/filtered_search_bar/filtered_search_bar_root.vue';
-import { groupRunnersData, groupRunnersDataPaginated } from '../mock_data';
+import { groupRunnersData, groupRunnersDataPaginated, groupRunnersCountData } from '../mock_data';
 
-const localVue = createLocalVue();
-localVue.use(VueApollo);
+Vue.use(VueApollo);
+Vue.use(GlToast);
 
 const mockGroupFullPath = 'group1';
 const mockRegistrationToken = 'AABBCC';
-const mockRunners = groupRunnersData.data.group.runners.nodes;
-const mockGroupRunnersLimitedCount = mockRunners.length;
+const mockGroupRunnersEdges = groupRunnersData.data.group.runners.edges;
+const mockGroupRunnersLimitedCount = mockGroupRunnersEdges.length;
 
 jest.mock('~/flash');
 jest.mock('~/runner/sentry_utils');
@@ -47,22 +58,31 @@ jest.mock('~/lib/utils/url_utility', () => ({
 describe('GroupRunnersApp', () => {
   let wrapper;
   let mockGroupRunnersQuery;
+  let mockGroupRunnersCountQuery;
 
-  const findRunnerTypeHelp = () => wrapper.findComponent(RunnerTypeHelp);
-  const findRunnerManualSetupHelp = () => wrapper.findComponent(RunnerManualSetupHelp);
+  const findRunnerStats = () => wrapper.findComponent(RunnerStats);
+  const findRunnerActionsCell = () => wrapper.findComponent(RunnerActionsCell);
+  const findRegistrationDropdown = () => wrapper.findComponent(RegistrationDropdown);
+  const findRunnerTypeTabs = () => wrapper.findComponent(RunnerTypeTabs);
   const findRunnerList = () => wrapper.findComponent(RunnerList);
+  const findRunnerRow = (id) => extendedWrapper(wrapper.findByTestId(`runner-row-${id}`));
   const findRunnerPagination = () => extendedWrapper(wrapper.findComponent(RunnerPagination));
-  const findRunnerPaginationPrev = () =>
-    findRunnerPagination().findByLabelText('Go to previous page');
   const findRunnerPaginationNext = () => findRunnerPagination().findByLabelText('Go to next page');
   const findRunnerFilteredSearchBar = () => wrapper.findComponent(RunnerFilteredSearchBar);
   const findFilteredSearch = () => wrapper.findComponent(FilteredSearch);
 
-  const createComponent = ({ props = {}, mountFn = shallowMount } = {}) => {
-    const handlers = [[getGroupRunnersQuery, mockGroupRunnersQuery]];
+  const mockCountQueryResult = (count) =>
+    Promise.resolve({
+      data: { group: { id: groupRunnersCountData.data.group.id, runners: { count } } },
+    });
+
+  const createComponent = ({ props = {}, mountFn = shallowMountExtended } = {}) => {
+    const handlers = [
+      [getGroupRunnersQuery, mockGroupRunnersQuery],
+      [getGroupRunnersCountQuery, mockGroupRunnersCountQuery],
+    ];
 
     wrapper = mountFn(GroupRunnersApp, {
-      localVue,
       apolloProvider: createMockApollo(handlers),
       propsData: {
         registrationToken: mockRegistrationToken,
@@ -77,21 +97,70 @@ describe('GroupRunnersApp', () => {
     setWindowLocation(`/groups/${mockGroupFullPath}/-/runners`);
 
     mockGroupRunnersQuery = jest.fn().mockResolvedValue(groupRunnersData);
+    mockGroupRunnersCountQuery = jest.fn().mockResolvedValue(groupRunnersCountData);
 
     createComponent();
     await waitForPromises();
   });
 
-  it('shows the runner type help', () => {
-    expect(findRunnerTypeHelp().exists()).toBe(true);
+  it('shows total runner counts', async () => {
+    createComponent({ mountFn: mountExtended });
+
+    await waitForPromises();
+
+    const stats = findRunnerStats().text();
+
+    expect(stats).toMatch('Online runners 2');
+    expect(stats).toMatch('Offline runners 2');
+    expect(stats).toMatch('Stale runners 2');
+  });
+
+  it('shows the runner tabs with a runner count for each type', async () => {
+    mockGroupRunnersCountQuery.mockImplementation(({ type }) => {
+      switch (type) {
+        case GROUP_TYPE:
+          return mockCountQueryResult(2);
+        case PROJECT_TYPE:
+          return mockCountQueryResult(1);
+        default:
+          return mockCountQueryResult(4);
+      }
+    });
+
+    createComponent({ mountFn: mountExtended });
+    await waitForPromises();
+
+    expect(findRunnerTypeTabs().text()).toMatchInterpolatedText('All 4 Group 2 Project 1');
+  });
+
+  it('shows the runner tabs with a formatted runner count', async () => {
+    mockGroupRunnersCountQuery.mockImplementation(({ type }) => {
+      switch (type) {
+        case GROUP_TYPE:
+          return mockCountQueryResult(2000);
+        case PROJECT_TYPE:
+          return mockCountQueryResult(1000);
+        default:
+          return mockCountQueryResult(3000);
+      }
+    });
+
+    createComponent({ mountFn: mountExtended });
+    await waitForPromises();
+
+    expect(findRunnerTypeTabs().text()).toMatchInterpolatedText(
+      'All 3,000 Group 2,000 Project 1,000',
+    );
   });
 
   it('shows the runner setup instructions', () => {
-    expect(findRunnerManualSetupHelp().props('registrationToken')).toBe(mockRegistrationToken);
+    expect(findRegistrationDropdown().props('registrationToken')).toBe(mockRegistrationToken);
+    expect(findRegistrationDropdown().props('type')).toBe(GROUP_TYPE);
   });
 
   it('shows the runners list', () => {
-    expect(findRunnerList().props('runners')).toEqual(groupRunnersData.data.group.runners.nodes);
+    const runners = findRunnerList().props('runners');
+    expect(runners).toEqual(mockGroupRunnersEdges.map(({ node }) => node));
   });
 
   it('requests the runners with group path and no other filters', () => {
@@ -105,39 +174,60 @@ describe('GroupRunnersApp', () => {
   });
 
   it('sets tokens in the filtered search', () => {
-    createComponent({ mountFn: mount });
+    createComponent({ mountFn: mountExtended });
 
-    expect(findFilteredSearch().props('tokens')).toEqual([
+    const tokens = findFilteredSearch().props('tokens');
+
+    expect(tokens).toHaveLength(1);
+    expect(tokens[0]).toEqual(
       expect.objectContaining({
         type: PARAM_KEY_STATUS,
         options: expect.any(Array),
       }),
-      expect.objectContaining({
-        type: PARAM_KEY_RUNNER_TYPE,
-        options: expect.any(Array),
-      }),
-    ]);
+    );
   });
 
-  describe('shows the active runner count', () => {
-    it('with a regular value', () => {
-      createComponent({ mountFn: mount });
+  describe('Single runner row', () => {
+    let showToast;
 
-      expect(findRunnerFilteredSearchBar().text()).toMatch(
-        `Runners in this group: ${mockGroupRunnersLimitedCount}`,
-      );
+    const { webUrl, editUrl, node } = mockGroupRunnersEdges[0];
+    const { id: graphqlId, shortSha } = node;
+    const id = getIdFromGraphQLId(graphqlId);
+
+    beforeEach(async () => {
+      mockGroupRunnersQuery.mockClear();
+
+      createComponent({ mountFn: mountExtended });
+      showToast = jest.spyOn(wrapper.vm.$root.$toast, 'show');
+
+      await waitForPromises();
     });
 
-    it('at the limit', () => {
-      createComponent({ props: { groupRunnersLimitedCount: 1000 }, mountFn: mount });
+    it('view link is displayed correctly', () => {
+      const viewLink = findRunnerRow(id).findByTestId('td-summary').findComponent(GlLink);
 
-      expect(findRunnerFilteredSearchBar().text()).toMatch(`Runners in this group: 1,000`);
+      expect(viewLink.text()).toBe(`#${id} (${shortSha})`);
+      expect(viewLink.attributes('href')).toBe(webUrl);
     });
 
-    it('over the limit', () => {
-      createComponent({ props: { groupRunnersLimitedCount: 1001 }, mountFn: mount });
+    it('edit link is displayed correctly', () => {
+      const editLink = findRunnerRow(id).findByTestId('td-actions').findComponent(GlButton);
 
-      expect(findRunnerFilteredSearchBar().text()).toMatch(`Runners in this group: 1,000+`);
+      expect(editLink.attributes()).toMatchObject({
+        'aria-label': I18N_EDIT,
+        href: editUrl,
+      });
+    });
+
+    it('When runner is deleted, data is refetched and a toast is shown', async () => {
+      expect(mockGroupRunnersQuery).toHaveBeenCalledTimes(1);
+
+      findRunnerActionsCell().vm.$emit('deleted', { message: 'Runner deleted' });
+
+      expect(mockGroupRunnersQuery).toHaveBeenCalledTimes(2);
+
+      expect(showToast).toHaveBeenCalledTimes(1);
+      expect(showToast).toHaveBeenCalledWith('Runner deleted');
     });
   });
 
@@ -151,10 +241,8 @@ describe('GroupRunnersApp', () => {
 
     it('sets the filters in the search bar', () => {
       expect(findRunnerFilteredSearchBar().props('value')).toEqual({
-        filters: [
-          { type: 'status', value: { data: STATUS_ACTIVE, operator: '=' } },
-          { type: 'runner_type', value: { data: INSTANCE_TYPE, operator: '=' } },
-        ],
+        runnerType: INSTANCE_TYPE,
+        filters: [{ type: 'status', value: { data: STATUS_ACTIVE, operator: '=' } }],
         sort: 'CREATED_DESC',
         pagination: { page: 1 },
       });
@@ -172,11 +260,14 @@ describe('GroupRunnersApp', () => {
   });
 
   describe('when a filter is selected by the user', () => {
-    beforeEach(() => {
+    beforeEach(async () => {
       findRunnerFilteredSearchBar().vm.$emit('input', {
+        runnerType: null,
         filters: [{ type: PARAM_KEY_STATUS, value: { data: STATUS_ACTIVE, operator: '=' } }],
         sort: CREATED_ASC,
       });
+
+      await nextTick();
     });
 
     it('updates the browser url', () => {
@@ -206,11 +297,13 @@ describe('GroupRunnersApp', () => {
       mockGroupRunnersQuery = jest.fn().mockResolvedValue({
         data: {
           group: {
+            id: '1',
             runners: { nodes: [] },
           },
         },
       });
       createComponent();
+      await waitForPromises();
     });
 
     it('shows a message for no results', async () => {
@@ -219,36 +312,30 @@ describe('GroupRunnersApp', () => {
   });
 
   describe('when runners query fails', () => {
-    beforeEach(() => {
+    beforeEach(async () => {
       mockGroupRunnersQuery = jest.fn().mockRejectedValue(new Error('Error!'));
       createComponent();
+      await waitForPromises();
     });
 
     it('error is shown to the user', async () => {
-      expect(createFlash).toHaveBeenCalledTimes(1);
+      expect(createAlert).toHaveBeenCalledTimes(1);
     });
 
     it('error is reported to sentry', async () => {
       expect(captureException).toHaveBeenCalledWith({
-        error: new Error('Network error: Error!'),
+        error: new Error('Error!'),
         component: 'GroupRunnersApp',
       });
     });
   });
 
   describe('Pagination', () => {
-    beforeEach(() => {
+    beforeEach(async () => {
       mockGroupRunnersQuery = jest.fn().mockResolvedValue(groupRunnersDataPaginated);
 
-      createComponent({ mountFn: mount });
-    });
-
-    it('more pages can be selected', () => {
-      expect(findRunnerPagination().text()).toMatchInterpolatedText('Prev Next');
-    });
-
-    it('cannot navigate to the previous page', () => {
-      expect(findRunnerPaginationPrev().attributes('aria-disabled')).toBe('true');
+      createComponent({ mountFn: mountExtended });
+      await waitForPromises();
     });
 
     it('navigates to the next page', async () => {

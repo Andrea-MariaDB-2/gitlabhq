@@ -5,7 +5,7 @@ info: To determine the technical writer assigned to the Stage/Group associated w
 type: reference
 ---
 
-# Using PostgreSQL
+# Using PostgreSQL **(FREE)**
 
 As many applications depend on PostgreSQL as their database, you
 eventually need it in order for your tests to run. Below you are guided how to
@@ -37,9 +37,9 @@ And then configure your application to use the database, for example:
 
 ```yaml
 Host: postgres
-User: $PG_USER
-Password: $PG_PASSWORD
-Database: $PG_DB
+User: $POSTGRES_USER
+Password: $POSTGRES_PASSWORD
+Database: $POSTGRES_DB
 ```
 
 If you're wondering why we used `postgres` for the `Host`, read more at

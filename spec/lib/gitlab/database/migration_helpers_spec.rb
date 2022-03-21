@@ -14,6 +14,54 @@ RSpec.describe Gitlab::Database::MigrationHelpers do
     allow(model).to receive(:puts)
   end
 
+  describe 'overridden dynamic model helpers' do
+    let(:test_table) { '__test_batching_table' }
+
+    before do
+      model.connection.execute(<<~SQL)
+        CREATE TABLE #{test_table} (
+          id integer NOT NULL PRIMARY KEY,
+          name text NOT NULL
+        );
+
+        INSERT INTO #{test_table} (id, name)
+        VALUES (1, 'bob'), (2, 'mary'), (3, 'amy');
+      SQL
+    end
+
+    describe '#define_batchable_model' do
+      it 'defines a batchable model with the migration connection' do
+        expect(model.define_batchable_model(test_table).count).to eq(3)
+      end
+    end
+
+    describe '#each_batch' do
+      before do
+        allow(model).to receive(:transaction_open?).and_return(false)
+      end
+
+      it 'calls each_batch with the migration connection' do
+        each_batch_name = ->(&block) do
+          model.each_batch(test_table, of: 2) do |batch|
+            block.call(batch.pluck(:name))
+          end
+        end
+
+        expect { |b| each_batch_name.call(&b) }.to yield_successive_args(%w[bob mary], %w[amy])
+      end
+    end
+
+    describe '#each_batch_range' do
+      before do
+        allow(model).to receive(:transaction_open?).and_return(false)
+      end
+
+      it 'calls each_batch with the migration connection' do
+        expect { |b| model.each_batch_range(test_table, of: 2, &b) }.to yield_successive_args([1, 2], [3, 3])
+      end
+    end
+  end
+
   describe '#remove_timestamps' do
     it 'can remove the default timestamps' do
       Gitlab::Database::MigrationHelpers::DEFAULT_TIMESTAMP_COLUMNS.each do |column_name|
@@ -31,16 +79,10 @@ RSpec.describe Gitlab::Database::MigrationHelpers do
   end
 
   describe '#add_timestamps_with_timezone' do
-    let(:in_transaction) { false }
-
-    before do
-      allow(model).to receive(:transaction_open?).and_return(in_transaction)
-      allow(model).to receive(:disable_statement_timeout)
-    end
-
     it 'adds "created_at" and "updated_at" fields with the "datetime_with_timezone" data type' do
       Gitlab::Database::MigrationHelpers::DEFAULT_TIMESTAMP_COLUMNS.each do |column_name|
-        expect(model).to receive(:add_column).with(:foo, column_name, :datetime_with_timezone, { null: false })
+        expect(model).to receive(:add_column)
+          .with(:foo, column_name, :datetime_with_timezone, { default: nil, null: false })
       end
 
       model.add_timestamps_with_timezone(:foo)
@@ -48,7 +90,8 @@ RSpec.describe Gitlab::Database::MigrationHelpers do
 
     it 'can disable the NOT NULL constraint' do
       Gitlab::Database::MigrationHelpers::DEFAULT_TIMESTAMP_COLUMNS.each do |column_name|
-        expect(model).to receive(:add_column).with(:foo, column_name, :datetime_with_timezone, { null: true })
+        expect(model).to receive(:add_column)
+          .with(:foo, column_name, :datetime_with_timezone, { default: nil, null: true })
       end
 
       model.add_timestamps_with_timezone(:foo, null: true)
@@ -64,38 +107,16 @@ RSpec.describe Gitlab::Database::MigrationHelpers do
     it 'can add choice of acceptable columns' do
       expect(model).to receive(:add_column).with(:foo, :created_at, :datetime_with_timezone, anything)
       expect(model).to receive(:add_column).with(:foo, :deleted_at, :datetime_with_timezone, anything)
+      expect(model).to receive(:add_column).with(:foo, :processed_at, :datetime_with_timezone, anything)
       expect(model).not_to receive(:add_column).with(:foo, :updated_at, :datetime_with_timezone, anything)
 
-      model.add_timestamps_with_timezone(:foo, columns: [:created_at, :deleted_at])
+      model.add_timestamps_with_timezone(:foo, columns: [:created_at, :deleted_at, :processed_at])
     end
 
     it 'cannot add unacceptable column names' do
       expect do
         model.add_timestamps_with_timezone(:foo, columns: [:bar])
       end.to raise_error %r/Illegal timestamp column name/
-    end
-
-    context 'in a transaction' do
-      let(:in_transaction) { true }
-
-      before do
-        allow(model).to receive(:add_column).with(any_args).and_call_original
-        allow(model).to receive(:add_column)
-          .with(:foo, anything, :datetime_with_timezone, anything)
-          .and_return(nil)
-      end
-
-      it 'cannot add a default value' do
-        expect do
-          model.add_timestamps_with_timezone(:foo, default: :i_cause_an_error)
-        end.to raise_error %r/add_timestamps_with_timezone/
-      end
-
-      it 'can add columns without defaults' do
-        expect do
-          model.add_timestamps_with_timezone(:foo)
-        end.not_to raise_error
-      end
     end
   end
 
@@ -271,12 +292,92 @@ RSpec.describe Gitlab::Database::MigrationHelpers do
         model.add_concurrent_index(:users, :foo, unique: true)
       end
 
-      it 'does nothing if the index exists already' do
-        expect(model).to receive(:index_exists?)
-          .with(:users, :foo, { algorithm: :concurrently, unique: true }).and_return(true)
-        expect(model).not_to receive(:add_index)
+      context 'when the index exists and is valid' do
+        before do
+          model.add_index :users, :id, unique: true
+        end
 
-        model.add_concurrent_index(:users, :foo, unique: true)
+        it 'does leaves the existing index' do
+          expect(model).to receive(:index_exists?)
+            .with(:users, :id, { algorithm: :concurrently, unique: true }).and_call_original
+
+          expect(model).not_to receive(:remove_index)
+          expect(model).not_to receive(:add_index)
+
+          model.add_concurrent_index(:users, :id, unique: true)
+        end
+      end
+
+      context 'when an invalid copy of the index exists' do
+        before do
+          model.add_index :users, :id, unique: true, name: index_name
+
+          model.connection.execute(<<~SQL)
+            UPDATE pg_index
+            SET indisvalid = false
+            WHERE indexrelid = '#{index_name}'::regclass
+          SQL
+        end
+
+        context 'when the default name is used' do
+          let(:index_name) { model.index_name(:users, :id) }
+
+          it 'drops and recreates the index' do
+            expect(model).to receive(:index_exists?)
+              .with(:users, :id, { algorithm: :concurrently, unique: true }).and_call_original
+            expect(model).to receive(:index_invalid?).with(index_name, schema: nil).and_call_original
+
+            expect(model).to receive(:remove_concurrent_index_by_name).with(:users, index_name)
+
+            expect(model).to receive(:add_index)
+              .with(:users, :id, { algorithm: :concurrently, unique: true })
+
+            model.add_concurrent_index(:users, :id, unique: true)
+          end
+        end
+
+        context 'when a custom name is used' do
+          let(:index_name) { 'my_test_index' }
+
+          it 'drops and recreates the index' do
+            expect(model).to receive(:index_exists?)
+              .with(:users, :id, { algorithm: :concurrently, unique: true, name: index_name }).and_call_original
+            expect(model).to receive(:index_invalid?).with(index_name, schema: nil).and_call_original
+
+            expect(model).to receive(:remove_concurrent_index_by_name).with(:users, index_name)
+
+            expect(model).to receive(:add_index)
+              .with(:users, :id, { algorithm: :concurrently, unique: true, name: index_name })
+
+            model.add_concurrent_index(:users, :id, unique: true, name: index_name)
+          end
+        end
+
+        context 'when a qualified table name is used' do
+          let(:other_schema) { 'foo_schema' }
+          let(:index_name) { 'my_test_index' }
+          let(:table_name) { "#{other_schema}.users" }
+
+          before do
+            model.connection.execute(<<~SQL)
+              CREATE SCHEMA #{other_schema};
+              ALTER TABLE users SET SCHEMA #{other_schema};
+            SQL
+          end
+
+          it 'drops and recreates the index' do
+            expect(model).to receive(:index_exists?)
+              .with(table_name, :id, { algorithm: :concurrently, unique: true, name: index_name }).and_call_original
+            expect(model).to receive(:index_invalid?).with(index_name, schema: other_schema).and_call_original
+
+            expect(model).to receive(:remove_concurrent_index_by_name).with(table_name, index_name)
+
+            expect(model).to receive(:add_index)
+              .with(table_name, :id, { algorithm: :concurrently, unique: true, name: index_name })
+
+            model.add_concurrent_index(table_name, :id, unique: true, name: index_name)
+          end
+        end
       end
 
       it 'unprepares the async index creation' do
@@ -385,6 +486,60 @@ RSpec.describe Gitlab::Database::MigrationHelpers do
 
         expect { model.remove_concurrent_index(:users, :foo) }
           .to raise_error(RuntimeError)
+      end
+    end
+  end
+
+  describe '#remove_foreign_key_if_exists' do
+    context 'when the foreign key does not exist' do
+      before do
+        allow(model).to receive(:foreign_key_exists?).and_return(false)
+      end
+
+      it 'does nothing' do
+        expect(model).not_to receive(:remove_foreign_key)
+
+        model.remove_foreign_key_if_exists(:projects, :users, column: :user_id)
+      end
+    end
+
+    context 'when the foreign key exists' do
+      before do
+        allow(model).to receive(:foreign_key_exists?).and_return(true)
+      end
+
+      it 'removes the foreign key' do
+        expect(model).to receive(:remove_foreign_key).with(:projects, :users, { column: :user_id })
+
+        model.remove_foreign_key_if_exists(:projects, :users, column: :user_id)
+      end
+
+      context 'when the target table is not given' do
+        it 'passes the options as the second parameter' do
+          expect(model).to receive(:remove_foreign_key).with(:projects, { column: :user_id })
+
+          model.remove_foreign_key_if_exists(:projects, column: :user_id)
+        end
+      end
+
+      context 'when the reverse_lock_order option is given' do
+        it 'requests for lock before removing the foreign key' do
+          expect(model).to receive(:transaction_open?).and_return(true)
+          expect(model).to receive(:execute).with(/LOCK TABLE users, projects/)
+          expect(model).not_to receive(:remove_foreign_key).with(:projects, :users)
+
+          model.remove_foreign_key_if_exists(:projects, :users, column: :user_id, reverse_lock_order: true)
+        end
+
+        context 'when not inside a transaction' do
+          it 'does not lock' do
+            expect(model).to receive(:transaction_open?).and_return(false)
+            expect(model).not_to receive(:execute).with(/LOCK TABLE users, projects/)
+            expect(model).to receive(:remove_foreign_key).with(:projects, :users, { column: :user_id })
+
+            model.remove_foreign_key_if_exists(:projects, :users, column: :user_id, reverse_lock_order: true)
+          end
+        end
       end
     end
   end
@@ -798,13 +953,13 @@ RSpec.describe Gitlab::Database::MigrationHelpers do
     # This spec runs without an enclosing transaction (:delete truncation method for db_cleaner)
     context 'when the statement_timeout is already disabled', :delete do
       before do
-        ActiveRecord::Base.connection.execute('SET statement_timeout TO 0')
+        ActiveRecord::Migration.connection.execute('SET statement_timeout TO 0')
       end
 
       after do
-        # Use ActiveRecord::Base.connection instead of model.execute
+        # Use ActiveRecord::Migration.connection instead of model.execute
         # so that this call is not counted below
-        ActiveRecord::Base.connection.execute('RESET statement_timeout')
+        ActiveRecord::Migration.connection.execute('RESET statement_timeout')
       end
 
       it 'yields control without disabling the timeout or resetting' do
@@ -954,10 +1109,11 @@ RSpec.describe Gitlab::Database::MigrationHelpers do
           let(:trigger_name) { model.rename_trigger_name(:users, :id, :new) }
           let(:user) { create(:user) }
           let(:copy_trigger) { double('copy trigger') }
+          let(:connection) { ActiveRecord::Migration.connection }
 
           before do
             expect(Gitlab::Database::UnidirectionalCopyTrigger).to receive(:on_table)
-              .with(:users).and_return(copy_trigger)
+              .with(:users, connection: connection).and_return(copy_trigger)
           end
 
           it 'copies the value to the new column using the type_cast_function', :aggregate_failures do
@@ -1300,11 +1456,13 @@ RSpec.describe Gitlab::Database::MigrationHelpers do
   end
 
   describe '#install_rename_triggers' do
+    let(:connection) { ActiveRecord::Migration.connection }
+
     it 'installs the triggers' do
       copy_trigger = double('copy trigger')
 
       expect(Gitlab::Database::UnidirectionalCopyTrigger).to receive(:on_table)
-        .with(:users).and_return(copy_trigger)
+        .with(:users, connection: connection).and_return(copy_trigger)
 
       expect(copy_trigger).to receive(:create).with(:old, :new, trigger_name: 'foo')
 
@@ -1313,11 +1471,13 @@ RSpec.describe Gitlab::Database::MigrationHelpers do
   end
 
   describe '#remove_rename_triggers' do
+    let(:connection) { ActiveRecord::Migration.connection }
+
     it 'removes the function and trigger' do
       copy_trigger = double('copy trigger')
 
       expect(Gitlab::Database::UnidirectionalCopyTrigger).to receive(:on_table)
-        .with('bar').and_return(copy_trigger)
+        .with('bar', connection: connection).and_return(copy_trigger)
 
       expect(copy_trigger).to receive(:drop).with('foo')
 
@@ -1626,8 +1786,17 @@ RSpec.describe Gitlab::Database::MigrationHelpers do
     let(:worker) do
       Class.new do
         include Sidekiq::Worker
+
         sidekiq_options queue: 'test'
+
+        def self.name
+          'WorkerClass'
+        end
       end
+    end
+
+    before do
+      stub_const(worker.name, worker)
     end
 
     describe '#sidekiq_queue_length' do
@@ -1682,116 +1851,6 @@ RSpec.describe Gitlab::Database::MigrationHelpers do
 
       expect { model.check_trigger_permissions!('kittens') }
         .to raise_error(RuntimeError, /Your database user is not allowed/)
-    end
-  end
-
-  describe '#change_column_type_using_background_migration' do
-    let!(:issue) { create(:issue, :closed, closed_at: Time.zone.now) }
-
-    let(:issue_model) do
-      Class.new(ActiveRecord::Base) do
-        self.table_name = 'issues'
-        include EachBatch
-      end
-    end
-
-    it 'changes the type of a column using a background migration' do
-      expect(model)
-        .to receive(:add_column)
-        .with('issues', 'closed_at_for_type_change', :datetime_with_timezone)
-
-      expect(model)
-        .to receive(:install_rename_triggers)
-        .with('issues', :closed_at, 'closed_at_for_type_change')
-
-      expect(BackgroundMigrationWorker)
-        .to receive(:perform_in)
-        .ordered
-        .with(
-          10.minutes,
-          'CopyColumn',
-          ['issues', :closed_at, 'closed_at_for_type_change', issue.id, issue.id]
-        )
-
-      expect(BackgroundMigrationWorker)
-        .to receive(:perform_in)
-        .ordered
-        .with(
-          1.hour + 10.minutes,
-          'CleanupConcurrentTypeChange',
-          ['issues', :closed_at, 'closed_at_for_type_change']
-        )
-
-      expect(Gitlab::BackgroundMigration)
-        .to receive(:steal)
-        .ordered
-        .with('CopyColumn')
-
-      expect(Gitlab::BackgroundMigration)
-        .to receive(:steal)
-        .ordered
-        .with('CleanupConcurrentTypeChange')
-
-      model.change_column_type_using_background_migration(
-        issue_model.all,
-        :closed_at,
-        :datetime_with_timezone
-      )
-    end
-  end
-
-  describe '#rename_column_using_background_migration' do
-    let!(:issue) { create(:issue, :closed, closed_at: Time.zone.now) }
-
-    it 'renames a column using a background migration' do
-      expect(model)
-        .to receive(:add_column)
-        .with(
-          'issues',
-          :closed_at_timestamp,
-          :datetime_with_timezone,
-          limit: anything,
-          precision: anything,
-          scale: anything
-        )
-
-      expect(model)
-        .to receive(:install_rename_triggers)
-        .with('issues', :closed_at, :closed_at_timestamp)
-
-      expect(BackgroundMigrationWorker)
-        .to receive(:perform_in)
-        .ordered
-        .with(
-          10.minutes,
-          'CopyColumn',
-          ['issues', :closed_at, :closed_at_timestamp, issue.id, issue.id]
-        )
-
-      expect(BackgroundMigrationWorker)
-        .to receive(:perform_in)
-        .ordered
-        .with(
-          1.hour + 10.minutes,
-          'CleanupConcurrentRename',
-          ['issues', :closed_at, :closed_at_timestamp]
-        )
-
-      expect(Gitlab::BackgroundMigration)
-        .to receive(:steal)
-        .ordered
-        .with('CopyColumn')
-
-      expect(Gitlab::BackgroundMigration)
-        .to receive(:steal)
-        .ordered
-        .with('CleanupConcurrentRename')
-
-      model.rename_column_using_background_migration(
-        'issues',
-        :closed_at,
-        :closed_at_timestamp
-      )
     end
   end
 
@@ -1886,6 +1945,61 @@ RSpec.describe Gitlab::Database::MigrationHelpers do
     end
   end
 
+  describe '#restore_conversion_of_integer_to_bigint' do
+    let(:table) { :test_table }
+    let(:column) { :id }
+    let(:tmp_column) { model.convert_to_bigint_column(column) }
+
+    before do
+      model.create_table table, id: false do |t|
+        t.bigint :id, primary_key: true
+        t.bigint :build_id, null: false
+        t.timestamps
+      end
+    end
+
+    context 'when the target table does not exist' do
+      it 'raises an error' do
+        expect { model.restore_conversion_of_integer_to_bigint(:this_table_is_not_real, column) }
+          .to raise_error('Table this_table_is_not_real does not exist')
+      end
+    end
+
+    context 'when the column to migrate does not exist' do
+      it 'raises an error' do
+        expect { model.restore_conversion_of_integer_to_bigint(table, :this_column_is_not_real) }
+          .to raise_error(ArgumentError, "Column this_column_is_not_real does not exist on #{table}")
+      end
+    end
+
+    context 'when a single column is given' do
+      let(:column_to_convert) { 'id' }
+      let(:temporary_column) { model.convert_to_bigint_column(column_to_convert) }
+
+      it 'creates the correct columns and installs the trigger' do
+        expect(model).to receive(:add_column).with(table, temporary_column, :int, default: 0, null: false)
+
+        expect(model).to receive(:install_rename_triggers).with(table, [column_to_convert], [temporary_column])
+
+        model.restore_conversion_of_integer_to_bigint(table, column_to_convert)
+      end
+    end
+
+    context 'when multiple columns are given' do
+      let(:columns_to_convert) { %i[id build_id] }
+      let(:temporary_columns) { columns_to_convert.map { |column| model.convert_to_bigint_column(column) } }
+
+      it 'creates the correct columns and installs the trigger' do
+        expect(model).to receive(:add_column).with(table, temporary_columns[0], :int, default: 0, null: false)
+        expect(model).to receive(:add_column).with(table, temporary_columns[1], :int, default: 0, null: false)
+
+        expect(model).to receive(:install_rename_triggers).with(table, columns_to_convert, temporary_columns)
+
+        model.restore_conversion_of_integer_to_bigint(table, columns_to_convert)
+      end
+    end
+  end
+
   describe '#revert_initialize_conversion_of_integer_to_bigint' do
     let(:table) { :test_table }
 
@@ -1943,8 +2057,6 @@ RSpec.describe Gitlab::Database::MigrationHelpers do
         t.integer :other_id
         t.timestamps
       end
-
-      allow(model).to receive(:perform_background_migration_inline?).and_return(false)
     end
 
     context 'when the target table does not exist' do
@@ -2139,7 +2251,7 @@ RSpec.describe Gitlab::Database::MigrationHelpers do
 
   describe '#index_exists_by_name?' do
     it 'returns true if an index exists' do
-      ActiveRecord::Base.connection.execute(
+      ActiveRecord::Migration.connection.execute(
         'CREATE INDEX test_index_for_index_exists ON projects (path);'
       )
 
@@ -2154,7 +2266,7 @@ RSpec.describe Gitlab::Database::MigrationHelpers do
 
     context 'when an index with a function exists' do
       before do
-        ActiveRecord::Base.connection.execute(
+        ActiveRecord::Migration.connection.execute(
           'CREATE INDEX test_index ON projects (LOWER(path));'
         )
       end
@@ -2167,15 +2279,15 @@ RSpec.describe Gitlab::Database::MigrationHelpers do
 
     context 'when an index exists for a table with the same name in another schema' do
       before do
-        ActiveRecord::Base.connection.execute(
+        ActiveRecord::Migration.connection.execute(
           'CREATE SCHEMA new_test_schema'
         )
 
-        ActiveRecord::Base.connection.execute(
+        ActiveRecord::Migration.connection.execute(
           'CREATE TABLE new_test_schema.projects (id integer, name character varying)'
         )
 
-        ActiveRecord::Base.connection.execute(
+        ActiveRecord::Migration.connection.execute(
           'CREATE INDEX test_index_on_name ON new_test_schema.projects (LOWER(name));'
         )
       end
@@ -2255,8 +2367,6 @@ RSpec.describe Gitlab::Database::MigrationHelpers do
       expect(buffer.read).to include("\"class\":\"#{model.class}\"")
     end
 
-    using RSpec::Parameterized::TableSyntax
-
     where(raise_on_exhaustion: [true, false])
 
     with_them do
@@ -2272,6 +2382,15 @@ RSpec.describe Gitlab::Database::MigrationHelpers do
     it 'does not raise on exhaustion by default' do
       with_lock_retries = double
       expect(Gitlab::Database::WithLockRetries).to receive(:new).and_return(with_lock_retries)
+      expect(with_lock_retries).to receive(:run).with(raise_on_exhaustion: false)
+
+      model.with_lock_retries(env: env, logger: in_memory_logger) { }
+    end
+
+    it 'defaults to allowing subtransactions' do
+      with_lock_retries = double
+
+      expect(Gitlab::Database::WithLockRetries).to receive(:new).with(hash_including(allow_savepoints: true)).and_return(with_lock_retries)
       expect(with_lock_retries).to receive(:run).with(raise_on_exhaustion: false)
 
       model.with_lock_retries(env: env, logger: in_memory_logger) { }
@@ -2302,7 +2421,7 @@ RSpec.describe Gitlab::Database::MigrationHelpers do
     let(:issues)         { table(:issues) }
 
     def setup
-      namespace = namespaces.create!(name: 'foo', path: 'foo')
+      namespace = namespaces.create!(name: 'foo', path: 'foo', type: Namespaces::UserNamespace.sti_name)
       projects.create!(namespace_id: namespace.id)
     end
 
@@ -2401,19 +2520,19 @@ RSpec.describe Gitlab::Database::MigrationHelpers do
 
   describe '#check_constraint_exists?' do
     before do
-      ActiveRecord::Base.connection.execute(
+      ActiveRecord::Migration.connection.execute(
         'ALTER TABLE projects ADD CONSTRAINT check_1 CHECK (char_length(path) <= 5) NOT VALID'
       )
 
-      ActiveRecord::Base.connection.execute(
+      ActiveRecord::Migration.connection.execute(
         'CREATE SCHEMA new_test_schema'
       )
 
-      ActiveRecord::Base.connection.execute(
+      ActiveRecord::Migration.connection.execute(
         'CREATE TABLE new_test_schema.projects (id integer, name character varying)'
       )
 
-      ActiveRecord::Base.connection.execute(
+      ActiveRecord::Migration.connection.execute(
         'ALTER TABLE new_test_schema.projects ADD CONSTRAINT check_2 CHECK (char_length(name) <= 5)'
       )
     end
@@ -2628,6 +2747,10 @@ RSpec.describe Gitlab::Database::MigrationHelpers do
   end
 
   describe '#remove_check_constraint' do
+    before do
+      allow(model).to receive(:transaction_open?).and_return(false)
+    end
+
     it 'removes the constraint' do
       drop_sql = /ALTER TABLE test_table\s+DROP CONSTRAINT IF EXISTS check_name/
 

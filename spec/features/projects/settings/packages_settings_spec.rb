@@ -5,7 +5,7 @@ require 'spec_helper'
 RSpec.describe 'Projects > Settings > Packages', :js do
   let_it_be(:project) { create(:project) }
 
-  let(:user) { project.owner }
+  let(:user) { project.first_owner }
 
   before do
     sign_in(user)
@@ -19,7 +19,7 @@ RSpec.describe 'Projects > Settings > Packages', :js do
     let(:packages_enabled) { true }
 
     it 'displays the packages toggle button' do
-      expect(page).to have_button('Packages', class: 'gl-toggle')
+      expect(page).to have_selector('[data-testid="toggle-label"]', text: 'Packages')
       expect(page).to have_selector('input[name="project[packages_enabled]"] + button', visible: true)
     end
   end
@@ -28,7 +28,7 @@ RSpec.describe 'Projects > Settings > Packages', :js do
     let(:packages_enabled) { false }
 
     it 'does not show up in UI' do
-      expect(page).not_to have_button('Packages', class: 'gl-toggle')
+      expect(page).not_to have_selector('[data-testid="toggle-label"]', text: 'Packages')
     end
   end
 end

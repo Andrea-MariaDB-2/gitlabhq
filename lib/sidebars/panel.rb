@@ -4,6 +4,7 @@ module Sidebars
   class Panel
     extend ::Gitlab::Utils::Override
     include ::Sidebars::Concerns::PositionableList
+    include Gitlab::Experiment::Dsl
 
     attr_reader :context, :scope_menu, :hidden_menu
 
@@ -34,6 +35,10 @@ module Sidebars
 
     def replace_menu(menu_to_replace, new_menu)
       replace_element(@menus, menu_to_replace, new_menu)
+    end
+
+    def remove_menu(menu_to_remove)
+      remove_element(@menus, menu_to_remove)
     end
 
     def set_scope_menu(scope_menu)

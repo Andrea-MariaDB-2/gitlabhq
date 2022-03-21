@@ -14,7 +14,7 @@ mind that it is possible only if GitLab.com integration is enabled on your GitLa
 To get to the importer page you need to go to "New project" page.
 
 NOTE:
-If you are interested in importing Wiki and Merge Request data to your new instance,
+If you are interested in importing Wiki and merge request data to your new instance,
 you'll need to follow the instructions for [exporting a project](../settings/import_export.md#export-a-project-and-its-data)
 
 ![New project page](img/gitlab_new_project_page_v12_2.png)
@@ -26,3 +26,8 @@ for permission to access your projects. After accepting, you are automatically r
 
 To import a project, click "Import". The importer imports your repository and issues.
 Once the importer is done, a new GitLab project is created with your imported data.
+
+## Automate group and project import **(PREMIUM)**
+
+For information on automating user, group, and project import API calls, see
+[Automate group and project import](index.md#automate-group-and-project-import).

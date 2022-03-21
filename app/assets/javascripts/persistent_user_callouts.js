@@ -9,6 +9,9 @@ const PERSISTENT_USER_CALLOUTS = [
   '.js-registration-enabled-callout',
   '.js-new-user-signups-cap-reached',
   '.js-eoa-bronze-plan-banner',
+  '.js-security-newsletter-callout',
+  '.js-approaching-seats-count-threshold',
+  '.js-storage-enforcement-banner',
 ];
 
 const initCallouts = () => {

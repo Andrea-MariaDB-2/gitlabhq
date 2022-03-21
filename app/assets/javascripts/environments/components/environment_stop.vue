@@ -8,6 +8,8 @@ import { GlTooltipDirective, GlButton, GlModalDirective } from '@gitlab/ui';
 import { BV_HIDE_TOOLTIP } from '~/lib/utils/constants';
 import { s__ } from '~/locale';
 import eventHub from '../event_hub';
+import setEnvironmentToStopMutation from '../graphql/mutations/set_environment_to_stop.mutation.graphql';
+import isEnvironmentStoppingQuery from '../graphql/queries/is_environment_stopping.query.graphql';
 
 export default {
   components: {
@@ -22,16 +24,29 @@ export default {
       type: Object,
       required: true,
     },
+    graphql: {
+      type: Boolean,
+      required: false,
+      default: false,
+    },
+  },
+  apollo: {
+    isEnvironmentStopping: {
+      query: isEnvironmentStoppingQuery,
+      variables() {
+        return { environment: this.environment };
+      },
+    },
+  },
+  i18n: {
+    title: s__('Environments|Stop environment'),
+    stop: s__('Environments|Stop'),
   },
   data() {
     return {
       isLoading: false,
+      isEnvironmentStopping: false,
     };
-  },
-  computed: {
-    title() {
-      return s__('Environments|Stop environment');
-    },
   },
   mounted() {
     eventHub.$on('stopEnvironment', this.onStopEnvironment);
@@ -42,7 +57,14 @@ export default {
   methods: {
     onClick() {
       this.$root.$emit(BV_HIDE_TOOLTIP, this.$options.stopEnvironmentTooltipId);
-      eventHub.$emit('requestStopEnvironment', this.environment);
+      if (this.graphql) {
+        this.$apollo.mutate({
+          mutation: setEnvironmentToStopMutation,
+          variables: { environment: this.environment },
+        });
+      } else {
+        eventHub.$emit('requestStopEnvironment', this.environment);
+      }
     },
     onStopEnvironment(environment) {
       if (this.environment.id === environment.id) {
@@ -57,12 +79,14 @@ export default {
   <gl-button
     v-gl-tooltip="{ id: $options.stopEnvironmentTooltipId }"
     v-gl-modal-directive="'stop-environment-modal'"
-    :loading="isLoading"
-    :title="title"
-    :aria-label="title"
+    :loading="isLoading || isEnvironmentStopping"
+    :title="$options.i18n.title"
+    :aria-label="$options.i18n.title"
     icon="stop"
-    category="primary"
+    category="secondary"
     variant="danger"
     @click="onClick"
-  />
+  >
+    {{ $options.i18n.stop }}
+  </gl-button>
 </template>

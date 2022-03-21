@@ -1,10 +1,10 @@
 ---
 stage: Manage
-group: Access
+group: Authentication and Authorization
 info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
 ---
 
-# Plan limits API **(FREE)**
+# Plan limits API **(FREE SELF)**
 
 > [Introduced](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/54232) in GitLab 13.10.
 
@@ -13,7 +13,6 @@ The plan limits API allows you to maintain the application limits for the existi
 The existing plans depend on the GitLab edition. In the Community Edition, only the plan `default`
 is available. In the Enterprise Edition, additional plans are available as well.
 
-NOTE:
 Administrator access is required to use this API.
 
 ## Get current plan limits

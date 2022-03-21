@@ -9,7 +9,7 @@ module QA
         def self.included(base)
           super
 
-          base.view 'app/assets/javascripts/invite_members/components/invite_members_modal.vue' do
+          base.view 'app/assets/javascripts/invite_members/components/invite_modal_base.vue' do
             element :invite_button
             element :access_level_dropdown
             element :invite_members_modal_content
@@ -44,40 +44,46 @@ module QA
           open_invite_members_modal
 
           within_element(:invite_members_modal_content) do
-            fill_element :members_token_select_input, username
+            fill_element(:members_token_select_input, username)
             Support::WaitForRequests.wait_for_requests
-            click_button username
-
-            # Guest option is selected by default, skipping these steps if desired option is 'Guest'
-            unless access_level == 'Guest'
-              click_element :access_level_dropdown
-              click_button access_level
-            end
-
-            click_element :invite_button
+            click_button(username, match: :prefer_exact)
+            set_access_level(access_level)
           end
 
-          Support::WaitForRequests.wait_for_requests
-
-          page.refresh
+          send_invite
         end
 
-        def invite_group(group_name, group_access = Resource::Members::AccessLevel::GUEST)
+        def invite_group(group_name, access_level = 'Guest')
           open_invite_group_modal
 
-          fill_element :access_level_dropdown, with: group_access
+          within_element(:invite_members_modal_content) do
+            click_button 'Select a group'
 
-          click_button 'Select a group'
-          fill_element :group_select_dropdown_search_field, group_name
+            # Helps stabilize race condition with concurrent group API calls while searching
+            # TODO: Replace with `fill_element :group_select_dropdown_search_field, group_name` when this bug is resolved: https://gitlab.com/gitlab-org/gitlab/-/issues/349379
+            send_keys_to_element(:group_select_dropdown_search_field, group_name)
 
-          Support::WaitForRequests.wait_for_requests
+            Support::WaitForRequests.wait_for_requests
+            click_button group_name
+            set_access_level(access_level)
+          end
 
-          click_button group_name
+          send_invite
+        end
 
+        private
+
+        def set_access_level(access_level)
+          # Guest option is selected by default, skipping these steps if desired option is 'Guest'
+          unless access_level == 'Guest'
+            click_element :access_level_dropdown
+            click_button access_level
+          end
+        end
+
+        def send_invite
           click_element :invite_button
-
           Support::WaitForRequests.wait_for_requests
-
           page.refresh
         end
       end

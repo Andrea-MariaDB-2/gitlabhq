@@ -7,11 +7,15 @@ module Gitlab
   # To check if a job has been completed, simply pass the job ID to the
   # `completed?` method:
   #
-  #     job_id = SomeWorker.perform_async(...)
+  #     job_id = SomeWorker.with_status.perform_async(...)
   #
   #     if Gitlab::SidekiqStatus.completed?(job_id)
   #       ...
   #     end
+  #
+  # If you do not use `with_status`, and the worker class does not declare
+  # `status_expiration` in its `sidekiq_options`, then this status will not be
+  # stored.
   #
   # For each job ID registered a separate key is stored in Redis, making lookups
   # much faster than using Sidekiq's built-in job finding/status API. These keys
@@ -30,6 +34,8 @@ module Gitlab
     # jid - The Sidekiq job ID
     # expire - The expiration time of the Redis key.
     def self.set(jid, expire = DEFAULT_EXPIRATION)
+      return unless expire
+
       Sidekiq.redis do |redis|
         redis.set(key_for(jid), 1, ex: expire)
       end
@@ -84,13 +90,13 @@ module Gitlab
     # true = job is still running or enqueued
     # false = job completed
     def self.job_status(job_ids)
+      return [] if job_ids.empty?
+
       keys = job_ids.map { |jid| key_for(jid) }
 
-      Sidekiq.redis do |redis|
-        redis.pipelined do
-          keys.each { |key| redis.exists(key) }
-        end
-      end
+      Sidekiq
+        .redis { |redis| redis.mget(*keys) }
+        .map { |result| !result.nil? }
     end
 
     # Returns the JIDs that are completed

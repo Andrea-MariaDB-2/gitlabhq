@@ -14,8 +14,19 @@ RSpec.describe API::CommitStatuses do
     let(:get_url) { "/projects/#{project.id}/repository/commits/#{sha}/statuses" }
 
     context 'ci commit exists' do
-      let!(:master) { project.ci_pipelines.create!(source: :push, sha: commit.id, ref: 'master', protected: false) }
-      let!(:develop) { project.ci_pipelines.create!(source: :push, sha: commit.id, ref: 'develop', protected: false) }
+      let!(:master) do
+        project.ci_pipelines.build(source: :push, sha: commit.id, ref: 'master', protected: false).tap do |p|
+          p.ensure_project_iid! # Necessary to avoid cross-database modification error
+          p.save!
+        end
+      end
+
+      let!(:develop) do
+        project.ci_pipelines.build(source: :push, sha: commit.id, ref: 'develop', protected: false).tap do |p|
+          p.ensure_project_iid! # Necessary to avoid cross-database modification error
+          p.save!
+        end
+      end
 
       context "reporter user" do
         let(:statuses_id) { json_response.map { |status| status['id'] } }
@@ -131,7 +142,7 @@ RSpec.describe API::CommitStatuses do
         %w[pending running success failed canceled].each do |status|
           context "for #{status}" do
             context 'when pipeline for sha does not exists' do
-              it 'creates commit status' do
+              it 'creates commit status and sets pipeline iid' do
                 post api(post_url, developer), params: { state: status }
 
                 expect(response).to have_gitlab_http_status(:created)
@@ -145,6 +156,8 @@ RSpec.describe API::CommitStatuses do
                 if status == 'failed'
                   expect(CommitStatus.find(json_response['id'])).to be_api_failure
                 end
+
+                expect(::Ci::Pipeline.last.iid).not_to be_nil
               end
             end
           end
@@ -308,8 +321,19 @@ RSpec.describe API::CommitStatuses do
         end
 
         context 'when a pipeline id is specified' do
-          let!(:first_pipeline) { project.ci_pipelines.create!(source: :push, sha: commit.id, ref: 'master', status: 'created') }
-          let!(:other_pipeline) { project.ci_pipelines.create!(source: :push, sha: commit.id, ref: 'master', status: 'created') }
+          let!(:first_pipeline) do
+            project.ci_pipelines.build(source: :push, sha: commit.id, ref: 'master', status: 'created').tap do |p|
+              p.ensure_project_iid! # Necessary to avoid cross-database modification error
+              p.save!
+            end
+          end
+
+          let!(:other_pipeline) do
+            project.ci_pipelines.build(source: :push, sha: commit.id, ref: 'master', status: 'created').tap do |p|
+              p.ensure_project_iid! # Necessary to avoid cross-database modification error
+              p.save!
+            end
+          end
 
           subject do
             post api(post_url, developer), params: {
@@ -345,38 +369,12 @@ RSpec.describe API::CommitStatuses do
           expect(json_response['status']).to eq('success')
         end
 
-        context 'feature flags' do
-          using RSpec::Parameterized::TableSyntax
+        it 'retries the commit status', :sidekiq_might_not_need_inline do
+          post_request
 
-          where(:ci_fix_commit_status_retried, :ci_remove_update_retried_from_process_pipeline, :previous_statuses_retried) do
-            true  | true  | true
-            true  | false | true
-            false | true  | false
-            false | false | true
-          end
-
-          with_them do
-            before do
-              stub_feature_flags(
-                ci_fix_commit_status_retried: ci_fix_commit_status_retried,
-                ci_remove_update_retried_from_process_pipeline: ci_remove_update_retried_from_process_pipeline
-              )
-            end
-
-            it 'retries a commit status', :sidekiq_might_not_need_inline do
-              post_request
-
-              expect(CommitStatus.count).to eq 2
-
-              if previous_statuses_retried
-                expect(CommitStatus.first).to be_retried
-                expect(CommitStatus.last.pipeline).to be_success
-              else
-                expect(CommitStatus.first).not_to be_retried
-                expect(CommitStatus.last.pipeline).to be_failed
-              end
-            end
-          end
+          expect(CommitStatus.count).to eq 2
+          expect(CommitStatus.first).to be_retried
+          expect(CommitStatus.last.pipeline).to be_success
         end
       end
 

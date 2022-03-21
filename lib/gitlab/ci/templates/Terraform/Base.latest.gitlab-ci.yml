@@ -20,13 +20,13 @@ cache:
   key: "${TF_ROOT}"
   paths:
     - ${TF_ROOT}/.terraform/
-    - ${TF_ROOT}/.terraform.lock.hcl
 
-.terraform:init: &terraform_init
-  stage: init
+.terraform:fmt: &terraform_fmt
+  stage: validate
   script:
     - cd ${TF_ROOT}
-    - gitlab-terraform init
+    - gitlab-terraform fmt
+  allow_failure: true
 
 .terraform:validate: &terraform_validate
   stage: validate
@@ -53,10 +53,9 @@ cache:
     - cd ${TF_ROOT}
     - gitlab-terraform apply
   resource_group: ${TF_STATE_NAME}
-  when: manual
-  only:
-    variables:
-      - $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      when: manual
 
 .terraform:destroy: &terraform_destroy
   stage: cleanup

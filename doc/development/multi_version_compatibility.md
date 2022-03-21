@@ -14,14 +14,14 @@ In a sense, these scenarios are all transient states. But they can often persist
 
 ### When modifying a Sidekiq worker
 
-For example when [changing arguments](sidekiq_style_guide.md#changing-the-arguments-for-a-worker):
+For example when [changing arguments](sidekiq/compatibility_across_updates.md#changing-the-arguments-for-a-worker):
 
 - Is it ok if jobs are being enqueued with the old signature but executed by the new monthly release?
 - Is it ok if jobs are being enqueued with the new signature but executed by the previous monthly release?
 
 ### When adding a new Sidekiq worker
 
-Is it ok if these jobs don't get executed for several hours because [Sidekiq nodes are not yet updated](sidekiq_style_guide.md#adding-new-workers)?
+Is it ok if these jobs don't get executed for several hours because [Sidekiq nodes are not yet updated](sidekiq/compatibility_across_updates.md#adding-new-workers)?
 
 ### When modifying JavaScript
 
@@ -49,14 +49,22 @@ Is it ok that some nodes have the new Rails version, but some nodes have the old
 
 ## A walkthrough of an update
 
-Backwards compatibility problems during updates are often very subtle. This is why it is worth familiarizing yourself with [update instructions](../update/index.md), [reference architectures](../administration/reference_architectures/index.md), and [GitLab.com's architecture](https://about.gitlab.com/handbook/engineering/infrastructure/production/architecture/). But to illustrate how these problems arise, take a look at this example of a simple update.
+Backward compatibility problems during updates are often very subtle. This is why it is worth
+familiarizing yourself with:
+
+- [Update instructions](../update/index.md)
+- [Reference architectures](../administration/reference_architectures/index.md)
+- [GitLab.com's architecture](https://about.gitlab.com/handbook/engineering/infrastructure/production/architecture/)
+- [GitLab.com's upgrade pipeline](https://gitlab.com/gitlab-org/release/docs/blob/master/general/deploy/gitlab-com-deployer.md#upgrade-pipeline-default)
+
+To illustrate how these problems arise, take a look at this example:
 
 - 🚢 New version
 - 🙂 Old version
 
 In this example, you can imagine that we are updating by one monthly release. But refer to [How long must code be backwards-compatible?](#how-long-must-code-be-backwards-compatible).
 
-| Update step | Postgres DB | Web nodes | API nodes | Sidekiq nodes | Compatibility concerns |
+| Update step | PostgreSQL DB | Web nodes | API nodes | Sidekiq nodes | Compatibility concerns |
 | --- | --- | --- | --- | --- | --- |
 | Initial state | 🙂 | 🙂 | 🙂 | 🙂 | |
 | Ran pre-deployment migrations | 🚢 except post-deploy migrations | 🙂 | 🙂 | 🙂 | Rails code in 🙂 is making DB calls to 🚢 |
@@ -81,7 +89,7 @@ Many users [skip some monthly releases](../update/index.md#upgrading-to-a-new-ma
 
 - 13.0 => 13.12
 
-These users accept some downtime during the update. Unfortunately we can't ignore this case completely. For example, 13.12 may execute Sidekiq jobs from 13.0, which illustrates why [we avoid removing arguments from jobs until a major release](sidekiq_style_guide.md#deprecate-and-remove-an-argument). The main question is: Will the deployment get to a good state after the update is complete?
+These users accept some downtime during the update. Unfortunately we can't ignore this case completely. For example, 13.12 may execute Sidekiq jobs from 13.0, which illustrates why [we avoid removing arguments from jobs until a major release](sidekiq/compatibility_across_updates.md#deprecate-and-remove-an-argument). The main question is: Will the deployment get to a good state after the update is complete?
 
 ## What kind of components can GitLab be broken down into?
 
@@ -94,7 +102,7 @@ But the problem isn't just that there are many nodes. The bigger problem is that
 - "Web app nodes": Handle web requests
 - "API app nodes": Handle API requests
 - "Sidekiq app nodes": Handle Sidekiq jobs
-- "Postgres database": Handle internal Postgres calls
+- "PostgreSQL database": Handle internal PostgreSQL calls
 - "Redis database": Handle internal Redis calls
 - "Gitaly nodes": Handle internal Gitaly calls
 
@@ -102,7 +110,7 @@ During an update, there will be [two different versions of GitLab running in dif
 
 ## Doesn't the order of update steps matter?
 
-Yes! We have specific instructions for [zero-downtime updates](../update/index.md#upgrading-without-downtime) because it allows us to ignore some permutations of compatibility. This is why we don't worry about Rails code making DB calls to an old Postgres database schema.
+Yes! We have specific instructions for [zero-downtime updates](../update/index.md#upgrading-without-downtime) because it allows us to ignore some permutations of compatibility. This is why we don't worry about Rails code making DB calls to an old PostgreSQL database schema.
 
 ## I've identified a potential backwards compatibility problem, what can I do about it?
 
@@ -124,7 +132,7 @@ GitLab.com, the feature can be enabled in ChatOps and validated on GitLab.com.
 
 **However, it is not necessarily safe to enable the feature by default.** If the
 feature flag is removed, or the default is flipped to enabled, in the same release
-where the code was merged, then customers performing [zero-downtime updates](https://docs.gitlab.com/omnibus/update/#zero-downtime-updates)
+where the code was merged, then customers performing [zero-downtime updates](../update/zero_downtime.md)
 will end up running the new frontend code against the previous release's API.
 
 If you're not sure whether it's safe to enable all the changes at once, then one
@@ -172,7 +180,7 @@ coexists in production.
 
 ### Changing Sidekiq worker's parameters
 
-This topic is explained in detail in [Sidekiq Compatibility across Updates](sidekiq_style_guide.md#sidekiq-compatibility-across-updates).
+This topic is explained in detail in [Sidekiq Compatibility across Updates](sidekiq/compatibility_across_updates.md).
 
 When we need to add a new parameter to a Sidekiq worker class, we can split this into the following steps:
 
@@ -201,7 +209,7 @@ gantt
   section Database
     Schema A      :done, schemaA, 00:00  , 1h
     Schema B      :crit, schemaB, after migr, 58m
-    Schema C.     : schmeaC, after postmigr, 1h
+    Schema C.     : schemaC, after postmigr, 1h
 
   section Machine A
     Version N      :done, mavn, 00:00 , 75m

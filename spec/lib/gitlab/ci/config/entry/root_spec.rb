@@ -3,7 +3,9 @@
 require 'spec_helper'
 
 RSpec.describe Gitlab::Ci::Config::Entry::Root do
-  let(:root) { described_class.new(hash) }
+  let(:user) {}
+  let(:project) {}
+  let(:root) { described_class.new(hash, user: user, project: project) }
 
   describe '.nodes' do
     it 'returns a hash' do
@@ -51,6 +53,41 @@ RSpec.describe Gitlab::Ci::Config::Entry::Root do
             }
           }
         }
+      end
+
+      context 'when deprecated types/type keywords are defined' do
+        let(:project) { create(:project, :repository) }
+        let(:user) { create(:user) }
+
+        let(:hash) do
+          { types: %w(test deploy),
+            rspec: { script: 'rspec', type: 'test' } }
+        end
+
+        before do
+          root.compose!
+        end
+
+        it 'returns array of types as stages with a warning' do
+          expect(root.jobs_value[:rspec][:stage]).to eq 'test'
+          expect(root.stages_value).to eq %w[test deploy]
+          expect(root.warnings).to match_array([
+            "root `types` is deprecated in 9.0 and will be removed in 15.0.",
+            "jobs:rspec `type` is deprecated in 9.0 and will be removed in 15.0."
+          ])
+        end
+
+        it 'logs usage of keywords' do
+          expect(Gitlab::AppJsonLogger).to(
+            receive(:info)
+              .with(event: 'ci_used_deprecated_keyword',
+                    entry: root[:stages].key.to_s,
+                    user_id: user.id,
+                    project_id: project.id)
+          )
+
+          root.compose!
+        end
       end
 
       describe '#compose!' do
@@ -106,17 +143,6 @@ RSpec.describe Gitlab::Ci::Config::Entry::Root do
           context 'when stages key defined' do
             it 'returns array of stages' do
               expect(root.stages_value).to eq %w[build pages release]
-            end
-          end
-
-          context 'when deprecated types key defined' do
-            let(:hash) do
-              { types: %w(test deploy),
-                rspec: { script: 'rspec' } }
-            end
-
-            it 'returns array of types as stages' do
-              expect(root.stages_value).to eq %w[test deploy]
             end
           end
         end
@@ -328,9 +354,9 @@ RSpec.describe Gitlab::Ci::Config::Entry::Root do
       root.compose!
     end
 
-    context 'when before script is not an array' do
+    context 'when before script is a number' do
       let(:hash) do
-        { before_script: 'ls' }
+        { before_script: 123 }
       end
 
       describe '#valid?' do
@@ -342,7 +368,7 @@ RSpec.describe Gitlab::Ci::Config::Entry::Root do
       describe '#errors' do
         it 'reports errors from child nodes' do
           expect(root.errors)
-            .to include 'before_script config should be an array containing strings and arrays of strings'
+            .to include 'before_script config should be a string or a nested array of strings up to 10 levels deep'
         end
       end
     end

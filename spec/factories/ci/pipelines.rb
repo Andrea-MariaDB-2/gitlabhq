@@ -23,6 +23,8 @@ FactoryBot.define do
         pipeline.project = evaluator.child_of.project
         pipeline.source = :parent_pipeline
       end
+
+      pipeline.ensure_project_iid!
     end
 
     after(:create) do |pipeline, evaluator|
@@ -83,6 +85,10 @@ FactoryBot.define do
 
       trait :unlocked do
         locked { Ci::Pipeline.lockeds[:unlocked] }
+      end
+
+      trait :artifacts_locked do
+        locked { Ci::Pipeline.lockeds[:artifacts_locked] }
       end
 
       trait :protected do
@@ -206,6 +212,14 @@ FactoryBot.define do
             pipeline: pipeline,
             project: pipeline.project,
             options: { artifacts: { expose_as: 'the artifact', paths: ['ci_artifacts.txt'] } })
+        end
+      end
+
+      trait :with_persisted_artifacts do
+        status { :success }
+
+        after(:create) do |pipeline, evaluator|
+          pipeline.builds << create(:ci_build, :artifacts, pipeline: pipeline, project: pipeline.project)
         end
       end
 

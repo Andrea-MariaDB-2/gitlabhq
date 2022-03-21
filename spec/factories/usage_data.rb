@@ -5,8 +5,7 @@ FactoryBot.define do
     skip_create # non-model factories (i.e. without #save)
 
     initialize_with do
-      projects = create_list(:project, 3)
-      projects << create(:project, :repository)
+      projects = create_list(:project, 4, :repository)
       group = create(:group)
       create(:board, project: projects[0])
       create(:jira_integration, project: projects[0])
@@ -19,16 +18,21 @@ FactoryBot.define do
       create(:jira_import_state, :finished, project: projects[1], label: jira_label, imported_issues_count: 3)
       create(:jira_import_state, :scheduled, project: projects[1], label: jira_label)
       create(:prometheus_integration, project: projects[1])
-      create(:service, project: projects[1], type: 'JenkinsService', active: true)
-      create(:service, project: projects[0], type: 'SlackSlashCommandsService', active: true)
-      create(:service, project: projects[1], type: 'SlackService', active: true)
-      create(:service, project: projects[2], type: 'SlackService', active: true)
-      create(:service, project: projects[2], type: 'MattermostService', active: false)
-      create(:service, group: group, project: nil, type: 'MattermostService', active: true)
-      mattermost_instance = create(:service, :instance, type: 'MattermostService', active: true)
-      create(:service, project: projects[1], type: 'MattermostService', active: true, inherit_from_id: mattermost_instance.id)
-      create(:service, group: group, project: nil, type: 'SlackService', active: true, inherit_from_id: mattermost_instance.id)
-      create(:service, project: projects[2], type: 'CustomIssueTrackerService', active: true)
+      create(:jenkins_integration, project: projects[1])
+
+      # slack
+      create(:slack_slash_commands_integration, project: projects[0])
+      create(:integrations_slack, project: projects[1])
+      create(:integrations_slack, project: projects[2])
+
+      # mattermost
+      create(:mattermost_integration, project: projects[2], active: false)
+      create(:mattermost_integration, group: group, project: nil)
+      mattermost_instance = create(:mattermost_integration, :instance)
+      create(:mattermost_integration, project: projects[1], inherit_from_id: mattermost_instance.id)
+      create(:integrations_slack, group: group, project: nil, active: true, inherit_from_id: mattermost_instance.id)
+
+      create(:custom_issue_tracker_integration, project: projects[2], active: true)
       create(:project_error_tracking_setting, project: projects[0])
       create(:project_error_tracking_setting, project: projects[1], enabled: false)
       alert_bot_issues = create_list(:incident, 2, project: projects[0], author: User.alert_bot)
@@ -58,14 +62,6 @@ FactoryBot.define do
       # Tracing
       create(:project_tracing_setting, project: projects[0])
 
-      # Incident Labeled Issues
-      incident_label = create(:label, :incident, project: projects[0])
-      create(:labeled_issue, project: projects[0], labels: [incident_label])
-      incident_label_scoped_to_project = create(:label, :incident, project: projects[1])
-      incident_label_scoped_to_group = create(:group_label, :incident, group: group)
-      create(:labeled_issue, project: projects[1], labels: [incident_label_scoped_to_project])
-      create(:labeled_issue, project: projects[1], labels: [incident_label_scoped_to_group])
-
       # Alert Issues
       create(:alert_management_alert, issue: issues[0], project: projects[0])
       create(:alert_management_alert, issue: alert_bot_issues[0], project: projects[0])
@@ -88,17 +84,9 @@ FactoryBot.define do
       create(:cluster, :group, :disabled)
       create(:cluster, :instance, :disabled)
 
-      # Applications
-      create(:clusters_applications_helm, :installed, cluster: gcp_cluster)
-      create(:clusters_applications_ingress, :installed, cluster: gcp_cluster)
-      create(:clusters_applications_cert_manager, :installed, cluster: gcp_cluster)
-      create(:clusters_applications_prometheus, :installed, cluster: gcp_cluster)
-      create(:clusters_applications_crossplane, :installed, cluster: gcp_cluster)
-      create(:clusters_applications_runner, :installed, cluster: gcp_cluster)
-      create(:clusters_applications_knative, :installed, cluster: gcp_cluster)
-      create(:clusters_applications_elastic_stack, :installed, cluster: gcp_cluster)
-      create(:clusters_applications_jupyter, :installed, cluster: gcp_cluster)
-      create(:clusters_applications_cilium, :installed, cluster: gcp_cluster)
+      # Cluster Integrations
+      create(:clusters_integrations_prometheus, cluster: gcp_cluster)
+      create(:clusters_integrations_elastic_stack, cluster: gcp_cluster)
 
       create(:grafana_integration, project: projects[0], enabled: true)
       create(:grafana_integration, project: projects[1], enabled: true)

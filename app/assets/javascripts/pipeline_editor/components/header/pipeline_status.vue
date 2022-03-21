@@ -1,15 +1,16 @@
 <script>
-import { GlButton, GlIcon, GlLink, GlLoadingIcon, GlSprintf } from '@gitlab/ui';
+import { GlButton, GlIcon, GlLink, GlLoadingIcon, GlSprintf, GlTooltipDirective } from '@gitlab/ui';
 import { getIdFromGraphQLId } from '~/graphql_shared/utils';
 import { truncateSha } from '~/lib/utils/text_utility';
 import { s__ } from '~/locale';
-import getPipelineQuery from '~/pipeline_editor/graphql/queries/client/pipeline.graphql';
-import getPipelineEtag from '~/pipeline_editor/graphql/queries/client/pipeline_etag.graphql';
+import getPipelineQuery from '~/pipeline_editor/graphql/queries/pipeline.query.graphql';
+import getPipelineEtag from '~/pipeline_editor/graphql/queries/client/pipeline_etag.query.graphql';
 import {
   getQueryHeaders,
   toggleQueryPollingByVisibility,
 } from '~/pipelines/components/graph/utils';
 import CiIcon from '~/vue_shared/components/ci_icon.vue';
+import PipelineEditorMiniGraph from './pipeline_editor_mini_graph.vue';
 
 const POLL_INTERVAL = 10000;
 export const i18n = {
@@ -19,6 +20,7 @@ export const i18n = {
     `Pipeline|Pipeline %{idStart}#%{idEnd} %{statusStart}%{statusEnd} for %{commitStart}%{commitEnd}`,
   ),
   viewBtn: s__('Pipeline|View pipeline'),
+  viewCommit: s__('Pipeline|View commit'),
 };
 
 export default {
@@ -30,6 +32,10 @@ export default {
     GlLink,
     GlLoadingIcon,
     GlSprintf,
+    PipelineEditorMiniGraph,
+  },
+  directives: {
+    GlTooltip: GlTooltipDirective,
   },
   inject: ['projectFullPath'],
   props: {
@@ -42,6 +48,9 @@ export default {
   apollo: {
     pipelineEtag: {
       query: getPipelineEtag,
+      update(data) {
+        return data.etags?.pipeline;
+      },
     },
     pipeline: {
       context() {
@@ -55,12 +64,16 @@ export default {
         };
       },
       update(data) {
-        const { id, commitPath = '', detailedStatus = {} } = data.project?.pipeline || {};
+        const { id, iid, commit = {}, detailedStatus = {}, stages, status } =
+          data.project?.pipeline || {};
 
         return {
           id,
-          commitPath,
+          iid,
+          commit,
           detailedStatus,
+          stages,
+          status,
         };
       },
       result(res) {
@@ -80,6 +93,16 @@ export default {
     };
   },
   computed: {
+    commitText() {
+      const shortSha = truncateSha(this.commitSha);
+      const commitTitle = this.pipeline.commit.title || '';
+
+      if (commitTitle.length > 0) {
+        return `${shortSha}: ${commitTitle}`;
+      }
+
+      return shortSha;
+    },
     hasPipelineData() {
       return Boolean(this.pipeline?.id);
     },
@@ -111,9 +134,7 @@ export default {
 </script>
 
 <template>
-  <div
-    class="gl-display-flex gl-justify-content-space-between gl-align-items-center gl-white-space-nowrap gl-max-w-full"
-  >
+  <div class="gl-display-flex gl-justify-content-space-between gl-align-items-center gl-flex-wrap">
     <template v-if="showLoadingState">
       <div>
         <gl-loading-icon class="gl-mr-auto gl-display-inline-block" size="sm" />
@@ -121,45 +142,39 @@ export default {
       </div>
     </template>
     <template v-else-if="hasError">
-      <div>
-        <gl-icon class="gl-mr-auto" name="warning-solid" />
-        <span data-testid="pipeline-error-msg">{{ $options.i18n.fetchError }}</span>
-      </div>
+      <gl-icon class="gl-mr-auto" name="warning-solid" />
+      <span data-testid="pipeline-error-msg">{{ $options.i18n.fetchError }}</span>
     </template>
     <template v-else>
-      <div>
+      <div class="gl-text-truncate gl-md-max-w-50p gl-mr-1">
         <a :href="status.detailsPath" class="gl-mr-auto">
-          <ci-icon :status="status" :size="16" />
+          <ci-icon :status="status" :size="16" data-testid="pipeline-status-icon" />
         </a>
         <span class="gl-font-weight-bold">
           <gl-sprintf :message="$options.i18n.pipelineInfo">
             <template #id="{ content }">
-              <gl-link
-                :href="status.detailsPath"
-                class="pipeline-id gl-font-weight-normal pipeline-number"
-                target="_blank"
-                data-testid="pipeline-id"
-              >
-                {{ content }}{{ pipelineId }}</gl-link
-              >
+              <span data-testid="pipeline-id" data-qa-selector="pipeline_id_content">
+                {{ content }}{{ pipelineId }}
+              </span>
             </template>
             <template #status>{{ status.text }}</template>
             <template #commit>
               <gl-link
-                :href="pipeline.commitPath"
-                class="commit-sha gl-font-weight-normal"
-                target="_blank"
+                v-gl-tooltip.hover
+                :href="pipeline.commit.webPath"
+                :title="$options.i18n.viewCommit"
                 data-testid="pipeline-commit"
               >
-                {{ shortSha }}
+                {{ commitText }}
               </gl-link>
             </template>
           </gl-sprintf>
         </span>
       </div>
-      <div>
+      <div class="gl-display-flex gl-flex-wrap">
+        <pipeline-editor-mini-graph :pipeline="pipeline" v-on="$listeners" />
         <gl-button
-          target="_blank"
+          class="gl-mt-2 gl-md-mt-0"
           category="secondary"
           variant="confirm"
           :href="status.detailsPath"

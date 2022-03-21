@@ -1,12 +1,11 @@
 import { TableCell } from '@tiptap/extension-table-cell';
 import { VueNodeViewRenderer } from '@tiptap/vue-2';
-import TableCellWrapper from '../components/wrappers/table_cell.vue';
-import { isBlockTablesFeatureEnabled } from '../services/feature_flags';
+import TableCellBodyWrapper from '../components/wrappers/table_cell_body.vue';
 
 export default TableCell.extend({
-  content: isBlockTablesFeatureEnabled() ? 'block+' : 'inline*',
+  content: 'block+',
 
   addNodeView() {
-    return VueNodeViewRenderer(TableCellWrapper);
+    return VueNodeViewRenderer(TableCellBodyWrapper);
   },
 });

@@ -1,6 +1,7 @@
 import { GlDropdown, GlSearchBoxByType, GlDropdownItem } from '@gitlab/ui';
 import { shallowMount } from '@vue/test-utils';
 
+import { nextTick } from 'vue';
 import DropdownWidget from '~/vue_shared/components/dropdown/dropdown_widget/dropdown_widget.vue';
 
 describe('DropdownWidget component', () => {
@@ -34,6 +35,7 @@ describe('DropdownWidget component', () => {
     // invokes `show` method of BDropdown used inside GlDropdown.
     // Context: https://gitlab.com/gitlab-org/gitlab/-/merge_requests/54895#note_524281679
     jest.spyOn(wrapper.vm, 'showDropdown').mockImplementation();
+    jest.spyOn(findDropdown().vm, 'hide').mockImplementation();
   };
 
   beforeEach(() => {
@@ -52,7 +54,7 @@ describe('DropdownWidget component', () => {
   describe('when dropdown is open', () => {
     beforeEach(async () => {
       findDropdown().vm.$emit('show');
-      await wrapper.vm.$nextTick();
+      await nextTick();
     });
 
     it('emits search event when typing in search box', () => {
@@ -67,11 +69,8 @@ describe('DropdownWidget component', () => {
     });
 
     it('emits set-option event when clicking on an option', async () => {
-      wrapper
-        .findAll('[data-testid="unselected-option"]')
-        .at(1)
-        .vm.$emit('click', new Event('click'));
-      await wrapper.vm.$nextTick();
+      wrapper.findAll('[data-testid="unselected-option"]').at(1).trigger('click');
+      await nextTick();
 
       expect(wrapper.emitted('set-option')).toEqual([[wrapper.props().options[1]]]);
     });

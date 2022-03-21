@@ -44,7 +44,7 @@ RSpec.describe IssuablesDescriptionTemplatesHelper, :clean_gitlab_redis_cache do
     end
   end
 
-  describe '#issuable_templates_names' do
+  describe '#selected_template' do
     let_it_be(:project) { build(:project) }
 
     before do
@@ -56,29 +56,52 @@ RSpec.describe IssuablesDescriptionTemplatesHelper, :clean_gitlab_redis_cache do
       let(:templates) do
         {
           "" => [
-            { name: "another_issue_template", id: "another_issue_template" },
-            { name: "custom_issue_template", id: "custom_issue_template" }
+            { name: "another_issue_template", id: "another_issue_template", project_id: project.id },
+            { name: "custom_issue_template", id: "custom_issue_template", project_id: project.id }
           ]
         }
       end
 
-      it 'returns project templates only' do
-        expect(helper.issuable_templates_names(Issue.new)).to eq(%w[another_issue_template custom_issue_template])
-      end
-    end
-
-    context 'without matching project templates' do
-      let(:templates) do
-        {
-          "Project Templates" => [
-            { name: "another_issue_template", id: "another_issue_template", project_id: non_existing_record_id },
-            { name: "custom_issue_template", id: "custom_issue_template", project_id: non_existing_record_id }
-          ]
-        }
+      it 'returns project templates' do
+        value = [
+            "",
+            [
+              { name: "another_issue_template", id: "another_issue_template", project_id: project.id },
+              { name: "custom_issue_template", id: "custom_issue_template", project_id: project.id }
+            ]
+          ].to_json
+        expect(helper.available_service_desk_templates_for(@project)).to eq(value)
       end
 
-      it 'returns empty array' do
-        expect(helper.issuable_templates_names(Issue.new)).to eq([])
+      context 'when no issuable_template parameter or default template is present' do
+        it 'does not select a template' do
+          expect(helper.selected_template(project)).to be(nil)
+        end
+      end
+
+      context 'when an issuable_template parameter has been provided' do
+        before do
+          allow(helper).to receive(:params).and_return({ issuable_template: 'another_issue_template' })
+        end
+
+        it 'selects the issuable template' do
+          expect(helper.selected_template(project)).to eq('another_issue_template')
+        end
+      end
+
+      context 'when there is a default template' do
+        let(:templates) do
+          {
+            "" => [
+              { name: "another_issue_template", id: "another_issue_template", project_id: project.id },
+              { name: "default", id: "default", project_id: project.id }
+            ]
+          }
+        end
+
+        it 'selects the default template' do
+          expect(helper.selected_template(project)).to eq('default')
+        end
       end
     end
 
@@ -86,7 +109,8 @@ RSpec.describe IssuablesDescriptionTemplatesHelper, :clean_gitlab_redis_cache do
       let(:templates) { {} }
 
       it 'returns empty array' do
-        expect(helper.issuable_templates_names(Issue.new)).to eq([])
+        value = [].to_json
+        expect(helper.available_service_desk_templates_for(@project)).to eq(value)
       end
     end
   end

@@ -13,11 +13,8 @@ import DiffFile from '~/diffs/components/diff_file.vue';
 import NoChanges from '~/diffs/components/no_changes.vue';
 import TreeList from '~/diffs/components/tree_list.vue';
 
-/* eslint-disable import/order */
-/* You know what: sometimes alphabetical isn't the best order */
 import CollapsedFilesWarning from '~/diffs/components/collapsed_files_warning.vue';
 import HiddenFilesWarning from '~/diffs/components/hidden_files_warning.vue';
-/* eslint-enable import/order */
 
 import axios from '~/lib/utils/axios_utils';
 import * as urlUtils from '~/lib/utils/url_utility';
@@ -72,6 +69,12 @@ describe('diffs/components/app', () => {
       },
       provide,
       store,
+      stubs: {
+        DynamicScroller: {
+          template: `<div><slot :item="$store.state.diffs.diffFiles[0]"></slot></div>`,
+        },
+        DynamicScrollerItem: true,
+      },
     });
   }
 
@@ -157,22 +160,6 @@ describe('diffs/components/app', () => {
     });
   });
 
-  it.each`
-    props                      | state                                                              | expected
-    ${{ isFluidLayout: true }} | ${{ isParallelView: false }}                                       | ${false}
-    ${{}}                      | ${{ isParallelView: false }}                                       | ${true}
-    ${{}}                      | ${{ showTreeList: true, diffFiles: [{}], isParallelView: false }}  | ${false}
-    ${{}}                      | ${{ showTreeList: false, diffFiles: [{}], isParallelView: false }} | ${true}
-    ${{}}                      | ${{ showTreeList: false, diffFiles: [], isParallelView: false }}   | ${true}
-  `(
-    'uses container-limiting classes ($expected) with state ($state) and props ($props)',
-    ({ props, state, expected }) => {
-      createComponent(props, ({ state: origState }) => Object.assign(origState.diffs, state));
-
-      expect(wrapper.find('.container-limited.limit-container-width').exists()).toBe(expected);
-    },
-  );
-
   it('displays loading icon on loading', () => {
     createComponent({}, ({ state }) => {
       state.diffs.isLoading = true;
@@ -183,7 +170,7 @@ describe('diffs/components/app', () => {
 
   it('displays loading icon on batch loading', () => {
     createComponent({}, ({ state }) => {
-      state.diffs.isBatchLoading = true;
+      state.diffs.batchLoadingState = 'loading';
     });
 
     expect(wrapper.find(GlLoadingIcon).exists()).toBe(true);
@@ -391,15 +378,24 @@ describe('diffs/components/app', () => {
 
       wrapper.vm.jumpToFile(+1);
 
-      expect(spy.mock.calls[spy.mock.calls.length - 1]).toEqual(['diffs/scrollToFile', '222.js']);
+      expect(spy.mock.calls[spy.mock.calls.length - 1]).toEqual([
+        'diffs/scrollToFile',
+        { path: '222.js' },
+      ]);
       store.state.diffs.currentDiffFileId = '222';
       wrapper.vm.jumpToFile(+1);
 
-      expect(spy.mock.calls[spy.mock.calls.length - 1]).toEqual(['diffs/scrollToFile', '333.js']);
+      expect(spy.mock.calls[spy.mock.calls.length - 1]).toEqual([
+        'diffs/scrollToFile',
+        { path: '333.js' },
+      ]);
       store.state.diffs.currentDiffFileId = '333';
       wrapper.vm.jumpToFile(-1);
 
-      expect(spy.mock.calls[spy.mock.calls.length - 1]).toEqual(['diffs/scrollToFile', '222.js']);
+      expect(spy.mock.calls[spy.mock.calls.length - 1]).toEqual([
+        'diffs/scrollToFile',
+        { path: '222.js' },
+      ]);
     });
 
     it('does not jump to previous file from the first one', async () => {
@@ -492,7 +488,6 @@ describe('diffs/components/app', () => {
       expect(wrapper.find(CompareVersions).exists()).toBe(true);
       expect(wrapper.find(CompareVersions).props()).toEqual(
         expect.objectContaining({
-          isLimitedContainer: false,
           diffFilesCountText: null,
         }),
       );
@@ -703,26 +698,6 @@ describe('diffs/components/app', () => {
           expect(wrapper.vm.navigateToDiffFileIndex).toHaveBeenCalledWith(targetFile - 1);
         },
       );
-    });
-  });
-
-  describe('diff file tree is aware of review bar', () => {
-    it('it does not have review-bar-visible class when review bar is not visible', () => {
-      createComponent({}, ({ state }) => {
-        state.diffs.diffFiles = [{ file_hash: '111', file_path: '111.js' }];
-      });
-
-      expect(wrapper.find('.js-diff-tree-list').exists()).toBe(true);
-      expect(wrapper.find('.js-diff-tree-list.review-bar-visible').exists()).toBe(false);
-    });
-
-    it('it does have review-bar-visible class when review bar is visible', () => {
-      createComponent({}, ({ state }) => {
-        state.diffs.diffFiles = [{ file_hash: '111', file_path: '111.js' }];
-        state.batchComments.drafts = ['draft message'];
-      });
-
-      expect(wrapper.find('.js-diff-tree-list.review-bar-visible').exists()).toBe(true);
     });
   });
 });

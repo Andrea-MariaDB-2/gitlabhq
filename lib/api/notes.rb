@@ -4,9 +4,13 @@ module API
   class Notes < ::API::Base
     include PaginationParams
     helpers ::API::Helpers::NotesHelpers
-    helpers Helpers::RateLimiter
 
     before { authenticate! }
+
+    urgency :low, [
+      '/projects/:id/merge_requests/:noteable_id/notes',
+      '/projects/:id/merge_requests/:noteable_id/notes/:note_id'
+    ]
 
     Helpers::NotesHelpers.feature_category_per_noteable_type.each do |noteable_type, feature_category|
       parent_type = noteable_type.parent_class.to_s.underscore
@@ -71,11 +75,12 @@ module API
           requires :body, type: String, desc: 'The content of a note'
           optional :confidential, type: Boolean, desc: 'Confidentiality note flag, default is false'
           optional :created_at, type: String, desc: 'The creation date of the note'
+          optional :merge_request_diff_head_sha, type: String, desc: 'The SHA of the head commit'
         end
         post ":id/#{noteables_str}/:noteable_id/notes", feature_category: feature_category do
           allowlist =
             Gitlab::CurrentSettings.current_application_settings.notes_create_limit_allowlist
-          check_rate_limit! :notes_create, [current_user], allowlist
+          check_rate_limit! :notes_create, scope: current_user, users_allowlist: allowlist
           noteable = find_noteable(noteable_type, params[:noteable_id])
 
           opts = {
@@ -83,12 +88,13 @@ module API
             noteable_type: noteables_str.classify,
             noteable_id: noteable.id,
             confidential: params[:confidential],
-            created_at: params[:created_at]
+            created_at: params[:created_at],
+            merge_request_diff_head_sha: params[:merge_request_diff_head_sha]
           }
 
           note = create_note(noteable, opts)
 
-          if note.errors.keys == [:commands_only]
+          if note.errors.attribute_names == [:commands_only]
             status 202
             present note, with: Entities::NoteCommands
           elsif note.valid?

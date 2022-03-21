@@ -10,10 +10,10 @@ import {
   GlSafeHtmlDirective as SafeHtml,
   GlSprintf,
 } from '@gitlab/ui';
-import { mergeUrlParams, webIDEUrl } from '~/lib/utils/url_utility';
+import { constructWebIDEPath } from '~/lib/utils/url_utility';
 import { s__ } from '~/locale';
 import clipboardButton from '~/vue_shared/components/clipboard_button.vue';
-import TooltipOnTruncate from '~/vue_shared/components/tooltip_on_truncate.vue';
+import TooltipOnTruncate from '~/vue_shared/components/tooltip_on_truncate/tooltip_on_truncate.vue';
 import WebIdeLink from '~/vue_shared/components/web_ide_link.vue';
 import MrWidgetHowToMergeModal from './mr_widget_how_to_merge_modal.vue';
 import MrWidgetIcon from './mr_widget_icon.vue';
@@ -58,15 +58,7 @@ export default {
       });
     },
     webIdePath() {
-      return mergeUrlParams(
-        {
-          target_project:
-            this.mr.sourceProjectFullPath !== this.mr.targetProjectFullPath
-              ? this.mr.targetProjectFullPath
-              : '',
-        },
-        webIDEUrl(`/${this.mr.sourceProjectFullPath}/merge_requests/${this.mr.iid}`),
-      );
+      return constructWebIDEPath(this.mr);
     },
     isFork() {
       return this.mr.sourceProjectFullPath !== this.mr.targetProjectFullPath;
@@ -79,7 +71,7 @@ export default {
 };
 </script>
 <template>
-  <div class="d-flex mr-source-target gl-mb-3">
+  <div class="gl-display-flex mr-source-target">
     <mr-widget-icon name="git-merge" />
     <div class="git-merge-container d-flex">
       <div class="normal">
@@ -127,6 +119,8 @@ export default {
             :show-gitpod-button="mr.showGitpodButton"
             :gitpod-url="mr.gitpodUrl"
             :gitpod-enabled="mr.gitpodEnabled"
+            :user-preferences-gitpod-path="mr.userPreferencesGitpodPath"
+            :user-profile-enable-gitpod-path="mr.userProfileEnableGitpodPath"
             :gitpod-text="$options.i18n.gitpodText"
             class="gl-display-none gl-md-display-inline-block gl-mr-3"
             data-placement="bottom"
@@ -159,7 +153,7 @@ export default {
           right
           data-qa-selector="download_dropdown"
         >
-          <gl-dropdown-section-header>{{ s__('Download as') }}</gl-dropdown-section-header>
+          <gl-dropdown-section-header>{{ __('Download as') }}</gl-dropdown-section-header>
           <gl-dropdown-item
             :href="mr.emailPatchesPath"
             class="js-download-email-patches"

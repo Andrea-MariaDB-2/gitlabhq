@@ -39,7 +39,7 @@ RSpec.describe Banzai::Filter::FrontMatterFilter do
 
     aggregate_failures do
       expect(output).not_to include '---'
-      expect(output).to include "```yaml\nfoo: :foo_symbol\n"
+      expect(output).to include "```yaml:frontmatter\nfoo: :foo_symbol\n"
     end
   end
 
@@ -59,7 +59,7 @@ RSpec.describe Banzai::Filter::FrontMatterFilter do
 
     aggregate_failures do
       expect(output).not_to include '+++'
-      expect(output).to include "```toml\nfoo = :foo_symbol\n"
+      expect(output).to include "```toml:frontmatter\nfoo = :foo_symbol\n"
     end
   end
 
@@ -81,7 +81,7 @@ RSpec.describe Banzai::Filter::FrontMatterFilter do
 
     aggregate_failures do
       expect(output).not_to include ';;;'
-      expect(output).to include "```json\n{\n  \"foo\": \":foo_symbol\",\n"
+      expect(output).to include "```json:frontmatter\n{\n  \"foo\": \":foo_symbol\",\n"
     end
   end
 
@@ -101,7 +101,57 @@ RSpec.describe Banzai::Filter::FrontMatterFilter do
 
     aggregate_failures do
       expect(output).not_to include '---arbitrary'
-      expect(output).to include "```arbitrary\nfoo = :foo_symbol\n"
+      expect(output).to include "```arbitrary:frontmatter\nfoo = :foo_symbol\n"
+    end
+  end
+
+  context 'source position mapping' do
+    it 'keeps spaces before and after' do
+      content = <<~MD
+
+
+        ---
+
+        foo: :foo_symbol
+
+        ---  
+
+
+        # Header
+      MD
+
+      output = filter(content)
+
+      expect(output).to eq <<~MD
+
+
+        ```yaml:frontmatter
+
+        foo: :foo_symbol
+
+        ```
+
+
+        # Header
+      MD
+    end
+
+    it 'keeps an empty line in place of the encoding' do
+      content = <<~MD
+        # encoding: UTF-8
+        ---
+        foo: :foo_symbol
+        ---
+      MD
+
+      output = filter(content)
+
+      expect(output).to eq <<~MD
+
+        ```yaml:frontmatter
+        foo: :foo_symbol
+        ```
+      MD
     end
   end
 
@@ -119,7 +169,7 @@ RSpec.describe Banzai::Filter::FrontMatterFilter do
 
   context 'on front matter without content' do
     it 'converts YAML front matter to a fenced code block' do
-      content = <<~MD
+      content = <<~MD.rstrip
         ---
         foo: :foo_symbol
         bar: :bar_symbol
@@ -130,13 +180,28 @@ RSpec.describe Banzai::Filter::FrontMatterFilter do
 
       aggregate_failures do
         expect(output).to eq <<~MD
-          ```yaml
+          ```yaml:frontmatter
           foo: :foo_symbol
           bar: :bar_symbol
           ```
-
         MD
       end
     end
+  end
+
+  it 'fails fast for strings with many spaces' do
+    content = "coding:" + " " * 50_000 + ";"
+
+    expect do
+      Timeout.timeout(3.seconds) { filter(content) }
+    end.not_to raise_error
+  end
+
+  it 'fails fast for strings with many newlines' do
+    content = "coding:\n" + ";;;" + "\n" * 10_000 + "x"
+
+    expect do
+      Timeout.timeout(3.seconds) { filter(content) }
+    end.not_to raise_error
   end
 end

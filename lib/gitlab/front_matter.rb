@@ -11,14 +11,12 @@ module Gitlab
     DELIM = Regexp.union(DELIM_LANG.keys)
 
     PATTERN = %r{
-      \A(?:[^\r\n]*coding:[^\r\n]*)?         # optional encoding line
-      \s*
-      ^(?<delim>#{DELIM})[ \t]*(?<lang>\S*)  # opening front matter marker (optional language specifier)
-      \s*
-      ^(?<front_matter>.*?)                  # front matter block content (not greedy)
-      \s*
-      ^(\k<delim> | \.{3})                   # closing front matter marker
-      \s*
+      \A(?<encoding>[^\r\n]*coding:[^\r\n]*\R)? # optional encoding line
+      (?<before>\s*)
+      ^(?<delim>#{DELIM})[ \t]*(?<lang>\S*)\R # opening front matter marker (optional language specifier)
+      (?<front_matter>.*?)                    # front matter block content (not greedy)
+      ^(\k<delim> | \.{3})                    # closing front matter marker
+      [^\S\r\n]*(\R|\z)
     }mx.freeze
   end
 end

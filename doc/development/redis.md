@@ -6,18 +6,22 @@ info: To determine the technical writer assigned to the Stage/Group associated w
 
 # Redis guidelines
 
+## Redis instances
+
 GitLab uses [Redis](https://redis.io) for the following distinct purposes:
 
 - Caching (mostly via `Rails.cache`).
 - As a job processing queue with [Sidekiq](sidekiq_style_guide.md).
 - To manage the shared application state.
+- To store CI trace chunks.
 - As a Pub/Sub queue backend for ActionCable.
+- Rate limiting state storage.
+- Sessions.
 
 In most environments (including the GDK), all of these point to the same
 Redis instance.
 
-On GitLab.com, we use [separate Redis
-instances](../administration/redis/replication_and_failover.md#running-multiple-redis-clusters).
+On GitLab.com, we use [separate Redis instances](../administration/redis/replication_and_failover.md#running-multiple-redis-clusters).
 See the [Redis SRE guide](https://gitlab.com/gitlab-com/runbooks/-/blob/master/docs/redis/redis-survival-guide-for-sres.md)
 for more details on our setup.
 
@@ -28,6 +32,8 @@ more often than it is read.
 
 If [Geo](geo.md) is enabled, each Geo node gets its own, independent Redis
 database.
+
+We have [development documentation on adding a new Redis instance](redis/new_redis_instance.md).
 
 ## Key naming
 
@@ -114,8 +120,7 @@ on GitLab.com
 
 On GitLab.com, entries from the [Redis
 slow log](https://redis.io/commands/slowlog) are available in the
-`pubsub-redis-inf-gprd*` index with the [`redis.slowlog`
-tag](https://log.gprd.gitlab.net/app/kibana#/discover?_g=(filters:!(),refreshInterval:(pause:!t,value:0),time:(from:now-1d,to:now))&_a=(columns:!(json.type,json.command,json.exec_time_s),filters:!(('$state':(store:appState),meta:(alias:!n,disabled:!f,index:AWSQX_Vf93rHTYrsexmk,key:json.tag,negate:!f,params:(query:redis.slowlog),type:phrase),query:(match:(json.tag:(query:redis.slowlog,type:phrase))))),index:AWSQX_Vf93rHTYrsexmk)).
+`pubsub-redis-inf-gprd*` index with the [`redis.slowlog` tag](https://log.gprd.gitlab.net/app/kibana#/discover?_g=(filters:!(),refreshInterval:(pause:!t,value:0),time:(from:now-1d,to:now))&_a=(columns:!(json.type,json.command,json.exec_time_s),filters:!(('$state':(store:appState),meta:(alias:!n,disabled:!f,index:AWSQX_Vf93rHTYrsexmk,key:json.tag,negate:!f,params:(query:redis.slowlog),type:phrase),query:(match:(json.tag:(query:redis.slowlog,type:phrase))))),index:AWSQX_Vf93rHTYrsexmk)).
 This shows commands that have taken a long time and may be a performance
 concern.
 

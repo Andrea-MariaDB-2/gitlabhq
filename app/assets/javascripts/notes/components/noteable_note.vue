@@ -3,9 +3,11 @@ import { GlSprintf, GlSafeHtmlDirective as SafeHtml } from '@gitlab/ui';
 import $ from 'jquery';
 import { escape, isEmpty } from 'lodash';
 import { mapGetters, mapActions } from 'vuex';
+import { confirmAction } from '~/lib/utils/confirm_via_gl_modal/confirm_via_gl_modal';
 import { INLINE_DIFF_LINES_KEY } from '~/diffs/constants';
 import createFlash from '~/flash';
 import httpStatusCodes from '~/lib/utils/http_status';
+import { ignoreWhilePending } from '~/lib/utils/ignore_while_pending';
 import { truncateSha } from '~/lib/utils/text_utility';
 import TimelineEntryItem from '~/vue_shared/components/notes/timeline_entry_item.vue';
 import { __, s__, sprintf } from '../../locale';
@@ -83,6 +85,11 @@ export default {
       type: String,
       required: false,
       default: '',
+    },
+    isOverviewTab: {
+      type: Boolean,
+      required: false,
+      default: false,
     },
   },
   data() {
@@ -186,6 +193,14 @@ export default {
 
       return fileResolvedFromAvailableSource || null;
     },
+    avatarSize() {
+      // Use a different size if shown on a Merge Request Diff
+      if (this.line && !this.isOverviewTab) {
+        return 24;
+      }
+
+      return 40;
+    },
   },
   created() {
     const line = this.note.position?.line_range?.start || this.line;
@@ -230,14 +245,18 @@ export default {
       this.setSelectedCommentPositionHover();
       this.$emit('handleEdit');
     },
-    deleteHandler() {
+    async deleteHandler() {
       const typeOfComment = this.note.isDraft ? __('pending comment') : __('comment');
-      if (
-        // eslint-disable-next-line no-alert
-        window.confirm(
-          sprintf(__('Are you sure you want to delete this %{typeOfComment}?'), { typeOfComment }),
-        )
-      ) {
+
+      const msg = sprintf(__('Are you sure you want to delete this %{typeOfComment}?'), {
+        typeOfComment,
+      });
+      const confirmed = await confirmAction(msg, {
+        primaryBtnVariant: 'danger',
+        primaryBtnText: __('Delete Comment'),
+      });
+
+      if (confirmed) {
         this.isDeleting = true;
         this.$emit('handleDeleteNote', this.note);
 
@@ -318,21 +337,28 @@ export default {
             this.isEditing = true;
             this.setSelectedCommentPositionHover();
             this.$nextTick(() => {
-              const msg = __('Something went wrong while editing your comment. Please try again.');
-              createFlash({
-                message: msg,
-                parent: this.$el,
-              });
+              this.handleUpdateError(response); // The 'response' parameter is being used in JH, don't remove it
               this.recoverNoteContent(noteText);
               callback();
             });
           }
         });
     },
-    formCancelHandler({ shouldConfirm, isDirty }) {
+    handleUpdateError() {
+      const msg = __('Something went wrong while editing your comment. Please try again.');
+      createFlash({
+        message: msg,
+        parent: this.$el,
+      });
+    },
+    formCancelHandler: ignoreWhilePending(async function formCancelHandler({
+      shouldConfirm,
+      isDirty,
+    }) {
       if (shouldConfirm && isDirty) {
-        // eslint-disable-next-line no-alert
-        if (!window.confirm(__('Are you sure you want to cancel editing this comment?'))) return;
+        const msg = __('Are you sure you want to cancel editing this comment?');
+        const confirmed = await confirmAction(msg);
+        if (!confirmed) return;
       }
       this.$refs.noteBody.resetAutoSave();
       if (this.oldContent) {
@@ -342,7 +368,7 @@ export default {
       }
       this.isEditing = false;
       this.$emit('cancelForm');
-    },
+    }),
     recoverNoteContent(noteText) {
       // we need to do this to prevent noteForm inconsistent content warning
       // this is something we intentionally do so we need to recover the content
@@ -375,7 +401,7 @@ export default {
     <div
       v-if="showMultiLineComment"
       data-testid="multiline-comment"
-      class="gl-mb-3 gl-text-gray-500 gl-border-gray-200 gl-border-b-solid gl-border-b-1 gl-pb-3"
+      class="gl-mb-5 gl-text-gray-500 gl-border-gray-100 gl-border-b-solid gl-border-b-1 gl-pb-4"
     >
       <gl-sprintf :message="__('Comment on lines %{startLine} to %{endLine}')">
         <template #startLine>
@@ -391,7 +417,7 @@ export default {
         :link-href="author.path"
         :img-src="author.avatar_url"
         :img-alt="author.name"
-        :img-size="40"
+        :img-size="avatarSize"
         lazy
       >
         <template #avatar-badge>

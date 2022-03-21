@@ -2,6 +2,7 @@ import { GlSprintf, GlModal, GlFormGroup, GlFormCheckbox, GlLoadingIcon } from '
 import { shallowMount } from '@vue/test-utils';
 import axios from 'axios';
 import MockAdapter from 'axios-mock-adapter';
+import { nextTick } from 'vue';
 import { extendedWrapper } from 'helpers/vue_test_utils_helper';
 import waitForPromises from 'helpers/wait_for_promises';
 import httpStatus from '~/lib/utils/http_status';
@@ -88,6 +89,8 @@ describe('CustomNotificationsModal', () => {
       beforeEach(async () => {
         wrapper = createComponent();
 
+        // setData usage is discouraged. See https://gitlab.com/groups/gitlab-org/-/epics/7330 for details
+        // eslint-disable-next-line no-restricted-syntax
         wrapper.setData({
           events: [
             { id: 'new_release', enabled: true, name: 'New release', loading: false },
@@ -95,7 +98,7 @@ describe('CustomNotificationsModal', () => {
           ],
         });
 
-        await wrapper.vm.$nextTick();
+        await nextTick();
       });
 
       it.each`
@@ -211,6 +214,8 @@ describe('CustomNotificationsModal', () => {
 
           wrapper = createComponent({ injectedProperties });
 
+          // setData usage is discouraged. See https://gitlab.com/groups/gitlab-org/-/epics/7330 for details
+          // eslint-disable-next-line no-restricted-syntax
           wrapper.setData({
             events: [
               { id: 'new_release', enabled: true, name: 'New release', loading: false },
@@ -218,7 +223,7 @@ describe('CustomNotificationsModal', () => {
             ],
           });
 
-          await wrapper.vm.$nextTick();
+          await nextTick();
 
           findCheckboxAt(1).vm.$emit('change', true);
 
@@ -239,6 +244,8 @@ describe('CustomNotificationsModal', () => {
         mockAxios.onPut('/api/v4/notification_settings').reply(httpStatus.NOT_FOUND, {});
         wrapper = createComponent();
 
+        // setData usage is discouraged. See https://gitlab.com/groups/gitlab-org/-/epics/7330 for details
+        // eslint-disable-next-line no-restricted-syntax
         wrapper.setData({
           events: [
             { id: 'new_release', enabled: true, name: 'New release', loading: false },
@@ -246,7 +253,7 @@ describe('CustomNotificationsModal', () => {
           ],
         });
 
-        await wrapper.vm.$nextTick();
+        await nextTick();
 
         findCheckboxAt(1).vm.$emit('change', true);
 

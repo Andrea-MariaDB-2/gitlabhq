@@ -1,7 +1,6 @@
 import { GlModal } from '@gitlab/ui';
-import { shallowMount } from '@vue/test-utils';
 import setWindowLocation from 'helpers/set_window_location_helper';
-import { TEST_HOST } from 'helpers/test_constants';
+import { shallowMountExtended } from 'helpers/vue_test_utils_helper';
 import waitForPromises from 'helpers/wait_for_promises';
 
 import BoardForm from '~/boards/components/board_form.vue';
@@ -18,21 +17,20 @@ jest.mock('~/lib/utils/url_utility', () => ({
 }));
 
 const currentBoard = {
-  id: 1,
+  id: 'gid://gitlab/Board/1',
   name: 'test',
   labels: [],
-  milestone_id: undefined,
+  milestone: {},
   assignee: {},
-  assignee_id: undefined,
+  iteration: {},
+  iterationCadence: {},
   weight: null,
-  hide_backlog_list: false,
-  hide_closed_list: false,
+  hideBacklogList: false,
+  hideClosedList: false,
 };
 
 const defaultProps = {
   canAdminBoard: false,
-  labelsPath: `${TEST_HOST}/labels/path`,
-  labelsWebUrl: `${TEST_HOST}/-/labels`,
   currentBoard,
   currentPage: '',
 };
@@ -41,11 +39,11 @@ describe('BoardForm', () => {
   let wrapper;
   let mutate;
 
-  const findModal = () => wrapper.find(GlModal);
+  const findModal = () => wrapper.findComponent(GlModal);
   const findModalActionPrimary = () => findModal().props('actionPrimary');
-  const findForm = () => wrapper.find('[data-testid="board-form"]');
-  const findFormWrapper = () => wrapper.find('[data-testid="board-form-wrapper"]');
-  const findDeleteConfirmation = () => wrapper.find('[data-testid="delete-confirmation-message"]');
+  const findForm = () => wrapper.findByTestId('board-form');
+  const findFormWrapper = () => wrapper.findByTestId('board-form-wrapper');
+  const findDeleteConfirmation = () => wrapper.findByTestId('delete-confirmation-message');
   const findInput = () => wrapper.find('#board-new-name');
 
   const store = createStore({
@@ -56,7 +54,7 @@ describe('BoardForm', () => {
   });
 
   const createComponent = (props, data) => {
-    wrapper = shallowMount(BoardForm, {
+    wrapper = shallowMountExtended(BoardForm, {
       propsData: { ...defaultProps, ...props },
       data() {
         return {
@@ -134,7 +132,7 @@ describe('BoardForm', () => {
 
       it('passes correct primary action text and variant', () => {
         expect(findModalActionPrimary().text).toBe('Create board');
-        expect(findModalActionPrimary().attributes[0].variant).toBe('success');
+        expect(findModalActionPrimary().attributes[0].variant).toBe('confirm');
       });
 
       it('does not render delete confirmation message', () => {
@@ -252,7 +250,7 @@ describe('BoardForm', () => {
         mutation: updateBoardMutation,
         variables: {
           input: expect.objectContaining({
-            id: `gid://gitlab/Board/${currentBoard.id}`,
+            id: currentBoard.id,
           }),
         },
       });
@@ -278,7 +276,7 @@ describe('BoardForm', () => {
         mutation: updateBoardMutation,
         variables: {
           input: expect.objectContaining({
-            id: `gid://gitlab/Board/${currentBoard.id}`,
+            id: currentBoard.id,
           }),
         },
       });
@@ -326,7 +324,7 @@ describe('BoardForm', () => {
       expect(mutate).toHaveBeenCalledWith({
         mutation: destroyBoardMutation,
         variables: {
-          id: 'gid://gitlab/Board/1',
+          id: currentBoard.id,
         },
       });
 

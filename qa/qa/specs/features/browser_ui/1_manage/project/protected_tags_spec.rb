@@ -2,8 +2,7 @@
 
 module QA
   RSpec.describe 'Manage' do
-    # TODO: Remove :requires_admin meta when the `Runtime::Feature.enable` method call is removed
-    describe 'Repository tags', :requires_admin do
+    describe 'Repository tags', :reliable do
       let(:project) do
         Resource::Project.fabricate_via_api! do |project|
           project.name = 'project-for-tags'
@@ -11,18 +10,20 @@ module QA
         end
       end
 
-      before do
-        Runtime::Feature.enable(:invite_members_group_modal, project: project)
+      let(:developer_user) do
+        Resource::User.fabricate_or_use(Runtime::Env.gitlab_qa_username_1, Runtime::Env.gitlab_qa_password_1)
       end
 
-      let(:developer_user) { Resource::User.fabricate_or_use(Runtime::Env.gitlab_qa_username_1, Runtime::Env.gitlab_qa_password_1) }
-      let(:maintainer_user) { Resource::User.fabricate_or_use(Runtime::Env.gitlab_qa_username_2, Runtime::Env.gitlab_qa_password_2) }
+      let(:maintainer_user) do
+        Resource::User.fabricate_or_use(Runtime::Env.gitlab_qa_username_2, Runtime::Env.gitlab_qa_password_2)
+      end
+
       let(:tag_name) { 'v0.0.1' }
       let(:tag_message) { 'Version 0.0.1' }
       let(:tag_release_notes) { 'Release It!' }
 
-      shared_examples 'successful tag creation' do |user|
-        it "can be created by #{user}" do
+      shared_examples 'successful tag creation' do |user, testcase|
+        it "can be created by #{user}", testcase: testcase do
           Flow::Login.sign_in(as: send(user))
 
           create_tag_for_project(project, tag_name, tag_message, tag_release_notes)
@@ -36,8 +37,8 @@ module QA
         end
       end
 
-      shared_examples 'unsuccessful tag creation' do |user|
-        it "cannot be created by an unauthorized #{user}" do
+      shared_examples 'unsuccessful tag creation' do |user, testcase|
+        it "cannot be created by an unauthorized #{user}", testcase: testcase do
           Flow::Login.sign_in(as: send(user))
 
           create_tag_for_project(project, tag_name, tag_message, tag_release_notes)
@@ -54,8 +55,8 @@ module QA
           add_members_to_project(project)
         end
 
-        it_behaves_like 'successful tag creation', :developer_user
-        it_behaves_like 'successful tag creation', :maintainer_user
+        it_behaves_like 'successful tag creation', :developer_user, 'https://gitlab.com/gitlab-org/gitlab/-/quality/test_cases/347930'
+        it_behaves_like 'successful tag creation', :maintainer_user, 'https://gitlab.com/gitlab-org/gitlab/-/quality/test_cases/347929'
       end
 
       context 'when protected' do
@@ -69,8 +70,8 @@ module QA
           Page::Main::Menu.perform(&:sign_out)
         end
 
-        it_behaves_like 'unsuccessful tag creation', :developer_user
-        it_behaves_like 'successful tag creation', :maintainer_user
+        it_behaves_like 'unsuccessful tag creation', :developer_user, 'https://gitlab.com/gitlab-org/gitlab/-/quality/test_cases/347927'
+        it_behaves_like 'successful tag creation', :maintainer_user, 'https://gitlab.com/gitlab-org/gitlab/-/quality/test_cases/347928'
       end
 
       def create_tag_for_project(project, name, message, release_notes)

@@ -1,9 +1,13 @@
 import { __ } from '~/locale';
 
 export const MERGE_DISABLED_TEXT = __('You can only merge once the items above are resolved.');
+export const MERGE_DISABLED_SKIPPED_PIPELINE_TEXT = __(
+  "Merge blocked: pipeline must succeed. It's waiting for a manual job to continue.",
+);
 export const PIPELINE_MUST_SUCCEED_CONFLICT_TEXT = __(
   'A CI/CD pipeline must run and be successful before merge.',
 );
+export const PIPELINE_SKIPPED_STATUS = 'SKIPPED';
 
 export default {
   computed: {
@@ -16,7 +20,18 @@ export default {
           this.mr.preventMerge,
       );
     },
+    shouldShowMergeControls() {
+      if (this.glFeatures.restructuredMrWidget) {
+        return this.restructuredWidgetShowMergeButtons;
+      }
+
+      return this.isMergeAllowed || this.isAutoMergeAvailable;
+    },
     mergeDisabledText() {
+      if (this.pipeline?.status === PIPELINE_SKIPPED_STATUS) {
+        return MERGE_DISABLED_SKIPPED_PIPELINE_TEXT;
+      }
+
       return MERGE_DISABLED_TEXT;
     },
     pipelineMustSucceedConflictText() {
@@ -32,13 +47,13 @@ export default {
     isMergeImmediatelyDangerous() {
       return false;
     },
-    shouldRenderMergeTrainHelperText() {
+    shouldRenderMergeTrainHelperIcon() {
       return false;
     },
     pipelineId() {
       return this.pipeline.id;
     },
-    showFailedPipelineModal() {
+    showFailedPipelineModalMergeTrain() {
       return false;
     },
   },

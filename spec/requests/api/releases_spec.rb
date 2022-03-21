@@ -42,6 +42,14 @@ RSpec.describe API::Releases do
         expect(response).to have_gitlab_http_status(:ok)
       end
 
+      it 'returns 200 HTTP status when using JOB-TOKEN auth' do
+        job = create(:ci_build, :running, project: project, user: maintainer)
+
+        get api("/projects/#{project.id}/releases"), params: { job_token: job.token }
+
+        expect(response).to have_gitlab_http_status(:ok)
+      end
+
       it 'returns releases ordered by released_at' do
         get api("/projects/#{project.id}/releases", maintainer)
 
@@ -152,7 +160,7 @@ RSpec.describe API::Releases do
         get api("/projects/#{project.id}/releases", maintainer)
       end.count
 
-      create_list(:release, 2, :with_evidence, project: project, tag: 'v0.1', author: maintainer)
+      create_list(:release, 2, :with_evidence, project: project, author: maintainer)
       create_list(:release, 2, project: project)
       create_list(:release_link, 2, release: project.releases.first)
       create_list(:release_link, 2, release: project.releases.last)
@@ -316,6 +324,14 @@ RSpec.describe API::Releases do
         expect(response).to have_gitlab_http_status(:ok)
       end
 
+      it 'returns 200 HTTP status when using JOB-TOKEN auth' do
+        job = create(:ci_build, :running, project: project, user: maintainer)
+
+        get api("/projects/#{project.id}/releases/v0.1"), params: { job_token: job.token }
+
+        expect(response).to have_gitlab_http_status(:ok)
+      end
+
       it 'returns a release entry' do
         get api("/projects/#{project.id}/releases/v0.1", maintainer)
 
@@ -451,10 +467,10 @@ RSpec.describe API::Releases do
           it "exposes tag and commit" do
             create(:release,
                    project: project,
-                   tag: 'v0.1',
+                   tag: 'v0.0.1',
                    author: maintainer,
                    created_at: 2.days.ago)
-            get api("/projects/#{project.id}/releases/v0.1", guest)
+            get api("/projects/#{project.id}/releases/v0.0.1", guest)
 
             expect(response).to match_response_schema('public_api/v4/release')
           end
@@ -1008,6 +1024,14 @@ RSpec.describe API::Releases do
       expect(response).to have_gitlab_http_status(:ok)
     end
 
+    it 'accepts the request when using JOB-TOKEN auth' do
+      job = create(:ci_build, :running, project: project, user: maintainer)
+
+      put api("/projects/#{project.id}/releases/v0.1"), params: params.merge(job_token: job.token)
+
+      expect(response).to have_gitlab_http_status(:ok)
+    end
+
     it 'updates the description' do
       put api("/projects/#{project.id}/releases/v0.1", maintainer), params: params
 
@@ -1216,6 +1240,14 @@ RSpec.describe API::Releases do
 
     it 'accepts the request' do
       delete api("/projects/#{project.id}/releases/v0.1", maintainer)
+
+      expect(response).to have_gitlab_http_status(:ok)
+    end
+
+    it 'accepts the request when using JOB-TOKEN auth' do
+      job = create(:ci_build, :running, project: project, user: maintainer)
+
+      delete api("/projects/#{project.id}/releases/v0.1"), params: { job_token: job.token }
 
       expect(response).to have_gitlab_http_status(:ok)
     end

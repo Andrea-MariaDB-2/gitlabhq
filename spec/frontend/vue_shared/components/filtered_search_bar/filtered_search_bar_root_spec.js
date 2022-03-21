@@ -8,6 +8,7 @@ import {
 } from '@gitlab/ui';
 import { shallowMount, mount } from '@vue/test-utils';
 
+import { nextTick } from 'vue';
 import RecentSearchesService from '~/filtered_search/services/recent_searches_service';
 import RecentSearchesStore from '~/filtered_search/stores/recent_searches_store';
 import { SortDirection } from '~/vue_shared/components/filtered_search_bar/constants';
@@ -25,6 +26,7 @@ import {
   tokenValueMilestone,
   tokenValueMembership,
   tokenValueConfidential,
+  tokenValueEmpty,
 } from './mock_data';
 
 jest.mock('~/vue_shared/components/filtered_search_bar/filtered_search_utils', () => ({
@@ -43,6 +45,7 @@ const createComponent = ({
   recentSearchesStorageKey = 'requirements',
   tokens = mockAvailableTokens,
   sortOptions,
+  initialFilterValue = [],
   showCheckbox = false,
   checkboxChecked = false,
   searchInputPlaceholder = 'Filter requirements',
@@ -55,6 +58,7 @@ const createComponent = ({
       recentSearchesStorageKey,
       tokens,
       sortOptions,
+      initialFilterValue,
       showCheckbox,
       checkboxChecked,
       searchInputPlaceholder,
@@ -119,6 +123,8 @@ describe('FilteredSearchBarRoot', () => {
 
     describe('sortDirectionIcon', () => {
       it('returns string "sort-lowest" when `selectedSortDirection` is "ascending"', () => {
+        // setData usage is discouraged. See https://gitlab.com/groups/gitlab-org/-/epics/7330 for details
+        // eslint-disable-next-line no-restricted-syntax
         wrapper.setData({
           selectedSortDirection: SortDirection.ascending,
         });
@@ -127,6 +133,8 @@ describe('FilteredSearchBarRoot', () => {
       });
 
       it('returns string "sort-highest" when `selectedSortDirection` is "descending"', () => {
+        // setData usage is discouraged. See https://gitlab.com/groups/gitlab-org/-/epics/7330 for details
+        // eslint-disable-next-line no-restricted-syntax
         wrapper.setData({
           selectedSortDirection: SortDirection.descending,
         });
@@ -137,6 +145,8 @@ describe('FilteredSearchBarRoot', () => {
 
     describe('sortDirectionTooltip', () => {
       it('returns string "Sort direction: Ascending" when `selectedSortDirection` is "ascending"', () => {
+        // setData usage is discouraged. See https://gitlab.com/groups/gitlab-org/-/epics/7330 for details
+        // eslint-disable-next-line no-restricted-syntax
         wrapper.setData({
           selectedSortDirection: SortDirection.ascending,
         });
@@ -145,6 +155,8 @@ describe('FilteredSearchBarRoot', () => {
       });
 
       it('returns string "Sort direction: Descending" when `selectedSortDirection` is "descending"', () => {
+        // setData usage is discouraged. See https://gitlab.com/groups/gitlab-org/-/epics/7330 for details
+        // eslint-disable-next-line no-restricted-syntax
         wrapper.setData({
           selectedSortDirection: SortDirection.descending,
         });
@@ -155,17 +167,21 @@ describe('FilteredSearchBarRoot', () => {
 
     describe('filteredRecentSearches', () => {
       it('returns array of recent searches filtering out any string type (unsupported) items', async () => {
+        // setData usage is discouraged. See https://gitlab.com/groups/gitlab-org/-/epics/7330 for details
+        // eslint-disable-next-line no-restricted-syntax
         wrapper.setData({
           recentSearches: [{ foo: 'bar' }, 'foo'],
         });
 
-        await wrapper.vm.$nextTick();
+        await nextTick();
 
         expect(wrapper.vm.filteredRecentSearches).toHaveLength(1);
         expect(wrapper.vm.filteredRecentSearches[0]).toEqual({ foo: 'bar' });
       });
 
       it('returns array of recent searches sanitizing any duplicate token values', async () => {
+        // setData usage is discouraged. See https://gitlab.com/groups/gitlab-org/-/epics/7330 for details
+        // eslint-disable-next-line no-restricted-syntax
         wrapper.setData({
           recentSearches: [
             [tokenValueAuthor, tokenValueLabel, tokenValueMilestone, tokenValueLabel],
@@ -173,7 +189,7 @@ describe('FilteredSearchBarRoot', () => {
           ],
         });
 
-        await wrapper.vm.$nextTick();
+        await nextTick();
 
         expect(wrapper.vm.filteredRecentSearches).toHaveLength(2);
         expect(uniqueTokens).toHaveBeenCalled();
@@ -184,7 +200,7 @@ describe('FilteredSearchBarRoot', () => {
           recentSearchesStorageKey: '',
         });
 
-        await wrapper.vm.$nextTick();
+        await nextTick();
 
         expect(wrapper.vm.filteredRecentSearches).not.toBeDefined();
       });
@@ -193,20 +209,30 @@ describe('FilteredSearchBarRoot', () => {
 
   describe('watchers', () => {
     describe('filterValue', () => {
-      it('emits component event `onFilter` with empty array when `filterValue` is cleared by GlFilteredSearch', () => {
+      it('emits component event `onFilter` with empty array and false when filter was never selected', async () => {
+        wrapper = createComponent({ initialFilterValue: [tokenValueEmpty] });
+        // setData usage is discouraged. See https://gitlab.com/groups/gitlab-org/-/epics/7330 for details
+        // eslint-disable-next-line no-restricted-syntax
         wrapper.setData({
           initialRender: false,
-          filterValue: [
-            {
-              type: 'filtered-search-term',
-              value: { data: '' },
-            },
-          ],
+          filterValue: [tokenValueEmpty],
         });
 
-        return wrapper.vm.$nextTick(() => {
-          expect(wrapper.emitted('onFilter')[0]).toEqual([[]]);
+        await nextTick();
+        expect(wrapper.emitted('onFilter')[0]).toEqual([[], false]);
+      });
+
+      it('emits component event `onFilter` with empty array and true when initially selected filter value was cleared', async () => {
+        wrapper = createComponent({ initialFilterValue: [tokenValueLabel] });
+        // setData usage is discouraged. See https://gitlab.com/groups/gitlab-org/-/epics/7330 for details
+        // eslint-disable-next-line no-restricted-syntax
+        wrapper.setData({
+          initialRender: false,
+          filterValue: [tokenValueEmpty],
         });
+
+        await nextTick();
+        expect(wrapper.emitted('onFilter')[0]).toEqual([[], true]);
       });
     });
   });
@@ -253,6 +279,8 @@ describe('FilteredSearchBarRoot', () => {
 
     describe('handleSortDirectionClick', () => {
       beforeEach(() => {
+        // setData usage is discouraged. See https://gitlab.com/groups/gitlab-org/-/epics/7330 for details
+        // eslint-disable-next-line no-restricted-syntax
         wrapper.setData({
           selectedSortOption: mockSortOptions[0],
         });
@@ -301,11 +329,13 @@ describe('FilteredSearchBarRoot', () => {
       const mockFilters = [tokenValueAuthor, 'foo'];
 
       beforeEach(async () => {
+        // setData usage is discouraged. See https://gitlab.com/groups/gitlab-org/-/epics/7330 for details
+        // eslint-disable-next-line no-restricted-syntax
         wrapper.setData({
           filterValue: mockFilters,
         });
 
-        await wrapper.vm.$nextTick();
+        await nextTick();
       });
 
       it('calls `uniqueTokens` on `filterValue` prop to remove duplicates', () => {
@@ -364,14 +394,16 @@ describe('FilteredSearchBarRoot', () => {
   });
 
   describe('template', () => {
-    beforeEach(() => {
+    beforeEach(async () => {
+      // setData usage is discouraged. See https://gitlab.com/groups/gitlab-org/-/epics/7330 for details
+      // eslint-disable-next-line no-restricted-syntax
       wrapper.setData({
         selectedSortOption: mockSortOptions[0],
         selectedSortDirection: SortDirection.descending,
         recentSearches: mockHistoryItems,
       });
 
-      return wrapper.vm.$nextTick();
+      await nextTick();
     });
 
     it('renders gl-filtered-search component', () => {
@@ -406,7 +438,7 @@ describe('FilteredSearchBarRoot', () => {
       const wrapperFullMount = createComponent({ sortOptions: mockSortOptions, shallow: false });
       wrapperFullMount.vm.recentSearchesStore.addRecentSearch(mockHistoryItems[0]);
 
-      await wrapperFullMount.vm.$nextTick();
+      await nextTick();
 
       const searchHistoryItemsEl = wrapperFullMount.findAll(
         '.gl-search-box-by-click-menu .gl-search-box-by-click-history-item',
@@ -429,7 +461,7 @@ describe('FilteredSearchBarRoot', () => {
 
         wrapperFullMount.vm.recentSearchesStore.addRecentSearch([tokenValueMembership]);
 
-        await wrapperFullMount.vm.$nextTick();
+        await nextTick();
 
         expect(wrapperFullMount.find(GlDropdownItem).text()).toBe('Membership := Direct');
 
@@ -447,7 +479,7 @@ describe('FilteredSearchBarRoot', () => {
 
         wrapperFullMount.vm.recentSearchesStore.addRecentSearch([tokenValueMembership]);
 
-        await wrapperFullMount.vm.$nextTick();
+        await nextTick();
 
         expect(wrapperFullMount.find(GlDropdownItem).text()).toBe('Membership := exclude');
 

@@ -19,9 +19,7 @@ class Packages::PackageFileFinder
   private
 
   def package_files
-    files = package.package_files
-
-    by_file_name(files)
+    by_file_name(package.installable_package_files)
   end
 
   def by_file_name(files)

@@ -4,21 +4,19 @@ module Types
   module Ci
     class StageType < BaseObject
       graphql_name 'CiStage'
-      authorize :read_commit_status
+      authorize :read_build
 
-      field :id, GraphQL::Types::ID, null: false,
-            description: 'ID of the stage.'
-      field :name, type: GraphQL::Types::String, null: true,
-            description: 'Name of the stage.'
+      field :detailed_status, Types::Ci::DetailedStatusType, null: true,
+            description: 'Detailed status of the stage.'
       field :groups, type: Ci::GroupType.connection_type, null: true,
             extras: [:lookahead],
             description: 'Group of jobs for the stage.'
-      field :detailed_status, Types::Ci::DetailedStatusType, null: true,
-            description: 'Detailed status of the stage.'
-      field :jobs, Ci::JobType.connection_type, null: true,
-            description: 'Jobs for the stage.',
-            method: 'latest_statuses',
-            max_page_size: 200
+      field :id, GraphQL::Types::ID, null: false,
+            description: 'ID of the stage.'
+      field :jobs, Types::Ci::JobType.connection_type, null: true,
+            description: 'Jobs for the stage.'
+      field :name, type: GraphQL::Types::String, null: true,
+            description: 'Name of the stage.'
       field :status, GraphQL::Types::String,
             null: true,
             description: 'Status of the pipeline stage.'
@@ -33,7 +31,10 @@ module Types
 
         BatchLoader::GraphQL.for(key).batch(default_value: []) do |keys, loader|
           by_pipeline = keys.group_by(&:pipeline)
-          include_needs = keys.any? { |k| k.requires?(%i[nodes jobs nodes needs]) }
+          include_needs = keys.any? do |k|
+            k.requires?(%i[nodes jobs nodes needs]) ||
+            k.requires?(%i[nodes jobs nodes previousStageJobsAndNeeds])
+          end
 
           by_pipeline.each do |pl, key_group|
             project = pl.project
@@ -49,24 +50,23 @@ module Types
         end
       end
 
+      def jobs
+        GraphQL::Pagination::ActiveRecordRelationConnection.new(
+          object.latest_statuses,
+          max_page_size: Gitlab::CurrentSettings.current_application_settings.jobs_per_stage_page_size
+        )
+      end
+
       private
 
       # rubocop: disable CodeReuse/ActiveRecord
       def jobs_for_pipeline(pipeline, stage_ids, include_needs)
         jobs = pipeline.statuses.latest.where(stage_id: stage_ids)
 
-        common_relations = [:project]
-        common_relations << :needs if include_needs
+        preloaded_relations = [:project, :metadata, :job_artifacts, :downstream_pipeline]
+        preloaded_relations << :needs if include_needs
 
-        preloaders = {
-          ::Ci::Build => [:metadata, :job_artifacts],
-          ::Ci::Bridge => [:metadata, :downstream_pipeline],
-          ::GenericCommitStatus => []
-        }
-
-        preloaders.each do |klass, relations|
-          ActiveRecord::Associations::Preloader.new.preload(jobs.select { |job| job.is_a?(klass) }, relations + common_relations)
-        end
+        Preloaders::CommitStatusPreloader.new(jobs).execute(preloaded_relations)
 
         jobs.group_by(&:stage_id)
       end

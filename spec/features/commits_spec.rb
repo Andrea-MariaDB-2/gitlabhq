@@ -24,21 +24,23 @@ RSpec.describe 'Commits' do
     end
 
     context 'commit status is Generic Commit Status' do
-      let!(:status) { create(:generic_commit_status, pipeline: pipeline) }
+      let!(:status) { create(:generic_commit_status, pipeline: pipeline, ref: pipeline.ref) }
 
       before do
         project.add_reporter(user)
       end
 
-      describe 'Commit builds' do
+      describe 'Commit builds', :js do
         before do
-          visit pipeline_path(pipeline)
+          visit builds_project_pipeline_path(project, pipeline)
+
+          wait_for_requests
         end
 
         it { expect(page).to have_content pipeline.sha[0..7] }
 
         it 'contains generic commit status build' do
-          page.within('.table-holder') do
+          page.within('[data-testid="jobs-tab-table"]') do
             expect(page).to have_content "##{status.id}" # build id
             expect(page).to have_content 'generic'       # build name
           end
@@ -89,15 +91,15 @@ RSpec.describe 'Commits' do
           end
         end
 
-        context 'Download artifacts' do
+        context 'Download artifacts', :js do
           before do
             create(:ci_job_artifact, :archive, file: artifacts_file, job: build)
           end
 
           it do
-            visit pipeline_path(pipeline)
-            click_on 'Download artifacts'
-            expect(page.response_headers['Content-Type']).to eq(artifacts_file.content_type)
+            visit builds_project_pipeline_path(project, pipeline)
+            wait_for_requests
+            expect(page).to have_link('Download artifacts', href: download_project_job_artifacts_path(project, build, file_type: :archive))
           end
         end
 
@@ -118,14 +120,15 @@ RSpec.describe 'Commits' do
         end
       end
 
-      context "when logged as reporter" do
+      context "when logged as reporter", :js do
         before do
           project.add_reporter(user)
           create(:ci_job_artifact, :archive, file: artifacts_file, job: build)
-          visit pipeline_path(pipeline)
+          visit builds_project_pipeline_path(project, pipeline)
+          wait_for_requests
         end
 
-        it 'renders header', :js do
+        it 'renders header' do
           expect(page).to have_content pipeline.sha[0..7]
           expect(page).to have_content pipeline.git_commit_message.gsub!(/\s+/, ' ')
           expect(page).to have_content pipeline.user.name

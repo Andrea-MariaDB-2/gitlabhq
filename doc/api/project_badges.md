@@ -1,17 +1,14 @@
 ---
 stage: Create
 group: Source Code
-info: "To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments"
-type: reference, api
+info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
 ---
 
 # Project badges API **(FREE)**
 
-> [Introduced](https://gitlab.com/gitlab-org/gitlab-foss/-/merge_requests/17082) in GitLab 10.6.
-
 ## Placeholder tokens
 
-Badges support placeholders that are replaced in real time in both the link and image URL. The allowed placeholders are:
+Badges support placeholders that are replaced in real-time in both the link and image URL. The allowed placeholders are:
 
 <!-- vale gitlab.Spelling = NO -->
 

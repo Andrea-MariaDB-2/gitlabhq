@@ -12,13 +12,9 @@ RSpec.describe 'Projects (JavaScript fixtures)', type: :controller do
   let(:project) { create(:project, namespace: namespace, path: 'builds-project', runners_token: runners_token, avatar: fixture_file_upload('spec/fixtures/dk.png', 'image/png')) }
   let(:project_with_repo) { create(:project, :repository, description: 'Code and stuff', avatar: fixture_file_upload('spec/fixtures/dk.png', 'image/png')) }
   let(:project_variable_populated) { create(:project, namespace: namespace, path: 'builds-project2', runners_token: runners_token) }
-  let(:user) { project.owner }
+  let(:user) { project.first_owner }
 
   render_views
-
-  before(:all) do
-    clean_frontend_fixtures('projects/')
-  end
 
   before do
     project_with_repo.add_maintainer(user)
@@ -55,10 +51,6 @@ RSpec.describe 'Projects (JavaScript fixtures)', type: :controller do
     context 'access token projects query' do
       before do
         project_variable_populated.add_maintainer(user)
-      end
-
-      before(:all) do
-        clean_frontend_fixtures('graphql/projects/access_tokens')
       end
 
       base_input_path = 'access_tokens/graphql/queries/'

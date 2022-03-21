@@ -1,15 +1,24 @@
 <script>
-import { GlTooltipDirective, GlButton, GlFormInput, GlLink, GlLoadingIcon } from '@gitlab/ui';
+import {
+  GlAlert,
+  GlTooltipDirective,
+  GlButton,
+  GlFormInput,
+  GlLink,
+  GlLoadingIcon,
+} from '@gitlab/ui';
 import produce from 'immer';
 import createFlash from '~/flash';
 import { __ } from '~/locale';
+import { workspaceLabelsQueries } from '~/sidebar/constants';
 import createLabelMutation from './graphql/create_label.mutation.graphql';
-import projectLabelsQuery from './graphql/project_labels.query.graphql';
+import { LabelType } from './constants';
 
 const errorMessage = __('Error creating label.');
 
 export default {
   components: {
+    GlAlert,
     GlButton,
     GlFormInput,
     GlLink,
@@ -18,9 +27,22 @@ export default {
   directives: {
     GlTooltip: GlTooltipDirective,
   },
-  inject: {
-    projectPath: {
-      default: '',
+  props: {
+    fullPath: {
+      type: String,
+      required: true,
+    },
+    attrWorkspacePath: {
+      type: String,
+      required: true,
+    },
+    labelCreateType: {
+      type: String,
+      required: true,
+    },
+    workspaceType: {
+      type: String,
+      required: true,
     },
   },
   data() {
@@ -28,6 +50,7 @@ export default {
       labelTitle: '',
       selectedColor: '',
       labelCreateInProgress: false,
+      error: undefined,
     };
   },
   computed: {
@@ -37,6 +60,15 @@ export default {
     suggestedColors() {
       const colorsMap = gon.suggested_label_colors;
       return Object.keys(colorsMap).map((color) => ({ [color]: colorsMap[color] }));
+    },
+    mutationVariables() {
+      const attributePath = this.labelCreateType === LabelType.group ? 'groupPath' : 'projectPath';
+
+      return {
+        title: this.labelTitle,
+        color: this.selectedColor,
+        [attributePath]: this.attrWorkspacePath,
+      };
     },
   },
   methods: {
@@ -50,9 +82,11 @@ export default {
       this.selectedColor = this.getColorCode(color);
     },
     updateLabelsInCache(store, label) {
+      const { query } = workspaceLabelsQueries[this.workspaceType];
+
       const sourceData = store.readQuery({
-        query: projectLabelsQuery,
-        variables: { fullPath: this.projectPath, searchTerm: '' },
+        query,
+        variables: { fullPath: this.fullPath, searchTerm: '' },
       });
 
       const collator = new Intl.Collator('en');
@@ -63,8 +97,8 @@ export default {
       });
 
       store.writeQuery({
-        query: projectLabelsQuery,
-        variables: { fullPath: this.projectPath, searchTerm: '' },
+        query,
+        variables: { fullPath: this.fullPath, searchTerm: '' },
         data,
       });
     },
@@ -75,11 +109,7 @@ export default {
           data: { labelCreate },
         } = await this.$apollo.mutate({
           mutation: createLabelMutation,
-          variables: {
-            title: this.labelTitle,
-            color: this.selectedColor,
-            projectPath: this.projectPath,
-          },
+          variables: this.mutationVariables,
           update: (
             store,
             {
@@ -87,16 +117,21 @@ export default {
                 labelCreate: { label },
               },
             },
-          ) => this.updateLabelsInCache(store, label),
+          ) => {
+            if (label) {
+              this.updateLabelsInCache(store, label);
+            }
+          },
         });
         if (labelCreate.errors.length) {
-          createFlash({ message: errorMessage });
+          [this.error] = labelCreate.errors;
+        } else {
+          this.$emit('hideCreateView');
         }
       } catch {
         createFlash({ message: errorMessage });
       }
       this.labelCreateInProgress = false;
-      this.$emit('hideCreateView');
     },
   },
 };
@@ -105,6 +140,9 @@ export default {
 <template>
   <div class="labels-select-contents-create js-labels-create">
     <div class="dropdown-input">
+      <gl-alert v-if="error" variant="danger" :dismissible="false" class="gl-mb-3">
+        {{ error }}
+      </gl-alert>
       <gl-form-input
         v-model.trim="labelTitle"
         :placeholder="__('Name new label')"
@@ -152,7 +190,7 @@ export default {
       <gl-button
         class="js-btn-cancel-create"
         data-testid="cancel-button"
-        @click="$emit('hideCreateView')"
+        @click.stop="$emit('hideCreateView')"
       >
         {{ __('Cancel') }}
       </gl-button>

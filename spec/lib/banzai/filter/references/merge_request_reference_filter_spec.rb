@@ -51,6 +51,7 @@ RSpec.describe Banzai::Filter::References::MergeRequestReferenceFilter do
 
   context 'internal reference' do
     let(:reference) { merge.to_reference }
+    let(:merge_request_url) { urls.project_merge_request_url(project, merge) }
 
     it 'links to a valid reference' do
       doc = reference_filter("See #{reference}")
@@ -107,6 +108,24 @@ RSpec.describe Banzai::Filter::References::MergeRequestReferenceFilter do
 
       expect(link).to have_attribute('data-merge-request')
       expect(link.attr('data-merge-request')).to eq merge.id.to_s
+    end
+
+    it 'includes a data-reference-format attribute' do
+      doc = reference_filter("Merge #{reference}+")
+      link = doc.css('a').first
+
+      expect(link).to have_attribute('data-reference-format')
+      expect(link.attr('data-reference-format')).to eq('+')
+      expect(link.attr('href')).to eq(merge_request_url)
+    end
+
+    it 'includes a data-reference-format attribute for URL references' do
+      doc = reference_filter("Merge #{merge_request_url}+")
+      link = doc.css('a').first
+
+      expect(link).to have_attribute('data-reference-format')
+      expect(link.attr('data-reference-format')).to eq('+')
+      expect(link.attr('href')).to eq(merge_request_url)
     end
 
     it 'supports an :only_path context' do

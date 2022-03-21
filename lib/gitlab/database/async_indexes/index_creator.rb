@@ -40,11 +40,15 @@ module Gitlab
         end
 
         def connection
-          @connection ||= ApplicationRecord.connection
+          @connection ||= async_index.connection
         end
 
         def lease_timeout
           TIMEOUT_PER_ACTION
+        end
+
+        def lease_key
+          [super, async_index.connection_db_config.name].join('/')
         end
 
         def set_statement_timeout

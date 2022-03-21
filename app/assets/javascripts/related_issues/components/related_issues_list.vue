@@ -2,7 +2,7 @@
 import { GlLoadingIcon } from '@gitlab/ui';
 import Sortable from 'sortablejs';
 import sortableConfig from '~/sortable/sortable_config';
-import RelatedIssuableItem from '~/vue_shared/components/issue/related_issuable_item.vue';
+import RelatedIssuableItem from '~/issuable/components/related_issuable_item.vue';
 
 export default {
   name: 'RelatedIssuesList',
@@ -20,6 +20,11 @@ export default {
       type: Boolean,
       required: false,
       default: false,
+    },
+    listLinkType: {
+      type: String,
+      required: false,
+      default: '',
     },
     heading: {
       type: String,
@@ -91,17 +96,13 @@ export default {
 </script>
 
 <template>
-  <div>
+  <div :data-link-type="listLinkType">
     <h4 v-if="heading" class="gl-font-base mt-0">{{ heading }}</h4>
     <div
       class="related-issues-token-body bordered-box bg-white"
       :class="{ 'sortable-container': canReorder }"
     >
-      <div
-        v-if="isFetching"
-        class="related-issues-loading-icon"
-        data-qa-selector="related_issues_loading_placeholder"
-      >
+      <div v-if="isFetching" class="gl-mb-2" data-qa-selector="related_issues_loading_placeholder">
         <gl-loading-icon
           ref="loadingIcon"
           size="sm"
@@ -114,7 +115,7 @@ export default {
           v-for="issue in relatedIssues"
           :key="issue.id"
           :class="{
-            'user-can-drag': canReorder,
+            'gl-cursor-grab': canReorder,
             'sortable-row': canReorder,
             'card card-slim': canReorder,
           }"

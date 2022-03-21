@@ -2,6 +2,7 @@ import { shallowMount } from '@vue/test-utils';
 import { nextTick } from 'vue';
 import { trimText } from 'helpers/text_helper';
 import { extendedWrapper } from 'helpers/vue_test_utils_helper';
+import waitForPromises from 'helpers/wait_for_promises';
 import autoMergeEnabledComponent from '~/vue_merge_request_widget/components/states/mr_widget_auto_merge_enabled.vue';
 import { MWPS_MERGE_STRATEGY } from '~/vue_merge_request_widget/constants';
 import eventHub from '~/vue_merge_request_widget/event_hub';
@@ -185,7 +186,7 @@ describe('MRWidgetAutoMergeEnabled', () => {
 
       describe('methods', () => {
         describe('cancelAutomaticMerge', () => {
-          it('should set flag and call service then tell main component to update the widget with data', (done) => {
+          it('should set flag and call service then tell main component to update the widget with data', async () => {
             factory({
               ...defaultMrProps(),
             });
@@ -201,20 +202,20 @@ describe('MRWidgetAutoMergeEnabled', () => {
             );
 
             wrapper.vm.cancelAutomaticMerge();
-            setImmediate(() => {
-              expect(wrapper.vm.isCancellingAutoMerge).toBeTruthy();
-              if (mergeRequestWidgetGraphql) {
-                expect(eventHub.$emit).toHaveBeenCalledWith('MRWidgetUpdateRequested');
-              } else {
-                expect(eventHub.$emit).toHaveBeenCalledWith('UpdateWidgetData', mrObj);
-              }
-              done();
-            });
+
+            await waitForPromises();
+
+            expect(wrapper.vm.isCancellingAutoMerge).toBeTruthy();
+            if (mergeRequestWidgetGraphql) {
+              expect(eventHub.$emit).toHaveBeenCalledWith('MRWidgetUpdateRequested');
+            } else {
+              expect(eventHub.$emit).toHaveBeenCalledWith('UpdateWidgetData', mrObj);
+            }
           });
         });
 
         describe('removeSourceBranch', () => {
-          it('should set flag and call service then request main component to update the widget', (done) => {
+          it('should set flag and call service then request main component to update the widget', async () => {
             factory({
               ...defaultMrProps(),
             });
@@ -227,14 +228,14 @@ describe('MRWidgetAutoMergeEnabled', () => {
             );
 
             wrapper.vm.removeSourceBranch();
-            setImmediate(() => {
-              expect(eventHub.$emit).toHaveBeenCalledWith('MRWidgetUpdateRequested');
-              expect(wrapper.vm.service.merge).toHaveBeenCalledWith({
-                sha,
-                auto_merge_strategy: MWPS_MERGE_STRATEGY,
-                should_remove_source_branch: true,
-              });
-              done();
+
+            await waitForPromises();
+
+            expect(eventHub.$emit).toHaveBeenCalledWith('MRWidgetUpdateRequested');
+            expect(wrapper.vm.service.merge).toHaveBeenCalledWith({
+              sha,
+              auto_merge_strategy: MWPS_MERGE_STRATEGY,
+              should_remove_source_branch: true,
             });
           });
         });
@@ -253,6 +254,8 @@ describe('MRWidgetAutoMergeEnabled', () => {
           factory({
             ...defaultMrProps(),
           });
+          // setData usage is discouraged. See https://gitlab.com/groups/gitlab-org/-/epics/7330 for details
+          // eslint-disable-next-line no-restricted-syntax
           wrapper.setData({
             isCancellingAutoMerge: true,
           });
@@ -270,8 +273,8 @@ describe('MRWidgetAutoMergeEnabled', () => {
 
           const normalizedText = wrapper.text().replace(/\s+/g, ' ');
 
-          expect(normalizedText).toContain('The source branch will be deleted');
-          expect(normalizedText).not.toContain('The source branch will not be deleted');
+          expect(normalizedText).toContain('Deletes the source branch');
+          expect(normalizedText).not.toContain('Does not delete the source branch');
         });
 
         it('should not show delete source branch button when user not able to delete source branch', () => {
@@ -287,6 +290,8 @@ describe('MRWidgetAutoMergeEnabled', () => {
           factory({
             ...defaultMrProps(),
           });
+          // setData usage is discouraged. See https://gitlab.com/groups/gitlab-org/-/epics/7330 for details
+          // eslint-disable-next-line no-restricted-syntax
           wrapper.setData({
             isRemovingSourceBranch: true,
           });

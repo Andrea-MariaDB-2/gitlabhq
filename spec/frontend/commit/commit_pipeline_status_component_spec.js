@@ -1,7 +1,8 @@
 import { GlLoadingIcon } from '@gitlab/ui';
 import { shallowMount } from '@vue/test-utils';
 import Visibility from 'visibilityjs';
-import { getJSONFixture } from 'helpers/fixtures';
+import { nextTick } from 'vue';
+import fixture from 'test_fixtures/pipelines/pipelines.json';
 import createFlash from '~/flash';
 import Poll from '~/lib/utils/poll';
 import CommitPipelineStatus from '~/projects/tree/components/commit_pipeline_status_component.vue';
@@ -20,7 +21,7 @@ jest.mock('~/projects/tree/services/commit_pipeline_service', () =>
 
 describe('Commit pipeline status component', () => {
   let wrapper;
-  const { pipelines } = getJSONFixture('pipelines/pipelines.json');
+  const { pipelines } = fixture;
   const { status: mockCiStatus } = pipelines[0].details;
 
   const defaultProps = {
@@ -112,7 +113,7 @@ describe('Commit pipeline status component', () => {
       createComponent();
     });
 
-    it('shows the loading icon at start', () => {
+    it('shows the loading icon at start', async () => {
       createComponent();
       expect(findLoader().exists()).toBe(true);
 
@@ -120,17 +121,16 @@ describe('Commit pipeline status component', () => {
         data: { pipelines: [] },
       });
 
-      return wrapper.vm.$nextTick().then(() => {
-        expect(findLoader().exists()).toBe(false);
-      });
+      await nextTick();
+      expect(findLoader().exists()).toBe(false);
     });
 
     describe('is successful', () => {
-      beforeEach(() => {
+      beforeEach(async () => {
         pollConfig.successCallback({
           data: { pipelines: [{ details: { status: mockCiStatus } }] },
         });
-        return wrapper.vm.$nextTick();
+        await nextTick();
       });
 
       it('does not render loader', () => {

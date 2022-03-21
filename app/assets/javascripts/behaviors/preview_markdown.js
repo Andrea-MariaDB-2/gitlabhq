@@ -81,7 +81,7 @@ MarkdownPreview.prototype.fetchMarkdownPreview = function (text, url, success) {
     })
     .catch(() =>
       createFlash({
-        message: __('An error occurred while fetching markdown preview'),
+        message: __('An error occurred while fetching Markdown preview'),
       }),
     );
 };
@@ -123,13 +123,6 @@ const previewButtonSelector = '.js-md-preview-button';
 const writeButtonSelector = '.js-md-write-button';
 lastTextareaPreviewed = null;
 const markdownToolbar = $('.md-header-toolbar');
-
-$.fn.setupMarkdownPreview = function () {
-  const $form = $(this);
-  $form.find('textarea.markdown-area').on('input', () => {
-    markdownPreview.hideReferencedUsers($form);
-  });
-};
 
 $(document).on('markdown-preview:show', (e, $form) => {
   if (!$form) {

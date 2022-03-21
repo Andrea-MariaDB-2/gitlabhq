@@ -2,7 +2,6 @@
 stage: Secure
 group: Static Analysis
 info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
-type: reference, howto
 ---
 
 # Secure your application **(ULTIMATE)**
@@ -31,19 +30,39 @@ For an overview of GitLab application security, see [Shifting Security Left](htt
 
 GitLab uses the following tools to scan and report known vulnerabilities found in your project.
 
-| Secure scanning tool                                                         | Description                                                            |
-|:-----------------------------------------------------------------------------|:-----------------------------------------------------------------------|
-| [Container Scanning](container_scanning/index.md) **(ULTIMATE)**                 | Scan Docker containers for known vulnerabilities.                      |
-| [Dependency List](dependency_list/index.md) **(ULTIMATE)**                       | View your project's dependencies and their known vulnerabilities.      |
-| [Dependency Scanning](dependency_scanning/index.md) **(ULTIMATE)**               | Analyze your dependencies for known vulnerabilities.                   |
-| [Dynamic Application Security Testing (DAST)](dast/index.md) **(ULTIMATE)**      | Analyze running web applications for known vulnerabilities.            |
-| [DAST API](dast_api/index.md) **(ULTIMATE)**                                     | Analyze running web APIs for known vulnerabilities.            |
-| [API fuzzing](api_fuzzing/index.md) **(ULTIMATE)**                               | Find unknown bugs and vulnerabilities in web APIs with fuzzing.        |
-| [Secret Detection](secret_detection/index.md)                                    | Analyze Git history for leaked secrets.                                |
-| [Security Dashboard](security_dashboard/index.md) **(ULTIMATE)**                 | View vulnerabilities in all your projects and groups.                  |
-| [Static Application Security Testing (SAST)](sast/index.md)                      | Analyze source code for known vulnerabilities.                         |
-| [Coverage fuzzing](coverage_fuzzing/index.md) **(ULTIMATE)**                     | Find unknown bugs and vulnerabilities with coverage-guided fuzzing.    |
-| [Cluster Image Scanning](cluster_image_scanning/index.md) **(ULTIMATE)**         | Scan Kubernetes clusters for known vulnerabilities.                      |
+| Secure scanning tool                                           | Description                                                         |
+| :------------------------------------------------------------- | :------------------------------------------------------------------ |
+| [Container Scanning](container_scanning/index.md)              | Scan Docker containers for known vulnerabilities.                   |
+| [Dependency List](dependency_list/index.md)                    | View your project's dependencies and their known vulnerabilities.   |
+| [Dependency Scanning](dependency_scanning/index.md)            | Analyze your dependencies for known vulnerabilities.                |
+| [Dynamic Application Security Testing (DAST)](dast/index.md)   | Analyze running web applications for known vulnerabilities.         |
+| [DAST API](dast_api/index.md)                                  | Analyze running web APIs for known vulnerabilities.                 |
+| [API fuzzing](api_fuzzing/index.md)                            | Find unknown bugs and vulnerabilities in web APIs with fuzzing.     |
+| [Secret Detection](secret_detection/index.md)                  | Analyze Git history for leaked secrets.                             |
+| [Security Dashboard](security_dashboard/index.md)              | View vulnerabilities in all your projects and groups.               |
+| [Static Application Security Testing (SAST)](sast/index.md)    | Analyze source code for known vulnerabilities.                      |
+| [Infrastructure as Code (IaC) Scanning](iac_scanning/index.md) | Analyze your IaC configuration files for known vulnerabilities.      |
+| [Coverage fuzzing](coverage_fuzzing/index.md)                  | Find unknown bugs and vulnerabilities with coverage-guided fuzzing. |
+| [Cluster Image Scanning](cluster_image_scanning/index.md)      | Scan Kubernetes clusters for known vulnerabilities.                 |
+
+## Vulnerability scanner maintenance
+
+The following vulnerability scanners and their databases are regularly updated:
+
+| Secure scanning tool                                            | Vulnerabilities database updates |
+|:----------------------------------------------------------------|:---------------------------------|
+| [Container Scanning](container_scanning/index.md)            | A job runs on a daily basis to build new images with the latest vulnerability database updates from the upstream scanner. For more details, see [Vulnerabilities database update](container_scanning/index.md#vulnerabilities-database-update). |
+| [Dependency Scanning](dependency_scanning/index.md)          | Relies on `bundler-audit` (for Ruby gems), `retire.js` (for npm packages), and `gemnasium` (the GitLab tool for all libraries). Both `bundler-audit` and `retire.js` fetch their vulnerabilities data from GitHub repositories, so vulnerabilities added to `ruby-advisory-db` and `retire.js` are immediately available. The tools themselves are updated once per month if there's a new version. The [Gemnasium DB](https://gitlab.com/gitlab-org/security-products/gemnasium-db) is updated on a daily basis using [data from NVD, the `ruby-advisory-db` and the GitHub Security Advisory Database as data sources](https://gitlab.com/gitlab-org/security-products/gemnasium-db/-/blob/master/SOURCES.md). See our [current measurement of time from CVE being issued to our product being updated](https://about.gitlab.com/handbook/engineering/development/performance-indicators/#cve-issue-to-update). |
+| [Dynamic Application Security Testing (DAST)](dast/index.md) | The scanning engine is updated on a periodic basis. See the [version of the underlying tool `zaproxy`](https://gitlab.com/gitlab-org/security-products/dast/blob/main/Dockerfile#L1). The scanning rules are downloaded at scan runtime. |
+| [Static Application Security Testing (SAST)](sast/index.md)  | Relies exclusively on [the tools GitLab wraps](sast/index.md#supported-languages-and-frameworks). The underlying analyzers are updated at least once per month if a relevant update is available. The vulnerabilities database is updated by the upstream tools. |
+
+In versions of GitLab that use the same major version of the analyzer, you do not have to update
+GitLab to benefit from the latest vulnerabilities definitions. The security tools are released as
+Docker images. The vendored job definitions that enable them use major release tags according to
+[semantic versioning](https://semver.org/). Each new release of the tools overrides these tags.
+Although in a major analyzer version you automatically get the latest versions of the scanning
+tools, there are some [known issues](https://gitlab.com/gitlab-org/gitlab/-/issues/9725) with this
+approach.
 
 ## Security scanning with Auto DevOps
 
@@ -91,16 +110,14 @@ For more details about each of the security scanning tools, see their respective
 
 ### Override the default registry base address
 
-By default, GitLab security scanners use `registry.gitlab.com/gitlab-org/security-products/analyzers` as the
+By default, GitLab security scanners use `registry.gitlab.com/security-products` as the
 base address for Docker images. You can override this globally by setting the CI/CD variable
-`SECURE_ANALYZERS_PREFIX` to another location. Note that this affects all scanners at once, except
-the container-scanning analyzer which uses
-`registry.gitlab.com/security-products/container-scanning` as its registry.
+`SECURE_ANALYZERS_PREFIX` to another location. Note that this affects all scanners at once.
 
-### Use security scanning tools with Pipelines for Merge Requests
+### Use security scanning tools with merge request pipelines
 
 By default, the application security jobs are configured to run for branch pipelines only.
-To use them with [pipelines for merge requests](../../ci/pipelines/merge_request_pipelines.md),
+To use them with [merge request pipelines](../../ci/pipelines/merge_request_pipelines.md),
 you may need to override the default `rules:` configuration to add:
 
 ```yaml
@@ -114,7 +131,9 @@ rules:
 
 If you add the security scanning jobs as described in [Security scanning with Auto DevOps](#security-scanning-with-auto-devops) or [Security scanning without Auto DevOps](#security-scanning-without-auto-devops) to your `.gitlab-ci.yml` each added [security scanning tool](#security-scanning-tools) behave as described below.
 
-For each compatible analyzer, a job is created in the `test`, `dast` or `fuzz` stage of your pipeline and runs on the next new branch pipeline. Features such as the [Security Dashboard](security_dashboard/index.md), [Vulnerability Report](vulnerability_report/index.md), and [Dependency List](dependency_list/index.md) that rely on this scan data only show results from pipelines on the default branch. One tool might use many analyzers.
+For each compatible analyzer, a job is created in the `test`, `dast` or `fuzz` stage of your pipeline and runs on the next new branch pipeline.
+Features such as the [Security Dashboard](security_dashboard/index.md), [Vulnerability Report](vulnerability_report/index.md), and [Dependency List](dependency_list/index.md)
+that rely on this scan data only show results from pipelines on the default branch, only if all jobs are finished, including manual ones. One tool might use many analyzers.
 
 Our language and package manager specific jobs attempt to assess which analyzer(s) they should run for your project so that you can do less configuration.
 
@@ -146,8 +165,8 @@ The artifact generated by the secure analyzer contains all findings it discovers
 ### All tiers
 
 Merge requests which have run security scans let you know that the generated
-reports are available to download. To download a report, click on the
-**Download results** dropdown, and select the desired report.
+reports are available to download. To download a report, select
+**Download results**, and select the desired report.
 
 ![Security widget](img/security_widget_v13_7.png)
 
@@ -167,7 +186,7 @@ From the merge request security widget, select **Expand** to unfold the widget, 
 
 A pipeline's security tab lists all findings in the current branch. It includes new findings introduced by this branch and existing vulnerabilities that were already present when the branch was created. These results likely do not match the findings displayed in the Merge Request security widget as those do not include the existing vulnerabilities (with the exception of showing any existing vulnerabilities that are no longer detected in the feature branch).
 
-For more details, see [security tab](security_dashboard/index.md#pipeline-security).
+For more details, see [security tab](security_dashboard/index.md#view-vulnerabilities-in-a-pipeline).
 
 ## View security scan information in the Security Dashboard
 
@@ -185,60 +204,56 @@ By default, the vulnerability report does not show vulnerabilities of `dismissed
 
 ## Security approvals in merge requests
 
-> [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/9928) in [GitLab Ultimate](https://about.gitlab.com/pricing/) 12.2.
+> [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/9928) in GitLab 12.2.
 
-You can implement merge request approvals to require approval by selected users or a group when a
-merge request would introduce one of the following security issues:
+You can enforce an additional approval for merge requests that would introduce one of the following
+security issues:
 
-- A security vulnerability
-- A software license compliance violation
+- A security vulnerability. For more details, read
+  [Vulnerability-Check rule](#vulnerability-check-rule).
+- A software license compliance violation. For more details, read
+  [Enabling license approvals within a project](../compliance/license_compliance/index.md#enabling-license-approvals-within-a-project).
 
-When the Vulnerability-Check merge request rule is enabled, additional merge request approval
+### Vulnerability-Check rule
+
+WARNING:
+This feature is in its end-of-life process. It is [deprecated](../../update/deprecations.md#vulnerability-check)
+for use in GitLab 14.8, and is planned for removal in GitLab 15.0. Users should migrate to the new
+[Security Approval Policies](policies/scan-result-policies.md).
+
+To prevent a merge request introducing a security vulnerability in a project, enable the
+Vulnerability-Check rule. While this rule is enabled, additional merge request approval by
+[eligible approvers](../project/merge_requests/approvals/rules.md#eligible-approvers)
 is required when the latest security report in a merge request:
 
-- Contains vulnerabilities that are not present in the
-  target branch. Note that approval is still required for dismissed vulnerabilities.
+- Contains vulnerabilities with states (for example, `previously detected`, `dismissed`) matching the rule's vulnerability states. Only `newly detected` are considered if the target branch differs from the project default branch.
 - Contains vulnerabilities with severity levels (for example, `high`, `critical`, or `unknown`)
   matching the rule's severity levels.
 - Contains a vulnerability count higher than the rule allows.
-- Is not generated during pipeline execution.
+- Is not yet generated (until pipeline completion).
 
 An approval is optional when the security report:
 
-- Contains no new vulnerabilities when compared to the target branch.
+- Contains only vulnerabilities with states (for example, `newly detected`, `resolved`) **NOT** matching the rule's vulnerability states.
 - Contains only vulnerabilities with severity levels (for example, `low`, `medium`) **NOT** matching
   the rule's severity levels.
 - Contains a vulnerability count equal to or less than what the rule allows.
 
-When the License-Check merge request rule is enabled, additional approval is required if a merge
-request contains a denied license. For more details, see [Enabling license approvals within a project](../compliance/license_compliance/index.md#enabling-license-approvals-within-a-project).
+Project members with at least the Maintainer role can enable or edit
+the Vulnerability-Check rule.
 
-### Enable the Vulnerability-Check rule
+#### Enable the Vulnerability-Check rule
 
-Prerequisites:
+To enable or edit the Vulnerability-Check rule:
 
-- Maintainer or Owner [role](../permissions.md#project-members-permissions).
-
-For this approval group, you must set the number of approvals required to greater than zero.
-
-Follow these steps to enable `Vulnerability-Check`:
-
-1. Go to your project and select **Settings > General**.
+1. On the top bar, select **Menu > Projects** and find your project.
+1. On the left sidebar, select **Settings > General**.
 1. Expand **Merge request approvals**.
-1. Select **Enable** or **Edit**.
-1. Set the **Security scanners** that the rule applies to.
-1. Select the **Target branch**.
-1. Set the **Vulnerabilities allowed** to the number of vulnerabilities allowed before the rule is
-   triggered.
-1. Set the **Severity levels** to the severity levels that the rule applies to.
-1. Set the **Approvals required** to the number of approvals that the rule requires.
-1. Select the users or groups to provide approval.
+1. Select **Activate** or **Edit** of the Vulnerability-Check.
+1. Complete the fields. **Approvals required** must be at least 1.
 1. Select **Add approval rule**.
 
-Once this group is added to your project, the approval rule is enabled for all merge requests.
-Any code changes cause the approvals required to reset.
-
-![Vulnerability Check Approver Rule](img/vulnerability-check_v14_2.png)
+The approval rule is enabled for all merge requests. Any code changes reset the approvals required.
 
 ## Using private Maven repositories
 
@@ -269,28 +284,44 @@ under your project's settings:
 </settings>
 ```
 
-## DAST On-Demand Scans
+## Using a custom scanning stage
 
-If you don’t want scans running in your normal DevOps process you can use on-demand scans instead. For more details, see [on-demand scans](dast/index.md#on-demand-scans). This feature is only available for DAST. If you run an on-demand scan against the default branch, it is reported as a "successful pipeline" and these results are included in the security dashboard and vulnerability report.
+When security scanning is enabled by including CI/CD templates as described in the
+[Security scanning without Auto DevOps](#security-scanning-without-auto-devops) section, the scanning jobs
+use the predefined `test` stage by default. If you specify a custom stage in your `.gitlab-ci.yml` file without
+including a `test` stage, an error occurs.
 
-## Security report validation
+For example, the following attempts to use a `unit-tests` stage:
 
-> - [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/321918) in GitLab 13.11.
-> - Schema validation message [added](https://gitlab.com/gitlab-org/gitlab/-/issues/321730) in GitLab 14.0.
+```yaml
+include:
+  - template: Security/Dependency-Scanning.gitlab-ci.yml
+  - template: Security/License-Scanning.gitlab-ci.yml
+  - template: Security/SAST.gitlab-ci.yml
+  - template: Security/Secret-Detection.gitlab-ci.yml
 
-You can optionally enable validation of the security report artifacts based on the
-[report schemas](https://gitlab.com/gitlab-org/security-products/security-report-schemas/-/tree/master/dist).
-If you enable validation, GitLab validates the report artifacts before ingesting the vulnerabilities.
-This prevents ingestion of broken vulnerability data into the database.
+stages:
+  - unit-tests
 
-In GitLab 14.0 and later, the pipeline's **Security** tab lists any report artifacts
-that failed validation. Security report validation must first be enabled.
+custom job:
+  stage: unit-tests
+  script:
+    - echo "custom job"
+```
 
-### Enable security report validation
+The above `.gitlab-ci.yml` causes a linting error:
 
-To enable report artifacts validation, set the `VALIDATE_SCHEMA` environment variable to `"true"` for the jobs in the `.gitlab-ci.yml` file.
+```plaintext
+Found errors in your .gitlab-ci.yml:
+- dependency_scanning job: chosen stage does not exist; available stages are .pre
+- unit-tests
+- .post
+```
 
-For example, the configuration below enables validation for only the `sast` job:
+This error appears because the `test` stage used by the security scanning jobs isn't declared in the `.gitlab-ci.yml` file.
+To fix this issue, you can either:
+
+- Add a `test` stage in your `.gitlab-ci.yml`:
 
   ```yaml
   include:
@@ -300,99 +331,16 @@ For example, the configuration below enables validation for only the `sast` job:
     - template: Security/Secret-Detection.gitlab-ci.yml
 
   stages:
-    - security-scan
+    - test
+    - unit-tests
 
-  dependency_scanning:
-    stage: security-scan
-
-  license_scanning:
-    stage: security-scan
-
-  sast:
-    stage: security-scan
-    variables:
-      VALIDATE_SCHEMA: "true"
-
-  .secret-analyzer:
-    stage: security-scan
+  custom job:
+    stage: unit-tests
+    script:
+      - echo "custom job"
   ```
 
-## Interacting with findings and vulnerabilities
-
-There are a variety of locations and ways to interact with the results of the security scanning tools:
-
-- [Scan information in merge requests](#view-security-scan-information-in-merge-requests)
-- [Project Security Dashboard](security_dashboard/#project-security-dashboard)
-- [Security pipeline tab](security_dashboard/#pipeline-security)
-- [Group Security Dashboard](security_dashboard/#group-security-dashboard)
-- [Security Center](security_dashboard/#security-center)
-- [Vulnerability Report](vulnerability_report/index.md)
-- [Vulnerability Pages](vulnerabilities/index.md)
-- [Dependency List](dependency_list/index.md)
-
-For more details about which findings or vulnerabilities you can view in each of those locations, select the respective link. Each page details the ways in which you can interact with the findings and vulnerabilities. As an example, in most cases findings start out as _detected_ status. You have the option to:
-
-- Change the status.
-- Create an issue.
-- Link it to an existing issue.
-- [Resolve the vulnerability](vulnerabilities/index.md#resolve-a-vulnerability), if a solution is known.
-
-## Troubleshooting
-
-### Secure job failing with exit code 1
-
-If a Secure job is failing and it's unclear why, add `SECURE_LOG_LEVEL: "debug"` as a global CI/CD variable for
-more verbose output that is helpful for troubleshooting.
-
-```yaml
-variables:
-  SECURE_LOG_LEVEL: "debug"
-```
-
-### Outdated security reports
-
-When a security report generated for a merge request becomes outdated, the merge request shows a warning
-message in the security widget and prompts you to take an appropriate action.
-
-This can happen in two scenarios:
-
-- Your [source branch is behind the target branch](#source-branch-is-behind-the-target-branch).
-- The [target branch security report is out of date](#target-branch-security-report-is-out-of-date).
-
-#### Source branch is behind the target branch
-
-This means the most recent common ancestor commit between the target branch and the source branch is
-not the most recent commit on the target branch. This is by far the most common situation.
-
-In this case you must rebase or merge to incorporate the changes from the target branch.
-
-![Incorporate target branch changes](img/outdated_report_branch_v12_9.png)
-
-#### Target branch security report is out of date
-
-This can happen for many reasons, including failed jobs or new advisories. When the merge request shows that a
-security report is out of date, you must run a new pipeline on the target branch.
-You can do it quickly by following the hyperlink given to run a new pipeline.
-
-![Run a new pipeline](img/outdated_report_pipeline_v12_9.png)
-
-### Getting error message `sast job: stage parameter should be [some stage name here]`
-
-When [including](../../ci/yaml/index.md#includetemplate) a `.gitlab-ci.yml` template
-like [`SAST.gitlab-ci.yml`](https://gitlab.com/gitlab-org/gitlab/-/blob/master/lib/gitlab/ci/templates/Security/SAST.gitlab-ci.yml),
-the following error may occur, depending on your GitLab CI/CD configuration:
-
-```plaintext
-Found errors in your .gitlab-ci.yml:
-
-* sast job: stage parameter should be unit-tests
-```
-
-This error appears when the included job's stage (named `test`) isn't declared in `.gitlab-ci.yml`.
-To fix this issue, you can either:
-
-- Add a `test` stage in your `.gitlab-ci.yml`.
-- Override the default stage of each security job. For example, to use a pre-defined stage name `unit-tests`:
+- Override the default stage of each security job. For example, to use a pre-defined stage named `unit-tests`:
 
   ```yaml
   include:
@@ -415,19 +363,187 @@ To fix this issue, you can either:
 
   .secret-analyzer:
     stage: unit-tests
+
+  custom job:
+    stage: unit-tests
+    script:
+      - echo "custom job"
   ```
 
-[Learn more on overriding SAST jobs](sast/index.md#overriding-sast-jobs).
+Learn more on overriding security jobs:
+
+- [Overriding SAST jobs](sast/index.md#overriding-sast-jobs).
+- [Overriding Dependency Scanning jobs](dependency_scanning/index.md#overriding-dependency-scanning-jobs).
+- [Overriding Container Scanning jobs](container_scanning/index.md#overriding-the-container-scanning-template).
+- [Overriding Secret Detection jobs](secret_detection/index.md#customizing-settings).
+- [Overriding DAST jobs](dast/index.md#customize-dast-settings).
+- [Overriding License Compliance jobs](../compliance/license_compliance/index.md#overriding-the-template).
+
 All the security scanning tools define their stage, so this error can occur with all of them.
+
+## Security report validation
+
+> - [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/321918) in GitLab 13.11.
+> - Schema validation message [added](https://gitlab.com/gitlab-org/gitlab/-/issues/321730) in GitLab 14.0.
+
+You can enforce validation of the security report artifacts before ingesting the vulnerabilities.
+This prevents ingestion of broken vulnerability data into the database. GitLab validates the
+artifacts based on the [report schemas](https://gitlab.com/gitlab-org/security-products/security-report-schemas/-/tree/master/dist).
+
+In GitLab 14.0 and later, when artifact validation is enabled, the pipeline's **Security** tab lists
+any report artifacts that failed validation.
+
+### Enable security report validation
+
+> [Deprecated](https://gitlab.com/gitlab-org/gitlab/-/issues/354928) in GitLab 14.9, and planned for removal in GitLab 15.0.
+
+To enable report artifacts validation, set the `VALIDATE_SCHEMA` environment variable to `"true"`
+for the desired jobs in the `.gitlab-ci.yml` file.
+
+For example, to enable validation for only the `sast` job:
+
+```yaml
+include:
+  - template: Security/Dependency-Scanning.gitlab-ci.yml
+  - template: Security/License-Scanning.gitlab-ci.yml
+  - template: Security/SAST.gitlab-ci.yml
+  - template: Security/Secret-Detection.gitlab-ci.yml
+stages:
+  - security-scan
+dependency_scanning:
+  stage: security-scan
+license_scanning:
+  stage: security-scan
+sast:
+  stage: security-scan
+  variables:
+    VALIDATE_SCHEMA: "true"
+.secret-analyzer:
+  stage: security-scan
+```
+
+## Interact with findings and vulnerabilities
+
+You can interact with the results of the security scanning tools in several locations:
+
+- [Scan information in merge requests](#view-security-scan-information-in-merge-requests)
+- [Project Security Dashboard](security_dashboard/index.md)
+- [Security pipeline tab](security_dashboard/index.md)
+- [Group Security Dashboard](security_dashboard/index.md)
+- [Security Center](security_dashboard/#security-center)
+- [Vulnerability Report](vulnerability_report/index.md)
+- [Vulnerability Pages](vulnerabilities/index.md)
+- [Dependency List](dependency_list/index.md)
+
+For more details about which findings or vulnerabilities you can view in each of those locations,
+select the respective link. Each page details the ways in which you can interact with the findings
+and vulnerabilities. As an example, in most cases findings start out as _detected_ status.
+
+You have the option to:
+
+- Change the status.
+- Create an issue.
+- Link it to an existing issue.
+- [Resolve the vulnerability](vulnerabilities/index.md#resolve-a-vulnerability), if a solution is known.
+
+## Security scanning configuration tips
+
+Each GitLab security scanning tool has a default
+[CI/CD configuration file](https://gitlab.com/gitlab-org/gitlab/-/tree/master/lib/gitlab/ci/templates/Security),
+also known as a _template_.
+
+When customizing the configuration:
+
+- [Include](../../ci/yaml/index.md#include) the scanning tool's CI/CD template. Don't _copy_ the content
+  of the template.
+- Use the [stable](../../development/cicd/templates.md#stable-version) version of each template
+  for production workflows. The stable version changes less often, and breaking changes are only
+  made between major GitLab versions. The [latest](../../development/cicd/templates.md#latest-version)
+  version contains the most recent changes, but may have significant changes between minor GitLab versions.
+- Only override values in the template as needed. All other values are inherited from the template.
+
+### Enforce scan execution
+
+Security and compliance teams must ensure that security scans:
+
+- Run on a regular basis for all projects.
+- Can't be disabled by developers.
+
+GitLab provides two methods of accomplishing this, each with advantages and disadvantages.
+
+- [Compliance framework pipelines](../project/settings/#compliance-pipeline-configuration)
+  are recommended when:
+
+  - Scan execution enforcement is required for SAST IaC, Dependency Scanning,
+    License Compliance, API Fuzzing, or Coverage-guided Fuzzing.
+  - Scan execution enforcement is required for scanners external to GitLab.
+  - Enforced execution is required for custom jobs other than security scans.
+
+- [Scan execution policies](policies/scan-execution-policies.md)
+  are recommended when:
+
+  - Scan execution enforcement is required for DAST, SAST, Secret Detection, or Container Scanning.
+  - Scans are required to run on a regular, scheduled cadence.
+
+Additional details about the differences between the two solutions are outlined below:
+
+| | Compliance Framework Pipelines | Scan Execution Policies |
+| ------ | ------ | ------ |
+| **Flexibility** | Supports anything that can be done in a CI file. | Limited to only the items for which GitLab has explicitly added support. DAST, SAST, Secret Detection, and Container Scanning scans are supported. |
+| **Usability** | Requires knowledge of CI YAML. | Follows a `rules` and `actions`-based YAML structure. |
+| **Inclusion in CI pipeline** | The compliance pipeline is executed instead of the project's `gitlab-ci.yml` file. To include the project's `gitlab-ci.yml` file, use an `include` statement. Defined variables aren't allowed to be overwritten by the included project's YAML file. | Forced inclusion of a new job into the CI pipeline. DAST jobs that must be customized on a per-project basis can have project-level Site Profiles and Scan Profiles defined. To ensure separation of duties, these profiles are immutable when referenced in a scan execution policy. All jobs can be customized as part of the security policy itself with the same variables that are normally available to the CI job. |
+| **Schedulable** | Can be scheduled through a scheduled pipeline on the group. | Can be scheduled natively through the policy configuration itself. |
+| **Separation of Duties** | Only group owners can create compliance framework labels. Only project owners can apply compliance framework labels to projects. The ability to make or approve changes to the compliance pipeline definition is limited to individuals who are explicitly given access to the project that contains the compliance pipeline. | Only project owners can define a linked security policy project. The ability to make or approve changes to security policies is limited to individuals who are explicitly given access to the security policy project. |
+| **Ability to apply one standard to multiple projects** | The same compliance framework label can be applied to multiple projects inside a group. | The same security policy project can be used for multiple projects across GitLab with no requirement of being located in the same group. |
+
+Feedback is welcome on our vision for [unifying the user experience for these two features](https://gitlab.com/groups/gitlab-org/-/epics/7312)
+
+## Troubleshooting
+
+### Secure job failing with exit code 1
+
+If a Secure job is failing and it's unclear why, add `SECURE_LOG_LEVEL: "debug"` as a global CI/CD variable for
+more verbose output that is helpful for troubleshooting.
+
+```yaml
+variables:
+  SECURE_LOG_LEVEL: "debug"
+```
+
+### Outdated security reports
+
+When a security report generated for a merge request becomes outdated, the merge request shows a
+warning message in the security widget and prompts you to take an appropriate action.
+
+This can happen in two scenarios:
+
+- Your [source branch is behind the target branch](#source-branch-is-behind-the-target-branch).
+- The [target branch security report is out of date](#target-branch-security-report-is-out-of-date).
+
+#### Source branch is behind the target branch
+
+A security report can be out of date when the most recent common ancestor commit between the
+target branch and the source branch is not the most recent commit on the target branch.
+
+To fix this issue, rebase or merge to incorporate the changes from the target branch.
+
+![Incorporate target branch changes](img/outdated_report_branch_v12_9.png)
+
+#### Target branch security report is out of date
+
+This can happen for many reasons, including failed jobs or new advisories. When the merge request
+shows that a security report is out of date, you must run a new pipeline on the target branch.
+Select **new pipeline** to run a new pipeline.
+
+![Run a new pipeline](img/outdated_report_pipeline_v12_9.png)
 
 ### Getting warning messages `… report.json: no matching files`
 
-This is often followed by the [error `No files to upload`](../../ci/pipelines/job_artifacts.md#error-message-no-files-to-upload),
-and preceded by other errors or warnings that indicate why the JSON report wasn't generated. Please
-check the entire job log for such messages. If you don't find these messages, retry the failed job
-after setting `SECURE_LOG_LEVEL: "debug"` as a
-[custom CI/CD variable](../../ci/variables/index.md#custom-cicd-variables).
-This provides useful information to investigate further.
+This message is often followed by the [error `No files to upload`](../../ci/pipelines/job_artifacts.md#error-message-no-files-to-upload),
+and preceded by other errors or warnings that indicate why the JSON report wasn't generated. Check
+the entire job log for such messages. If you don't find these messages, retry the failed job after
+setting `SECURE_LOG_LEVEL: "debug"` as a [custom CI/CD variable](../../ci/variables/index.md#custom-cicd-variables).
+This provides extra information to investigate further.
 
 ### Getting error message `sast job: config key may not be used with 'rules': only/except`
 
@@ -525,27 +641,40 @@ involve pinning to the previous template versions, for example:
   ```
 
 Additionally, we provide a dedicated project containing the versioned legacy templates.
-This can be useful for offline setups or anyone wishing to use [Auto DevOps](../../topics/autodevops/index.md).
+This can be used for offline setups or anyone wishing to use [Auto DevOps](../../topics/autodevops/index.md).
 
 Instructions are available in the [legacy template project](https://gitlab.com/gitlab-org/auto-devops-v12-10).
 
 #### Vulnerabilities are found, but the job succeeds. How can I have a pipeline fail instead?
 
-This is the current default behavior, because the job's status indicates success or failure of the analyzer itself.
-Analyzer results are displayed in the [job logs](../../ci/jobs/index.md#expand-and-collapse-job-log-sections),
-[Merge Request widget](#view-security-scan-information-in-merge-requests)
-or [Security Dashboard](security_dashboard/index.md).
+In these circumstances, that the job succeeds is the default behavior. The job's status indicates
+success or failure of the analyzer itself. Analyzer results are displayed in the
+[job logs](../../ci/jobs/index.md#expand-and-collapse-job-log-sections),
+[Merge Request widget](#view-security-scan-information-in-merge-requests) or
+[Security Dashboard](security_dashboard/index.md).
 
 ### Error: job `is used for configuration only, and its script should not be executed`
 
 [Changes made in GitLab 13.4](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/41260)
 to the `Security/Dependency-Scanning.gitlab-ci.yml` and `Security/SAST.gitlab-ci.yml`
 templates mean that if you enable the `sast` or `dependency_scanning` jobs by setting the `rules` attribute,
-they will fail with the error `(job) is used for configuration only, and its script should not be executed`.
+they fail with the error `(job) is used for configuration only, and its script should not be executed`.
 
 The `sast` or `dependency_scanning` stanzas can be used to make changes to all SAST or Dependency Scanning,
 such as changing `variables` or the `stage`, but they cannot be used to define shared `rules`.
 
 There [is an issue open to improve extendability](https://gitlab.com/gitlab-org/gitlab/-/issues/218444).
+Please upvote the issue to help with prioritization, and
+[contributions are welcomed](https://about.gitlab.com/community/contribute/).
+
+### Empty Vulnerability Report, Dependency List, License list pages
+
+If the pipeline has manual steps with a job that has the `allow_failure: false` option, and this job is not finished,
+GitLab can't populate listed pages with the data from security reports.
+In this case, [the Vulnerability Report](vulnerability_report/index.md), [the Dependency List](dependency_list/index.md),
+and [the License list](../compliance/license_compliance/index.md#license-list) pages will be empty.
+These security pages can be populated by running the jobs from the manual step of the pipeline.
+
+There is [an issue open to handle this scenario](https://gitlab.com/gitlab-org/gitlab/-/issues/346843).
 Please upvote the issue to help with prioritization, and
 [contributions are welcomed](https://about.gitlab.com/community/contribute/).

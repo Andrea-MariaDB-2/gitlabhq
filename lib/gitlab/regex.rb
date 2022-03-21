@@ -16,12 +16,18 @@ module Gitlab
         @conan_revision_regex ||= %r{\A0\z}.freeze
       end
 
+      def conan_recipe_user_channel_regex
+        %r{\A(_|#{conan_name_regex})\z}.freeze
+      end
+
       def conan_recipe_component_regex
-        @conan_recipe_component_regex ||= %r{\A[a-zA-Z0-9_][a-zA-Z0-9_\+\.-]{1,49}\z}.freeze
+        # https://docs.conan.io/en/latest/reference/conanfile/attributes.html#name
+        @conan_recipe_component_regex ||= %r{\A#{conan_name_regex}\z}.freeze
       end
 
       def composer_package_version_regex
-        @composer_package_version_regex ||= %r{^v?(\d+(\.(\d+|x))*(-.+)?)}.freeze
+        # see https://github.com/composer/semver/blob/31f3ea725711245195f62e54ffa402d8ef2fdba9/src/VersionParser.php#L215
+        @composer_package_version_regex ||= %r{\Av?((\d++)(\.(?:\d++|[xX*]))?(\.(?:\d++|[xX*]))?(\.(?:\d++|[xX*]))?)?\z}.freeze
       end
 
       def composer_dev_version_regex
@@ -56,7 +62,7 @@ module Gitlab
       end
 
       def maven_version_regex
-        @maven_version_regex ||= /\A(\.?[\w\+-]+\.?)+\z/.freeze
+        @maven_version_regex ||= /\A(?!.*\.\.)[\w+.-]+\z/.freeze
       end
 
       def maven_app_group_regex
@@ -73,7 +79,11 @@ module Gitlab
 
       def nuget_version_regex
         @nuget_version_regex ||= /
-          \A#{_semver_major_minor_patch_regex}(\.\d*)?#{_semver_prerelease_build_regex}\z
+          \A#{_semver_major_regex}
+          \.#{_semver_minor_regex}
+          (\.#{_semver_patch_regex})?
+          (\.\d*)?
+          #{_semver_prerelease_build_regex}\z
         /x.freeze
       end
 
@@ -130,7 +140,7 @@ module Gitlab
       end
 
       def helm_channel_regex
-        @helm_channel_regex ||= %r{\A[-\.\_a-zA-Z0-9]+\z}.freeze
+        @helm_channel_regex ||= %r{\A([a-zA-Z0-9](\.|-|_)?){1,255}(?<!\.|-|_)\z}.freeze
       end
 
       def helm_package_regex
@@ -161,9 +171,25 @@ module Gitlab
       # regexes rather than being used alone.
       def _semver_major_minor_patch_regex
         @_semver_major_minor_patch_regex ||= /
+          #{_semver_major_regex}\.#{_semver_minor_regex}\.#{_semver_patch_regex}
+        /x.freeze
+      end
+
+      def _semver_major_regex
+        @_semver_major_regex ||= /
           (?<major>0|[1-9]\d*)
-          \.(?<minor>0|[1-9]\d*)
-          \.(?<patch>0|[1-9]\d*)
+        /x.freeze
+      end
+
+      def _semver_minor_regex
+        @_semver_minor_regex ||= /
+          (?<minor>0|[1-9]\d*)
+        /x.freeze
+      end
+
+      def _semver_patch_regex
+        @_semver_patch_regex ||= /
+          (?<patch>0|[1-9]\d*)
         /x.freeze
       end
 
@@ -210,6 +236,12 @@ module Gitlab
       def generic_package_file_name_regex
         generic_package_name_regex
       end
+
+      private
+
+      def conan_name_regex
+        @conan_name_regex ||= %r{[a-zA-Z0-9_][a-zA-Z0-9_\+\.-]{1,49}}.freeze
+      end
     end
 
     extend self
@@ -219,12 +251,21 @@ module Gitlab
       # The character range \p{Alnum} overlaps with \u{00A9}-\u{1f9ff}
       # hence the Ruby warning.
       # https://gitlab.com/gitlab-org/gitlab/merge_requests/23165#not-easy-fixable
-      @project_name_regex ||= /\A[\p{Alnum}\u{00A9}-\u{1f9ff}_][\p{Alnum}\p{Pd}\u{00A9}-\u{1f9ff}_\. ]*\z/.freeze
+      @project_name_regex ||= /\A[\p{Alnum}\u{00A9}-\u{1f9ff}_][\p{Alnum}\p{Pd}\u{002B}\u{00A9}-\u{1f9ff}_\. ]*\z/.freeze
     end
 
     def project_name_regex_message
-      "can contain only letters, digits, emojis, '_', '.', dash, space. " \
-      "It must start with letter, digit, emoji or '_'."
+      "can contain only letters, digits, emojis, '_', '.', '+', dashes, or spaces. " \
+      "It must start with a letter, digit, emoji, or '_'."
+    end
+
+    # Project path must conform to this regex. See https://gitlab.com/gitlab-org/gitlab/-/issues/27483
+    def oci_repository_path_regex
+      @oci_repository_path_regex ||= %r{\A[a-zA-Z0-9]+([._-][a-zA-Z0-9]+)*\z}.freeze
+    end
+
+    def oci_repository_path_regex_message
+      'must not start or end with a special character and must not contain consecutive special characters.'
     end
 
     def group_name_regex
@@ -403,16 +444,16 @@ module Gitlab
       @utc_date_regex ||= /\A[0-9]{4}-[0-9]{2}-[0-9]{2}\z/.freeze
     end
 
-    def merge_request_wip
-      /(?i)(\[WIP\]\s*|WIP:\s*|\AWIP\z)/
-    end
-
     def merge_request_draft
-      /\A(?i)(\[draft\]|\(draft\)|draft:|draft\s\-\s|draft\z)/
+      /\A(?i)(\[draft\]|\(draft\)|draft:)/
     end
 
     def issue
-      @issue ||= /(?<issue>\d+\b)/
+      @issue ||= /(?<issue>\d+)(?<format>\+)?(?=\W|\z)/
+    end
+
+    def merge_request
+      @merge_request ||= /(?<merge_request>\d+)(?<format>\+)?/
     end
 
     def base64_regex
@@ -427,5 +468,16 @@ module Gitlab
       "can contain only lowercase letters, digits, '_' and '-'. " \
       "Must start with a letter, and cannot end with '-' or '_'"
     end
+
+    def saved_reply_name_regex
+      @saved_reply_name_regex ||= /\A[a-z]([a-z0-9\-_]*[a-z0-9])?\z/.freeze
+    end
+
+    def saved_reply_name_regex_message
+      "can contain only lowercase letters, digits, '_' and '-'. " \
+      "Must start with a letter, and cannot end with '-' or '_'"
+    end
   end
 end
+
+Gitlab::Regex.prepend_mod

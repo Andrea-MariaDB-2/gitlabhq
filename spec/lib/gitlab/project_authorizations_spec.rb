@@ -37,7 +37,7 @@ RSpec.describe Gitlab::ProjectAuthorizations do
     it 'includes the correct access levels' do
       mapping = map_access_levels(authorizations)
 
-      expect(mapping[owned_project.id]).to eq(Gitlab::Access::MAINTAINER)
+      expect(mapping[owned_project.id]).to eq(Gitlab::Access::OWNER)
       expect(mapping[other_project.id]).to eq(Gitlab::Access::REPORTER)
       expect(mapping[group_project.id]).to eq(Gitlab::Access::DEVELOPER)
     end
@@ -204,6 +204,43 @@ RSpec.describe Gitlab::ProjectAuthorizations do
     end
   end
 
+  context 'with shared projects' do
+    let_it_be(:shared_with_group) { create(:group) }
+    let_it_be(:user) { create(:user) }
+    let_it_be(:project) { create(:project, group: create(:group)) }
+
+    let(:mapping) { map_access_levels(authorizations) }
+
+    before do
+      create(:project_group_link, :developer, project: project, group: shared_with_group)
+      shared_with_group.add_maintainer(user)
+    end
+
+    it 'creates proper authorizations' do
+      expect(mapping[project.id]).to eq(Gitlab::Access::DEVELOPER)
+    end
+
+    context 'even when the `lock_memberships_to_ldap` setting has been turned ON' do
+      before do
+        stub_application_setting(lock_memberships_to_ldap: true)
+      end
+
+      it 'creates proper authorizations' do
+        expect(mapping[project.id]).to eq(Gitlab::Access::DEVELOPER)
+      end
+    end
+
+    context 'when the group containing the project has forbidden group shares for any of its projects' do
+      before do
+        project.namespace.update!(share_with_group_lock: true)
+      end
+
+      it 'does not create authorizations' do
+        expect(mapping[project.id]).to be_nil
+      end
+    end
+  end
+
   context 'with shared groups' do
     let(:parent_group_user) { create(:user) }
     let(:group_user) { create(:user) }
@@ -297,7 +334,7 @@ RSpec.describe Gitlab::ProjectAuthorizations do
       let(:common_id) { non_existing_record_id }
       let!(:group) { create(:group, id: common_id) }
       let!(:unrelated_project) { create(:project, id: common_id) }
-      let(:user) { unrelated_project.owner }
+      let(:user) { unrelated_project.first_owner }
 
       it 'does not have access to group and its projects' do
         mapping = map_access_levels(authorizations)
@@ -305,6 +342,78 @@ RSpec.describe Gitlab::ProjectAuthorizations do
         expect(mapping[project_parent.id]).to be_nil
         expect(mapping[project.id]).to be_nil
         expect(mapping[project_child.id]).to be_nil
+      end
+    end
+  end
+
+  context 'with pending memberships' do
+    let_it_be(:group) { create(:group) }
+    let_it_be(:user) { create(:user) }
+
+    subject(:mapping) { map_access_levels(authorizations) }
+
+    context 'group membership' do
+      let!(:group_project) { create(:project, namespace: group) }
+
+      before do
+        create(:group_member, :developer, :awaiting, user: user, group: group)
+      end
+
+      it 'does not create authorization' do
+        expect(mapping[group_project.id]).to be_nil
+      end
+    end
+
+    context 'inherited group membership' do
+      let!(:sub_group) { create(:group, parent: group) }
+      let!(:sub_group_project) { create(:project, namespace: sub_group) }
+
+      before do
+        create(:group_member, :developer, :awaiting, user: user, group: group)
+      end
+
+      it 'does not create authorization' do
+        expect(mapping[sub_group_project.id]).to be_nil
+      end
+    end
+
+    context 'project membership' do
+      let!(:group_project) { create(:project, namespace: group) }
+
+      before do
+        create(:project_member, :developer, :awaiting, user: user, project: group_project)
+      end
+
+      it 'does not create authorization' do
+        expect(mapping[group_project.id]).to be_nil
+      end
+    end
+
+    context 'shared group' do
+      let!(:shared_group) { create(:group) }
+      let!(:shared_group_project) { create(:project, namespace: shared_group) }
+
+      before do
+        create(:group_group_link, shared_group: shared_group, shared_with_group: group)
+        create(:group_member, :developer, :awaiting, user: user, group: group)
+      end
+
+      it 'does not create authorization' do
+        expect(mapping[shared_group_project.id]).to be_nil
+      end
+    end
+
+    context 'shared project' do
+      let!(:another_group) { create(:group) }
+      let!(:shared_project) { create(:project, namespace: another_group) }
+
+      before do
+        create(:project_group_link, group: group, project: shared_project)
+        create(:group_member, :developer, :awaiting, user: user, group: group)
+      end
+
+      it 'does not create authorization' do
+        expect(mapping[shared_project.id]).to be_nil
       end
     end
   end

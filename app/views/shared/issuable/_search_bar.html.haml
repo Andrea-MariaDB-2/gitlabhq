@@ -5,6 +5,7 @@
 - placeholder = local_assigns[:placeholder] || _('Search or filter results...')
 - block_css_class = type != :productivity_analytics ? 'row-content-block second-block' : ''
 - is_epic_board = board&.to_type == "EpicBoard"
+
 - if is_epic_board
   - user_can_admin_list = can?(current_user, :admin_epic_board_list, board.resource_parent)
 - elsif board
@@ -15,17 +16,18 @@
     .d-flex.flex-column.flex-md-row.flex-grow-1.mb-lg-0.mb-md-2.mb-sm-0.w-100
       - if type == :boards
         = render "shared/boards/switcher", board: board
+        .js-new-board{ data: { multiple_issue_boards_available: parent.multiple_issue_boards_available?.to_s, can_admin_board: can?(current_user, :admin_issue_board, parent).to_s, } }
       = form_tag page_filter_path, method: :get, class: 'filter-form js-filter-form w-100' do
         - if params[:search].present?
           = hidden_field_tag :search, params[:search]
         - if @can_bulk_update
-          .check-all-holder.d-none.d-sm-block.hidden
+          .check-all-holder.gl-display-none.gl-sm-display-block.hidden.gl-float-left.gl-mr-5.gl-line-height-36
             - checkbox_id = 'check-all-issues'
             %label.gl-sr-only{ for: checkbox_id }= _('Select all')
             = check_box_tag checkbox_id, nil, false, class: "check-all-issues left"
         - if is_epic_board
           #js-board-filtered-search{ data: { full_path: @group&.full_path } }
-        - elsif Feature.enabled?(:issue_boards_filtered_search, board&.resource_parent) && board
+        - elsif board
           #js-issue-board-filtered-search
         - else
           .issues-other-filters.filtered-search-wrapper.d-flex.flex-column.flex-md-row
@@ -101,6 +103,16 @@
                     = render 'shared/issuable/user_dropdown_item',
                       user: User.new(username: '{{username}}', name: '{{name}}'),
                       avatar: { lazy: true, url: '{{avatar_url}}' }
+                - if Feature.enabled?(:mr_attention_requests, default_enabled: :yaml)
+                  #js-dropdown-attention-requested.filtered-search-input-dropdown-menu.dropdown-menu
+                    - if current_user
+                      %ul{ data: { dropdown: true } }
+                        = render 'shared/issuable/user_dropdown_item',
+                          user: current_user
+                    %ul.filter-dropdown{ data: { dynamic: true, dropdown: true } }
+                      = render 'shared/issuable/user_dropdown_item',
+                        user: User.new(username: '{{username}}', name: '{{name}}'),
+                        avatar: { lazy: true, url: '{{avatar_url}}' }
                 = render_if_exists 'shared/issuable/approver_dropdown'
                 = render_if_exists 'shared/issuable/approved_by_dropdown'
                 #js-dropdown-milestone.filtered-search-input-dropdown-menu.dropdown-menu
@@ -200,7 +212,7 @@
 
               %button.clear-search.hidden{ type: 'button' }
                 = sprite_icon('close', size: 16, css_class: 'clear-search-icon')
-    .filter-dropdown-container.d-flex.flex-column.flex-md-row
+    .filter-dropdown-container.gl-display-flex.gl-flex-direction-column.gl-md-flex-direction-row.gl-align-items-flex-start
       - if type == :boards
         #js-board-labels-toggle
         - if current_user

@@ -11,16 +11,34 @@ RSpec.describe Members::CreateService, :aggregate_failures, :clean_gitlab_redis_
 
   let(:additional_params) { { invite_source: '_invite_source_' } }
   let(:params) { { user_ids: user_ids, access_level: access_level }.merge(additional_params) }
+  let(:current_user) { user }
 
-  subject(:execute_service) { described_class.new(user, params.merge({ source: source })).execute }
+  subject(:execute_service) { described_class.new(current_user, params.merge({ source: source })).execute }
 
   before do
-    if source.is_a?(Project)
+    case source
+    when Project
       source.add_maintainer(user)
       OnboardingProgress.onboard(source.namespace)
-    else
+    when Group
       source.add_owner(user)
       OnboardingProgress.onboard(source)
+    end
+  end
+
+  context 'when the current user does not have permission to create members' do
+    let(:current_user) { create(:user) }
+
+    it 'raises a Gitlab::Access::AccessDeniedError' do
+      expect { execute_service }.to raise_error(Gitlab::Access::AccessDeniedError)
+    end
+  end
+
+  context 'when passing an invalid source' do
+    let_it_be(:source) { Object.new }
+
+    it 'raises a RuntimeError' do
+      expect { execute_service }.to raise_error(RuntimeError, 'Unknown source type: Object!')
     end
   end
 
@@ -38,6 +56,15 @@ RSpec.describe Members::CreateService, :aggregate_failures, :clean_gitlab_redis_
         expect(execute_service[:status]).to eq(:success)
         expect(source.users).to include member
         expect(OnboardingProgress.completed?(source, :user_added)).to be(true)
+      end
+
+      it 'triggers a members added event' do
+        expect(Gitlab::EventStore)
+          .to receive(:publish)
+          .with(an_instance_of(Members::MembersAddedEvent))
+          .and_call_original
+
+        expect(execute_service[:status]).to eq(:success)
       end
     end
   end
@@ -80,7 +107,7 @@ RSpec.describe Members::CreateService, :aggregate_failures, :clean_gitlab_redis_
 
     it 'does not add a member' do
       expect(execute_service[:status]).to eq(:error)
-      expect(execute_service[:message]).to eq('Invite email has already been taken')
+      expect(execute_service[:message]).to eq("The member's email address has already been taken")
       expect(OnboardingProgress.completed?(source.namespace, :user_added)).to be(false)
     end
   end
@@ -108,6 +135,24 @@ RSpec.describe Members::CreateService, :aggregate_failures, :clean_gitlab_redis_
           user: user
         )
       end
+
+      context 'with an already existing member' do
+        before do
+          source.add_developer(member)
+        end
+
+        it 'tracks the invite source from params' do
+          execute_service
+
+          expect_snowplow_event(
+            category: described_class.name,
+            action: 'create_member',
+            label: '_invite_source_',
+            property: 'existing_user',
+            user: user
+          )
+        end
+      end
     end
 
     context 'when it is a net_new_user' do
@@ -127,72 +172,102 @@ RSpec.describe Members::CreateService, :aggregate_failures, :clean_gitlab_redis_
     end
   end
 
-  context 'when tracking the areas of focus', :snowplow do
-    context 'when areas_of_focus is not passed' do
-      it 'does not track' do
-        execute_service
+  context 'when assigning tasks to be done' do
+    let(:additional_params) do
+      { invite_source: '_invite_source_', tasks_to_be_done: %w(ci code), tasks_project_id: source.id }
+    end
 
-        expect_no_snowplow_event(category: described_class.name, action: 'area_of_focus')
+    it 'creates 2 task issues', :aggregate_failures do
+      expect(TasksToBeDone::CreateWorker)
+        .to receive(:perform_async)
+        .with(anything, user.id, [member.id])
+        .once
+        .and_call_original
+      expect { execute_service }.to change { source.issues.count }.by(2)
+
+      expect(source.issues).to all have_attributes(
+        project: source,
+        author: user
+      )
+    end
+
+    context 'when passing many user ids' do
+      before do
+        stub_licensed_features(multiple_issue_assignees: false)
+      end
+
+      let(:another_user) { create(:user) }
+      let(:user_ids) { [member.id, another_user.id].join(',') }
+
+      it 'still creates 2 task issues', :aggregate_failures do
+        expect(TasksToBeDone::CreateWorker)
+          .to receive(:perform_async)
+          .with(anything, user.id, array_including(member.id, another_user.id))
+          .once
+          .and_call_original
+        expect { execute_service }.to change { source.issues.count }.by(2)
+
+        expect(source.issues).to all have_attributes(
+          project: source,
+          author: user
+        )
       end
     end
 
-    context 'when 1 areas_of_focus is passed' do
-      let(:additional_params) { { invite_source: '_invite_source_', areas_of_focus: ['no_selection'] } }
-
-      it 'tracks the areas_of_focus from params' do
-        execute_service
-
-        expect_snowplow_event(
-          category: described_class.name,
-          action: 'area_of_focus',
-          label: 'no_selection',
-          property: source.members.last.id.to_s
-        )
+    context 'when a `tasks_project_id` is missing' do
+      let(:additional_params) do
+        { invite_source: '_invite_source_', tasks_to_be_done: %w(ci code) }
       end
 
-      context 'when passing many user ids' do
-        let(:another_user) { create(:user) }
-        let(:user_ids) { [member.id, another_user.id].join(',') }
-
-        it 'tracks the areas_of_focus from params' do
-          execute_service
-
-          members = source.members.last(2)
-
-          expect_snowplow_event(
-            category: described_class.name,
-            action: 'area_of_focus',
-            label: 'no_selection',
-            property: members.first.id.to_s
-          )
-          expect_snowplow_event(
-            category: described_class.name,
-            action: 'area_of_focus',
-            label: 'no_selection',
-            property: members.last.id.to_s
-          )
-        end
+      it 'does not create task issues' do
+        expect(TasksToBeDone::CreateWorker).not_to receive(:perform_async)
+        execute_service
       end
     end
 
-    context 'when multiple areas_of_focus are passed' do
-      let(:additional_params) { { invite_source: '_invite_source_', areas_of_focus: %w[no_selection Other] } }
+    context 'when `tasks_to_be_done` are missing' do
+      let(:additional_params) do
+        { invite_source: '_invite_source_', tasks_project_id: source.id }
+      end
 
-      it 'tracks the areas_of_focus from params' do
+      it 'does not create task issues' do
+        expect(TasksToBeDone::CreateWorker).not_to receive(:perform_async)
         execute_service
+      end
+    end
 
-        expect_snowplow_event(
-          category: described_class.name,
-          action: 'area_of_focus',
-          label: 'no_selection',
-          property: source.members.last.id.to_s
-        )
-        expect_snowplow_event(
-          category: described_class.name,
-          action: 'area_of_focus',
-          label: 'Other',
-          property: source.members.last.id.to_s
-        )
+    context 'when invalid `tasks_to_be_done` are passed' do
+      let(:additional_params) do
+        { invite_source: '_invite_source_', tasks_project_id: source.id, tasks_to_be_done: %w(invalid_task) }
+      end
+
+      it 'does not create task issues' do
+        expect(TasksToBeDone::CreateWorker).not_to receive(:perform_async)
+        execute_service
+      end
+    end
+
+    context 'when invalid `tasks_project_id` is passed' do
+      let(:another_project) { create(:project) }
+      let(:additional_params) do
+        { invite_source: '_invite_source_', tasks_project_id: another_project.id, tasks_to_be_done: %w(ci code) }
+      end
+
+      it 'does not create task issues' do
+        expect(TasksToBeDone::CreateWorker).not_to receive(:perform_async)
+        execute_service
+      end
+    end
+
+    context 'when a member was already invited' do
+      let(:user_ids) { create(:project_member, :invited, project: source).invite_email }
+      let(:additional_params) do
+        { invite_source: '_invite_source_', tasks_project_id: source.id, tasks_to_be_done: %w(ci code) }
+      end
+
+      it 'does not create task issues' do
+        expect(TasksToBeDone::CreateWorker).not_to receive(:perform_async)
+        execute_service
       end
     end
   end

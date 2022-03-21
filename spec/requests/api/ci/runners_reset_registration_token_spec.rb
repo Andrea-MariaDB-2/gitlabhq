@@ -118,7 +118,7 @@ RSpec.describe API::Ci::Runners do
       end
 
       include_context 'when authorized', 'group' do
-        let_it_be(:user) { create_default(:group_member, :maintainer, user: create(:user), group: group ).user }
+        let_it_be(:user) { create_default(:group_member, :owner, user: create(:user), group: group ).user }
 
         def get_token
           group.reload.runners_token
@@ -138,7 +138,7 @@ RSpec.describe API::Ci::Runners do
       end
 
       include_context 'when authorized', 'project' do
-        let_it_be(:user) { project.owner }
+        let_it_be(:user) { project.first_owner }
 
         def get_token
           project.reload.runners_token

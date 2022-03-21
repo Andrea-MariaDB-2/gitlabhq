@@ -4,9 +4,13 @@ group: Configure
 info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
 ---
 
-# Cluster cost management **(ULTIMATE)**
+# Cluster cost management (DEPRECATED) **(ULTIMATE)**
 
-> [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/216737) in [GitLab Ultimate](https://about.gitlab.com/pricing/) 13.5.
+> - [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/216737) in [GitLab Ultimate](https://about.gitlab.com/pricing/) 13.5.
+> - [Deprecated](https://gitlab.com/groups/gitlab-org/configure/-/epics/8) in GitLab 14.5.
+
+WARNING:
+This feature was [deprecated](https://gitlab.com/groups/gitlab-org/configure/-/epics/8) in GitLab 14.5.
 
 Cluster cost management provides insights into cluster resource usage. GitLab provides an example
 [`kubecost-cost-model`](https://gitlab.com/gitlab-examples/kubecost-cost-model/)
@@ -18,8 +22,7 @@ insights within GitLab:
 
 ## Configure cluster cost management
 
-To get started with cluster cost management, you need [Maintainer](../permissions.md)
-permissions in a project or group.
+To get started with cluster cost management, you need the Maintainer role for a project or group.
 
 1. Clone the [`kubecost-cost-model`](https://gitlab.com/gitlab-examples/kubecost-cost-model/)
    example repository, which contains minor modifications to the upstream Kubecost

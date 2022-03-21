@@ -28,7 +28,7 @@ module DiffHelper
   end
 
   def diff_options
-    options = { ignore_whitespace_change: hide_whitespace?, expanded: diffs_expanded? }
+    options = { ignore_whitespace_change: hide_whitespace?, expanded: diffs_expanded?, use_extra_viewer_as_main: true }
 
     if action_name == 'diff_for_path'
       options[:expanded] = true
@@ -74,7 +74,7 @@ module DiffHelper
   end
 
   def diff_link_number(line_type, match, text)
-    line_type == match ? " " : text
+    line_type == match || text == 0 ? " " : text
   end
 
   def parallel_diff_discussions(left, right, diff_file)
@@ -183,9 +183,9 @@ module DiffHelper
 
   def diff_file_changed_icon_color(diff_file)
     if diff_file.deleted_file?
-      "cred"
+      "danger"
     elsif diff_file.new_file?
-      "cgreen"
+      "success"
     end
   end
 
@@ -248,6 +248,23 @@ module DiffHelper
     toggle_whitespace_link(url, options)
   end
 
+  def diff_files_data(diff_files)
+    diffs_map = diff_files.map do |f|
+      {
+          href: "##{hexdigest(f.file_path)}",
+          title: f.new_path,
+          name: f.file_path,
+          path: diff_file_path_text(f),
+          icon: diff_file_changed_icon(f),
+          iconColor: "#{diff_file_changed_icon_color(f)}",
+          added: f.added_lines,
+          removed: f.removed_lines
+      }
+    end
+
+    diffs_map.to_json
+  end
+
   def hide_whitespace?
     params[:w] == '1'
   end
@@ -266,7 +283,7 @@ module DiffHelper
 
     return path unless path.size > max && max > 3
 
-    "...#{path[-(max - 3)..-1]}"
+    "...#{path[-(max - 3)..]}"
   end
 
   def code_navigation_path(diffs)

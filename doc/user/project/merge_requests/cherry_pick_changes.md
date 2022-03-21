@@ -66,20 +66,17 @@ git cherry-pick -m 2 7a39eb0
 > - [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/21268) in GitLab 13.11 behind a [feature flag](../../feature_flags.md), disabled by default.
 > - [Feature flag removed](https://gitlab.com/gitlab-org/gitlab/-/issues/324154) in GitLab 14.0.
 
-WARNING:
-This feature might not be available to you. Check the **version history** note above for details.
-
-You can use the GitLab UI to cherry-pick merge requests into a project, even if the
-merge request is from a fork:
+You can cherry-pick merge requests from the same project, or forks of the same
+project, from the GitLab user interface:
 
 1. In the merge request's secondary menu, click **Commits** to display the commit details page.
 1. Click on the **Options** dropdown and select **Cherry-pick** to show the cherry-pick modal.
 1. In **Pick into project** and **Pick into branch**, select the destination project and branch:
    ![Cherry-pick commit](img/cherry_pick_into_project_v13_11.png)
-1. (Optional) Select **Start a new merge request** if you're ready to create a merge request.
+1. Optional. Select **Start a new merge request** if you're ready to create a merge request.
 1. Click **Cherry-pick**.
 
-## Related links
+## Related topics
 
 - The [Commits API](../../../api/commits.md) enables you to add custom messages
   to changes you cherry-pick through the API.

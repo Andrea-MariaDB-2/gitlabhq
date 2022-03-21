@@ -1,6 +1,6 @@
 #import "ee_else_ce/boards/graphql/issue.fragment.graphql"
 
-query ListIssues(
+query BoardListsEE(
   $fullPath: ID!
   $boardId: ID!
   $id: ID
@@ -11,15 +11,18 @@ query ListIssues(
   $first: Int
 ) {
   group(fullPath: $fullPath) @include(if: $isGroup) {
+    id
     board(id: $boardId) {
+      id
       lists(id: $id, issueFilters: $filters) {
         nodes {
           id
           issuesCount
+          listType
           issues(first: $first, filters: $filters, after: $after) {
             edges {
               node {
-                ...IssueNode
+                ...Issue
               }
             }
             pageInfo {
@@ -32,15 +35,18 @@ query ListIssues(
     }
   }
   project(fullPath: $fullPath) @include(if: $isProject) {
+    id
     board(id: $boardId) {
+      id
       lists(id: $id, issueFilters: $filters) {
         nodes {
           id
           issuesCount
+          listType
           issues(first: $first, filters: $filters, after: $after) {
             edges {
               node {
-                ...IssueNode
+                ...Issue
               }
             }
             pageInfo {

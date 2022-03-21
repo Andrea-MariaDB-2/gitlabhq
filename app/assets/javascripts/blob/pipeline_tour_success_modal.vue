@@ -1,7 +1,7 @@
 <script>
 import { GlModal, GlSprintf, GlLink, GlButton } from '@gitlab/ui';
-import Cookies from 'js-cookie';
-import { s__ } from '~/locale';
+import { getCookie, removeCookie } from '~/lib/utils/common_utils';
+import { __, s__ } from '~/locale';
 import Tracking from '~/tracking';
 
 const trackingMixin = Tracking.mixin();
@@ -62,16 +62,16 @@ export default {
       return this.commitCookiePath || this.projectMergeRequestsPath;
     },
     commitCookiePath() {
-      const cookieVal = Cookies.get(this.commitCookie);
+      const cookieVal = getCookie(this.commitCookie);
 
       if (cookieVal !== 'true') return cookieVal;
       return '';
     },
   },
   i18n: {
-    modalTitle: s__("That's it, well done!"),
+    modalTitle: __("That's it, well done!"),
     pipelinesButton: s__('MR widget|See your pipeline in action'),
-    mergeRequestButton: s__('MR widget|Back to the Merge request'),
+    mergeRequestButton: s__('MR widget|Back to the merge request'),
     bodyMessage: s__(
       `MR widget|The pipeline will test your code on every commit. A %{codeQualityLinkStart}code quality report%{codeQualityLinkEnd} will appear in your merge requests to warn you about potential code degradations.`,
     ),
@@ -85,7 +85,7 @@ export default {
   },
   methods: {
     disableModalFromRenderingAgain() {
-      Cookies.remove(this.commitCookie);
+      removeCookie(this.commitCookie);
     },
   },
 };
@@ -124,7 +124,7 @@ export default {
         :href="goToMergeRequestPath"
         :data-track-property="humanAccess"
         :data-track-value="$options.goToTrackValueMergeRequest"
-        :data-track-event="$options.trackEvent"
+        :data-track-action="$options.trackEvent"
         :data-track-label="trackLabel"
       >
         {{ $options.i18n.mergeRequestButton }}
@@ -135,7 +135,7 @@ export default {
         variant="success"
         :data-track-property="humanAccess"
         :data-track-value="$options.goToTrackValuePipelines"
-        :data-track-event="$options.trackEvent"
+        :data-track-action="$options.trackEvent"
         :data-track-label="trackLabel"
       >
         {{ $options.i18n.pipelinesButton }}

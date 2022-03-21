@@ -2,24 +2,37 @@
 stage: Enablement
 group: Distribution
 info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
-type: howto
 ---
 
 {::options parse_block_html="true" /}
 
-# Installing GitLab on Amazon Web Services (AWS) (DEPRECATED) **(FREE SELF)**
+# Installing a GitLab POC on Amazon Web Services (AWS) **(FREE SELF)**
 
 This page offers a walkthrough of a common configuration for GitLab on AWS using the official GitLab Linux package. You should customize it to accommodate your needs.
 
 NOTE:
-For organizations with 1,000 users or less, the recommended AWS installation method is to launch an EC2 single box [Omnibus Installation](https://about.gitlab.com/install/) and implement a snapshot strategy for backing up the data. See the [1,000 user reference architecture](../../administration/reference_architectures/1k_users.md) for more.
+For organizations with 1,000 users or less, the recommended AWS installation method is to launch an EC2 single box [Omnibus Installation](https://about.gitlab.com/install/) and implement a snapshot strategy for backing up the data. See the [1,000 user reference architecture](../../administration/reference_architectures/1k_users.md) for more information.
+
+## Getting started for production-grade GitLab
 
 NOTE:
-The [GitLab Environment Toolkit (GET)](https://gitlab.com/gitlab-org/quality/gitlab-environment-toolkit/-/tree/master) is GitLabs internal effort to create a multi-cloud, multi-GitLab toolkit to provision GitLab. It can be used to deploy Omnibus GitLab on AWS. GET is developed by GitLab developers and is open to community contributions.
+This document is an installation guide for a proof of concept instance. It is not a reference architecture and it does not result in a highly available configuration.
+
+Following this guide exactly results in a proof of concept instance that roughly equates to a **scaled down** version of a **two availability zone implementation** of the **Non-HA** [Omnibus 2000 User Reference Architecture](../../administration/reference_architectures/2k_users.md). The 2K reference architecture is not HA because it is primarily intended to provide some scaling while keeping costs and complexity low. The [3000 User Reference Architecture](../../administration/reference_architectures/3k_users.md) is the smallest size that is GitLab HA. It has additional service roles to achieve HA, most notably it uses Gitaly Cluster to achieve HA for Git repository storage and specifies triple redundancy.
+
+GitLab maintains and tests two main types of Reference Architectures. The **Omnibus architectures** are implemented on instance compute while **Cloud Native Hybrid architectures** maximize the use of a Kubernetes cluster. Cloud Native Hybrid reference architecture specifications are addendum sections to the Reference Architecture size pages that start by describing the Omnibus architecture. For example, the 3000 User Cloud Native Reference Architecture is in the subsection titled [Cloud Native Hybrid reference architecture with Helm Charts (alternative)](../../administration/reference_architectures/3k_users.md#cloud-native-hybrid-reference-architecture-with-helm-charts-alternative) in the 3000 User Reference Architecture page.
+
+### Getting started for production-grade Omnibus GitLab
+
+The Infrastructure as Code tooling [GitLab Environment Tool (GET)](https://gitlab.com/gitlab-org/gitlab-environment-toolkit/-/tree/main) is the best place to start for building Omnibus GitLab on AWS and most especially if you are targeting an HA setup. While it does not automate everything, it does complete complex setups like Gitaly Cluster for you. GET is open source so anyone can build on top of it and contribute improvements to it.
+
+### Getting started for production-grade Cloud Native Hybrid GitLab
+
+For the Cloud Native Hybrid architectures there are two Infrastructure as Code options which are compared in GitLab Cloud Native Hybrid on AWS EKS implementation pattern in the section [Available Infrastructure as Code for GitLab Cloud Native Hybrid](gitlab_hybrid_on_aws.md#available-infrastructure-as-code-for-gitlab-cloud-native-hybrid). It compares the [GitLab Environment Toolkit](https://gitlab.com/gitlab-org/gitlab-environment-toolkit/-/tree/main) to the AWS Quick Start for GitLab Cloud Native Hybrid on EKS which was co-developed by GitLab and AWS. GET and the AWS Quick Start are both open source so anyone can build on top of them and contribute improvements to them.
 
 ## Introduction
 
-For the most part, we'll make use of Omnibus GitLab in our setup, but we'll also leverage native AWS services. Instead of using the Omnibus bundled PostgreSQL and Redis, we will use AWS RDS and ElastiCache.
+For the most part, we'll make use of Omnibus GitLab in our setup, but we'll also leverage native AWS services. Instead of using the Omnibus bundled PostgreSQL and Redis, we will use Amazon RDS and ElastiCache.
 
 In this guide, we'll go through a multi-node setup where we'll start by
 configuring our Virtual Private Cloud and subnets to later integrate
@@ -255,8 +268,7 @@ On the EC2 dashboard, look for Load Balancer in the left navigation bar:
 1. Click **Configure Health Check** and set up a health check for your EC2 instances.
    1. For **Ping Protocol**, select HTTP.
    1. For **Ping Port**, enter 80.
-   1. For **Ping Path**, enter `/users/sign_in`. (We use `/users/sign_in` as it's a public endpoint that does
-   not require authentication.)
+   1. For **Ping Path** - we recommend that you [use the Readiness check endpoint](../../administration/load_balancer.md#readiness-check). You'll need to add [the VPC IP Address Range (CIDR)](https://docs.aws.amazon.com/elasticloadbalancing/latest/classic/elb-security-groups.html#elb-vpc-nacl) to the [IP Allowlist](../../administration/monitoring/ip_whitelist.md) for the [Health Check endpoints](../../user/admin_area/monitoring/health_check.md)
    1. Keep the default **Advanced Details** or adjust them according to your needs.
 1. Click **Add EC2 Instances** - don't add anything as we will create an Auto Scaling Group later to manage instances for us.
 1. Click **Add Tags** and add any tags you need.
@@ -378,7 +390,7 @@ persistence and is used to store session data, temporary cache information, and 
    chance to deploy Redis in multiple availability zones.
 1. In the settings section:
    1. Give the cluster a name (`gitlab-redis`) and a description.
-   1. For the version, select the latest of `5.0` series (e.g., `5.0.6`).
+   1. For the version, select the latest.
    1. Leave the port as `6379` since this is what we used in our Redis security group above.
    1. Select the node type (at least `cache.t3.medium`, but adjust to your needs) and the number of replicas.
 1. In the advanced settings section:
@@ -396,7 +408,10 @@ persistence and is used to store session data, temporary cache information, and 
 
 ## Setting up Bastion Hosts
 
-Since our GitLab instances will be in private subnets, we need a way to connect to these instances via SSH to make configuration changes, perform upgrades, etc. One way of doing this is via a [bastion host](https://en.wikipedia.org/wiki/Bastion_host), sometimes also referred to as a jump box.
+Because our GitLab instances are in private subnets, we need a way to connect
+to these instances with SSH for actions that include making configuration changes
+and performing upgrades. One way of doing this is by using a [bastion host](https://en.wikipedia.org/wiki/Bastion_host),
+sometimes also referred to as a jump box.
 
 NOTE:
 If you do not want to maintain bastion hosts, you can set up [AWS Systems Manager Session Manager](https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager.html) for access to instances. This is beyond the scope of this document.
@@ -573,8 +588,8 @@ Let's create an EC2 instance where we'll install Gitaly:
    1. In the **Subnet** dropdown, select `gitlab-private-10.0.1.0` from the list of subnets we created earlier.
    1. Double check that **Auto-assign Public IP** is set to `Use subnet setting (Disable)`.
    1. Click **Add Storage**.
-1. Increase the Root volume size to `20 GiB` and change the **Volume Type** to `Provisoned IOPS SSD (io1)`. (This is an arbitrary size. Create a volume big enough for your repository storage requirements.)
-   1. For **IOPS** set `1000` (20 GiB x 50 IOPS). You can provision up to 50 IOPS per GiB. If you select a larger volume, increase the IOPS accordingly. Workloads where many small files are written in a serialized manner, like `git`, requires performant storage, hence the choice of `Provisoned IOPS SSD (io1)`.
+1. Increase the Root volume size to `20 GiB` and change the **Volume Type** to `Provisioned IOPS SSD (io1)`. (This is an arbitrary size. Create a volume big enough for your repository storage requirements.)
+   1. For **IOPS** set `1000` (20 GiB x 50 IOPS). You can provision up to 50 IOPS per GiB. If you select a larger volume, increase the IOPS accordingly. Workloads where many small files are written in a serialized manner, like `git`, requires performant storage, hence the choice of `Provisioned IOPS SSD (io1)`.
 1. Click on **Add Tags** and add your tags. In our case, we'll only set `Key: Name` and `Value: Gitaly`.
 1. Click on **Configure Security Group** and let's **Create a new security group**.
    1. Give your security group a name and description. We'll use `gitlab-gitaly-sec-group` for both.
@@ -642,12 +657,6 @@ Since we are using the [AWS IAM profile](#create-an-iam-role) we created earlier
 
 Remember to run `sudo gitlab-ctl reconfigure` after saving the changes to the `gitlab.rb` file.
 
-NOTE:
-One current feature of GitLab that still requires a shared directory (NFS) is
-[GitLab Pages](../../user/project/pages/index.md).
-There is [work in progress](https://gitlab.com/gitlab-org/gitlab-pages/-/issues/196)
-to eliminate the need for NFS to support GitLab Pages.
-
 ---
 
 That concludes the configuration changes for our GitLab instance. Next, we'll create a custom AMI based on this instance to use for our launch configuration and auto scaling group.
@@ -655,8 +664,13 @@ That concludes the configuration changes for our GitLab instance. Next, we'll cr
 ### Log in for the first time
 
 Using the domain name you used when setting up [DNS for the load balancer](#configure-dns-for-load-balancer), you should now be able to visit GitLab in your browser.
-If you didn't change the password by any other means, the default password will be the same as the instance ID. To change the default password, login as the `root` user
-with the default password and [change it in the user profile](../../user/profile#change-your-password).
+
+Depending on how you installed GitLab and if you did not change the password by any other means, the default password is either:
+
+- Your instance ID if you used the official GitLab AMI.
+- A randomly generated password stored for 24 hours in `/etc/gitlab/initial_root_password`.
+
+To change the default password, log in as the `root` user with the default password and [change it in the user profile](../../user/profile#change-your-password).
 
 When our [auto scaling group](#create-an-auto-scaling-group) spins up new instances, we'll be able to log in with username `root` and the newly created password.
 
@@ -734,7 +748,7 @@ Read more on configuring an
 
 ## Backup and restore
 
-GitLab provides [a tool to back up](../../raketasks/backup_restore.md#back-up-gitlab)
+GitLab provides [a tool to back up](../../raketasks/backup_restore.md)
 and restore its Git data, database, attachments, LFS objects, and so on.
 
 Some important things to know:
@@ -791,21 +805,7 @@ After a few minutes, the new version should be up and running.
 
 ## Find official GitLab-created AMI IDs on AWS
 
-To find the AMIs generated by GitLab:
-
-1. Login to AWS Web Console, so that clicking the links below will take you directly to the AMI list.
-1. Pick the edition you want:
-
-    - [GitLab Enterprise Edition](https://console.aws.amazon.com/ec2/v2/home?region=us-east-1#Images:visibility=public-images;ownerAlias=782774275127;search=GitLab%20EE;sort=desc:name): If you want to unlock the enterprise features, a license is needed. Recommended for this guide.
-    - [GitLab Community Edition](https://console.aws.amazon.com/ec2/v2/home?region=us-east-1#Images:visibility=public-images;ownerAlias=782774275127;search=GitLab%20CE;sort=desc:name): The open source version of GitLab.
-    - [GitLab Premium or Ultimate Marketplace (Prelicensed)](https://console.aws.amazon.com/ec2/v2/home?region=us-east-1#Images:visibility=public-images;source=Marketplace;search=GitLab%20EE;sort=desc:name): 5 user license built into per-minute billing.
-1. AMI IDs are unique per region, so once you've loaded one of the above, select the desired target region in the upper right of the console to see the appropriate AMIs.
-1. Once the console is loaded, you can add additional search criteria to narrow further. For instance, `13.` to find only 13.x versions.
-1. To launch an EC2 Machine with one of the listed AMIs, check the box at the start of the relevant row, and select the "Launch" button near the top of left of the page.
-
-NOTE:
-If you are trying to restore from an older version of GitLab while moving to AWS, find the
-[Enterprise and Community Editions Before 11.10.3](https://console.aws.amazon.com/ec2/v2/home?region=us-east-1#Images:visibility=public-images;ownerAlias=855262394183;sort=desc:name).
+Read more on how to use [GitLab releases as AMIs](index.md#official-gitlab-releases-as-amis).
 
 ## Conclusion
 
@@ -827,7 +827,7 @@ to request additional material:
   Geo is the solution for widely distributed development teams.
 - [Omnibus GitLab](https://docs.gitlab.com/omnibus/) - Everything you need to know
   about administering your GitLab instance.
-- [Upload a license](../../user/admin_area/license.md):
+- [Add a license](../../user/admin_area/license.md):
   Activate all GitLab Enterprise Edition functionality with a license.
 - [Pricing](https://about.gitlab.com/pricing/): Pricing for the different tiers.
 
@@ -835,7 +835,7 @@ to request additional material:
 
 ### Instances are failing health checks
 
-If your instances are failing the load balancer's health checks, verify that they are returning a status `200` from the health check endpoint we configured earlier. Any other status, including redirects (e.g. status `302`) will cause the health check to fail.
+If your instances are failing the load balancer's health checks, verify that they are returning a status `200` from the health check endpoint we configured earlier. Any other status, including redirects like status `302`, will cause the health check to fail.
 
 You may have to set a password on the `root` user to prevent automatic redirects on the sign-in endpoint before health checks will pass.
 

@@ -32,7 +32,7 @@ sudo gitlab-rake gitlab:import:all_users_to_all_projects
 bundle exec rake gitlab:import:all_users_to_all_projects RAILS_ENV=production
 ```
 
-Admin users are added as maintainers.
+Administrators are added as maintainers.
 
 ## Add user as a developer to all groups
 
@@ -176,3 +176,7 @@ cp config/secrets.yml.bak config/secrets.yml
 sudo /etc/init.d/gitlab start
 
 ```
+
+## Related topics
+
+- [Reset a user's password](../security/reset_user_password.md#use-a-rake-task).

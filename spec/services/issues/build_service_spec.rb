@@ -3,14 +3,18 @@
 require 'spec_helper'
 
 RSpec.describe Issues::BuildService do
+  using RSpec::Parameterized::TableSyntax
+
   let_it_be(:project) { create(:project, :repository) }
   let_it_be(:developer) { create(:user) }
+  let_it_be(:reporter) { create(:user) }
   let_it_be(:guest) { create(:user) }
 
   let(:user) { developer }
 
   before_all do
     project.add_developer(developer)
+    project.add_reporter(reporter)
     project.add_guest(guest)
   end
 
@@ -138,55 +142,63 @@ RSpec.describe Issues::BuildService do
   end
 
   describe '#execute' do
-    context 'as developer' do
-      it 'builds a new issues with given params' do
-        milestone = create(:milestone, project: project)
-        issue = build_issue(milestone_id: milestone.id)
+    describe 'setting milestone' do
+      context 'when developer' do
+        it 'builds a new issues with given params' do
+          milestone = create(:milestone, project: project)
+          issue = build_issue(milestone_id: milestone.id)
 
-        expect(issue.milestone).to eq(milestone)
+          expect(issue.milestone).to eq(milestone)
+        end
+
+        it 'sets milestone to nil if it is not available for the project' do
+          milestone = create(:milestone, project: create(:project))
+          issue = build_issue(milestone_id: milestone.id)
+
+          expect(issue.milestone).to be_nil
+        end
       end
 
-      it 'sets milestone to nil if it is not available for the project' do
-        milestone = create(:milestone, project: create(:project))
-        issue = build_issue(milestone_id: milestone.id)
+      context 'when guest' do
+        let(:user) { guest }
 
-        expect(issue.milestone).to be_nil
+        it 'cannot set milestone' do
+          milestone = create(:milestone, project: project)
+          issue = build_issue(milestone_id: milestone.id)
+
+          expect(issue.milestone).to be_nil
+        end
       end
     end
 
-    context 'as guest' do
-      let(:user) { guest }
+    describe 'setting issue type' do
+      context 'with a corresponding WorkItems::Type' do
+        let_it_be(:type_issue_id) { WorkItems::Type.default_issue_type.id }
+        let_it_be(:type_incident_id) { WorkItems::Type.default_by_type(:incident).id }
 
-      it 'cannot set milestone' do
-        milestone = create(:milestone, project: project)
-        issue = build_issue(milestone_id: milestone.id)
-
-        expect(issue.milestone).to be_nil
-      end
-
-      context 'setting issue type' do
-        it 'defaults to issue if issue_type not given' do
-          issue = build_issue
-
-          expect(issue).to be_issue
+        where(:issue_type, :current_user, :work_item_type_id, :resulting_issue_type) do
+          nil           | ref(:guest)    | ref(:type_issue_id)       | 'issue'
+          'issue'       | ref(:guest)    | ref(:type_issue_id)       | 'issue'
+          'incident'    | ref(:guest)    | ref(:type_issue_id)       | 'issue'
+          'incident'    | ref(:reporter) | ref(:type_incident_id)    | 'incident'
+          # update once support for test_case is enabled
+          'test_case'   | ref(:guest)    | ref(:type_issue_id)       | 'issue'
+          # update once support for requirement is enabled
+          'requirement' | ref(:guest)    | ref(:type_issue_id)       | 'issue'
+          'invalid'     | ref(:guest)    | ref(:type_issue_id)       | 'issue'
+          # ensure that we don't set a value which has a permission check but is an invalid issue type
+          'project'     | ref(:guest)    | ref(:type_issue_id)       | 'issue'
         end
 
-        it 'sets issue' do
-          issue = build_issue(issue_type: 'issue')
+        with_them do
+          let(:user) { current_user }
 
-          expect(issue).to be_issue
-        end
+          it 'builds an issue' do
+            issue = build_issue(issue_type: issue_type)
 
-        it 'sets incident' do
-          issue = build_issue(issue_type: 'incident')
-
-          expect(issue).to be_incident
-        end
-
-        it 'cannot set invalid issue type' do
-          issue = build_issue(issue_type: 'project')
-
-          expect(issue).to be_issue
+            expect(issue.issue_type).to eq(resulting_issue_type)
+            expect(issue.work_item_type_id).to eq(work_item_type_id)
+          end
         end
       end
     end

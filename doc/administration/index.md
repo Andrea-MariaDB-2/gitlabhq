@@ -31,18 +31,16 @@ Learn how to install, configure, update, and maintain your GitLab instance.
 ### Installing GitLab
 
 - [Install](../install/index.md): Requirements, directory structures, and installation methods.
-  - [Database load balancing](database_load_balancing.md): Distribute database queries among multiple database servers.
-  - [Omnibus support for log forwarding](https://docs.gitlab.com/omnibus/settings/logs.html#udp-log-shipping-gitlab-enterprise-edition-only).
 - [Reference architectures](reference_architectures/index.md): Add additional resources to support more users.
   - [Installing GitLab on Amazon Web Services (AWS)](../install/aws/index.md): Set up GitLab on Amazon AWS.
 - [Geo](geo/index.md): Replicate your GitLab instance to other geographic locations as a read-only fully operational version.
 - [Disaster Recovery](geo/disaster_recovery/index.md): Quickly fail-over to a different site with minimal effort in a disaster situation.
-- [Add License](../user/admin_area/license.md): Upload a license at install time to unlock features that are in paid tiers of GitLab.
+- [Add License](../user/admin_area/license.md): Add a license at install time to unlock features that are in paid tiers of GitLab.
 
 ### Configuring GitLab
 
-- [Adjust your instance's timezone](timezone.md): Customize the default time zone of GitLab.
-- [System hooks](../system_hooks/system_hooks.md): Notifications when users, projects and keys are changed.
+- [Adjust your instance's time zone](timezone.md): Customize the default time zone of GitLab.
+- [System hooks](system_hooks.md): Notifications when users, projects and keys are changed.
 - [Security](../security/index.md): Learn what you can do to further secure your GitLab instance.
 - [Usage statistics, version check, and Service Ping](../user/admin_area/settings/usage_statistics.md): Enable or disable information about your instance to be sent to GitLab, Inc.
 - [Global user settings](user_settings.md): Configure instance-wide user permissions.
@@ -57,7 +55,7 @@ Learn how to install, configure, update, and maintain your GitLab instance.
 - [File hooks](file_hooks.md): With custom file hooks, GitLab administrators can
   introduce custom integrations without modifying GitLab source code.
 - [Enforcing Terms of Service](../user/admin_area/settings/terms.md)
-- [Third party offers](../user/admin_area/settings/third_party_offers.md)
+- [Customer experience improvement and third-party offers](../user/admin_area/settings/third_party_offers.md)
 - [Compliance](compliance.md): A collection of features from across the
   application that you may configure to help ensure that your GitLab instance
   and DevOps workflow meet compliance standards.
@@ -70,7 +68,7 @@ Learn how to install, configure, update, and maintain your GitLab instance.
 - [Elasticsearch](../integration/elasticsearch.md): Enable Elasticsearch to
   empower Advanced Search. Use when you deal with a huge amount of data.
 - [External Classification Policy Authorization](../user/admin_area/settings/external_authorization.md)
-- [Upload a license](../user/admin_area/license.md): Upload a license to unlock
+- [Add a license](../user/admin_area/license.md): Add a license to unlock
   features that are in paid tiers of GitLab.
 - [Admin Area](../user/admin_area/index.md): for self-managed instance-wide
   configuration and maintenance.
@@ -79,6 +77,8 @@ Learn how to install, configure, update, and maintain your GitLab instance.
 - [Enabling and disabling features flags](feature_flags.md): how to enable and
   disable GitLab features deployed behind feature flags.
 - [Application settings cache expiry interval](application_settings_cache.md)
+- [Database Load Balancing](postgresql/database_load_balancing.md): Distribute database queries among multiple database servers.
+- [Omnibus support for log forwarding](https://docs.gitlab.com/omnibus/settings/logs.html#udp-log-shipping-gitlab-enterprise-edition-only).
 
 #### Customizing GitLab appearance
 
@@ -111,10 +111,10 @@ Learn how to install, configure, update, and maintain your GitLab instance.
 
 ### GitLab platform integrations
 
-- [Mattermost](https://docs.gitlab.com/omnibus/gitlab-mattermost/): Integrate with [Mattermost](https://mattermost.com), an open source, private cloud workplace for web messaging.
+- [Mattermost](../integration/mattermost/index.md): Integrate with [Mattermost](https://mattermost.com), an open source, private cloud workplace for web messaging.
 - [PlantUML](integration/plantuml.md): Create diagrams in AsciiDoc and Markdown documents
   created in snippets, wikis, and repositories.
-- [Web terminals](integration/terminal.md): Provide terminal access to your applications deployed to Kubernetes from GitLab CI/CD [environments](../ci/environments/index.md#web-terminals).
+- [Web terminals](integration/terminal.md): Provide terminal access to your applications deployed to Kubernetes from GitLab CI/CD [environments](../ci/environments/index.md#web-terminals-deprecated).
 
 ## User settings and permissions
 
@@ -133,7 +133,7 @@ Learn how to install, configure, update, and maintain your GitLab instance.
   - Instances.
 - [Auditor users](auditor_users.md): Users with read-only access to all projects, groups, and other resources on the GitLab instance.
 - [Incoming email](incoming_email.md): Configure incoming emails to allow
-  users to [reply by email](reply_by_email.md), create [issues by email](../user/project/issues/managing_issues.md#new-issue-via-email) and
+  users to [reply by email](reply_by_email.md), create [issues by email](../user/project/issues/managing_issues.md#by-sending-an-email) and
   [merge requests by email](../user/project/merge_requests/creating_merge_requests.md#by-sending-an-email), and to enable [Service Desk](../user/project/service_desk.md).
   - [Postfix for incoming email](reply_by_email_postfix_setup.md): Set up a
   basic Postfix mail server with IMAP authentication on Ubuntu for incoming
@@ -146,7 +146,7 @@ Learn how to install, configure, update, and maintain your GitLab instance.
 - [Issue closing pattern](issue_closing_pattern.md): Customize how to close an issue from commit messages.
 - [Gitaly](gitaly/index.md): Configuring Gitaly, the Git repository storage service for GitLab.
 - [Default labels](../user/admin_area/labels.md): Create labels that are automatically added to every new project.
-- [Restrict the use of public or internal projects](../public_access/public_access.md#restrict-use-of-public-or-internal-projects): Restrict the use of visibility levels for users when they create a project or a snippet.
+- [Restrict the use of public or internal projects](../user/public_access.md#restrict-use-of-public-or-internal-projects): Restrict the use of visibility levels for users when they create a project or a snippet.
 - [Custom project templates](../user/admin_area/custom_project_templates.md): Configure a set of projects to be used as custom templates when creating a new project.
 
 ## Package Registry administration
@@ -172,7 +172,7 @@ Learn how to install, configure, update, and maintain your GitLab instance.
 - [Job artifacts](job_artifacts.md): Enable, disable, and configure job artifacts (a set of files and directories which are outputted by a job when it completes successfully).
 - [Job logs](job_logs.md): Information about the job logs.
 - [Register runners](../ci/runners/runners_scope.md): Learn how to register and configure runners.
-- [Shared runners pipelines quota](../user/admin_area/settings/continuous_integration.md#shared-runners-pipeline-minutes-quota): Limit the usage of pipeline minutes for shared runners.
+- [Shared runners quota of CI/CD minutes](../ci/pipelines/cicd_minutes.md): Limit the usage of CI/CD minutes for shared runners.
 - [Enable or disable Auto DevOps](../topics/autodevops/index.md#enable-or-disable-auto-devops): Enable or disable Auto DevOps for your instance.
 
 ## Snippet settings

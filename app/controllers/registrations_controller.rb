@@ -5,6 +5,8 @@ class RegistrationsController < Devise::RegistrationsController
   include AcceptsPendingInvitations
   include RecaptchaHelper
   include InvisibleCaptchaOnSignup
+  include OneTrustCSP
+  include BizibleCSP
 
   layout 'devise'
 
@@ -12,6 +14,13 @@ class RegistrationsController < Devise::RegistrationsController
   before_action :ensure_destroy_prerequisites_met, only: [:destroy]
   before_action :load_recaptcha, only: :new
   before_action :set_invite_params, only: :new
+  before_action only: [:create] do
+    check_rate_limit!(:user_sign_up, scope: request.ip)
+  end
+
+  before_action only: [:new] do
+    push_frontend_feature_flag(:gitlab_gtm_datalayer, type: :ops)
+  end
 
   feature_category :authentication_and_authorization
 
@@ -27,6 +36,7 @@ class RegistrationsController < Devise::RegistrationsController
 
       persist_accepted_terms_if_required(new_user)
       set_role_required(new_user)
+      track_experiment_event(new_user)
 
       if pending_approval?
         NotificationService.new.new_instance_access_request(new_user)
@@ -45,6 +55,11 @@ class RegistrationsController < Devise::RegistrationsController
   end
 
   def destroy
+    if current_user.required_terms_not_accepted?
+      redirect_to profile_account_path, status: :see_other, alert: s_('Profiles|You must accept the Terms of Service in order to perform this action.')
+      return
+    end
+
     if destroy_confirmation_valid?
       current_user.delete_async(deleted_by: current_user)
       session.try(:destroy)
@@ -147,8 +162,12 @@ class RegistrationsController < Devise::RegistrationsController
     resource.persisted? && resource.blocked_pending_approval?
   end
 
+  def sign_up_params_attributes
+    [:username, :email, :name, :first_name, :last_name, :password]
+  end
+
   def sign_up_params
-    params.require(:user).permit(:username, :email, :name, :first_name, :last_name, :password)
+    params.require(:user).permit(sign_up_params_attributes)
   end
 
   def resource_name
@@ -200,14 +219,19 @@ class RegistrationsController < Devise::RegistrationsController
 
     return unless member
 
-    experiment_name = session.delete(:invite_email_experiment_name)
-    experiment(:invite_email_preview_text, actor: member).track(:accepted) if experiment_name == 'invite_email_preview_text'
-    experiment(:invite_email_from, actor: member).track(:accepted) if experiment_name == 'invite_email_from'
     Gitlab::Tracking.event(self.class.name, 'accepted', label: 'invite_email', property: member.id.to_s)
   end
 
   def context_user
     current_user
+  end
+
+  def track_experiment_event(new_user)
+    # Track signed up event to relate it with click "Sign up" button events from
+    # the experimental logged out header with marketing links. This allows us to
+    # have a funnel of visitors clicking on the header and those visitors
+    # signing up and becoming users
+    experiment(:logged_out_marketing_header, actor: new_user).track(:signed_up) if new_user.persisted?
   end
 end
 

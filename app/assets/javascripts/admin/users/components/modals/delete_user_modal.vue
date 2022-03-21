@@ -2,7 +2,7 @@
 import { GlModal, GlButton, GlFormInput, GlSprintf } from '@gitlab/ui';
 import * as Sentry from '@sentry/browser';
 import { s__, sprintf } from '~/locale';
-import OncallSchedulesList from '~/vue_shared/components/oncall_schedules_list.vue';
+import UserDeletionObstaclesList from '~/vue_shared/components/user_deletion_obstacles/user_deletion_obstacles_list.vue';
 
 export default {
   components: {
@@ -10,7 +10,7 @@ export default {
     GlButton,
     GlFormInput,
     GlSprintf,
-    OncallSchedulesList,
+    UserDeletionObstaclesList,
   },
   props: {
     title: {
@@ -45,7 +45,7 @@ export default {
       type: String,
       required: true,
     },
-    oncallSchedules: {
+    userDeletionObstacles: {
       type: String,
       required: false,
       default: '[]',
@@ -57,18 +57,21 @@ export default {
     };
   },
   computed: {
+    trimmedUsername() {
+      return this.username.trim();
+    },
     modalTitle() {
-      return sprintf(this.title, { username: this.username }, false);
+      return sprintf(this.title, { username: this.trimmedUsername }, false);
     },
     secondaryButtonLabel() {
       return s__('AdminUsers|Block user');
     },
     canSubmit() {
-      return this.enteredUsername === this.username;
+      return this.enteredUsername === this.trimmedUsername;
     },
-    schedules() {
+    obstacles() {
       try {
-        return JSON.parse(this.oncallSchedules);
+        return JSON.parse(this.userDeletionObstacles);
       } catch (e) {
         Sentry.captureException(e);
       }
@@ -104,7 +107,7 @@ export default {
     <p>
       <gl-sprintf :message="content">
         <template #username>
-          <strong>{{ username }}</strong>
+          <strong>{{ trimmedUsername }}</strong>
         </template>
         <template #strong="props">
           <strong>{{ props.content }}</strong>
@@ -112,12 +115,16 @@ export default {
       </gl-sprintf>
     </p>
 
-    <oncall-schedules-list v-if="schedules.length" :schedules="schedules" :user-name="username" />
+    <user-deletion-obstacles-list
+      v-if="obstacles.length"
+      :obstacles="obstacles"
+      :user-name="trimmedUsername"
+    />
 
     <p>
       <gl-sprintf :message="s__('AdminUsers|To confirm, type %{username}')">
         <template #username>
-          <code>{{ username }}</code>
+          <code class="gl-white-space-pre-wrap">{{ trimmedUsername }}</code>
         </template>
       </gl-sprintf>
     </p>
@@ -134,7 +141,7 @@ export default {
       />
     </form>
     <template #modal-footer>
-      <gl-button @click="onCancel">{{ s__('Cancel') }}</gl-button>
+      <gl-button @click="onCancel">{{ __('Cancel') }}</gl-button>
       <gl-button
         :disabled="!canSubmit"
         category="secondary"

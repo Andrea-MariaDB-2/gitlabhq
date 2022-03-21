@@ -5,7 +5,7 @@ export const MAX_TITLE_LENGTH = 50;
 export const MAX_BODY_LENGTH = 72;
 
 export const SIDEBAR_INIT_WIDTH = 340;
-export const SIDEBAR_MIN_WIDTH = 340;
+export const SIDEBAR_MIN_WIDTH = 260;
 export const SIDEBAR_NAV_WIDTH = 60;
 
 // File view modes
@@ -76,15 +76,15 @@ export const stageKeys = {
 export const commitItemIconMap = {
   addition: {
     icon: 'file-addition',
-    class: 'ide-file-addition',
+    class: 'file-addition ide-file-addition',
   },
   modified: {
     icon: 'file-modified',
-    class: 'ide-file-modified',
+    class: 'file-modified ide-file-modified',
   },
   deleted: {
     icon: 'file-deletion',
-    class: 'ide-file-deletion',
+    class: 'file-deletion ide-file-deletion',
   },
 };
 
@@ -114,3 +114,7 @@ export const LIVE_PREVIEW_DEBOUNCE = 2000;
 export const MAX_MR_FILES_AUTO_OPEN = 10;
 
 export const DEFAULT_BRANCH = 'main';
+
+// Ping Usage Metrics Keys
+export const PING_USAGE_PREVIEW_KEY = 'web_ide_clientside_preview';
+export const PING_USAGE_PREVIEW_SUCCESS_KEY = 'web_ide_clientside_preview_success';

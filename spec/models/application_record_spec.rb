@@ -104,6 +104,18 @@ RSpec.describe ApplicationRecord do
     end
   end
 
+  describe '.where_not_exists' do
+    it 'produces a WHERE NOT EXISTS query' do
+      create(:user, :two_factor_via_u2f)
+      user_2 = create(:user)
+
+      expect(
+        User.where_not_exists(
+          U2fRegistration.where(U2fRegistration.arel_table[:user_id].eq(User.arel_table[:id])))
+      ).to match_array([user_2])
+    end
+  end
+
   describe '.transaction', :delete do
     it 'opens a new transaction' do
       expect(described_class.connection.transaction_open?).to be false
@@ -147,22 +159,20 @@ RSpec.describe ApplicationRecord do
       end
     end
 
-    # rubocop:disable Database/MultipleDatabases
     it 'increments a counter when a transaction is created in ActiveRecord' do
       expect(described_class.connection.transaction_open?).to be false
 
       expect(::Gitlab::Database::Metrics)
         .to receive(:subtransactions_increment)
-        .with('ActiveRecord::Base')
+        .with('ApplicationRecord')
         .once
 
-      ActiveRecord::Base.transaction do
-        ActiveRecord::Base.transaction(requires_new: true) do
-          expect(ActiveRecord::Base.connection.transaction_open?).to be true
+      ApplicationRecord.transaction do
+        ApplicationRecord.transaction(requires_new: true) do
+          expect(ApplicationRecord.connection.transaction_open?).to be true
         end
       end
     end
-    # rubocop:enable Database/MultipleDatabases
   end
 
   describe '.with_fast_read_statement_timeout' do
@@ -194,7 +204,7 @@ RSpec.describe ApplicationRecord do
     end
 
     context 'with database load balancing' do
-      let(:session) { double(:session) }
+      let(:session) { Gitlab::Database::LoadBalancing::Session.new }
 
       before do
         allow(::Gitlab::Database::LoadBalancing::Session).to receive(:current).and_return(session)

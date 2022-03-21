@@ -2,7 +2,7 @@
 import { GlFilteredSearchSuggestion } from '@gitlab/ui';
 import createFlash from '~/flash';
 import { __ } from '~/locale';
-import { sortMilestonesByDueDate } from '~/milestones/milestone_utils';
+import { sortMilestonesByDueDate } from '~/milestones/utils';
 import BaseToken from '~/vue_shared/components/filtered_search_bar/tokens/base_token.vue';
 import { DEFAULT_MILESTONES } from '../constants';
 import { stripQuotes } from '../filtered_search_utils';
@@ -57,7 +57,12 @@ export default {
         .fetchMilestones(searchTerm)
         .then((response) => {
           const data = Array.isArray(response) ? response : response.data;
-          this.milestones = data.slice().sort(sortMilestonesByDueDate);
+
+          if (this.config.shouldSkipSort) {
+            this.milestones = data;
+          } else {
+            this.milestones = data.slice().sort(sortMilestonesByDueDate);
+          }
         })
         .catch(() => {
           createFlash({ message: __('There was a problem fetching milestones.') });

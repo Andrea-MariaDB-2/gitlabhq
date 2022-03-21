@@ -105,9 +105,6 @@ module API
           params.except!(:created_after, :created_before, :order_by, :sort, :two_factor, :without_projects)
         end
 
-        users = UsersFinder.new(current_user, params).execute
-        users = reorder_users(users)
-
         authorized = can?(current_user, :read_users_list)
 
         # When `current_user` is not present, require that the `username`
@@ -118,6 +115,9 @@ module API
         authorized &&= params[:username].present? if current_user.blank?
 
         forbidden!("Not authorized to access /api/v4/users") unless authorized
+
+        users = UsersFinder.new(current_user, params).execute
+        users = reorder_users(users)
 
         entity = current_user&.admin? ? Entities::UserWithAdmin : Entities::UserBasic
         users = users.preload(:identities, :u2f_registrations) if entity == Entities::UserWithAdmin
@@ -140,10 +140,20 @@ module API
       end
       # rubocop: disable CodeReuse/ActiveRecord
       get ":id", feature_category: :users do
+        forbidden!('Not authorized!') unless current_user
+
+        unless current_user.admin?
+          check_rate_limit!(:users_get_by_id,
+            scope: current_user,
+            users_allowlist: Gitlab::CurrentSettings.current_application_settings.users_get_by_id_limit_allowlist
+          )
+        end
+
         user = User.find_by(id: params[:id])
+
         not_found!('User') unless user && can?(current_user, :read_user, user)
 
-        opts = { with: current_user&.admin? ? Entities::UserDetailsWithAdmin : Entities::User, current_user: current_user }
+        opts = { with: current_user.admin? ? Entities::UserDetailsWithAdmin : Entities::User, current_user: current_user }
         user, opts = with_custom_attributes(user, opts)
 
         present user, opts
@@ -156,6 +166,7 @@ module API
       end
       get ":user_id/status", requirements: API::USER_REQUIREMENTS, feature_category: :users do
         user = find_user(params[:user_id])
+
         not_found!('User') unless user && can?(current_user, :read_user, user)
 
         present user.status || {}, with: Entities::UserStatus
@@ -203,6 +214,8 @@ module API
         use :pagination
       end
       get ':id/following', feature_category: :users do
+        forbidden!('Not authorized!') unless current_user
+
         user = find_user(params[:id])
         not_found!('User') unless user && can?(current_user, :read_user_profile, user)
 
@@ -217,6 +230,8 @@ module API
         use :pagination
       end
       get ':id/followers', feature_category: :users do
+        forbidden!('Not authorized!') unless current_user
+
         user = find_user(params[:id])
         not_found!('User') unless user && can?(current_user, :read_user_profile, user)
 
@@ -364,6 +379,23 @@ module API
 
         keys = user.keys.preload_users
         present paginate(keys), with: Entities::SSHKey
+      end
+
+      desc 'Get a SSH key of a specified user.' do
+        success Entities::SSHKey
+      end
+      params do
+        requires :id, type: Integer, desc: 'The ID of the user'
+        requires :key_id, type: Integer, desc: 'The ID of the SSH key'
+      end
+      get ':id/keys/:key_id', requirements: API::USER_REQUIREMENTS, feature_category: :authentication_and_authorization do
+        user = find_user(params[:id])
+        not_found!('User') unless user && can?(current_user, :read_user, user)
+
+        key = user.keys.find_by(id: params[:key_id]) # rubocop: disable CodeReuse/ActiveRecord
+        not_found!('Key') unless key
+
+        present key, with: Entities::SSHKey
       end
 
       desc 'Delete an existing SSH key from a specified user. Available only for admins.' do
@@ -615,6 +647,22 @@ module API
         end
       end
 
+      desc 'Reject a pending user. Available only for admins.'
+      params do
+        requires :id, type: Integer, desc: 'The ID of the user'
+      end
+      post ':id/reject', feature_category: :authentication_and_authorization do
+        user = find_user_by_id(params)
+
+        result = ::Users::RejectService.new(current_user).execute(user)
+
+        if result[:success]
+          present user
+        else
+          render_api_error!(result[:message], result[:http_status])
+        end
+      end
+
       # rubocop: enable CodeReuse/ActiveRecord
       desc 'Deactivate an active user. Available only for admins.'
       params do
@@ -654,6 +702,8 @@ module API
 
         if user.ldap_blocked?
           forbidden!('LDAP blocked users cannot be modified by the API')
+        elsif current_user == user
+          forbidden!('The API initiating user cannot be blocked by the API')
         end
 
         break if user.blocked?
@@ -771,7 +821,7 @@ module API
             use :pagination
             optional :state, type: String, default: 'all', values: %w[all active inactive], desc: 'Filters (all|active|inactive) impersonation_tokens'
           end
-          get feature_category :authentication_and_authorization do
+          get feature_category: :authentication_and_authorization do
             present paginate(finder(declared_params(include_missing: false)).execute), with: Entities::ImpersonationToken
           end
 
@@ -1034,6 +1084,11 @@ module API
       params do
         requires :user_id, type: String, desc: 'The ID or username of the user'
         requires :credit_card_validated_at, type: DateTime, desc: 'The time when the user\'s credit card was validated'
+        requires :credit_card_expiration_month, type: Integer, desc: 'The month the credit card expires'
+        requires :credit_card_expiration_year, type: Integer, desc: 'The year the credit card expires'
+        requires :credit_card_holder_name, type: String, desc: 'The credit card holder name'
+        requires :credit_card_mask_number, type: String, desc: 'The last 4 digits of credit card number'
+        requires :credit_card_type, type: String, desc: 'The credit card network name'
       end
       put ":user_id/credit_card_validation", feature_category: :users do
         authenticated_as_admin!
@@ -1043,7 +1098,7 @@ module API
 
         attrs = declared_params(include_missing: false)
 
-        service = ::Users::UpsertCreditCardValidationService.new(attrs).execute
+        service = ::Users::UpsertCreditCardValidationService.new(attrs, user).execute
 
         if service.success?
           present user.credit_card_validation, with: Entities::UserCreditCardValidations
@@ -1069,7 +1124,6 @@ module API
         attrs = declared_params(include_missing: false)
 
         service = ::UserPreferences::UpdateService.new(current_user, attrs).execute
-
         if service.success?
           present preferences, with: Entities::UserPreferences
         else

@@ -1,12 +1,19 @@
 # frozen_string_literal: true
 class Packages::PackageFile < ApplicationRecord
+  include EachBatch
   include UpdateProjectStatistics
   include FileStoreMounter
+  include Packages::Installable
+  include Packages::Destructible
+
+  INSTALLABLE_STATUSES = [:default].freeze
 
   delegate :project, :project_id, to: :package
   delegate :conan_file_type, to: :conan_file_metadatum
   delegate :file_type, :dsc?, :component, :architecture, :fields, to: :debian_file_metadatum, prefix: :debian
   delegate :channel, :metadata, to: :helm_file_metadatum, prefix: :helm
+
+  enum status: { default: 0, pending_destruction: 1, processing: 2, error: 3 }
 
   belongs_to :package
 
@@ -15,7 +22,7 @@ class Packages::PackageFile < ApplicationRecord
 
   has_one :conan_file_metadatum, inverse_of: :package_file, class_name: 'Packages::Conan::FileMetadatum'
   has_many :package_file_build_infos, inverse_of: :package_file, class_name: 'Packages::PackageFileBuildInfo'
-  has_many :pipelines, through: :package_file_build_infos
+  has_many :pipelines, through: :package_file_build_infos, disable_joins: true
   has_one :debian_file_metadatum, inverse_of: :package_file, class_name: 'Packages::Debian::FileMetadatum'
   has_one :helm_file_metadatum, inverse_of: :package_file, class_name: 'Packages::Helm::FileMetadatum'
 
@@ -38,18 +45,22 @@ class Packages::PackageFile < ApplicationRecord
   scope :with_format, ->(format) { where(::Packages::PackageFile.arel_table[:file_name].matches("%.#{format}")) }
 
   scope :preload_package, -> { preload(:package) }
+  scope :preload_pipelines, -> { preload(pipelines: :user) }
   scope :preload_conan_file_metadata, -> { preload(:conan_file_metadatum) }
   scope :preload_debian_file_metadata, -> { preload(:debian_file_metadatum) }
   scope :preload_helm_file_metadata, -> { preload(:helm_file_metadatum) }
+  scope :order_id_asc, -> { order(id: :asc) }
 
   scope :for_rubygem_with_file_name, ->(project, file_name) do
     joins(:package).merge(project.packages.rubygems).with_file_name(file_name)
   end
 
   scope :for_helm_with_channel, ->(project, channel) do
-    joins(:package).merge(project.packages.helm.installable)
-                   .joins(:helm_file_metadatum)
-                   .where(packages_helm_file_metadata: { channel: channel })
+    joins(:package)
+      .merge(project.packages.helm.installable)
+      .joins(:helm_file_metadatum)
+      .where(packages_helm_file_metadata: { channel: channel })
+      .installable
   end
 
   scope :with_conan_file_type, ->(file_type) do
@@ -92,6 +103,25 @@ class Packages::PackageFile < ApplicationRecord
   # * enable a new after_commit callback that will move the file in object storage
   skip_callback :commit, :after, :remove_previously_stored_file, if: :execute_move_in_object_storage?
   after_commit :move_in_object_storage, if: :execute_move_in_object_storage?
+
+  # Returns the most recent installable package file for *each* of the given packages.
+  # The order is not guaranteed.
+  def self.most_recent_for(packages, extra_join: nil, extra_where: nil)
+    cte_name = :packages_cte
+    cte = Gitlab::SQL::CTE.new(cte_name, packages.select(:id))
+
+    package_files = ::Packages::PackageFile.installable
+                                           .limit_recent(1)
+                                           .where(arel_table[:package_id].eq(Arel.sql("#{cte_name}.id")))
+
+    package_files = package_files.joins(extra_join) if extra_join
+    package_files = package_files.where(extra_where) if extra_where
+
+    query = select('finder.*')
+              .from([Arel.sql(cte_name.to_s), package_files.arel.lateral.as('finder')])
+
+    query.with(cte.to_arel)
+  end
 
   def download_path
     Gitlab::Routing.url_helpers.download_project_package_file_path(project, self)

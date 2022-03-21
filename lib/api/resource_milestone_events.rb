@@ -8,7 +8,7 @@ module API
     before { authenticate! }
 
     {
-      Issue => :issue_tracking,
+      Issue => :team_planning,
       MergeRequest => :code_review
     }.each do |eventable_type, feature_category|
       parent_type = eventable_type.parent_class.to_s.underscore
@@ -26,7 +26,7 @@ module API
           use :pagination
         end
 
-        get ":id/#{eventables_str}/:eventable_id/resource_milestone_events", feature_category: feature_category do
+        get ":id/#{eventables_str}/:eventable_id/resource_milestone_events", feature_category: feature_category, urgency: :low do
           eventable = find_noteable(eventable_type, params[:eventable_id])
 
           events = ResourceMilestoneEventFinder.new(current_user, eventable).execute

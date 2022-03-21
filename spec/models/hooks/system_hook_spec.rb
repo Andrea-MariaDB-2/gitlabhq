@@ -37,7 +37,7 @@ RSpec.describe SystemHook do
     let(:project)     { create(:project, namespace: user.namespace) }
     let(:group)       { create(:group) }
     let(:params) do
-      { name: 'John Doe', username: 'jduser', email: 'jg@example.com', password: 'mydummypass' }
+      { name: 'John Doe', username: 'jduser', email: 'jg@example.com', password: Gitlab::Password.test_default }
     end
 
     before do
@@ -168,17 +168,17 @@ RSpec.describe SystemHook do
     let(:data) { { key: 'value' } }
     let(:hook_name) { 'system_hook' }
 
-    before do
-      expect(WebHookService).to receive(:new).with(hook, data, hook_name).and_call_original
-    end
-
     it '#execute' do
+      expect(WebHookService).to receive(:new).with(hook, data, hook_name, force: false).and_call_original
+
       expect_any_instance_of(WebHookService).to receive(:execute)
 
       hook.execute(data, hook_name)
     end
 
     it '#async_execute' do
+      expect(WebHookService).to receive(:new).with(hook, data, hook_name).and_call_original
+
       expect_any_instance_of(WebHookService).to receive(:async_execute)
 
       hook.async_execute(data, hook_name)

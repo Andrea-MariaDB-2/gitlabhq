@@ -5,6 +5,7 @@ module QA
     module Project
       class Members < Page::Base
         include QA::Page::Component::InviteMembersModal
+        include QA::Page::Component::MembersFilter
 
         view 'app/assets/javascripts/members/components/members_tabs.vue' do
           element :groups_list_tab
@@ -40,6 +41,11 @@ module QA
           within_element(:remove_group_link_modal_content) do
             click_button 'Remove group'
           end
+        end
+
+        def has_group?(group_name)
+          click_element :groups_list_tab
+          has_element?(:group_row, text: group_name)
         end
       end
     end

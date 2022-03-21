@@ -10,8 +10,9 @@ module SystemNotes
     #   "marked this issue as related to gitlab-foss#9001"
     #
     # Returns the created Note object
-    def relate_issue(noteable_ref)
-      body = "marked this issue as related to #{noteable_ref.to_reference(noteable.project)}"
+    def relate_issuable(noteable_ref)
+      issuable_type = noteable.to_ability_name.humanize(capitalize: false)
+      body = "marked this #{issuable_type} as related to #{noteable_ref.to_reference(noteable.resource_parent)}"
 
       issue_activity_counter.track_issue_related_action(author: author) if noteable.is_a?(Issue)
 
@@ -26,8 +27,8 @@ module SystemNotes
     #   "removed the relation with gitlab-foss#9001"
     #
     # Returns the created Note object
-    def unrelate_issue(noteable_ref)
-      body = "removed the relation with #{noteable_ref.to_reference(noteable.project)}"
+    def unrelate_issuable(noteable_ref)
+      body = "removed the relation with #{noteable_ref.to_reference(noteable.resource_parent)}"
 
       issue_activity_counter.track_issue_unrelated_action(author: author) if noteable.is_a?(Issue)
 
@@ -111,6 +112,35 @@ module SystemNotes
       create_note(NoteSummary.new(noteable, project, author, body, action: 'reviewer'))
     end
 
+    # Called when the contacts of an issuable are changed or removed
+    # We intend to reference the contacts but for security we are just
+    # going to state how many were added/removed for now. See discussion:
+    # https://gitlab.com/gitlab-org/gitlab/-/merge_requests/77816#note_806114273
+    #
+    # added_count - number of contacts added, or 0
+    # removed_count - number of contacts  removed, or 0
+    #
+    # Example Note text:
+    #
+    #   "added 2 contacts"
+    #
+    #   "added 3 contacts and removed one contact"
+    #
+    # Returns the created Note object
+    def change_issuable_contacts(added_count, removed_count)
+      text_parts = []
+
+      Gitlab::I18n.with_default_locale do
+        text_parts << "added #{added_count} #{'contact'.pluralize(added_count)}" if added_count > 0
+        text_parts << "removed #{removed_count} #{'contact'.pluralize(removed_count)}" if removed_count > 0
+      end
+
+      return if text_parts.empty?
+
+      body = text_parts.join(' and ')
+      create_note(NoteSummary.new(noteable, project, author, body, action: 'contact'))
+    end
+
     # Called when the title of a Noteable is changed
     #
     # old_title - Previous String title
@@ -131,6 +161,7 @@ module SystemNotes
       body = "changed title from **#{marked_old_title}** to **#{marked_new_title}**"
 
       issue_activity_counter.track_issue_title_changed_action(author: author) if noteable.is_a?(Issue)
+      work_item_activity_counter.track_work_item_title_changed_action(author: author) if noteable.is_a?(WorkItem)
 
       create_note(NoteSummary.new(noteable, project, author, body, action: 'title'))
     end
@@ -154,9 +185,8 @@ module SystemNotes
       create_note(NoteSummary.new(noteable, project, author, body, action: 'description'))
     end
 
-    # Called when a Mentionable references a Noteable
-    #
-    # mentioner - Mentionable object
+    # Called when a Mentionable (the `mentioned_in`) references another Mentionable (the `mentioned`,
+    # passed to this service as `noteable`).
     #
     # Example Note text:
     #
@@ -168,15 +198,22 @@ module SystemNotes
     #
     # See cross_reference_note_content.
     #
-    # Returns the created Note object
-    def cross_reference(mentioner)
-      return if cross_reference_disallowed?(mentioner)
+    # @param mentioned_in [Mentionable]
+    # @return [Note]
+    def cross_reference(mentioned_in)
+      return if cross_reference_disallowed?(mentioned_in)
 
-      gfm_reference = mentioner.gfm_reference(noteable.project || noteable.group)
+      gfm_reference = mentioned_in.gfm_reference(noteable.project || noteable.group)
       body = cross_reference_note_content(gfm_reference)
 
       if noteable.is_a?(ExternalIssue)
-        noteable.project.external_issue_tracker.create_cross_reference_note(noteable, mentioner, author)
+        Integrations::CreateExternalCrossReferenceWorker.perform_async(
+          noteable.project_id,
+          noteable.id,
+          mentioned_in.class.name,
+          mentioned_in.id,
+          author.id
+        )
       else
         track_cross_reference_action
         create_note(NoteSummary.new(noteable, noteable.project, author, body, action: 'cross_reference'))
@@ -189,15 +226,14 @@ module SystemNotes
     # in a merge request. Additionally, it prevents the creation of references to
     # external issues (which would fail).
     #
-    # mentioner - Mentionable object
-    #
-    # Returns Boolean
-    def cross_reference_disallowed?(mentioner)
+    # @param mentioned_in [Mentionable]
+    # @return [Boolean]
+    def cross_reference_disallowed?(mentioned_in)
       return true if noteable.is_a?(ExternalIssue) && !noteable.project&.external_references_supported?
-      return false unless mentioner.is_a?(MergeRequest)
+      return false unless mentioned_in.is_a?(MergeRequest)
       return false unless noteable.is_a?(Commit)
 
-      mentioner.commits.include?(noteable)
+      mentioned_in.commits.include?(noteable)
     end
 
     # Called when the status of a Task has changed
@@ -303,19 +339,65 @@ module SystemNotes
       create_resource_state_event(status: status, mentionable_source: source)
     end
 
-    # Check if a cross reference to a noteable from a mentioner already exists
+    # Check if a cross reference to a Mentionable from the `mentioned_in` Mentionable
+    # already exists.
     #
     # This method is used to prevent multiple notes being created for a mention
-    # when a issue is updated, for example. The method also calls notes_for_mentioner
-    # to check if the mentioner is a commit, and return matches only on commit hash
+    # when a issue is updated, for example. The method also calls `existing_mentions_for`
+    # to check if the mention is in a commit, and return matches only on commit hash
     # instead of project + commit, to avoid repeated mentions from forks.
     #
-    # mentioner - Mentionable object
-    #
-    # Returns Boolean
-    def cross_reference_exists?(mentioner)
+    # @param mentioned_in [Mentionable]
+    # @return [Boolean]
+    def cross_reference_exists?(mentioned_in)
       notes = noteable.notes.system
-      notes_for_mentioner(mentioner, noteable, notes).exists?
+      existing_mentions_for(mentioned_in, noteable, notes).exists?
+    end
+
+    # Called when a user's attention has been requested for a Notable
+    #
+    # user - User's whos attention has been requested
+    #
+    # Example Note text:
+    #
+    #   "requested attention from @eli.wisoky"
+    #
+    # Returns the created Note object
+    def request_attention(user)
+      body = "requested attention from #{user.to_reference}"
+
+      create_note(NoteSummary.new(noteable, project, author, body, action: 'attention_requested'))
+    end
+
+    # Called when a user's attention request has been removed for a Notable
+    #
+    # user - User's whos attention request has been removed
+    #
+    # Example Note text:
+    #
+    #   "removed attention request from @eli.wisoky"
+    #
+    # Returns the created Note object
+    def remove_attention_request(user)
+      body = "removed attention request from #{user.to_reference}"
+
+      create_note(NoteSummary.new(noteable, project, author, body, action: 'attention_request_removed'))
+    end
+
+    # Called when a Noteable has been marked as the canonical Issue of a duplicate
+    #
+    # duplicate_issue - Issue that was a duplicate of this
+    #
+    # Example Note text:
+    #
+    #   "marked #1234 as a duplicate of this issue"
+    #
+    #   "marked other_project#5678 as a duplicate of this issue"
+    #
+    # Returns the created Note object
+    def mark_canonical_issue_of_duplicate(duplicate_issue)
+      body = "marked #{duplicate_issue.to_reference(project)} as a duplicate of this issue"
+      create_note(NoteSummary.new(noteable, project, author, body, action: 'duplicate'))
     end
 
     # Called when a Noteable has been marked as a duplicate of another Issue
@@ -334,22 +416,6 @@ module SystemNotes
 
       issue_activity_counter.track_issue_marked_as_duplicate_action(author: author) if noteable.is_a?(Issue)
 
-      create_note(NoteSummary.new(noteable, project, author, body, action: 'duplicate'))
-    end
-
-    # Called when a Noteable has been marked as the canonical Issue of a duplicate
-    #
-    # duplicate_issue - Issue that was a duplicate of this
-    #
-    # Example Note text:
-    #
-    #   "marked #1234 as a duplicate of this issue"
-    #
-    #   "marked other_project#5678 as a duplicate of this issue"
-    #
-    # Returns the created Note object
-    def mark_canonical_issue_of_duplicate(duplicate_issue)
-      body = "marked #{duplicate_issue.to_reference(project)} as a duplicate of this issue"
       create_note(NoteSummary.new(noteable, project, author, body, action: 'duplicate'))
     end
 
@@ -392,12 +458,12 @@ module SystemNotes
       "#{self.class.cross_reference_note_prefix}#{gfm_reference}"
     end
 
-    def notes_for_mentioner(mentioner, noteable, notes)
-      if mentioner.is_a?(Commit)
-        text = "#{self.class.cross_reference_note_prefix}%#{mentioner.to_reference(nil)}"
+    def existing_mentions_for(mentioned_in, noteable, notes)
+      if mentioned_in.is_a?(Commit)
+        text = "#{self.class.cross_reference_note_prefix}%#{mentioned_in.to_reference(nil)}"
         notes.like_note_or_capitalized_note(text)
       else
-        gfm_reference = mentioner.gfm_reference(noteable.project || noteable.group)
+        gfm_reference = mentioned_in.gfm_reference(noteable.project || noteable.group)
         text = cross_reference_note_content(gfm_reference)
         notes.for_note_or_capitalized_note(text)
       end
@@ -418,6 +484,10 @@ module SystemNotes
 
     def issue_activity_counter
       Gitlab::UsageDataCounters::IssueActivityUniqueCounter
+    end
+
+    def work_item_activity_counter
+      Gitlab::UsageDataCounters::WorkItemActivityUniqueCounter
     end
 
     def track_cross_reference_action

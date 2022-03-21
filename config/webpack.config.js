@@ -1,4 +1,6 @@
-const crypto = require('crypto');
+// eslint-disable-next-line import/order
+const crypto = require('./helpers/patched_crypto');
+
 const fs = require('fs');
 const path = require('path');
 
@@ -24,6 +26,7 @@ const IS_JH = require('./helpers/is_jh_env');
 const vendorDllHash = require('./helpers/vendor_dll_hash');
 
 const MonacoWebpackPlugin = require('./plugins/monaco_webpack');
+const GraphqlKnownOperationsPlugin = require('./plugins/graphql_known_operations_plugin');
 
 const ROOT_PATH = path.resolve(__dirname, '..');
 const SUPPORTED_BROWSERS = fs.readFileSync(path.join(ROOT_PATH, '.browserslistrc'), 'utf-8');
@@ -35,14 +38,12 @@ const SUPPORTED_BROWSERS_HASH = crypto
 const VENDOR_DLL = process.env.WEBPACK_VENDOR_DLL && process.env.WEBPACK_VENDOR_DLL !== 'false';
 const CACHE_PATH = process.env.WEBPACK_CACHE_PATH || path.join(ROOT_PATH, 'tmp/cache');
 const IS_PRODUCTION = process.env.NODE_ENV === 'production';
-const IS_DEV_SERVER = process.env.WEBPACK_DEV_SERVER === 'true';
+const IS_DEV_SERVER = process.env.WEBPACK_SERVE === 'true';
 
-const DEV_SERVER_HOST = process.env.DEV_SERVER_HOST || 'localhost';
-const DEV_SERVER_PORT = parseInt(process.env.DEV_SERVER_PORT, 10) || 3808;
-const { DEV_SERVER_PUBLIC_ADDR } = process.env;
+const { DEV_SERVER_HOST, DEV_SERVER_PUBLIC_ADDR } = process.env;
+const DEV_SERVER_PORT = parseInt(process.env.DEV_SERVER_PORT, 10);
 const DEV_SERVER_ALLOWED_HOSTS =
   process.env.DEV_SERVER_ALLOWED_HOSTS && process.env.DEV_SERVER_ALLOWED_HOSTS.split(',');
-const DEV_SERVER_HTTPS = process.env.DEV_SERVER_HTTPS && process.env.DEV_SERVER_HTTPS !== 'false';
 const DEV_SERVER_LIVERELOAD = IS_DEV_SERVER && process.env.DEV_SERVER_LIVERELOAD !== 'false';
 const INCREMENTAL_COMPILER_ENABLED =
   IS_DEV_SERVER &&
@@ -140,21 +141,23 @@ function generateEntries() {
     sentry: './sentry/index.js',
     performance_bar: './performance_bar/index.js',
     jira_connect_app: './jira_connect/subscriptions/index.js',
+    sandboxed_mermaid: './lib/mermaid.js',
+    redirect_listbox: './entrypoints/behaviors/redirect_listbox.js',
   };
 
   return Object.assign(manualEntries, incrementalCompiler.filterEntryPoints(autoEntries));
 }
 
 const alias = {
+  // Map Apollo client to apollo/client/core to prevent react related imports from being loaded
+  '@apollo/client$': '@apollo/client/core',
   '~': path.join(ROOT_PATH, 'app/assets/javascripts'),
   emojis: path.join(ROOT_PATH, 'fixtures/emojis'),
   empty_states: path.join(ROOT_PATH, 'app/views/shared/empty_states'),
   icons: path.join(ROOT_PATH, 'app/views/shared/icons'),
   images: path.join(ROOT_PATH, 'app/assets/images'),
   vendor: path.join(ROOT_PATH, 'vendor/assets/javascripts'),
-  vue$: 'vue/dist/vue.esm.js',
   jquery$: 'jquery/dist/jquery.slim.js',
-  spec: path.join(ROOT_PATH, 'spec/javascripts'),
   jest: path.join(ROOT_PATH, 'spec/frontend'),
   shared_queries: path.join(ROOT_PATH, 'app/graphql/queries'),
 
@@ -163,6 +166,9 @@ const alias = {
 
   // the following resolves files which are different between CE and JH
   jh_else_ce: path.join(ROOT_PATH, 'app/assets/javascripts'),
+
+  // the following resolves files which are different between CE/EE/JH
+  any_else_ce: path.join(ROOT_PATH, 'app/assets/javascripts'),
 
   // override loader path for icons.svg so we do not duplicate this asset
   '@gitlab/svgs/dist/icons.svg': path.join(
@@ -178,9 +184,10 @@ if (IS_EE) {
     ee_empty_states: path.join(ROOT_PATH, 'ee/app/views/shared/empty_states'),
     ee_icons: path.join(ROOT_PATH, 'ee/app/views/shared/icons'),
     ee_images: path.join(ROOT_PATH, 'ee/app/assets/images'),
-    ee_spec: path.join(ROOT_PATH, 'ee/spec/javascripts'),
     ee_jest: path.join(ROOT_PATH, 'ee/spec/frontend'),
     ee_else_ce: path.join(ROOT_PATH, 'ee/app/assets/javascripts'),
+    jh_else_ee: path.join(ROOT_PATH, 'ee/app/assets/javascripts'),
+    any_else_ce: path.join(ROOT_PATH, 'ee/app/assets/javascripts'),
   });
 }
 
@@ -191,9 +198,11 @@ if (IS_JH) {
     jh_empty_states: path.join(ROOT_PATH, 'jh/app/views/shared/empty_states'),
     jh_icons: path.join(ROOT_PATH, 'jh/app/views/shared/icons'),
     jh_images: path.join(ROOT_PATH, 'jh/app/assets/images'),
-    jh_spec: path.join(ROOT_PATH, 'jh/spec/javascripts'),
     jh_jest: path.join(ROOT_PATH, 'jh/spec/frontend'),
+    // jh path alias https://gitlab.com/gitlab-org/gitlab/-/merge_requests/74305#note_732793956
     jh_else_ce: path.join(ROOT_PATH, 'jh/app/assets/javascripts'),
+    jh_else_ee: path.join(ROOT_PATH, 'jh/app/assets/javascripts'),
+    any_else_ce: path.join(ROOT_PATH, 'jh/app/assets/javascripts'),
   });
 }
 
@@ -202,6 +211,7 @@ if (!IS_PRODUCTION) {
 
   Object.assign(alias, {
     test_fixtures: path.join(ROOT_PATH, `tmp/tests/frontend/${fixtureDir}`),
+    test_fixtures_static: path.join(ROOT_PATH, 'spec/frontend/fixtures/static'),
     test_helpers: path.join(ROOT_PATH, 'spec/frontend_integration/test_helpers'),
   });
 }
@@ -251,8 +261,7 @@ module.exports = {
       {
         test: /\.js$/,
         exclude: (modulePath) =>
-          /node_modules\/(?!tributejs)|node_modules|vendor[\\/]assets/.test(modulePath) &&
-          !/\.vue\.js/.test(modulePath),
+          /node_modules|vendor[\\/]assets/.test(modulePath) && !/\.vue\.js/.test(modulePath),
         loader: 'babel-loader',
         options: {
           cacheDirectory: path.join(CACHE_PATH, 'babel-loader'),
@@ -345,6 +354,18 @@ module.exports = {
           name: '[name].[contenthash:8].[ext]',
           esModule: false,
         },
+      },
+      {
+        test: /editor\/schema\/.+\.json$/,
+        type: 'javascript/auto',
+        loader: 'file-loader',
+        options: {
+          name: '[name].[contenthash:8].[ext]',
+        },
+      },
+      {
+        test: /\.(yml|yaml)$/,
+        loader: 'raw-loader',
       },
     ],
   },
@@ -450,6 +471,8 @@ module.exports = {
     new MonacoWebpackPlugin({
       globalAPI: true,
     }),
+
+    new GraphqlKnownOperationsPlugin({ filename: 'graphql_known_operations.yml' }),
 
     // fix legacy jQuery plugins which depend on globals
     new webpack.ProvidePlugin({
@@ -636,9 +659,6 @@ module.exports = {
       },
     },
 
-    // enable HMR only in webpack-dev-server
-    DEV_SERVER_LIVERELOAD && new webpack.HotModuleReplacementPlugin(),
-
     // optionally generate webpack bundle analysis
     WEBPACK_REPORT &&
       new BundleAnalyzerPlugin({
@@ -661,6 +681,7 @@ module.exports = {
       IS_JH: IS_JH ? 'window.gon && window.gon.jh' : JSON.stringify(false),
       // This is used by Sourcegraph because these assets are loaded dnamically
       'process.env.SOURCEGRAPH_PUBLIC_PATH': JSON.stringify(SOURCEGRAPH_PUBLIC_PATH),
+      ...(IS_PRODUCTION ? {} : { LIVE_RELOAD: DEV_SERVER_LIVERELOAD }),
     }),
 
     /* Pikaday has a optional dependency to moment.
@@ -671,19 +692,44 @@ module.exports = {
     */
     new webpack.IgnorePlugin(/moment/, /pikaday/),
   ].filter(Boolean),
+
   devServer: {
-    before(app, server) {
-      incrementalCompiler.setupMiddleware(app, server);
+    setupMiddlewares: (middlewares, devServer) => {
+      if (!devServer) {
+        throw new Error('webpack-dev-server is not defined');
+      }
+
+      const incrementalCompilerMiddleware = incrementalCompiler.createMiddleware(devServer);
+
+      if (incrementalCompilerMiddleware) {
+        middlewares.unshift(incrementalCompilerMiddleware);
+      }
+
+      return middlewares;
     },
-    host: DEV_SERVER_HOST,
-    port: DEV_SERVER_PORT,
-    public: DEV_SERVER_PUBLIC_ADDR,
-    allowedHosts: DEV_SERVER_ALLOWED_HOSTS,
-    https: DEV_SERVER_HTTPS,
-    contentBase: false,
-    stats: 'errors-only',
+    // Only print errors to CLI
+    devMiddleware: {
+      stats: 'errors-only',
+    },
+    host: DEV_SERVER_HOST || 'localhost',
+    port: DEV_SERVER_PORT || 3808,
+    // Setting up hot module reloading
+    // HMR works by setting up a websocket server and injecting
+    // a client script which connects to that server.
+    // The server will push messages to the client to reload parts
+    // of the JavaScript or reload the page if necessary
+    webSocketServer: DEV_SERVER_LIVERELOAD ? 'ws' : false,
     hot: DEV_SERVER_LIVERELOAD,
-    inline: DEV_SERVER_LIVERELOAD,
+    liveReload: DEV_SERVER_LIVERELOAD,
+    // The following settings are mainly needed for HMR support in gitpod.
+    // Per default only local hosts are allowed, but here we could
+    // allow different hosts (e.g. ['.gitpod'], all of gitpod),
+    // as the webpack server will run on a different subdomain than
+    // the rails application
+    ...(DEV_SERVER_ALLOWED_HOSTS ? { allowedHosts: DEV_SERVER_ALLOWED_HOSTS } : {}),
+    client: {
+      ...(DEV_SERVER_PUBLIC_ADDR ? { webSocketURL: DEV_SERVER_PUBLIC_ADDR } : {}),
+    },
   },
 
   devtool: NO_SOURCEMAPS ? false : devtool,

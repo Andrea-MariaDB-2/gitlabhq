@@ -145,16 +145,13 @@ RSpec.describe "Issues > User edits issue", :js do
           fill_in 'Comment', with: '/label ~syzygy'
 
           click_button 'Comment'
-
-          wait_for_requests
+          expect(page).to have_text('added syzygy label just now')
 
           page.within '.block.labels' do
             # Remove `verisimilitude` label
             within '.gl-label' do
-              click_button
+              click_button 'Remove label'
             end
-
-            wait_for_requests
 
             expect(page).to have_text('syzygy')
             expect(page).not_to have_text('verisimilitude')
@@ -420,7 +417,7 @@ RSpec.describe "Issues > User edits issue", :js do
         it 'adds due date to issue' do
           date = Date.today.at_beginning_of_month + 2.days
 
-          page.within '[data-testid="due-date"]' do
+          page.within '[data-testid="sidebar-due-date"]' do
             click_button 'Edit'
             page.within '.pika-single' do
               click_button date.day
@@ -435,7 +432,7 @@ RSpec.describe "Issues > User edits issue", :js do
         it 'removes due date from issue' do
           date = Date.today.at_beginning_of_month + 2.days
 
-          page.within '[data-testid="due-date"]' do
+          page.within '[data-testid="sidebar-due-date"]' do
             click_button 'Edit'
 
             page.within '.pika-single' do

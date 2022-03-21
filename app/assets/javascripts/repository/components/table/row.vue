@@ -1,5 +1,4 @@
 <script>
-/* eslint-disable vue/no-v-html */
 import {
   GlBadge,
   GlLink,
@@ -8,11 +7,13 @@ import {
   GlLoadingIcon,
   GlIcon,
   GlHoverLoadDirective,
+  GlSafeHtmlDirective,
+  GlIntersectionObserver,
 } from '@gitlab/ui';
 import { escapeRegExp } from 'lodash';
-import filesQuery from 'shared_queries/repository/files.query.graphql';
+import paginatedTreeQuery from 'shared_queries/repository/paginated_tree.query.graphql';
 import { escapeFileUrl } from '~/lib/utils/url_utility';
-import { TREE_PAGE_SIZE } from '~/repository/constants';
+import { TREE_PAGE_SIZE, ROW_APPEAR_DELAY } from '~/repository/constants';
 import FileIcon from '~/vue_shared/components/file_icon.vue';
 import TimeagoTooltip from '~/vue_shared/components/time_ago_tooltip.vue';
 import glFeatureFlagMixin from '~/vue_shared/mixins/gl_feature_flags_mixin';
@@ -29,10 +30,12 @@ export default {
     GlIcon,
     TimeagoTooltip,
     FileIcon,
+    GlIntersectionObserver,
   },
   directives: {
     GlTooltip: GlTooltipDirective,
     GlHoverLoad: GlHoverLoadDirective,
+    SafeHtml: GlSafeHtmlDirective,
   },
   apollo: {
     commit: {
@@ -46,10 +49,23 @@ export default {
           maxOffset: this.totalEntries,
         };
       },
+      skip() {
+        return this.glFeatures.lazyLoadCommits;
+      },
     },
   },
   mixins: [getRefMixin, glFeatureFlagMixin()],
   props: {
+    commitInfo: {
+      type: Object,
+      required: false,
+      default: null,
+    },
+    rowNumber: {
+      type: Number,
+      required: false,
+      default: null,
+    },
     totalEntries: {
       type: Number,
       required: true,
@@ -111,9 +127,14 @@ export default {
   data() {
     return {
       commit: null,
+      hasRowAppeared: false,
+      delayedRowAppear: null,
     };
   },
   computed: {
+    commitData() {
+      return this.glFeatures.lazyLoadCommits ? this.commitInfo : this.commit;
+    },
     refactorBlobViewerEnabled() {
       return this.glFeatures.refactorBlobViewer;
     },
@@ -146,7 +167,10 @@ export default {
       return this.sha.slice(0, 8);
     },
     hasLockLabel() {
-      return this.commit && this.commit.lockLabel;
+      return this.commitData && this.commitData.lockLabel;
+    },
+    showSkeletonLoader() {
+      return !this.commitData && this.hasRowAppeared;
     },
   },
   methods: {
@@ -154,7 +178,7 @@ export default {
       return this.isFolder ? this.loadFolder() : this.loadBlob();
     },
     loadFolder() {
-      this.apolloQuery(filesQuery, {
+      this.apolloQuery(paginatedTreeQuery, {
         projectPath: this.projectPath,
         ref: this.ref,
         path: this.path,
@@ -171,12 +195,32 @@ export default {
         projectPath: this.projectPath,
         filePath: this.path,
         ref: this.ref,
+        shouldFetchRawText: Boolean(this.glFeatures.highlightJs),
       });
     },
     apolloQuery(query, variables) {
       this.$apollo.query({ query, variables });
     },
+    rowAppeared() {
+      this.hasRowAppeared = true;
+
+      if (this.commitInfo) {
+        return;
+      }
+
+      if (this.glFeatures.lazyLoadCommits) {
+        this.delayedRowAppear = setTimeout(
+          () => this.$emit('row-appear', this.rowNumber),
+          ROW_APPEAR_DELAY,
+        );
+      }
+    },
+    rowDisappeared() {
+      clearTimeout(this.delayedRowAppear);
+      this.hasRowAppeared = false;
+    },
   },
+  safeHtmlConfig: { ADD_TAGS: ['gl-emoji'] },
 };
 </script>
 
@@ -218,7 +262,7 @@ export default {
       <gl-icon
         v-if="hasLockLabel"
         v-gl-tooltip
-        :title="commit.lockLabel"
+        :title="commitData.lockLabel"
         name="lock"
         :size="12"
         class="ml-1"
@@ -226,17 +270,19 @@ export default {
     </td>
     <td class="d-none d-sm-table-cell tree-commit cursor-default">
       <gl-link
-        v-if="commit"
-        :href="commit.commitPath"
-        :title="commit.message"
+        v-if="commitData"
+        v-safe-html:[$options.safeHtmlConfig]="commitData.titleHtml"
+        :href="commitData.commitPath"
+        :title="commitData.message"
         class="str-truncated-100 tree-commit-link"
-        v-html="commit.titleHtml"
       />
-      <gl-skeleton-loading v-else :lines="1" class="h-auto" />
+      <gl-intersection-observer @appear="rowAppeared" @disappear="rowDisappeared">
+        <gl-skeleton-loading v-if="showSkeletonLoader" :lines="1" class="h-auto" />
+      </gl-intersection-observer>
     </td>
     <td class="tree-time-ago text-right cursor-default">
-      <timeago-tooltip v-if="commit" :time="commit.committedDate" />
-      <gl-skeleton-loading v-else :lines="1" class="ml-auto h-auto w-50" />
+      <timeago-tooltip v-if="commitData" :time="commitData.committedDate" />
+      <gl-skeleton-loading v-if="showSkeletonLoader" :lines="1" class="ml-auto h-auto w-50" />
     </td>
   </tr>
 </template>

@@ -36,9 +36,12 @@ RSpec.describe PagesDomain do
         '123.456.789'      => true,
         '0x12345.com'      => true,
         '0123123'          => true,
-        '_foo.com'         => false,
+        'a-reserved.com'   => true,
+        'a.b-reserved.com' => true,
         'reserved.com'     => false,
+        '_foo.com'         => false,
         'a.reserved.com'   => false,
+        'a.b.reserved.com' => false,
         nil                => false
       }.each do |value, validity|
         context "domain #{value.inspect} validity" do
@@ -94,7 +97,7 @@ RSpec.describe PagesDomain do
 
       with_them do
         it "is adds the expected errors" do
-          expect(pages_domain.errors.keys).to eq errors_on
+          expect(pages_domain.errors.attribute_names).to eq errors_on
         end
       end
     end
@@ -104,7 +107,7 @@ RSpec.describe PagesDomain do
     let(:domain) { build(:pages_domain) }
 
     it 'saves validity time' do
-      domain.save
+      domain.save!
 
       expect(domain.certificate_valid_not_before).to be_like_time(Time.zone.parse("2020-03-16 14:20:34 UTC"))
       expect(domain.certificate_valid_not_after).to be_like_time(Time.zone.parse("2220-01-28 14:20:34 UTC"))
@@ -155,17 +158,17 @@ RSpec.describe PagesDomain do
         it "adds error to certificate" do
           domain.valid?
 
-          expect(domain.errors.keys).to contain_exactly(:key, :certificate)
+          expect(domain.errors.attribute_names).to contain_exactly(:key, :certificate)
         end
       end
 
       context 'when certificate is already saved' do
         it "doesn't add error to certificate" do
-          domain.save(validate: false)
+          domain.save!(validate: false)
 
           domain.valid?
 
-          expect(domain.errors.keys).to contain_exactly(:key)
+          expect(domain.errors.attribute_names).to contain_exactly(:key)
         end
       end
     end
@@ -333,129 +336,6 @@ RSpec.describe PagesDomain do
       subject { build(:pages_domain, :without_certificate) }
 
       it { is_expected.not_to be_https }
-    end
-  end
-
-  describe '#update_daemon' do
-    let_it_be(:project) { create(:project).tap(&:mark_pages_as_deployed) }
-
-    context 'when usage is serverless' do
-      it 'does not call the UpdatePagesConfigurationService' do
-        expect(PagesUpdateConfigurationWorker).not_to receive(:perform_async)
-
-        create(:pages_domain, usage: :serverless)
-      end
-    end
-
-    it 'runs when the domain is created' do
-      domain = build(:pages_domain)
-
-      expect(domain).to receive(:update_daemon)
-
-      domain.save!
-    end
-
-    it 'runs when the domain is destroyed' do
-      domain = create(:pages_domain)
-
-      expect(domain).to receive(:update_daemon)
-
-      domain.destroy!
-    end
-
-    it "schedules a PagesUpdateConfigurationWorker" do
-      expect(PagesUpdateConfigurationWorker).to receive(:perform_async).with(project.id)
-
-      create(:pages_domain, project: project)
-    end
-
-    context "when the pages aren't deployed" do
-      let_it_be(:project) { create(:project).tap(&:mark_pages_as_not_deployed) }
-
-      it "does not schedule a PagesUpdateConfigurationWorker" do
-        expect(PagesUpdateConfigurationWorker).not_to receive(:perform_async).with(project.id)
-
-        create(:pages_domain, project: project)
-      end
-    end
-
-    context 'configuration updates when attributes change' do
-      let_it_be(:project1) { create(:project) }
-      let_it_be(:project2) { create(:project) }
-      let_it_be(:domain) { create(:pages_domain) }
-
-      where(:attribute, :old_value, :new_value, :update_expected) do
-        now = Time.current
-        future = now + 1.day
-
-        :project | nil       | :project1 | true
-        :project | :project1 | :project1 | false
-        :project | :project1 | :project2 | true
-        :project | :project1 | nil       | true
-
-        # domain can't be set to nil
-        :domain | 'a.com' | 'a.com' | false
-        :domain | 'a.com' | 'b.com' | true
-
-        # verification_code can't be set to nil
-        :verification_code | 'foo' | 'foo'  | false
-        :verification_code | 'foo' | 'bar'  | false
-
-        :verified_at | nil | now    | false
-        :verified_at | now | now    | false
-        :verified_at | now | future | false
-        :verified_at | now | nil    | false
-
-        :enabled_until | nil | now    | true
-        :enabled_until | now | now    | false
-        :enabled_until | now | future | false
-        :enabled_until | now | nil    | true
-      end
-
-      with_them do
-        it 'runs if a relevant attribute has changed' do
-          a = old_value.is_a?(Symbol) ? send(old_value) : old_value
-          b = new_value.is_a?(Symbol) ? send(new_value) : new_value
-
-          domain.update!(attribute => a)
-
-          if update_expected
-            expect(domain).to receive(:update_daemon)
-          else
-            expect(domain).not_to receive(:update_daemon)
-          end
-
-          domain.update!(attribute => b)
-        end
-      end
-
-      context 'TLS configuration' do
-        let_it_be(:domain_without_tls) { create(:pages_domain, :without_certificate, :without_key) }
-        let_it_be(:domain) { create(:pages_domain) }
-
-        let(:cert1) { domain.certificate }
-        let(:cert2) { cert1 + ' ' }
-        let(:key1) { domain.key }
-        let(:key2) { key1 + ' ' }
-
-        it 'updates when added' do
-          expect(domain_without_tls).to receive(:update_daemon)
-
-          domain_without_tls.update!(key: key1, certificate: cert1)
-        end
-
-        it 'updates when changed' do
-          expect(domain).to receive(:update_daemon)
-
-          domain.update!(key: key2, certificate: cert2)
-        end
-
-        it 'updates when removed' do
-          expect(domain).to receive(:update_daemon)
-
-          domain.update!(key: nil, certificate: nil)
-        end
-      end
     end
   end
 

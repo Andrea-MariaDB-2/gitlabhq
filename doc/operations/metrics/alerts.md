@@ -1,6 +1,6 @@
 ---
 stage: Monitor
-group: Monitor
+group: Respond
 info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
 ---
 
@@ -19,8 +19,7 @@ Alerts are not currently supported for [Prometheus cluster integrations](../../u
 
 ## External Prometheus instances
 
-> - [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/9258) in GitLab Ultimate 11.8.
-> - [Moved](https://gitlab.com/gitlab-org/gitlab/-/issues/42640) to GitLab Free in 12.10.
+> [Moved](https://gitlab.com/gitlab-org/gitlab/-/issues/42640) to GitLab Free in 12.10.
 
 For manually configured Prometheus servers, GitLab provides a notify endpoint for
 use with Prometheus webhooks. If you have manual configuration enabled, an
@@ -61,8 +60,6 @@ Prometheus server to use the
 
 ## Trigger actions from alerts **(ULTIMATE)**
 
-> [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/4925) in [GitLab Ultimate](https://about.gitlab.com/pricing/) 11.11.
-
 Alerts can be used to trigger actions, like opening an issue automatically
 (disabled by default since `13.1`). To configure the actions:
 
@@ -83,7 +80,7 @@ values extracted from the [`alerts` field in webhook payload](https://prometheus
   - `full_query`: Alert query extracted from the payload's `generatorURL` field
   - Optional list of attached annotations extracted from `annotations/*`
 - Alert [GFM](../../user/markdown.md): GitLab Flavored Markdown from the payload's `annotations/gitlab_incident_markdown` field.
-- Alert Severity (introduced in GitLab version [13.9](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/50871):
+- Alert Severity ([Introduced](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/50871) in GitLab version 13.9):
   Extracted from the alert payload field `labels/severity`. Maps case-insensitive
   value to [Alert's severity](../incident_management/alerts.md#alert-severity):
   - **Critical**: `critical`, `s1`, `p1`, `emergency`, `fatal`, or any value not in this list
@@ -102,12 +99,11 @@ GitLab tags each incident issue with the `incident` label automatically. If the 
 does not yet exist, it is also created automatically.
 
 If the metric exceeds the threshold of the alert for over 5 minutes, GitLab sends
-an email to all [Maintainers and Owners](../../user/permissions.md#project-members-permissions)
-of the project.
+an email to all Maintainers and Owners of the project.
 
 ### Recovery alerts
 
-> - [From GitLab Ultimate 12.5](https://gitlab.com/gitlab-org/gitlab/-/issues/13401), when GitLab receives a recovery alert, it automatically closes the associated issue.
+> [From GitLab 12.5](https://gitlab.com/gitlab-org/gitlab/-/issues/13401), when GitLab receives a recovery alert, it automatically closes the associated issue.
 
 The alert in GitLab will be automatically resolved when Prometheus
 sends a payload with the field `status` set to `resolved`.

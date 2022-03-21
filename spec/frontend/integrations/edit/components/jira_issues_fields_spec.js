@@ -1,8 +1,8 @@
 import { GlFormCheckbox, GlFormInput } from '@gitlab/ui';
-import { mountExtended } from 'helpers/vue_test_utils_helper';
+import { nextTick } from 'vue';
+import { mountExtended, shallowMountExtended } from 'helpers/vue_test_utils_helper';
 
 import JiraIssuesFields from '~/integrations/edit/components/jira_issues_fields.vue';
-import eventHub from '~/integrations/edit/event_hub';
 import { createStore } from '~/integrations/edit/store';
 
 describe('JiraIssuesFields', () => {
@@ -16,12 +16,17 @@ describe('JiraIssuesFields', () => {
     upgradePlanPath: 'https://gitlab.com',
   };
 
-  const createComponent = ({ isInheriting = false, props, ...options } = {}) => {
+  const createComponent = ({
+    isInheriting = false,
+    mountFn = mountExtended,
+    props,
+    ...options
+  } = {}) => {
     store = createStore({
       defaultState: isInheriting ? {} : undefined,
     });
 
-    wrapper = mountExtended(JiraIssuesFields, {
+    wrapper = mountFn(JiraIssuesFields, {
       propsData: { ...defaultProps, ...props },
       store,
       stubs: ['jira-issue-creation-vulnerabilities'],
@@ -37,11 +42,18 @@ describe('JiraIssuesFields', () => {
   const findEnableCheckboxDisabled = () =>
     findEnableCheckbox().find('[type=checkbox]').attributes('disabled');
   const findProjectKey = () => wrapper.findComponent(GlFormInput);
+  const findProjectKeyFormGroup = () => wrapper.findByTestId('project-key-form-group');
   const findPremiumUpgradeCTA = () => wrapper.findByTestId('premium-upgrade-cta');
   const findUltimateUpgradeCTA = () => wrapper.findByTestId('ultimate-upgrade-cta');
   const findJiraForVulnerabilities = () => wrapper.findByTestId('jira-for-vulnerabilities');
+  const findConflictWarning = () => wrapper.findByTestId('conflict-warning-text');
   const setEnableCheckbox = async (isEnabled = true) =>
     findEnableCheckbox().vm.$emit('input', isEnabled);
+
+  const assertProjectKeyState = (expectedStateValue) => {
+    expect(findProjectKey().attributes('state')).toBe(expectedStateValue);
+    expect(findProjectKeyFormGroup().attributes('state')).toBe(expectedStateValue);
+  };
 
   describe('template', () => {
     describe.each`
@@ -150,19 +162,18 @@ describe('JiraIssuesFields', () => {
     });
 
     describe('GitLab issues warning', () => {
-      const expectedText = 'Consider disabling GitLab issues';
+      it.each`
+        gitlabIssuesEnabled | scenario
+        ${true}             | ${'displays conflict warning'}
+        ${false}            | ${'does not display conflict warning'}
+      `(
+        '$scenario when `gitlabIssuesEnabled` is `$gitlabIssuesEnabled`',
+        ({ gitlabIssuesEnabled }) => {
+          createComponent({ props: { gitlabIssuesEnabled } });
 
-      it('contains warning when GitLab issues is enabled', () => {
-        createComponent();
-
-        expect(wrapper.text()).toContain(expectedText);
-      });
-
-      it('does not contain warning when GitLab issues is disabled', () => {
-        createComponent({ props: { gitlabIssuesEnabled: false } });
-
-        expect(wrapper.text()).not.toContain(expectedText);
-      });
+          expect(findConflictWarning().exists()).toBe(gitlabIssuesEnabled);
+        },
+      );
     });
 
     describe('Vulnerabilities creation', () => {
@@ -183,7 +194,7 @@ describe('JiraIssuesFields', () => {
         await setEnableCheckbox(true);
         expect(findJiraForVulnerabilities().attributes('show-full-feature')).toBe('true');
         wrapper.setProps({ showJiraVulnerabilitiesIntegration: false });
-        await wrapper.vm.$nextTick();
+        await nextTick();
         expect(findJiraForVulnerabilities().attributes('show-full-feature')).toBeUndefined();
       });
 
@@ -201,13 +212,53 @@ describe('JiraIssuesFields', () => {
         );
       });
 
-      it('emits "getJiraIssueTypes" to the eventHub when the jira-vulnerabilities component requests to fetch issue types', async () => {
-        const eventHubEmitSpy = jest.spyOn(eventHub, '$emit');
-
+      it('emits "request-jira-issue-types` when the jira-vulnerabilities component requests to fetch issue types', async () => {
         await setEnableCheckbox(true);
-        await findJiraForVulnerabilities().vm.$emit('request-get-issue-types');
+        await findJiraForVulnerabilities().vm.$emit('request-jira-issue-types');
 
-        expect(eventHubEmitSpy).toHaveBeenCalledWith('getJiraIssueTypes');
+        expect(wrapper.emitted('request-jira-issue-types')).toHaveLength(1);
+      });
+    });
+
+    describe('Project key input field', () => {
+      it('sets Project Key `state` attribute to `true` by default', () => {
+        createComponent({
+          props: {
+            initialProjectKey: '',
+            initialEnableJiraIssues: true,
+          },
+          mountFn: shallowMountExtended,
+        });
+
+        assertProjectKeyState('true');
+      });
+
+      describe('when `isValidated` prop is true', () => {
+        beforeEach(() => {
+          createComponent({
+            props: {
+              initialProjectKey: '',
+              initialEnableJiraIssues: true,
+              isValidated: true,
+            },
+            mountFn: shallowMountExtended,
+          });
+        });
+
+        describe('with no project key', () => {
+          it('sets Project Key `state` attribute to `undefined`', async () => {
+            assertProjectKeyState(undefined);
+          });
+        });
+
+        describe('when project key is set', () => {
+          it('sets Project Key `state` attribute to `true`', async () => {
+            // set the project key
+            await findProjectKey().vm.$emit('input', 'AB');
+
+            assertProjectKeyState('true');
+          });
+        });
       });
     });
   });

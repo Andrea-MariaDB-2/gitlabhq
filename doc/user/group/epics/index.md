@@ -1,5 +1,4 @@
 ---
-type: reference, howto
 stage: Plan
 group: Product Planning
 info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
@@ -7,8 +6,7 @@ info: To determine the technical writer assigned to the Stage/Group associated w
 
 # Epics **(PREMIUM)**
 
-> - Introduced in [GitLab Ultimate](https://about.gitlab.com/pricing/) 10.2.
-> - Single-level epics [were moved](https://gitlab.com/gitlab-org/gitlab/-/issues/37081) to [GitLab Premium](https://about.gitlab.com/pricing/) in 12.8.
+> Single-level epics were [moved](https://gitlab.com/gitlab-org/gitlab/-/issues/37081) from GitLab Ultimate to GitLab Premium in 12.8.
 
 When [issues](../../project/issues/index.md) share a theme across projects and milestones,
 you can manage them by using epics.
@@ -37,9 +35,9 @@ graph TD
     Child_epic --> Issue2
 ```
 
-## Roadmap in epics **(ULTIMATE)**
+Also, read more about possible [planning hierarchies](../planning_hierarchy/index.md).
 
-> [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/7327) in [GitLab Ultimate](https://about.gitlab.com/pricing/) 11.10.
+## Roadmap in epics **(ULTIMATE)**
 
 If your epic contains one or more [child epics](manage_epics.md#multi-level-child-epics) that
 have a start or due date, a visual
@@ -64,6 +62,7 @@ You can also consult the [group permissions table](../../permissions.md#group-me
 ## Related topics
 
 - [Manage epics](manage_epics.md) and multi-level child epics.
+- Link [related epics](linked_epics.md) based on a type of relationship.
 - Create workflows with [epic boards](epic_boards.md).
 - [Turn on notifications](../../profile/notifications.md) for about epic events.
 - [Award an emoji](../../award_emojis.md) to an epic or its comments.

@@ -3,12 +3,14 @@
 require 'rspec-parameterized'
 require 'gitlab-dangerfiles'
 require 'danger'
-require 'danger/plugins/helper'
+require 'danger/plugins/internal/helper'
 require 'gitlab/dangerfiles/spec_helper'
 
 require_relative '../../../danger/plugins/project_helper'
+require_relative '../../../spec/support/helpers/stub_env'
 
 RSpec.describe Tooling::Danger::ProjectHelper do
+  include StubENV
   include_context "with dangerfile"
 
   let(:fake_danger) { DangerSpecHelper.fake_danger.include(described_class) }
@@ -18,29 +20,14 @@ RSpec.describe Tooling::Danger::ProjectHelper do
 
   before do
     allow(project_helper).to receive(:helper).and_return(fake_helper)
-  end
-
-  describe '#changes' do
-    it 'returns an array of Change objects' do
-      expect(project_helper.changes).to all(be_an(Gitlab::Dangerfiles::Change))
-    end
-
-    it 'groups changes by change type' do
-      changes = project_helper.changes
-
-      expect(changes.added.files).to eq(added_files)
-      expect(changes.modified.files).to eq(modified_files)
-      expect(changes.deleted.files).to eq(deleted_files)
-      expect(changes.renamed_before.files).to eq([renamed_before_file])
-      expect(changes.renamed_after.files).to eq([renamed_after_file])
-    end
+    allow(fake_helper).to receive(:config).and_return(double(files_to_category: described_class::CATEGORIES))
   end
 
   describe '#categories_for_file' do
     using RSpec::Parameterized::TableSyntax
 
     before do
-      allow(fake_git).to receive(:diff_for_file).with('usage_data.rb') { double(:diff, patch: "+ count(User.active)") }
+      allow(fake_git).to receive(:diff_for_file).with(instance_of(String)) { double(:diff, patch: "+ count(User.active)") }
     end
 
     where(:path, :expected_categories) do
@@ -57,10 +44,9 @@ RSpec.describe Tooling::Danger::ProjectHelper do
       'ee/README'       | [:unknown]
 
       'app/assets/foo'                   | [:frontend]
-      'app/views/foo'                    | [:frontend]
+      'app/views/foo'                    | [:frontend, :backend]
       'public/foo'                       | [:frontend]
       'scripts/frontend/foo'             | [:frontend]
-      'spec/javascripts/foo'             | [:frontend]
       'spec/frontend/bar'                | [:frontend]
       'spec/frontend_integration/bar'    | [:frontend]
       'vendor/assets/foo'                | [:frontend]
@@ -72,8 +58,7 @@ RSpec.describe Tooling::Danger::ProjectHelper do
       'config/deep/foo.js'               | [:frontend]
 
       'ee/app/assets/foo'                | [:frontend]
-      'ee/app/views/foo'                 | [:frontend]
-      'ee/spec/javascripts/foo'          | [:frontend]
+      'ee/app/views/foo'                 | [:frontend, :backend]
       'ee/spec/frontend/bar'             | [:frontend]
       'ee/spec/frontend_integration/bar' | [:frontend]
 
@@ -86,7 +71,7 @@ RSpec.describe Tooling::Danger::ProjectHelper do
       'rubocop/foo'                | [:backend]
       '.rubocop.yml'               | [:backend]
       '.rubocop_todo.yml'          | [:backend]
-      '.rubocop_manual_todo.yml'   | [:backend]
+      '.rubocop_todo/cop/name.yml' | [:backend]
       'spec/foo'                   | [:backend]
       'spec/foo/bar'               | [:backend]
 
@@ -94,6 +79,9 @@ RSpec.describe Tooling::Danger::ProjectHelper do
       'ee/bin/foo'      | [:backend]
       'ee/spec/foo'     | [:backend]
       'ee/spec/foo/bar' | [:backend]
+
+      'spec/migrations/foo'    | [:database]
+      'ee/spec/migrations/foo' | [:database]
 
       'spec/features/foo'                            | [:test]
       'ee/spec/features/foo'                         | [:test]
@@ -178,6 +166,8 @@ RSpec.describe Tooling::Danger::ProjectHelper do
       'lib/gitlab/usage_data_counters/aggregated_metrics/common.yml' | [:product_intelligence]
       'lib/gitlab/usage_data_counters/hll_redis_counter.rb' | [:backend, :product_intelligence]
       'lib/gitlab/tracking.rb' | [:backend, :product_intelligence]
+      'lib/gitlab/usage/service_ping_report.rb' | [:backend, :product_intelligence]
+      'lib/gitlab/usage/metrics/key_path_processor.rb' | [:backend, :product_intelligence]
       'spec/lib/gitlab/tracking_spec.rb' | [:backend, :product_intelligence]
       'app/helpers/tracking_helper.rb' | [:backend, :product_intelligence]
       'spec/helpers/tracking_helper_spec.rb' | [:backend, :product_intelligence]
@@ -188,22 +178,90 @@ RSpec.describe Tooling::Danger::ProjectHelper do
       'spec/frontend/tracking/foo.js' | [:frontend, :product_intelligence]
       'spec/frontend/tracking_spec.js' | [:frontend, :product_intelligence]
       'lib/gitlab/usage_database/foo.rb' | [:backend]
+      'config/metrics/counts_7d/test_metric.yml' | [:product_intelligence]
+      'config/events/snowplow_event.yml' | [:product_intelligence]
+      'config/metrics/schema.json' | [:product_intelligence]
+      'doc/api/usage_data.md' | [:product_intelligence]
+      'spec/lib/gitlab/usage_data_spec.rb' | [:product_intelligence]
+      'spec/lib/gitlab/usage/service_ping_report.rb' | [:backend, :product_intelligence]
+      'spec/lib/gitlab/usage/metrics/key_path_processor.rb' | [:backend, :product_intelligence]
+
+      'app/models/integration.rb' | [:integrations_be, :backend]
+      'ee/app/models/integrations/github.rb' | [:integrations_be, :backend]
+      'ee/app/models/ee/integrations/jira.rb' | [:integrations_be, :backend]
+      'app/models/integrations/chat_message/pipeline_message.rb' | [:integrations_be, :backend]
+      'app/models/jira_connect_subscription.rb' | [:integrations_be, :backend]
+      'app/models/hooks/service_hook.rb' | [:integrations_be, :backend]
+      'ee/app/models/ee/hooks/system_hook.rb' | [:integrations_be, :backend]
+      'app/services/concerns/integrations/project_test_data.rb' | [:integrations_be, :backend]
+      'ee/app/services/ee/integrations/test/project_service.rb' | [:integrations_be, :backend]
+      'app/controllers/concerns/integrations/actions.rb' | [:integrations_be, :backend]
+      'ee/app/controllers/concerns/ee/integrations/params.rb' | [:integrations_be, :backend]
+      'ee/app/controllers/projects/integrations/jira/issues_controller.rb' | [:integrations_be, :backend]
+      'app/controllers/projects/hooks_controller.rb' | [:integrations_be, :backend]
+      'app/controllers/admin/hook_logs_controller.rb' | [:integrations_be, :backend]
+      'app/controllers/groups/settings/integrations_controller.rb' | [:integrations_be, :backend]
+      'app/controllers/jira_connect/branches_controller.rb' | [:integrations_be, :backend]
+      'app/controllers/oauth/jira/authorizations_controller.rb' | [:integrations_be, :backend]
+      'ee/app/finders/projects/integrations/jira/by_ids_finder.rb' | [:integrations_be, :database, :backend]
+      'app/workers/jira_connect/sync_merge_request_worker.rb' | [:integrations_be, :backend]
+      'app/workers/propagate_integration_inherit_worker.rb' | [:integrations_be, :backend]
+      'app/workers/web_hooks/log_execution_worker.rb' | [:integrations_be, :backend]
+      'app/workers/web_hook_worker.rb' | [:integrations_be, :backend]
+      'app/workers/project_service_worker.rb' | [:integrations_be, :backend]
+      'lib/atlassian/jira_connect/serializers/commit_entity.rb' | [:integrations_be, :backend]
+      'lib/api/entities/project_integration.rb' | [:integrations_be, :backend]
+      'lib/gitlab/hook_data/note_builder.rb' | [:integrations_be, :backend]
+      'lib/gitlab/data_builder/note.rb' | [:integrations_be, :backend]
+      'lib/gitlab/web_hooks/recursion_detection.rb' | [:integrations_be, :backend]
+      'ee/lib/ee/gitlab/integrations/sti_type.rb' | [:integrations_be, :backend]
+      'ee/lib/ee/api/helpers/integrations_helpers.rb' | [:integrations_be, :backend]
+      'ee/app/serializers/integrations/jira_serializers/issue_entity.rb' | [:integrations_be, :backend]
+      'app/serializers/jira_connect/app_data_serializer.rb' | [:integrations_be, :backend]
+      'lib/api/github/entities.rb' | [:integrations_be, :backend]
+      'lib/api/v3/github.rb' | [:integrations_be, :backend]
+      'app/models/clusters/integrations/elastic_stack.rb' | [:backend]
+      'app/controllers/clusters/integrations_controller.rb' | [:backend]
+      'app/services/clusters/integrations/prometheus_health_check_service.rb' | [:backend]
+      'app/graphql/types/alert_management/integration_type.rb' | [:backend]
+
+      'app/views/jira_connect/branches/new.html.haml' | [:integrations_fe, :frontend]
+      'app/views/layouts/jira_connect.html.haml' | [:integrations_fe, :frontend]
+      'app/assets/javascripts/jira_connect/branches/pages/index.vue' | [:integrations_fe, :frontend]
+      'ee/app/views/projects/integrations/jira/issues/show.html.haml' | [:integrations_fe, :frontend]
+      'ee/app/assets/javascripts/integrations/zentao/issues_list/graphql/queries/get_zentao_issues.query.graphql' | [:integrations_fe, :frontend]
+      'app/assets/javascripts/pages/projects/settings/integrations/show/index.js' | [:integrations_fe, :frontend]
+      'ee/app/assets/javascripts/pages/groups/hooks/index.js' | [:integrations_fe, :frontend]
+      'app/views/clusters/clusters/_integrations_tab.html.haml' | [:frontend, :backend]
+      'app/assets/javascripts/alerts_settings/graphql/fragments/integration_item.fragment.graphql' | [:frontend]
+      'app/assets/javascripts/filtered_search/droplab/hook_input.js' | [:frontend]
+
+      'app/views/layouts/header/_default.html.haml' | [:frontend, :backend]
+      'app/views/layouts/header/_default.html.erb'  | [:frontend, :backend]
     end
 
     with_them do
-      subject { project_helper.categories_for_file(path) }
+      subject { project_helper.helper.categories_for_file(path) }
 
       it { is_expected.to eq(expected_categories) }
     end
 
     context 'having specific changes' do
       where(:expected_categories, :patch, :changed_files) do
+        [:product_intelligence]                      | '+data-track-action'                           | ['components/welcome.vue']
+        [:product_intelligence]                      | '+ data: { track_label:'                       | ['admin/groups/_form.html.haml']
+        [:product_intelligence]                      | '+ Gitlab::Tracking.event'                     | ['dashboard/todos_controller.rb', 'admin/groups/_form.html.haml']
         [:database, :backend, :product_intelligence] | '+ count(User.active)'                         | ['usage_data.rb', 'lib/gitlab/usage_data.rb', 'ee/lib/ee/gitlab/usage_data.rb']
         [:database, :backend, :product_intelligence] | '+ estimate_batch_distinct_count(User.active)' | ['usage_data.rb']
         [:backend, :product_intelligence]            | '+ alt_usage_data(User.active)'                | ['lib/gitlab/usage_data.rb']
         [:backend, :product_intelligence]            | '+ count(User.active)'                         | ['lib/gitlab/usage_data/topology.rb']
         [:backend, :product_intelligence]            | '+ foo_count(User.active)'                     | ['lib/gitlab/usage_data.rb']
         [:backend]                                   | '+ count(User.active)'                         | ['user.rb']
+        [:integrations_be, :database, :migration]    | '+ add_column :integrations, :foo, :text'      | ['db/migrate/foo.rb']
+        [:integrations_be, :database, :migration]    | '+ create_table :zentao_tracker_data do |t|'   | ['ee/db/post_migrate/foo.rb']
+        [:integrations_be, :backend]                 | '+ Integrations::Foo'                          | ['app/foo/bar.rb']
+        [:integrations_be, :backend]                 | '+ project.execute_hooks(foo, :bar)'           | ['ee/lib/ee/foo.rb']
+        [:integrations_be, :backend]                 | '+ project.execute_integrations(foo, :bar)'    | ['app/foo.rb']
       end
 
       with_them do
@@ -211,7 +269,7 @@ RSpec.describe Tooling::Danger::ProjectHelper do
           changed_files.each do |file|
             allow(fake_git).to receive(:diff_for_file).with(file) { double(:diff, patch: patch) }
 
-            expect(project_helper.categories_for_file(file)).to eq(expected_categories)
+            expect(project_helper.helper.categories_for_file(file)).to eq(expected_categories)
           end
         end
       end
@@ -220,7 +278,7 @@ RSpec.describe Tooling::Danger::ProjectHelper do
 
   describe '.local_warning_message' do
     it 'returns an informational message with rules that can run' do
-      expect(described_class.local_warning_message).to eq('==> Only the following Danger rules can be run locally: changelog, database, documentation, duplicate_yarn_dependencies, eslint, gitaly, karma, pajamas, pipeline, prettier, product_intelligence, utility_css, vue_shared_documentation')
+      expect(described_class.local_warning_message).to eq('==> Only the following Danger rules can be run locally: ci_config, database, documentation, duplicate_yarn_dependencies, eslint, gitaly, pajamas, pipeline, prettier, product_intelligence, utility_css, vue_shared_documentation, datateam')
     end
   end
 
@@ -252,31 +310,16 @@ RSpec.describe Tooling::Danger::ProjectHelper do
     end
   end
 
-  describe '#all_ee_changes' do
-    subject { project_helper.all_ee_changes }
+  describe '#file_lines' do
+    let(:filename) { 'spec/foo_spec.rb' }
+    let(:file_spy) { spy }
 
-    it 'returns all changed files starting with ee/' do
-      changes = double
-      expect(project_helper).to receive(:changes).and_return(changes)
-      expect(changes).to receive(:files).and_return(%w[fr/ee/beer.rb ee/wine.rb ee/lib/ido.rb ee.k])
+    it 'returns the chomped file lines' do
+      expect(project_helper).to receive(:read_file).with(filename).and_return(file_spy)
 
-      is_expected.to match_array(%w[ee/wine.rb ee/lib/ido.rb])
-    end
-  end
+      project_helper.file_lines(filename)
 
-  describe '#project_name' do
-    subject { project_helper.project_name }
-
-    it 'returns gitlab if ee? returns true' do
-      expect(project_helper).to receive(:ee?) { true }
-
-      is_expected.to eq('gitlab')
-    end
-
-    it 'returns gitlab-ce if ee? returns false' do
-      expect(project_helper).to receive(:ee?) { false }
-
-      is_expected.to eq('gitlab-foss')
+      expect(file_spy).to have_received(:lines).with(chomp: true)
     end
   end
 end

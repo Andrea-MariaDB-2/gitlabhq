@@ -1,4 +1,4 @@
-import Vue from 'vue';
+import Vue, { nextTick } from 'vue';
 import { createComponentWithStore } from 'helpers/vue_mount_component_helper';
 import IdeTreeList from '~/ide/components/ide_tree_list.vue';
 import { createStore } from '~/ide/stores';
@@ -38,18 +38,22 @@ describe('IDE tree list', () => {
     beforeEach(() => {
       bootstrapWithTree();
 
+      jest.spyOn(vm, '$emit').mockImplementation(() => {});
+
       vm.$mount();
     });
 
-    it('renders loading indicator', (done) => {
+    it('emits tree-ready event', () => {
+      expect(vm.$emit).toHaveBeenCalledTimes(1);
+      expect(vm.$emit).toHaveBeenCalledWith('tree-ready');
+    });
+
+    it('renders loading indicator', async () => {
       store.state.trees['abcproject/main'].loading = true;
 
-      vm.$nextTick(() => {
-        expect(vm.$el.querySelector('.multi-file-loading-container')).not.toBeNull();
-        expect(vm.$el.querySelectorAll('.multi-file-loading-container').length).toBe(3);
-
-        done();
-      });
+      await nextTick();
+      expect(vm.$el.querySelector('.multi-file-loading-container')).not.toBeNull();
+      expect(vm.$el.querySelectorAll('.multi-file-loading-container').length).toBe(3);
     });
 
     it('renders list of files', () => {
@@ -61,7 +65,13 @@ describe('IDE tree list', () => {
     beforeEach(() => {
       bootstrapWithTree(emptyBranchTree);
 
+      jest.spyOn(vm, '$emit').mockImplementation(() => {});
+
       vm.$mount();
+    });
+
+    it('still emits tree-ready event', () => {
+      expect(vm.$emit).toHaveBeenCalledWith('tree-ready');
     });
 
     it('does not load files if the branch is empty', () => {

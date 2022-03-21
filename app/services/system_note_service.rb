@@ -45,12 +45,16 @@ module SystemNoteService
     ::SystemNotes::IssuablesService.new(noteable: issuable, project: project, author: author).change_issuable_reviewers(old_reviewers)
   end
 
-  def relate_issue(noteable, noteable_ref, user)
-    ::SystemNotes::IssuablesService.new(noteable: noteable, project: noteable.project, author: user).relate_issue(noteable_ref)
+  def change_issuable_contacts(issuable, project, author, added_count, removed_count)
+    ::SystemNotes::IssuablesService.new(noteable: issuable, project: project, author: author).change_issuable_contacts(added_count, removed_count)
   end
 
-  def unrelate_issue(noteable, noteable_ref, user)
-    ::SystemNotes::IssuablesService.new(noteable: noteable, project: noteable.project, author: user).unrelate_issue(noteable_ref)
+  def relate_issuable(noteable, noteable_ref, user)
+    ::SystemNotes::IssuablesService.new(noteable: noteable, project: noteable.project, author: user).relate_issuable(noteable_ref)
+  end
+
+  def unrelate_issuable(noteable, noteable_ref, user)
+    ::SystemNotes::IssuablesService.new(noteable: noteable, project: noteable.project, author: user).unrelate_issuable(noteable_ref)
   end
 
   # Called when the due_date of a Noteable is changed
@@ -113,6 +117,14 @@ module SystemNoteService
 
   def change_status(noteable, project, author, status, source = nil)
     ::SystemNotes::IssuablesService.new(noteable: noteable, project: project, author: author).change_status(status, source)
+  end
+
+  def request_attention(noteable, project, author, user)
+    ::SystemNotes::IssuablesService.new(noteable: noteable, project: project, author: author).request_attention(user)
+  end
+
+  def remove_attention_request(noteable, project, author, user)
+    ::SystemNotes::IssuablesService.new(noteable: noteable, project: project, author: author).remove_attention_request(user)
   end
 
   # Called when 'merge when pipeline succeeds' is executed
@@ -213,12 +225,12 @@ module SystemNoteService
     ::SystemNotes::MergeRequestsService.new(noteable: issue, project: project, author: author).new_merge_request(merge_request)
   end
 
-  def cross_reference(noteable, mentioner, author)
-    ::SystemNotes::IssuablesService.new(noteable: noteable, author: author).cross_reference(mentioner)
+  def cross_reference(mentioned, mentioned_in, author)
+    ::SystemNotes::IssuablesService.new(noteable: mentioned, author: author).cross_reference(mentioned_in)
   end
 
-  def cross_reference_exists?(noteable, mentioner)
-    ::SystemNotes::IssuablesService.new(noteable: noteable).cross_reference_exists?(mentioner)
+  def cross_reference_exists?(mentioned, mentioned_in)
+    ::SystemNotes::IssuablesService.new(noteable: mentioned).cross_reference_exists?(mentioned_in)
   end
 
   def change_task_status(noteable, project, author, new_task)
@@ -249,8 +261,8 @@ module SystemNoteService
     ::SystemNotes::IssuablesService.new(noteable: issuable, project: issuable.project, author: author).discussion_lock
   end
 
-  def cross_reference_disallowed?(noteable, mentioner)
-    ::SystemNotes::IssuablesService.new(noteable: noteable).cross_reference_disallowed?(mentioner)
+  def cross_reference_disallowed?(mentioned, mentioned_in)
+    ::SystemNotes::IssuablesService.new(noteable: mentioned).cross_reference_disallowed?(mentioned_in)
   end
 
   def zoom_link_added(issue, project, author)
@@ -311,8 +323,8 @@ module SystemNoteService
     merge_requests_service(noteable, noteable.project, user).unapprove_mr
   end
 
-  def change_alert_status(alert, author)
-    ::SystemNotes::AlertManagementService.new(noteable: alert, project: alert.project, author: author).change_alert_status(alert)
+  def change_alert_status(alert, author, reason = nil)
+    ::SystemNotes::AlertManagementService.new(noteable: alert, project: alert.project, author: author).change_alert_status(reason)
   end
 
   def new_alert_issue(alert, issue, author)
@@ -325,6 +337,10 @@ module SystemNoteService
 
   def change_incident_severity(incident, author)
     ::SystemNotes::IncidentService.new(noteable: incident, project: incident.project, author: author).change_incident_severity
+  end
+
+  def change_incident_status(incident, author, reason = nil)
+    ::SystemNotes::IncidentService.new(noteable: incident, project: incident.project, author: author).change_incident_status(reason)
   end
 
   def log_resolving_alert(alert, monitoring_tool)

@@ -12,6 +12,7 @@ module Projects
 
       feature_category :source_code_management, [:show, :cleanup]
       feature_category :continuous_delivery, [:create_deploy_token]
+      urgency :low, [:show]
 
       def show
         render_show
@@ -24,7 +25,7 @@ module Projects
         if result[:status] == :success
           flash[:notice] = _('Repository cleanup has started. You will receive an email once the cleanup operation is complete.')
         else
-          flash[:alert] = status.fetch(:message, _('Failed to upload object map file'))
+          flash[:alert] = result.fetch(:message, _('Failed to upload object map file'))
         end
 
         redirect_to project_settings_repository_path(project)
@@ -80,8 +81,7 @@ module Projects
         @protected_branch = @project.protected_branches.new
         @protected_tag = @project.protected_tags.new
 
-        @protected_branches_count = @protected_branches.reduce(0) { |sum, branch| sum + branch.matching(@project.repository.branches).size }
-        @protected_tags_count = @protected_tags.reduce(0) { |sum, tag| sum + tag.matching(@project.repository.tags).size }
+        @protected_tags_count = @protected_tags.reduce(0) { |sum, tag| sum + tag.matching(@project.repository.tag_names).size }
 
         load_gon_index
       end

@@ -1,10 +1,11 @@
 import Vue from 'vue';
+import VueApollo from 'vue-apollo';
+import createDefaultClient from '~/lib/graphql';
+import BridgeApp from './bridge/app.vue';
 import JobApp from './components/job_app.vue';
 import createStore from './store';
 
-export default () => {
-  const element = document.getElementById('js-job-vue-app');
-
+const initializeJobPage = (element) => {
   const store = createStore();
 
   // Let's start initializing the store (i.e. fetching data) right away
@@ -13,7 +14,6 @@ export default () => {
   const {
     artifactHelpUrl,
     deploymentHelpUrl,
-    codeQualityHelpUrl,
     runnerSettingsUrl,
     subscriptionsMoreMinutesUrl,
     endpoint,
@@ -38,7 +38,6 @@ export default () => {
         props: {
           artifactHelpUrl,
           deploymentHelpUrl,
-          codeQualityHelpUrl,
           runnerSettingsUrl,
           subscriptionsMoreMinutesUrl,
           endpoint,
@@ -50,4 +49,45 @@ export default () => {
       });
     },
   });
+};
+
+const initializeBridgePage = (el) => {
+  const {
+    buildId,
+    downstreamPipelinePath,
+    emptyStateIllustrationPath,
+    pipelineIid,
+    projectFullPath,
+  } = el.dataset;
+
+  Vue.use(VueApollo);
+  const apolloProvider = new VueApollo({
+    defaultClient: createDefaultClient(),
+  });
+
+  return new Vue({
+    el,
+    apolloProvider,
+    provide: {
+      buildId,
+      downstreamPipelinePath,
+      emptyStateIllustrationPath,
+      pipelineIid,
+      projectFullPath,
+    },
+    render(h) {
+      return h(BridgeApp);
+    },
+  });
+};
+
+export default () => {
+  const jobElement = document.getElementById('js-job-page');
+  const bridgeElement = document.getElementById('js-bridge-page');
+
+  if (jobElement) {
+    initializeJobPage(jobElement);
+  } else {
+    initializeBridgePage(bridgeElement);
+  }
 };

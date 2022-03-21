@@ -25,6 +25,11 @@ module QA
 
         view 'app/assets/javascripts/diffs/components/compare_versions.vue' do
           element :target_version_dropdown
+          element :file_tree_button
+        end
+
+        view 'app/assets/javascripts/diffs/components/tree_list.vue' do
+          element :file_tree_container
         end
 
         view 'app/assets/javascripts/diffs/components/diff_file_header.vue' do
@@ -78,8 +83,16 @@ module QA
           element :merge_immediately_menu_item
         end
 
+        view 'app/assets/javascripts/vue_merge_request_widget/components/states/sha_mismatch.vue' do
+          element :head_mismatch_content
+        end
+
         view 'app/assets/javascripts/vue_merge_request_widget/components/states/squash_before_merge.vue' do
           element :squash_checkbox
+        end
+
+        view 'app/assets/javascripts/vue_merge_request_widget/mr_widget_options.vue' do
+          element :mr_widget_content
         end
 
         view 'app/assets/javascripts/vue_shared/components/markdown/apply_suggestion.vue' do
@@ -93,8 +106,9 @@ module QA
         end
 
         view 'app/assets/javascripts/vue_shared/components/markdown/suggestion_diff_header.vue' do
-          element :apply_suggestions_batch_button
           element :add_suggestion_batch_button
+          element :applied_badge
+          element :applying_badge
         end
 
         view 'app/views/projects/merge_requests/_description.html.haml' do
@@ -102,7 +116,7 @@ module QA
         end
 
         view 'app/views/projects/merge_requests/_mr_box.html.haml' do
-          element :title_content
+          element :title_content, required: true
         end
 
         view 'app/views/projects/merge_requests/_mr_title.html.haml' do
@@ -110,9 +124,9 @@ module QA
         end
 
         view 'app/views/projects/merge_requests/show.html.haml' do
-          element :notes_tab
-          element :commits_tab
-          element :diffs_tab
+          element :notes_tab, required: true
+          element :commits_tab, required: true
+          element :diffs_tab, required: true
         end
 
         view 'app/assets/javascripts/vue_merge_request_widget/components/states/mr_widget_auto_merge_enabled.vue' do
@@ -136,14 +150,14 @@ module QA
         end
 
         def submit_pending_reviews
+          has_element?(:submit_review_button)
           within_element(:review_bar_content) do
             click_element(:review_preview_dropdown)
             click_element(:submit_review_button)
-
-            # After clicking the button, wait for it to disappear
-            # before moving on to the next part of the test
-            has_no_element?(:submit_review_button)
           end
+          # After clicking the button, wait for it to disappear
+          # before moving on to the next part of the test
+          has_no_element?(:submit_review_button)
         end
 
         def add_comment_to_diff(text)
@@ -187,11 +201,17 @@ module QA
         end
 
         def has_file?(file_name)
-          has_element?(:file_name_content, text: file_name)
+          open_file_tree
+          has_element?(:file_name_content, file_name: file_name)
         end
 
         def has_no_file?(file_name)
-          has_no_element?(:file_name_content, text: file_name)
+          open_file_tree
+          has_no_element?(:file_name_content, file_name: file_name)
+        end
+
+        def open_file_tree
+          click_element(:file_tree_button) unless has_element?(:file_tree_container)
         end
 
         def has_merge_button?
@@ -202,7 +222,7 @@ module QA
 
         def has_pipeline_status?(text)
           # Pipelines can be slow, so we wait a bit longer than the usual 10 seconds
-          wait_until(sleep_interval: 5, reload: false) do
+          wait_until(max_duration: 120, sleep_interval: 5, reload: true) do
             has_element?(:merge_request_pipeline_info_content, text: text, wait: 15 )
           end
         end
@@ -243,7 +263,8 @@ module QA
           # status as unmerged, the test will fail.
           # Revisit after merge page re-architect is done https://gitlab.com/groups/gitlab-org/-/epics/5598
           # To remove page refresh logic if possible
-          retry_until(max_attempts: 3, reload: true) do
+          # We don't raise on failure because this method is used as a predicate matcher
+          retry_until(max_attempts: 3, reload: true, raise_on_failure: false) do
             has_element?(:merged_status_content, text: 'The changes were merged into', wait: 20)
           end
         end
@@ -257,13 +278,29 @@ module QA
           has_element?(:merge_button, disabled: false)
         end
 
-        # Waits up 60 seconds and raises an error if unable to merge
-        def wait_until_ready_to_merge
-          has_element?(:merge_button)
+        # Waits up 60 seconds and raises an error if unable to merge.
+        #
+        # If a state is encountered in which a user would typically refresh the page, this will refresh the page and
+        # then check again if it's ready to merge. For example, it will refresh if a new change was pushed and the page
+        # needs to be refreshed to show the change.
+        #
+        # @param [Boolean] transient_test true if the current test is a transient test (default: false)
+        def wait_until_ready_to_merge(transient_test: false)
+          wait_until do
+            has_element?(:merge_button)
 
-          # The merge button is enabled via JS
-          wait_until(reload: false) do
-            !find_element(:merge_button).disabled?
+            break true unless find_element(:merge_button).disabled?
+
+            # If the widget shows "Merge blocked: new changes were just added" we can refresh the page and check again
+            next false if has_element?(:head_mismatch_content)
+
+            # Stop waiting if we're in a transient test. By this point we're in an unexpected state and should let the
+            # test fail so we can investigate. If we're not in a transient test we keep trying until we reach timeout.
+            next true unless transient_test
+
+            QA::Runtime::Logger.debug("MR widget text: #{mr_widget_text}")
+
+            false
           end
         end
 
@@ -285,6 +322,15 @@ module QA
           end
 
           raise "Rebase did not appear to be successful" unless success
+        end
+
+        def merge_immediately!
+          if has_element?(:merge_moment_dropdown)
+            click_element(:merge_moment_dropdown, skip_finished_loading_check: true)
+            click_element(:merge_immediately_menu_item, skip_finished_loading_check: true)
+          else
+            click_element(:merge_button, skip_finished_loading_check: true)
+          end
         end
 
         def try_to_merge!
@@ -335,7 +381,7 @@ module QA
         end
 
         def apply_suggestion_with_message(message)
-          click_element(:apply_suggestion_dropdown)
+          all_elements(:apply_suggestion_dropdown, minimum: 1).first.click
           fill_element(:commit_message_field, message)
           click_element(:commit_with_custom_message_button)
         end
@@ -344,8 +390,11 @@ module QA
           all_elements(:add_suggestion_batch_button, minimum: 1).first.click
         end
 
-        def apply_suggestions_batch
-          all_elements(:apply_suggestions_batch_button, minimum: 1).first.click
+        def has_suggestions_applied?(count = 1)
+          wait_until(reload: false) do
+            has_no_element?(:applying_badge)
+          end
+          all_elements(:applied_badge, count: count)
         end
 
         def cherry_pick!
@@ -360,6 +409,10 @@ module QA
 
         def cancel_auto_merge!
           click_element(:cancel_auto_merge_button)
+        end
+
+        def mr_widget_text
+          find_element(:mr_widget_content).text
         end
       end
     end

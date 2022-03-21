@@ -7,16 +7,17 @@ module Gitlab
         class Base
           include Gitlab::Email::Message::InProductMarketing::Helper
           include Gitlab::Routing
+          include Gitlab::Experiment::Dsl
 
           attr_accessor :format
 
           def initialize(group:, user:, series:, format: :html)
-            raise ArgumentError, "Only #{total_series} series available for this track." unless series.between?(0, total_series - 1)
-
+            @series = series
             @group = group
             @user = user
-            @series = series
             @format = format
+
+            validate_series!
           end
 
           def subject_line
@@ -50,10 +51,22 @@ module Gitlab
           def cta_link
             case format
             when :html
-              link_to cta_text, group_email_campaigns_url(group, track: track, series: series), target: '_blank', rel: 'noopener noreferrer'
+              ActionController::Base.helpers.link_to cta_text, group_email_campaigns_url(group, track: track, series: series), target: '_blank', rel: 'noopener noreferrer'
             else
               [cta_text, group_email_campaigns_url(group, track: track, series: series)].join(' >> ')
             end
+          end
+
+          def invite_members?
+            false
+          end
+
+          def invite_text
+            s_('InProductMarketing|Do you have a teammate who would be perfect for this task?')
+          end
+
+          def invite_link
+            action_link(s_('InProductMarketing|Invite them to help out.'), group_url(group, open_modal: 'invite_members_for_task'))
           end
 
           def unsubscribe
@@ -75,31 +88,12 @@ module Gitlab
             end
           end
 
-          def address
-            s_('InProductMarketing|%{strong_start}GitLab Inc.%{strong_end} 268 Bush Street, #350, San Francisco, CA 94104, USA').html_safe % strong_options
-          end
-
-          def footer_links
-            links = [
-              [s_('InProductMarketing|Blog'), 'https://about.gitlab.com/blog'],
-              [s_('InProductMarketing|Twitter'), 'https://twitter.com/gitlab'],
-              [s_('InProductMarketing|Facebook'), 'https://www.facebook.com/gitlab'],
-              [s_('InProductMarketing|YouTube'), 'https://www.youtube.com/channel/UCnMGQ8QHMAnVIsI3xJrihhg']
-            ]
-            case format
-            when :html
-              links.map do |text, link|
-                link_to(text, link)
-              end
-            else
-              '| ' + links.map do |text, link|
-                [text, link].join(' ')
-              end.join("\n| ")
-            end
-          end
-
           def logo_path
             ["mailers/in_product_marketing", "#{track}-#{series}.png"].join('/')
+          end
+
+          def series?
+            total_series > 0
           end
 
           protected
@@ -147,6 +141,10 @@ module Gitlab
             preference_link = "https://about.gitlab.com/company/preference-center/?#{params.to_query}"
 
             link(s_('InProductMarketing|update your preferences'), preference_link)
+          end
+
+          def validate_series!
+            raise ArgumentError, "Only #{total_series} series available for this track." unless @series.between?(0, total_series - 1)
           end
         end
       end

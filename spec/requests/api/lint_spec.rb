@@ -26,6 +26,35 @@ RSpec.describe API::Lint do
           expect(response).to have_gitlab_http_status(:ok)
         end
       end
+
+      context 'when authenticated as external user' do
+        let(:project) { create(:project) }
+        let(:api_user) { create(:user, :external) }
+
+        context 'when reporter in a project' do
+          before do
+            project.add_reporter(api_user)
+          end
+
+          it 'returns authorization failure' do
+            post api('/ci/lint', api_user), params: { content: 'content' }
+
+            expect(response).to have_gitlab_http_status(:unauthorized)
+          end
+        end
+
+        context 'when developer in a project' do
+          before do
+            project.add_developer(api_user)
+          end
+
+          it 'returns authorization success' do
+            post api('/ci/lint', api_user), params: { content: 'content' }
+
+            expect(response).to have_gitlab_http_status(:ok)
+          end
+        end
+      end
     end
 
     context 'when signup is enabled and not limited' do
@@ -81,7 +110,7 @@ RSpec.describe API::Lint do
     context 'when authenticated' do
       let_it_be(:api_user) { create(:user) }
 
-      context 'with valid .gitlab-ci.yaml content' do
+      context 'with valid .gitlab-ci.yml content' do
         let(:yaml_content) do
           File.read(Rails.root.join('spec/support/gitlab_stubs/gitlab_ci.yml'))
         end
@@ -92,8 +121,8 @@ RSpec.describe API::Lint do
           expect(response).to have_gitlab_http_status(:ok)
           expect(json_response).to be_an Hash
           expect(json_response['status']).to eq('valid')
-          expect(json_response['warnings']).to eq([])
-          expect(json_response['errors']).to eq([])
+          expect(json_response['warnings']).to match_array([])
+          expect(json_response['errors']).to match_array([])
         end
 
         it 'outputs expanded yaml content' do
@@ -102,9 +131,16 @@ RSpec.describe API::Lint do
           expect(response).to have_gitlab_http_status(:ok)
           expect(json_response).to have_key('merged_yaml')
         end
+
+        it 'outputs jobs' do
+          post api('/ci/lint', api_user), params: { content: yaml_content, include_jobs: true }
+
+          expect(response).to have_gitlab_http_status(:ok)
+          expect(json_response).to have_key('jobs')
+        end
       end
 
-      context 'with valid .gitlab-ci.yaml with warnings' do
+      context 'with valid .gitlab-ci.yml with warnings' do
         let(:yaml_content) { { job: { script: 'ls', rules: [{ when: 'always' }] } }.to_yaml }
 
         it 'passes validation but returns warnings' do
@@ -113,11 +149,24 @@ RSpec.describe API::Lint do
           expect(response).to have_gitlab_http_status(:ok)
           expect(json_response['status']).to eq('valid')
           expect(json_response['warnings']).not_to be_empty
-          expect(json_response['errors']).to eq([])
+          expect(json_response['errors']).to match_array([])
         end
       end
 
-      context 'with an invalid .gitlab_ci.yml' do
+      context 'with valid .gitlab-ci.yml using deprecated keywords' do
+        let(:yaml_content) { { job: { script: 'ls', type: 'test' }, types: ['test'] }.to_yaml }
+
+        it 'passes validation but returns warnings' do
+          post api('/ci/lint', api_user), params: { content: yaml_content }
+
+          expect(response).to have_gitlab_http_status(:ok)
+          expect(json_response['status']).to eq('valid')
+          expect(json_response['warnings']).not_to be_empty
+          expect(json_response['errors']).to match_array([])
+        end
+      end
+
+      context 'with an invalid .gitlab-ci.yml' do
         context 'with invalid syntax' do
           let(:yaml_content) { 'invalid content' }
 
@@ -135,6 +184,13 @@ RSpec.describe API::Lint do
 
             expect(response).to have_gitlab_http_status(:ok)
             expect(json_response).to have_key('merged_yaml')
+          end
+
+          it 'outputs jobs' do
+            post api('/ci/lint', api_user), params: { content: yaml_content, include_jobs: true }
+
+            expect(response).to have_gitlab_http_status(:ok)
+            expect(json_response).to have_key('jobs')
           end
         end
 
@@ -156,6 +212,13 @@ RSpec.describe API::Lint do
             expect(response).to have_gitlab_http_status(:ok)
             expect(json_response).to have_key('merged_yaml')
           end
+
+          it 'outputs jobs' do
+            post api('/ci/lint', api_user), params: { content: yaml_content, include_jobs: true }
+
+            expect(response).to have_gitlab_http_status(:ok)
+            expect(json_response).to have_key('jobs')
+          end
         end
       end
 
@@ -171,10 +234,11 @@ RSpec.describe API::Lint do
   end
 
   describe 'GET /projects/:id/ci/lint' do
-    subject(:ci_lint) { get api("/projects/#{project.id}/ci/lint", api_user), params: { dry_run: dry_run } }
+    subject(:ci_lint) { get api("/projects/#{project.id}/ci/lint", api_user), params: { dry_run: dry_run, include_jobs: include_jobs } }
 
     let(:project) { create(:project, :repository) }
     let(:dry_run) { nil }
+    let(:include_jobs) { nil }
 
     RSpec.shared_examples 'valid config with warnings' do
       it 'passes validation with warnings' do
@@ -320,6 +384,15 @@ RSpec.describe API::Lint do
         project.add_developer(api_user)
       end
 
+      context 'with no commit' do
+        it 'returns error about providing content' do
+          ci_lint
+
+          expect(response).to have_gitlab_http_status(:ok)
+          expect(json_response['errors']).to match_array(['Please provide content of .gitlab-ci.yml'])
+        end
+      end
+
       context 'with valid .gitlab-ci.yml content' do
         let(:yaml_content) do
           { include: { local: 'another-gitlab-ci.yml' }, test: { stage: 'test', script: 'echo 1' } }.to_yaml
@@ -359,6 +432,30 @@ RSpec.describe API::Lint do
           it_behaves_like 'valid config without warnings'
         end
 
+        context 'when running with include jobs' do
+          let(:include_jobs) { true }
+
+          it_behaves_like 'valid config without warnings'
+
+          it 'returns jobs key' do
+            ci_lint
+
+            expect(json_response).to have_key('jobs')
+          end
+        end
+
+        context 'when running without include jobs' do
+          let(:include_jobs) { false }
+
+          it_behaves_like 'valid config without warnings'
+
+          it 'does not return jobs key' do
+            ci_lint
+
+            expect(json_response).not_to have_key('jobs')
+          end
+        end
+
         context 'With warnings' do
           let(:yaml_content) { { job: { script: 'ls', rules: [{ when: 'always' }] } }.to_yaml }
 
@@ -386,15 +483,40 @@ RSpec.describe API::Lint do
 
           it_behaves_like 'invalid config'
         end
+
+        context 'when running with include jobs' do
+          let(:include_jobs) { true }
+
+          it_behaves_like 'invalid config'
+
+          it 'returns jobs key' do
+            ci_lint
+
+            expect(json_response).to have_key('jobs')
+          end
+        end
+
+        context 'when running without include jobs' do
+          let(:include_jobs) { false }
+
+          it_behaves_like 'invalid config'
+
+          it 'does not return jobs key' do
+            ci_lint
+
+            expect(json_response).not_to have_key('jobs')
+          end
+        end
       end
     end
   end
 
   describe 'POST /projects/:id/ci/lint' do
-    subject(:ci_lint) { post api("/projects/#{project.id}/ci/lint", api_user), params: { dry_run: dry_run, content: yaml_content } }
+    subject(:ci_lint) { post api("/projects/#{project.id}/ci/lint", api_user), params: { dry_run: dry_run, content: yaml_content, include_jobs: include_jobs } }
 
     let(:project) { create(:project, :repository) }
     let(:dry_run) { nil }
+    let(:include_jobs) { nil }
 
     let_it_be(:api_user) { create(:user) }
 
@@ -562,6 +684,30 @@ RSpec.describe API::Lint do
 
           it_behaves_like 'valid project config'
         end
+
+        context 'when running with include jobs param' do
+          let(:include_jobs) { true }
+
+          it_behaves_like 'valid project config'
+
+          it 'contains jobs key' do
+            ci_lint
+
+            expect(json_response).to have_key('jobs')
+          end
+        end
+
+        context 'when running without include jobs param' do
+          let(:include_jobs) { false }
+
+          it_behaves_like 'valid project config'
+
+          it 'does not contain jobs key' do
+            ci_lint
+
+            expect(json_response).not_to have_key('jobs')
+          end
+        end
       end
 
       context 'with invalid .gitlab-ci.yml content' do
@@ -579,6 +725,30 @@ RSpec.describe API::Lint do
           let(:dry_run) { false }
 
           it_behaves_like 'invalid project config'
+        end
+
+        context 'when running with include jobs set to false' do
+          let(:include_jobs) { false }
+
+          it_behaves_like 'invalid project config'
+
+          it 'does not contain jobs key' do
+            ci_lint
+
+            expect(json_response).not_to have_key('jobs')
+          end
+        end
+
+        context 'when running with param include jobs' do
+          let(:include_jobs) { true }
+
+          it_behaves_like 'invalid project config'
+
+          it 'contains jobs key' do
+            ci_lint
+
+            expect(json_response).to have_key('jobs')
+          end
         end
       end
     end

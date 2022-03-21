@@ -2,13 +2,11 @@
 stage: Secure
 group: Static Analysis
 info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
-type: reference, howto
 ---
 
 # Code Quality **(FREE)**
 
-> - [Introduced](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/1984) in GitLab 9.3.
-> - Made [available in all tiers](https://gitlab.com/gitlab-org/gitlab/-/issues/212499) in 13.2.
+> [Moved](https://gitlab.com/gitlab-org/gitlab/-/issues/212499) to GitLab Free in 13.2.
 
 To ensure your project's code stays simple, readable, and easy to contribute to,
 you can use [GitLab CI/CD](../../../ci/index.md) to analyze your source code quality.
@@ -32,8 +30,7 @@ Code Quality:
 
 ## Code Quality Widget
 
-> - [Introduced](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/1984) in GitLab 9.3.
-> - Made [available in all tiers](https://gitlab.com/gitlab-org/gitlab/-/issues/212499) in 13.2.
+> [Moved](https://gitlab.com/gitlab-org/gitlab/-/issues/212499) to GitLab Free in 13.2.
 
 Going a step further, GitLab can show the Code Quality report right
 in the merge request widget area if a report from the target branch is available to compare to:
@@ -56,7 +53,7 @@ See also the Code Climate list of [Supported Languages for Maintainability](http
 
 ## Code Quality in diff view **(ULTIMATE)**
 
-> - [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/267612) in [GitLab Ultimate](https://about.gitlab.com/pricing/) 13.11, disabled by default behind the `codequality_mr_diff` [feature flag](../../../administration/feature_flags.md).
+> - [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/267612) in GitLab 13.11, disabled by default behind the `codequality_mr_diff` [feature flag](../../../administration/feature_flags.md).
 > - [Enabled by default](https://gitlab.com/gitlab-org/gitlab/-/issues/284140) in GitLab 13.12.
 > - [Disabled by default](https://gitlab.com/gitlab-org/gitlab/-/issues/2526) in GitLab 14.0 due to [this issue](https://gitlab.com/gitlab-org/gitlab/-/issues/334116).
 > - [Inline annotation added](https://gitlab.com/gitlab-org/gitlab/-/issues/2526) and [feature flag removed](https://gitlab.com/gitlab-org/gitlab/-/issues/284140) in GitLab 14.1.
@@ -69,11 +66,8 @@ the merge request's diff view displays an indicator next to lines with new Code 
 ## Example configuration
 
 This example shows how to run Code Quality on your code by using GitLab CI/CD and Docker.
-It requires GitLab 11.11 or later, and GitLab Runner 11.5 or later. If you are using
-GitLab 11.4 or earlier, you can view the deprecated job definitions in the
-[documentation archive](https://docs.gitlab.com/12.10/ee/user/project/merge_requests/code_quality.html#previous-job-definitions).
 
-- Using shared runners, the job should be configured For the [Docker-in-Docker workflow](../../../ci/docker/using_docker_build.md#use-the-docker-executor-with-the-docker-image-docker-in-docker).
+- Using shared runners, the job should be configured For the [Docker-in-Docker workflow](../../../ci/docker/using_docker_build.md#use-docker-in-docker).
 - Using private runners, there is an [alternative configuration](#set-up-a-private-runner-for-code-quality-without-docker-in-docker) recommended for running Code Quality analysis more efficiently.
 
 In either configuration, the runner must have enough disk space to handle generated Code Quality files. For example on the [GitLab project](https://gitlab.com/gitlab-org/gitlab) the files are approximately 7 GB.
@@ -87,7 +81,7 @@ include:
 
 The above example creates a `code_quality` job in your CI/CD pipeline which
 scans your source code for code quality issues. The report is saved as a
-[Code Quality report artifact](../../../ci/yaml/index.md#artifactsreportscodequality)
+[Code Quality report artifact](../../../ci/yaml/artifacts_reports.md#artifactsreportscodequality)
 that you can later download and analyze.
 
 It's also possible to override the URL to the Code Quality image by
@@ -232,7 +226,7 @@ are configured with `privileged=true`, and they do not expose `docker.sock` into
 the job container. As a result, socket binding cannot be used to make `docker` available
 in the context of the job script.
 
-[Docker-in-Docker](../../../ci/docker/using_docker_build.md#use-the-docker-executor-with-the-docker-image-docker-in-docker)
+[Docker-in-Docker](../../../ci/docker/using_docker_build.md#use-docker-in-docker)
 was chosen as an operational decision by the runner team, instead of exposing `docker.sock`.
 
 ### Disabling the code quality job
@@ -254,9 +248,9 @@ This can be done:
 ### Using with merge request pipelines
 
 The configuration provided by the Code Quality template does not let the `code_quality` job
-run on [pipelines for merge requests](../../../ci/pipelines/merge_request_pipelines.md).
+run on [merge request pipelines](../../../ci/pipelines/merge_request_pipelines.md).
 
-If pipelines for merge requests is enabled, the `code_quality:rules` must be redefined.
+If merge request pipelines is enabled, the `code_quality:rules` must be redefined.
 
 The template has these [`rules`](../../../ci/yaml/index.md#rules) for the `code quality` job:
 
@@ -275,7 +269,7 @@ might look like this example:
 job1:
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"' # Run job1 in merge request pipelines
-    - if: '$CI_COMMIT_BRANCH == "master"'                # Run job1 in pipelines on the master branch (but not in other branch pipelines)
+    - if: '$CI_COMMIT_BRANCH == "main"'                  # Run job1 in pipelines on the main branch (but not in other branch pipelines)
     - if: '$CI_COMMIT_TAG'                               # Run job1 in pipelines for tags
 ```
 
@@ -291,7 +285,7 @@ code_quality:
     - if: '$CODE_QUALITY_DISABLED'
       when: never
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"' # Run code quality job in merge request pipelines
-    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'      # Run code quality job in pipelines on the master branch (but not in other branch pipelines)
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'      # Run code quality job in pipelines on the default branch (but not in other branch pipelines)
     - if: '$CI_COMMIT_TAG'                               # Run code quality job in pipelines for tags
 ```
 
@@ -343,8 +337,7 @@ It's possible to have a custom tool provide Code Quality reports in GitLab. To
 do this:
 
 1. Define a job in your `.gitlab-ci.yml` file that generates the
-   [Code Quality report
-   artifact](../../../ci/yaml/index.md#artifactsreportscodequality).
+   [Code Quality report artifact](../../../ci/yaml/artifacts_reports.md#artifactsreportscodequality).
 1. Configure your tool to generate the Code Quality report artifact as a JSON
    file that implements a subset of the [Code Climate
    spec](https://github.com/codeclimate/platform/blob/master/spec/analyzers/SPEC.md#data-types).
@@ -386,7 +379,7 @@ at the beginning of the file.
 
 ## Code Quality reports **(PREMIUM)**
 
-> [Introduced](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/21527) in GitLab Premium 12.9.
+> [Introduced](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/21527) in GitLab 12.9.
 
 ![Code Quality Report](img/code_quality_report_13_11.png)
 
@@ -399,7 +392,7 @@ After the Code Quality job completes:
   [downloadable artifact](../../../ci/pipelines/job_artifacts.md#download-job-artifacts)
   for the `code_quality` job.
 - The full list of code quality violations generated by a pipeline is shown in the
-  Code Quality tab of the Pipeline Details page. **(PREMIUM)**
+  Code Quality tab of the Pipeline Details page.
 
 ## Generate an HTML report
 
@@ -598,3 +591,22 @@ plugins:
 
 If your merge requests do not show any code quality changes when using a custom tool,
 ensure that the line property is an `integer`.
+
+### Code Quality CI job with Code Climate plugins enabled fails with error
+
+If you enabled any of the Code Climate plugins, and the Code Quality CI job fails with the error
+below, it's likely the job takes longer than the default timeout of 900 seconds:
+
+```shell
+error: (CC::CLI::Analyze::EngineFailure) engine pmd ran for 900 seconds and was killed
+Could not analyze code quality for the repository at /code
+```
+
+To work around this problem, set `TIMEOUT_SECONDS` to a higher value in your `.gitlab.-ci.yml` file.
+
+For example:
+
+```yaml
+variables:
+  TIMEOUT_SECONDS: 3600
+```

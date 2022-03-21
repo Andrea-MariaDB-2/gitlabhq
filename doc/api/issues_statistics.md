@@ -41,6 +41,7 @@ GET /issues_statistics?confidential=true
 | `author_username`   | string           | no         | Return issues created by the given `username`. Similar to `author_id` and mutually exclusive with `author_id`. |
 | `assignee_id`       | integer          | no         | Return issues assigned to the given user `id`. Mutually exclusive with `assignee_username`. `None` returns unassigned issues. `Any` returns issues with an assignee. |
 | `assignee_username` | string array     | no         | Return issues assigned to the given `username`. Similar to `assignee_id` and mutually exclusive with `assignee_id`. In GitLab CE `assignee_username` array should only contain a single value or an invalid parameter error is returned otherwise. |
+| `epic_id` **(PREMIUM)** | integer      | no         | Return issues associated with the given epic ID. `None` returns issues that are not associated with an epic. `Any` returns issues that are associated with an epic. _([Introduced](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/46887) in GitLab 13.6)_
 | `my_reaction_emoji` | string           | no         | Return issues reacted by the authenticated user by the given `emoji`. `None` returns issues not given a reaction. `Any` returns issues given at least one reaction. |
 | `iids[]`            | integer array    | no         | Return only the issues having the given `iid`                                                                                                       |
 | `search`            | string           | no         | Search issues against their `title` and `description`                                                                                               |
@@ -49,7 +50,7 @@ GET /issues_statistics?confidential=true
 | `created_before`    | datetime         | no         | Return issues created on or before the given time. Expected in ISO 8601 format (`2019-03-15T08:00:00Z`) |
 | `updated_after`     | datetime         | no         | Return issues updated on or after the given time. Expected in ISO 8601 format (`2019-03-15T08:00:00Z`) |
 | `updated_before`    | datetime         | no         | Return issues updated on or before the given time. Expected in ISO 8601 format (`2019-03-15T08:00:00Z`) |
-| `confidential`     | boolean          | no         | Filter confidential or public issues.                                                                                                               |
+| `confidential`      | boolean          | no         | Filter confidential or public issues.                                                                                                               |
 
 ```shell
 curl --header "PRIVATE-TOKEN: <your_access_token>" "https://gitlab.example.com/api/v4/issues_statistics"
@@ -105,7 +106,7 @@ GET /groups/:id/issues_statistics?confidential=true
 | `created_before`    | datetime         | no         | Return issues created on or before the given time. Expected in ISO 8601 format (`2019-03-15T08:00:00Z`) |
 | `updated_after`     | datetime         | no         | Return issues updated on or after the given time. Expected in ISO 8601 format (`2019-03-15T08:00:00Z`) |
 | `updated_before`    | datetime         | no         | Return issues updated on or before the given time. Expected in ISO 8601 format (`2019-03-15T08:00:00Z`) |
-| `confidential`     | boolean          | no         | Filter confidential or public issues.                                                                                         |
+| `confidential`      | boolean          | no         | Filter confidential or public issues.                                                                                         |
 
 ```shell
 curl --header "PRIVATE-TOKEN: <your_access_token>" "https://gitlab.example.com/api/v4/groups/4/issues_statistics"
@@ -161,7 +162,7 @@ GET /projects/:id/issues_statistics?confidential=true
 | `created_before`    | datetime         | no         | Return issues created on or before the given time. Expected in ISO 8601 format (`2019-03-15T08:00:00Z`) |
 | `updated_after`     | datetime         | no         | Return issues updated on or after the given time. Expected in ISO 8601 format (`2019-03-15T08:00:00Z`) |
 | `updated_before`    | datetime         | no         | Return issues updated on or before the given time. Expected in ISO 8601 format (`2019-03-15T08:00:00Z`) |
-| `confidential`     | boolean          | no         | Filter confidential or public issues.                                                                                         |
+| `confidential`      | boolean          | no         | Filter confidential or public issues.                                                                                         |
 
 ```shell
 curl --header "PRIVATE-TOKEN: <your_access_token>" "https://gitlab.example.com/api/v4/projects/4/issues_statistics"

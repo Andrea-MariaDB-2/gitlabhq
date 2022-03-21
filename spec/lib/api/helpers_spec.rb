@@ -32,15 +32,11 @@ RSpec.describe API::Helpers do
       helper
     end
 
-    before do
-      allow(Gitlab::Database::LoadBalancing).to receive(:enable?).and_return(true)
-    end
-
     it 'handles sticking when a user could be found' do
       allow_any_instance_of(API::Helpers).to receive(:initial_current_user).and_return(user)
 
-      expect(Gitlab::Database::LoadBalancing::RackMiddleware)
-        .to receive(:stick_or_unstick).with(any_args, :user, 42)
+      expect(ApplicationRecord.sticking)
+        .to receive(:stick_or_unstick_request).with(any_args, :user, 42)
 
       get 'user'
 
@@ -50,8 +46,8 @@ RSpec.describe API::Helpers do
     it 'does not handle sticking if no user could be found' do
       allow_any_instance_of(API::Helpers).to receive(:initial_current_user).and_return(nil)
 
-      expect(Gitlab::Database::LoadBalancing::RackMiddleware)
-        .not_to receive(:stick_or_unstick)
+      expect(ApplicationRecord.sticking)
+        .not_to receive(:stick_or_unstick_request)
 
       get 'user'
 
@@ -80,6 +76,12 @@ RSpec.describe API::Helpers do
           expect(subject.find_project(non_existing_id)).to be_nil
         end
       end
+
+      context 'when project id is not provided' do
+        it 'returns nil' do
+          expect(subject.find_project(nil)).to be_nil
+        end
+      end
     end
 
     context 'when ID is used as an argument' do
@@ -105,6 +107,26 @@ RSpec.describe API::Helpers do
 
           subject.find_project(non_existing_id)
         end
+      end
+    end
+
+    context 'when project is pending delete' do
+      let(:project_pending_delete) { create(:project, pending_delete: true) }
+
+      it 'does not return the project pending delete' do
+        expect(Project).not_to receive(:find_by_full_path)
+
+        expect(subject.find_project(project_pending_delete.id)).to be_nil
+      end
+    end
+
+    context 'when project is hidden' do
+      let(:hidden_project) { create(:project, :hidden) }
+
+      it 'does not return the hidden project' do
+        expect(Project).not_to receive(:find_by_full_path)
+
+        expect(subject.find_project(hidden_project.id)).to be_nil
       end
     end
   end
@@ -164,7 +186,7 @@ RSpec.describe API::Helpers do
   describe '#find_project!' do
     let_it_be(:project) { create(:project) }
 
-    let(:user) { project.owner}
+    let(:user) { project.first_owner}
 
     before do
       allow(subject).to receive(:current_user).and_return(user)
@@ -355,12 +377,14 @@ RSpec.describe API::Helpers do
 
     let(:send_git_blob) do
       subject.send(:send_git_blob, repository, blob)
+      subject.header
     end
 
     before do
       allow(subject).to receive(:env).and_return({})
       allow(subject).to receive(:content_type)
       allow(subject).to receive(:header).and_return({})
+      allow(subject).to receive(:body).and_return('')
       allow(Gitlab::Workhorse).to receive(:send_git_blob)
     end
 

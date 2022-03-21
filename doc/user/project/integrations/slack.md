@@ -31,7 +31,7 @@ to control GitLab from Slack. Slash commands are configured separately.
    [Triggers for Slack notifications](#triggers-for-slack-notifications).
    By default, messages are sent to the channel you configured during
    [Slack configuration](#configure-slack).
-1. (Optional) To send messages to a different channel, multiple channels, or as
+1. Optional. To send messages to a different channel, multiple channels, or as
    a direct message:
    - *To send messages to channels,* enter the Slack channel names, separated by
      commas.
@@ -42,10 +42,10 @@ to control GitLab from Slack. Slash commands are configured separately.
 
 1. In **Webhook**, enter the webhook URL you copied in the
    [Slack configuration](#configure-slack) step.
-1. (Optional) In **Username**, enter the username of the Slack bot that sends
+1. Optional. In **Username**, enter the username of the Slack bot that sends
    the notifications.
 1. Select the **Notify only broken pipelines** checkbox to notify only on failures.
-1. In the **Branches to be notified** dropdown, select which types of branches
+1. In the **Branches for which notifications are to be sent** dropdown, select which types of branches
    to send notifications for.
 1. Leave the **Labels to be notified** field blank to get all notifications, or
    add labels that the issue or merge request must have to trigger a
@@ -59,19 +59,20 @@ Your Slack team now starts receiving GitLab event notifications as configured.
 
 The following triggers are available for Slack notifications:
 
-| Trigger name           | Trigger event                                        |
-|------------------------|------------------------------------------------------|
-| **Push**               | A push to the repository.                            |
-| **Issue**              | An issue is created, updated, or closed.             |
-| **Confidential issue** | A confidential issue is created, updated, or closed. |
-| **Merge request**      | A merge request is created, updated, or merged.      |
-| **Note**               | A comment is added.                                  |
-| **Confidential note**  | A confidential note is added.                        |
-| **Tag push**           | A new tag is pushed to the repository.               |
-| **Pipeline**           | A pipeline status changed.                           |
-| **Wiki page**          | A wiki page is created or updated.                   |
-| **Deployment**         | A deployment starts or finishes.                     |
-| **Alert**              | A new, unique alert is recorded.                     |
+| Trigger name                                                             | Trigger event                                        |
+|--------------------------------------------------------------------------|------------------------------------------------------|
+| **Push**                                                                 | A push to the repository.                            |
+| **Issue**                                                                | An issue is created, updated, or closed.             |
+| **Confidential issue**                                                   | A confidential issue is created, updated, or closed. |
+| **Merge request**                                                        | A merge request is created, updated, or merged.      |
+| **Note**                                                                 | A comment is added.                                  |
+| **Confidential note**                                                    | A confidential note is added.                        |
+| **Tag push**                                                             | A new tag is pushed to the repository.               |
+| **Pipeline**                                                             | A pipeline status changed.                           |
+| **Wiki page**                                                            | A wiki page is created or updated.                   |
+| **Deployment**                                                           | A deployment starts or finishes.                     |
+| **Alert**                                                                | A new, unique alert is recorded.                     |
+| [**Vulnerability**](../../application_security/vulnerabilities/index.md) | A new, unique vulnerability is recorded.             |
 
 ## Troubleshooting
 

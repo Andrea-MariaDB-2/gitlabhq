@@ -84,43 +84,27 @@ class Commit
       sha[0..MIN_SHA_LENGTH]
     end
 
-    def diff_safe_lines(project: nil)
-      diff_safe_max_lines(project: project)
+    def diff_max_files
+      Gitlab::CurrentSettings.diff_max_files
     end
 
-    def diff_max_files(project: nil)
-      if Feature.enabled?(:increased_diff_limits, project)
-        3000
-      elsif Feature.enabled?(:configurable_diff_limits, project)
-        Gitlab::CurrentSettings.diff_max_files
-      else
-        1000
-      end
+    def diff_max_lines
+      Gitlab::CurrentSettings.diff_max_lines
     end
 
-    def diff_max_lines(project: nil)
-      if Feature.enabled?(:increased_diff_limits, project)
-        100000
-      elsif Feature.enabled?(:configurable_diff_limits, project)
-        Gitlab::CurrentSettings.diff_max_lines
-      else
-        50000
-      end
-    end
-
-    def max_diff_options(project: nil)
+    def max_diff_options
       {
-        max_files: diff_max_files(project: project),
-        max_lines: diff_max_lines(project: project)
+        max_files: diff_max_files,
+        max_lines: diff_max_lines
       }
     end
 
-    def diff_safe_max_files(project: nil)
-      diff_max_files(project: project) / DIFF_SAFE_LIMIT_FACTOR
+    def diff_safe_max_files
+      diff_max_files / DIFF_SAFE_LIMIT_FACTOR
     end
 
-    def diff_safe_max_lines(project: nil)
-      diff_max_lines(project: project) / DIFF_SAFE_LIMIT_FACTOR
+    def diff_safe_max_lines
+      diff_max_lines / DIFF_SAFE_LIMIT_FACTOR
     end
 
     def from_hash(hash, container)
@@ -133,7 +117,7 @@ class Commit
     end
 
     def lazy(container, oid)
-      BatchLoader.for({ container: container, oid: oid }).batch(replace_methods: false) do |items, loader|
+      BatchLoader.for({ container: container, oid: oid }).batch do |items, loader|
         items_by_container = items.group_by { |i| i[:container] }
 
         items_by_container.each do |container, commit_ids|
@@ -529,9 +513,7 @@ class Commit
     # We don't want to do anything for `Commit` model, so this is empty.
   end
 
-  # WIP is deprecated in favor of Draft. Currently both options are supported
-  # https://gitlab.com/gitlab-org/gitlab/-/issues/227426
-  DRAFT_REGEX = /\A\s*#{Regexp.union(Gitlab::Regex.merge_request_wip, Gitlab::Regex.merge_request_draft)}|(fixup!|squash!)\s/.freeze
+  DRAFT_REGEX = /\A\s*#{Gitlab::Regex.merge_request_draft}|(fixup!|squash!)\s/.freeze
 
   def work_in_progress?
     !!(title =~ DRAFT_REGEX)

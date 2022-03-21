@@ -394,7 +394,7 @@ RSpec.describe Ability do
   describe '.project_disabled_features_rules' do
     let(:project) { create(:project, :wiki_disabled) }
 
-    subject { described_class.policy_for(project.owner, project) }
+    subject { described_class.policy_for(project.first_owner, project) }
 
     context 'wiki named abilities' do
       it 'disables wiki abilities if the project has no wiki' do
@@ -425,9 +425,9 @@ RSpec.describe Ability do
       expect(keys).to include(
         :administrator,
         'admin',
-        "/dp/condition/BasePolicy/admin/#{user_b.id}"
+        "/dp/condition/BasePolicy/admin/User:#{user_b.id}"
       )
-      expect(keys).not_to include("/dp/condition/BasePolicy/admin/#{user_a.id}")
+      expect(keys).not_to include("/dp/condition/BasePolicy/admin/User:#{user_a.id}")
     end
 
     # regression spec for re-entrant admin condition checks

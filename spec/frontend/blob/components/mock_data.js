@@ -22,7 +22,7 @@ export const Blob = {
   binary: false,
   name: 'dummy.md',
   path: 'foo/bar/dummy.md',
-  rawPath: '/flightjs/flight/snippets/51/raw',
+  rawPath: 'https://testing.com/flightjs/flight/snippets/51/raw',
   size: 75,
   simpleViewer: {
     ...SimpleViewerMock,
@@ -55,3 +55,6 @@ export const SimpleBlobContentMock = {
   path: 'foo.js',
   plainData: 'Plain',
 };
+
+export const mockEnvironmentName = 'my.testing.environment';
+export const mockEnvironmentPath = 'https://my.testing.environment';

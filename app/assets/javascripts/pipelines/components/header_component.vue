@@ -1,9 +1,22 @@
 <script>
-import { GlAlert, GlButton, GlLoadingIcon, GlModal, GlModalDirective } from '@gitlab/ui';
+import {
+  GlAlert,
+  GlButton,
+  GlLoadingIcon,
+  GlModal,
+  GlModalDirective,
+  GlTooltipDirective,
+} from '@gitlab/ui';
 import { setUrlFragment, redirectTo } from '~/lib/utils/url_utility';
 import { __ } from '~/locale';
 import ciHeader from '~/vue_shared/components/header_ci_component.vue';
-import { LOAD_FAILURE, POST_FAILURE, DELETE_FAILURE, DEFAULT } from '../constants';
+import {
+  LOAD_FAILURE,
+  POST_FAILURE,
+  DELETE_FAILURE,
+  DEFAULT,
+  BUTTON_TOOLTIP_RETRY,
+} from '../constants';
 import cancelPipelineMutation from '../graphql/mutations/cancel_pipeline.mutation.graphql';
 import deletePipelineMutation from '../graphql/mutations/delete_pipeline.mutation.graphql';
 import retryPipelineMutation from '../graphql/mutations/retry_pipeline.mutation.graphql';
@@ -15,6 +28,7 @@ const POLL_INTERVAL = 10000;
 
 export default {
   name: 'PipelineHeaderSection',
+  BUTTON_TOOLTIP_RETRY,
   pipelineCancel: 'pipelineCancel',
   pipelineRetry: 'pipelineRetry',
   finishedStatuses: ['FAILED', 'SUCCESS', 'CANCELED'],
@@ -27,6 +41,7 @@ export default {
   },
   directives: {
     GlModal: GlModalDirective,
+    GlTooltip: GlTooltipDirective,
   },
   errorTexts: {
     [LOAD_FAILURE]: __('We are currently unable to fetch data for the pipeline header.'),
@@ -159,6 +174,8 @@ export default {
         });
 
         if (errors.length > 0) {
+          this.isRetrying = false;
+
           this.reportFailure(POST_FAILURE);
         } else {
           await this.$apollo.queries.pipeline.refetch();
@@ -167,6 +184,8 @@ export default {
           }
         }
       } catch {
+        this.isRetrying = false;
+
         this.reportFailure(POST_FAILURE);
       }
     },
@@ -212,17 +231,22 @@ export default {
 </script>
 <template>
   <div class="js-pipeline-header-container">
-    <gl-alert v-if="hasError" :variant="failure.variant">{{ failure.text }}</gl-alert>
+    <gl-alert v-if="hasError" :variant="failure.variant" :dismissible="false">{{
+      failure.text
+    }}</gl-alert>
     <ci-header
       v-if="shouldRenderContent"
       :status="pipeline.detailedStatus"
       :time="pipeline.createdAt"
       :user="pipeline.user"
-      :item-id="Number(pipelineId)"
+      :item-id="pipelineId"
       item-name="Pipeline"
     >
       <gl-button
         v-if="canRetryPipeline"
+        v-gl-tooltip
+        :aria-label="$options.BUTTON_TOOLTIP_RETRY"
+        :title="$options.BUTTON_TOOLTIP_RETRY"
         :loading="isRetrying"
         :disabled="isRetrying"
         category="secondary"

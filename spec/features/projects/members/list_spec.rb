@@ -5,6 +5,7 @@ require 'spec_helper'
 RSpec.describe 'Project members list', :js do
   include Spec::Support::Helpers::Features::MembersHelpers
   include Spec::Support::Helpers::Features::InviteMembersModalHelper
+  include Spec::Support::Helpers::ModalHelpers
 
   let_it_be(:user1) { create(:user, name: 'John Doe') }
   let_it_be(:user2) { create(:user, name: 'Mary Jane') }
@@ -93,7 +94,7 @@ RSpec.describe 'Project members list', :js do
       click_button 'Remove member'
     end
 
-    page.within('[role="dialog"]') do
+    within_modal do
       expect(page).to have_unchecked_field 'Also unassign this user from related issues and merge requests'
       click_button('Remove member')
     end
@@ -147,7 +148,7 @@ RSpec.describe 'Project members list', :js do
     it 'does not show form used to change roles and "Expiration date" or the remove user button', :aggregate_failures do
       visit_members_page
 
-      page.within find_member_row(project_bot) do
+      page.within find_username_row(project_bot) do
         expect(page).not_to have_button('Maintainer')
         expect(page).to have_field('Expiration date', disabled: true)
         expect(page).not_to have_button('Remove member')

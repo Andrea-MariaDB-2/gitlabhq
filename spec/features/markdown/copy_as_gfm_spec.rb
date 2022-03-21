@@ -201,6 +201,15 @@ RSpec.describe 'Copy as GFM', :js do
         GFM
       )
 
+      aggregate_failures('CustomEmojiFilter') do
+        gfm = ':custom_emoji:'
+
+        html = '<img class="emoji" src="custom_emoji.svg" title=":custom_emoji:" height="20" width="20">'
+
+        output_gfm = html_to_gfm(html)
+        expect(output_gfm.strip).to eq(gfm.strip)
+      end
+
       aggregate_failures('MathFilter: math as transformed from HTML to KaTeX') do
         gfm = '$`c = \pm\sqrt{a^2 + b^2}`$'
 
@@ -650,7 +659,7 @@ RSpec.describe 'Copy as GFM', :js do
     let(:project) { create(:project, :repository) }
 
     before do
-      sign_in(project.owner)
+      sign_in(project.first_owner)
     end
 
     context 'from a diff' do
@@ -751,8 +760,8 @@ RSpec.describe 'Copy as GFM', :js do
       context 'selecting one word of text' do
         it 'copies as inline code' do
           verify(
-            '.line[id="LC9"] .no',
-            '`RuntimeError`'
+            '.line[id="LC10"]',
+            '`end`'
           )
         end
       end
@@ -821,6 +830,7 @@ RSpec.describe 'Copy as GFM', :js do
     end
 
     def verify(selector, gfm, target: nil)
+      expect(page).to have_selector('.js-syntax-highlight')
       html = html_for_selector(selector)
       output_gfm = html_to_gfm(html, 'transformCodeSelection', target: target)
       wait_for_requests

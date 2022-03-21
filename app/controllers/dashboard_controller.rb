@@ -15,8 +15,10 @@ class DashboardController < Dashboard::ApplicationController
   respond_to :html
 
   feature_category :users, [:activity]
-  feature_category :issue_tracking, [:issues, :issues_calendar]
+  feature_category :team_planning, [:issues, :issues_calendar]
   feature_category :code_review, [:merge_requests]
+
+  urgency :low, [:merge_requests]
 
   def activity
     respond_to do |format|
@@ -65,10 +67,15 @@ class DashboardController < Dashboard::ApplicationController
   end
 
   def check_filters_presence!
-    no_scalar_filters_set = finder_type.scalar_params.none? { |k| params.key?(k) }
-    no_array_filters_set = finder_type.array_params.none? { |k, _| params.key?(k) }
+    no_scalar_filters_set = finder_type.scalar_params.none? { |k| params[k].present? }
+    no_array_filters_set = finder_type.array_params.none? { |k, _| params[k].present? }
 
-    @no_filters_set = no_scalar_filters_set && no_array_filters_set
+    # The `in` param is a modifier of `search`. If it's present while the `search`
+    # param isn't, the finder won't use the `in` param. We consider this as a no
+    # filter scenario.
+    no_search_filter_set = params[:in].present? && params[:search].blank?
+
+    @no_filters_set = (no_scalar_filters_set && no_array_filters_set) || no_search_filter_set
 
     return unless @no_filters_set
 

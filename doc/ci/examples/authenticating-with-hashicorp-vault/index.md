@@ -1,6 +1,6 @@
 ---
-stage: Release
-group: Release
+stage: Verify
+group: Pipeline Authoring
 info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
 type: tutorial
 ---
@@ -22,8 +22,7 @@ This tutorial assumes you are familiar with GitLab CI/CD and Vault.
 To follow along, you must have:
 
 - An account on GitLab.
-- A running Vault server and access to it is required to configure authentication and create roles
-  and policies. For HashiCorp Vaults, this can be the Open Source or Enterprise version.
+- Access to a running Vault server (at least v1.2.0) to configure authentication and to create roles and policies. For HashiCorp Vaults, this can be the Open Source or Enterprise version.
 
 NOTE:
 You must replace the `vault.example.com` URL below with the URL of your Vault server, and `gitlab.example.com` with the URL of your GitLab instance.
@@ -122,8 +121,8 @@ Then create policies that allow you to read these secrets (one for each secret):
 $ vault policy write myproject-staging - <<EOF
 # Policy name: myproject-staging
 #
-# Read-only permission on 'secret/data/myproject/staging/*' path
-path "secret/data/myproject/staging/*" {
+# Read-only permission on 'secret/myproject/staging/*' path
+path "secret/myproject/staging/*" {
   capabilities = [ "read" ]
 }
 EOF
@@ -132,8 +131,8 @@ Success! Uploaded policy: myproject-staging
 $ vault policy write myproject-production - <<EOF
 # Policy name: myproject-production
 #
-# Read-only permission on 'secret/data/myproject/production/*' path
-path "secret/data/myproject/production/*" {
+# Read-only permission on 'secret/myproject/production/*' path
+path "secret/myproject/production/*" {
   capabilities = [ "read" ]
 }
 EOF
@@ -189,6 +188,28 @@ Combined with [protected branches](../../../user/project/protected_branches.md),
 [`user_claim`](https://www.vaultproject.io/api/auth/jwt#user_claim) specifies the name for the Identity alias created by Vault upon a successful login.
 
 [`bound_claims_type`](https://www.vaultproject.io/api-docs/auth/jwt#bound_claims_type) configures the interpretation of the `bound_claims` values. If set to `glob`, the values are interpreted as globs, with `*` matching any number of characters.
+
+The claim fields listed in [the table above](#how-it-works) can also be accessed for [Vault's policy path templating](https://learn.hashicorp.com/tutorials/vault/policy-templating?in=vault/policies) purposes by using the accessor name of the JWT auth within Vault. The [mount accessor name](https://learn.hashicorp.com/tutorials/vault/identity#step-1-create-an-entity-with-alias) (`ACCESSOR_NAME` in the example below) can be retrieved by running `vault auth list`.
+
+Policy template example making use of a named metadata field named `project_path`:
+
+```plaintext
+path "secret/data/{{identity.entity.aliases.ACCESSOR_NAME.metadata.project_path}}/staging/*" {
+  capabilities = [ "read" ]
+}
+```
+
+Role example to support the templated policy above, mapping the claim field `project_path` as a metadata field through use of [`claim_mappings`](https://www.vaultproject.io/api-docs/auth/jwt#claim_mappings) configuration:
+
+```plaintext
+{
+  "role_type": "jwt",
+  ...
+  "claim_mappings": {
+    "project_path": "project_path"
+  }
+}
+```
 
 For the full list of options, see Vault's [Create Role documentation](https://www.vaultproject.io/api/auth/jwt#create-role).
 
@@ -256,3 +277,19 @@ read_secrets:
 ```
 
 ![read_secrets production](img/vault-read-secrets-production.png)
+
+### Limit token access to Vault secrets
+
+You can control `CI_JOB_JWT` access to Vault secrets by using Vault protections
+and GitLab features. For example, restrict the token by:
+
+- Using Vault [bound_claims](https://www.vaultproject.io/docs/auth/jwt#bound-claims)
+  for specific groups using `group_claim`.
+- Hard coding values for Vault bound claims based on the `user_login` and `user_email`
+  of specific users.
+- Setting Vault time limits for TTL of the token as specified in [`token_explicit_max_ttl`](https://www.vaultproject.io/api/auth/jwt#token_explicit_max_ttl),
+  where the token expires after authentication.
+- Scoping the JWT to [GitLab projected branches](../../../user/project/protected_branches.md)
+  that are restricted to a subset of project users.
+- Scoping the JWT to [GitLab projected tags](../../../user/project/protected_tags.md),
+  that are restricted to a subset of project users.

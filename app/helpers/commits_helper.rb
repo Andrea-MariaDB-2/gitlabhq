@@ -17,11 +17,22 @@ module CommitsHelper
     commit_person_link(commit, options.merge(source: :committer))
   end
 
+  def commit_committer_avatar(committer, options = {})
+    user_avatar(options.merge({
+      user: committer,
+      user_name: committer.name,
+      user_email: committer.email,
+      css_class: 'd-none d-sm-inline-block float-none gl-mr-0! gl-vertical-align-text-bottom'
+    }))
+  end
+
   def commit_to_html(commit, ref, project)
-    render 'projects/commits/commit.html',
-      commit: commit,
-      ref: ref,
-      project: project
+    render partial: 'projects/commits/commit', formats: :html,
+      locals: {
+        commit: commit,
+        ref: ref,
+        project: project
+      }
   end
 
   # Breadcrumb links for a Project and, if applicable, a tree path
@@ -64,9 +75,7 @@ module CommitsHelper
 
   # Returns a link formatted as a commit branch link
   def commit_branch_link(url, text)
-    link_to(url, class: 'badge badge-gray ref-name branch-link') do
-      sprite_icon('branch', size: 12, css_class: 'fork-svg') + "#{text}"
-    end
+    gl_badge_tag(text, { variant: :info, icon: 'branch' }, { href: url, class: 'gl-font-monospace gl-mb-1' })
   end
 
   # Returns the sorted alphabetically links to branches, separated by a comma
@@ -78,9 +87,7 @@ module CommitsHelper
 
   # Returns a link formatted as a commit tag link
   def commit_tag_link(url, text)
-    link_to(url, class: 'badge badge-gray ref-name') do
-      sprite_icon('tag', size: 12, css_class: 'gl-mr-2 vertical-align-middle') + "#{text}"
-    end
+    gl_badge_tag(text, { variant: :info, icon: 'tag' }, { href: url, class: 'gl-font-monospace' })
   end
 
   # Returns the sorted links to tags, separated by a comma
@@ -173,6 +180,19 @@ module CommitsHelper
   # to be utilized by the client applications.
   def commit_path_template(project)
     project_commit_path(project, DEFAULT_SHA).sub("/#{DEFAULT_SHA}", '/$COMMIT_SHA')
+  end
+
+  def diff_mode_swap_button(mode, file_hash)
+    icon = mode == 'raw' ? 'doc-code' : 'doc-text'
+    entity = mode == 'raw' ? 'toHideBtn' : 'toShowBtn'
+    title = "Display #{mode} diff"
+
+    link_to("##{mode}-diff-#{file_hash}",
+            class: "btn gl-button btn-default btn-file-option has-tooltip btn-show-#{mode}-diff",
+            title: title,
+            data: { file_hash: file_hash, diff_toggle_entity: entity }) do
+      sprite_icon(icon)
+    end
   end
 
   protected

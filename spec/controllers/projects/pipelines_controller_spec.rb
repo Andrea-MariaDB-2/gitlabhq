@@ -44,7 +44,7 @@ RSpec.describe Projects::PipelinesController do
         end
       end
 
-      it 'does not execute N+1 queries' do
+      it 'does not execute N+1 queries', quarantine: 'https://gitlab.com/gitlab-org/gitlab/-/issues/345470' do
         get_pipelines_index_json
 
         control_count = ActiveRecord::QueryRecorder.new do
@@ -292,12 +292,8 @@ RSpec.describe Projects::PipelinesController do
 
     subject { project.namespace }
 
-    context 'code_quality_walkthrough experiment' do
-      it_behaves_like 'tracks assignment and records the subject', :code_quality_walkthrough, :namespace
-    end
-
-    context 'ci_runner_templates experiment' do
-      it_behaves_like 'tracks assignment and records the subject', :ci_runner_templates, :namespace
+    context 'runners_availability_section experiment' do
+      it_behaves_like 'tracks assignment and records the subject', :runners_availability_section, :namespace
     end
   end
 
@@ -745,9 +741,28 @@ RSpec.describe Projects::PipelinesController do
   describe 'GET #charts' do
     let(:pipeline) { create(:ci_pipeline, project: project) }
 
-    it_behaves_like 'tracking unique visits', :charts do
-      let(:request_params) { { namespace_id: project.namespace, project_id: project, id: pipeline.id } }
-      let(:target_id) { 'p_analytics_pipelines' }
+    [
+      {
+        chart_param: '',
+        event: 'p_analytics_ci_cd_pipelines'
+      },
+      {
+        chart_param: 'pipelines',
+        event: 'p_analytics_ci_cd_pipelines'
+      },
+      {
+        chart_param: 'deployment-frequency',
+        event: 'p_analytics_ci_cd_deployment_frequency'
+      },
+      {
+        chart_param: 'lead-time',
+        event: 'p_analytics_ci_cd_lead_time'
+      }
+    ].each do |tab|
+      it_behaves_like 'tracking unique visits', :charts do
+        let(:request_params) { { namespace_id: project.namespace, project_id: project, id: pipeline.id, chart: tab[:chart_param] } }
+        let(:target_id) { ['p_analytics_pipelines', tab[:event]] }
+      end
     end
   end
 
@@ -915,6 +930,33 @@ RSpec.describe Projects::PipelinesController do
         post_retry
 
         expect(response).to have_gitlab_http_status(:not_found)
+      end
+    end
+
+    context 'when access denied' do
+      it 'returns an error' do
+        sign_in(create(:user))
+
+        post_retry
+
+        expect(response).to have_gitlab_http_status(:not_found)
+      end
+    end
+
+    context 'when service returns an error' do
+      before do
+        service_response = ServiceResponse.error(message: 'some error', http_status: 404)
+        allow_next_instance_of(::Ci::RetryPipelineService) do |service|
+          allow(service).to receive(:check_access).and_return(service_response)
+        end
+      end
+
+      it 'does not retry' do
+        post_retry
+
+        expect(response).to have_gitlab_http_status(:not_found)
+        expect(response.body).to include('some error')
+        expect(::Ci::RetryPipelineWorker).not_to have_received(:perform_async).with(pipeline.id, user.id)
       end
     end
   end
@@ -1150,7 +1192,7 @@ RSpec.describe Projects::PipelinesController do
 
     context 'when user has ability to delete pipeline' do
       before do
-        sign_in(project.owner)
+        sign_in(project.first_owner)
       end
 
       it 'deletes pipeline and redirects' do
@@ -1289,6 +1331,38 @@ RSpec.describe Projects::PipelinesController do
         get_config_variables
 
         expect(response).to have_gitlab_http_status(:no_content)
+      end
+    end
+
+    context 'when project uses external project ci config' do
+      let(:other_project) { create(:project) }
+      let(:sha) { 'master' }
+      let(:service) { ::Ci::ListConfigVariablesService.new(other_project, user) }
+
+      let(:ci_config) do
+        {
+          variables: {
+            KEY1: { value: 'val 1', description: 'description 1' }
+          },
+          test: {
+            stage: 'test',
+            script: 'echo'
+          }
+        }
+      end
+
+      before do
+        project.update!(ci_config_path: ".gitlab-ci.yml@#{other_project.full_path}")
+        synchronous_reactive_cache(service)
+      end
+
+      it 'returns other project config variables' do
+        expect(::Ci::ListConfigVariablesService).to receive(:new).with(other_project, anything).and_return(service)
+
+        get_config_variables
+
+        expect(response).to have_gitlab_http_status(:ok)
+        expect(json_response['KEY1']).to eq({ 'value' => 'val 1', 'description' => 'description 1' })
       end
     end
 

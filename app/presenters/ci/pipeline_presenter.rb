@@ -3,7 +3,8 @@
 module Ci
   class PipelinePresenter < Gitlab::View::Presenter::Delegated
     include Gitlab::Utils::StrongMemoize
-    include ActionView::Helpers::UrlHelper
+
+    delegator_override_with Gitlab::Utils::StrongMemoize # This module inclusion is expected. See https://gitlab.com/gitlab-org/gitlab/-/issues/352884.
 
     # We use a class method here instead of a constant, allowing EE to redefine
     # the returned `Hash` more easily.
@@ -20,8 +21,9 @@ module Ci
         user_blocked: 'The user who created this pipeline is blocked.' }
     end
 
-    presents :pipeline
+    presents ::Ci::Pipeline, as: :pipeline
 
+    delegator_override :failed_builds
     def failed_builds
       return [] unless can?(current_user, :read_build, pipeline)
 
@@ -30,6 +32,7 @@ module Ci
       end
     end
 
+    delegator_override :failure_reason
     def failure_reason
       return unless pipeline.failure_reason?
 
@@ -55,6 +58,13 @@ module Ci
       # Currently, `merge_request_event_type` is the only source to name pipelines
       # but this could be extended with the other types in the future.
       localized_names.fetch(pipeline.merge_request_event_type, s_('Pipeline|Pipeline'))
+    end
+
+    delegator_override :coverage
+    def coverage
+      return unless pipeline.coverage.present?
+
+      '%.2f' % pipeline.coverage
     end
 
     def ref_text
@@ -96,7 +106,7 @@ module Ci
     end
 
     def link_to_pipeline_ref
-      link_to(pipeline.ref,
+      ApplicationController.helpers.link_to(pipeline.ref,
         project_commits_path(pipeline.project, pipeline.ref),
         class: "ref-name")
     end
@@ -104,7 +114,7 @@ module Ci
     def link_to_merge_request
       return unless merge_request_presenter
 
-      link_to(merge_request_presenter.to_reference,
+      ApplicationController.helpers.link_to(merge_request_presenter.to_reference,
         project_merge_request_path(merge_request_presenter.project, merge_request_presenter),
         class: 'mr-iid')
     end
@@ -131,7 +141,7 @@ module Ci
     private
 
     def plain_ref_name
-      content_tag(:span, pipeline.ref, class: 'ref-name')
+      ApplicationController.helpers.content_tag(:span, pipeline.ref, class: 'ref-name')
     end
 
     def merge_request_presenter
@@ -148,7 +158,7 @@ module Ci
       all_related_merge_requests.first(limit).map do |merge_request|
         mr_path = project_merge_request_path(merge_request.project, merge_request)
 
-        link_to "#{merge_request.to_reference} #{merge_request.title}", mr_path, class: 'mr-iid'
+        ApplicationController.helpers.link_to "#{merge_request.to_reference} #{merge_request.title}", mr_path, class: 'mr-iid'
       end
     end
 

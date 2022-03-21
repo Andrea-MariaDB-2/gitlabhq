@@ -6,9 +6,9 @@ info: To determine the technical writer assigned to the Stage/Group associated w
 
 # Translating GitLab
 
-For managing the translation process, we use [CrowdIn](https://crowdin.com).
+For managing the translation process, we use [Crowdin](https://crowdin.com).
 To contribute translations at [`translate.gitlab.com`](https://translate.gitlab.com),
-you must create a CrowdIn account. You may create a new account or use any of their supported
+you must create a Crowdin account. You may create a new account or use any of their supported
 sign-in services.
 
 ## Language selections
@@ -16,12 +16,12 @@ sign-in services.
 GitLab is being translated into many languages. To select a language to contribute to:
 
 1. Find the language that you want to contribute to, in the
-   [GitLab CrowdIn project](https://crowdin.com/project/gitlab-ee).
+   [GitLab Crowdin project](https://crowdin.com/project/gitlab-ee).
 
    - If the language you want is available, proceed to the next step.
    - If the language you want is not available,
       [open an issue](https://gitlab.com/gitlab-org/gitlab/-/issues?scope=all&utf8=✓&state=all&label_name[]=Category%3AInternationalization).
-      Notify our CrowdIn administrators by including `@gitlab-org/manage/import` in your issue.
+      Notify our Crowdin administrators by including `@gitlab-org/manage/import` in your issue.
    - After the issue and any merge requests are complete, restart this procedure.
 
 1. View the list of files and folders. Select `gitlab.pot` to open the translation editor.
@@ -30,7 +30,7 @@ GitLab is being translated into many languages. To select a language to contribu
 
 The online translation editor is the easiest way to contribute translations.
 
-![CrowdIn Editor](img/crowdin-editor.png)
+![Crowdin Editor](img/crowdin-editor.png)
 
 - Strings for translation are listed in the left panel.
 - Translations are entered into the central panel. Multiple translations are required for strings
@@ -48,10 +48,10 @@ Be sure to check the following guidelines before you translate any strings.
 
 ### Namespaced strings
 
-When an externalized string is prepended with a namespace (for example,
-`s_('OpenedNDaysAgo|Opened')`), the namespace should be removed from the final translation. For
-example, in French, `OpenedNDaysAgo|Opened` is translated to `Ouvert•e`, not
-`OpenedNDaysAgo|Ouvert•e`.
+A namespace precedes the string and is separated from it by a `|` (`namespace|string`). When you see
+a namespace before an externalized string, you should remove the namespace from the final
+translation. For example, in `OpenedNDaysAgo|Opened`, remove `OpenedNDaysAgo|`. If translating to
+French, translate `OpenedNDaysAgo|Opened` to `Ouvert•e`, not `OpenedNDaysAgo|Ouvert•e`.
 
 ### Technical terms
 
@@ -60,6 +60,12 @@ should always be in English are noted in the glossary when using
 [`translate.gitlab.com`](https://translate.gitlab.com).
 This helps maintain a logical connection and consistency between tools (for example, a Git client)
 and GitLab.
+
+To find the list of technical terms:
+
+1. Go to [`translate.gitlab.com`](https://translate.gitlab.com).
+1. Select the language to translate.
+1. Select **Glossary**.
 
 ### Formality
 

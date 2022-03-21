@@ -36,7 +36,7 @@ The following table describes the version types and their release cadence:
 
 | Version type | Description | Cadence |
 |:-------------|:------------|:--------|
-| Major        | For significant changes, or when any backward-incompatible changes are introduced to the public API. | Yearly. The next major release is GitLab 14.0 on June 22, 2021 (one month later than typical, details in [this issue](https://gitlab.com/gitlab-com/Product/-/issues/2337)). Subsequent major releases will be scheduled for May 22 each year, by default. |
+| Major        | For significant changes, or when any backward-incompatible changes are introduced to the public API. | Yearly. The next major release is GitLab 15.0 on May 22, 2022. GitLab schedules major releases on May 22 each year, by default. |
 | Minor        | For when new backward-compatible functionality is introduced to the public API, a minor feature is introduced, or when a set of smaller features is rolled out. | Monthly on the 22nd. |
 | Patch        | For backward-compatible bug fixes that fix incorrect behavior. See [Patch releases](#patch-releases). | As needed. |
 
@@ -48,26 +48,15 @@ To make sure you can easily run the most recent stable release, we are working
 hard to keep the update process simple and reliable.
 
 If you are unable to follow our monthly release cycle, there are a couple of
-cases you need to consider.
-
-It is considered safe to jump between patch versions and minor versions within
-one major version. For example, it is safe to:
-
-- Upgrade the *minor* version. For example:
-
-  - `13.7.5` -> `13.10.5`
-  - `12.3.4` -> `12.10.11`
-
-- Upgrade the *patch* version. For example:
-
-  - `13.0.4` -> `13.0.12`
-  - `12.10.1` -> `12.10.8`
+cases you need to consider. Follow the
+[upgrade paths guide](../update/index.md#upgrade-paths) to safely upgrade
+between versions.
 
 NOTE:
-Version specific changes in Omnibus GitLab Linux packages can be found in [the Omnibus GitLab documentation](https://docs.gitlab.com/omnibus/update/README.html#version-specific-changes).
+Version specific changes in Omnibus GitLab Linux packages can be found in [the Omnibus GitLab documentation](../update/package/index.md#version-specific-changes).
 
 NOTE:
-Instructions are available for downloading an Omnibus GitLab Linux package locally and [manually installing](https://docs.gitlab.com/omnibus/manual_install.html) it.
+Instructions are available for downloading an Omnibus GitLab Linux package locally and [manually installing](../update/package/index.md#upgrade-using-a-manually-downloaded-package) it.
 
 NOTE:
 A step-by-step guide to [upgrading the Omnibus-bundled PostgreSQL is documented separately](https://docs.gitlab.com/omnibus/settings/database.html#upgrade-packaged-postgresql-server).

@@ -1,12 +1,18 @@
 <script>
-import { GlLabel } from '@gitlab/ui';
-import { getIdFromGraphQLId } from '~/graphql_shared/utils';
+import { GlIcon, GlLabel, GlTooltipDirective } from '@gitlab/ui';
+import { sortBy } from 'lodash';
 import { isScopedLabel } from '~/lib/utils/common_utils';
+import { s__, sprintf } from '~/locale';
 
 export default {
+  directives: {
+    GlTooltip: GlTooltipDirective,
+  },
   components: {
+    GlIcon,
     GlLabel,
   },
+  inject: ['allowScopedLabels'],
   props: {
     disableLabels: {
       type: Boolean,
@@ -21,10 +27,6 @@ export default {
       type: Boolean,
       required: true,
     },
-    allowScopedLabels: {
-      type: Boolean,
-      required: true,
-    },
     labelsFilterBasePath: {
       type: String,
       required: true,
@@ -32,6 +34,28 @@ export default {
     labelsFilterParam: {
       type: String,
       required: true,
+    },
+  },
+  computed: {
+    sortedSelectedLabels() {
+      return sortBy(this.selectedLabels, (label) => (isScopedLabel(label) ? 0 : 1));
+    },
+    labelsList() {
+      const labelsString = this.selectedLabels.length
+        ? this.selectedLabels
+            .slice(0, 5)
+            .map((label) => label.title)
+            .join(', ')
+        : s__('LabelSelect|Labels');
+
+      if (this.selectedLabels.length > 5) {
+        return sprintf(s__('LabelSelect|%{labelsString}, and %{remainingLabelCount} more'), {
+          labelsString,
+          remainingLabelCount: this.selectedLabels.length - 5,
+        });
+      }
+
+      return labelsString;
     },
   },
   methods: {
@@ -44,7 +68,10 @@ export default {
       return this.allowScopedLabels && isScopedLabel(label);
     },
     removeLabel(labelId) {
-      this.$emit('onLabelRemove', getIdFromGraphQLId(labelId));
+      this.$emit('onLabelRemove', labelId);
+    },
+    handleCollapsedClick() {
+      this.$emit('onCollapsedValueClick');
     },
   },
 };
@@ -55,16 +82,30 @@ export default {
     :class="{
       'has-labels': selectedLabels.length,
     }"
-    class="hide-collapsed value issuable-show-labels js-value"
+    class="value issuable-show-labels js-value"
     data-testid="value-wrapper"
   >
-    <span v-if="!selectedLabels.length" class="text-secondary" data-testid="empty-placeholder">
+    <div
+      v-gl-tooltip.left.viewport
+      :title="labelsList"
+      class="sidebar-collapsed-icon"
+      @click="handleCollapsedClick"
+    >
+      <gl-icon name="labels" />
+      <span class="gl-font-base gl-line-height-24">{{ selectedLabels.length }}</span>
+    </div>
+    <span
+      v-if="!selectedLabels.length"
+      class="text-secondary hide-collapsed"
+      data-testid="empty-placeholder"
+    >
       <slot></slot>
     </span>
     <template v-else>
       <gl-label
-        v-for="label in selectedLabels"
+        v-for="label in sortedSelectedLabels"
         :key="label.id"
+        class="hide-collapsed"
         data-qa-selector="selected_label_content"
         :data-qa-label-name="label.title"
         :title="label.title"

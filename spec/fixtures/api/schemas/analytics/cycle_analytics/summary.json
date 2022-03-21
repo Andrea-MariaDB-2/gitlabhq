@@ -6,6 +6,9 @@
     "type": "object",
     "required": ["value", "title"],
     "properties": {
+      "identifier": {
+        "type": "string"
+      },
       "value": {
         "type": "string"
       },
@@ -14,6 +17,9 @@
       },
       "unit": {
         "type": "string"
+      },
+      "links": {
+        "type": "array"
       }
     },
     "additionalProperties": false

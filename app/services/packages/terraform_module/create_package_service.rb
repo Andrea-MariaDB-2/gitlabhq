@@ -7,7 +7,7 @@ module Packages
 
       def execute
         return error('Version is empty.', 400) if params[:module_version].blank?
-        return error('Package already exists.', 403) if current_package_exists_elsewhere?
+        return error('Access Denied', 403) if current_package_exists_elsewhere?
         return error('Package version already exists.', 403) if current_package_version_exists?
         return error('File is too large.', 400) if file_size_exceeded?
 
@@ -29,6 +29,7 @@ module Packages
           .for_projects(project.root_namespace.all_projects.id_not_in(project.id))
           .with_package_type(:terraform_module)
           .with_name(name)
+          .not_pending_destruction
           .exists?
       end
 
@@ -37,6 +38,7 @@ module Packages
           .with_package_type(:terraform_module)
           .with_name(name)
           .with_version(params[:module_version])
+          .not_pending_destruction
           .exists?
       end
 

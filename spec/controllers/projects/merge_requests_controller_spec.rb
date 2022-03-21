@@ -9,8 +9,9 @@ RSpec.describe Projects::MergeRequestsController do
   let_it_be_with_refind(:project) { create(:project, :repository) }
   let_it_be_with_reload(:project_public_with_private_builds) { create(:project, :repository, :public, :builds_private) }
 
-  let(:user) { project.owner }
-  let(:merge_request) { create(:merge_request_with_diffs, target_project: project, source_project: project) }
+  let(:user) { project.first_owner }
+  let(:merge_request) { create(:merge_request_with_diffs, target_project: project, source_project: merge_request_source_project, allow_collaboration: false) }
+  let(:merge_request_source_project) { project }
 
   before do
     sign_in(user)
@@ -41,32 +42,6 @@ RSpec.describe Projects::MergeRequestsController do
       get :show, params: params.merge(extra_params)
     end
 
-    context 'with the invite_members_in_comment experiment', :experiment do
-      context 'when user can invite' do
-        before do
-          stub_experiments(invite_members_in_comment: :invite_member_link)
-          project.add_maintainer(user)
-        end
-
-        it 'assigns the candidate experience and tracks the event' do
-          expect(experiment(:invite_members_in_comment)).to track(:view, property: project.root_ancestor.id.to_s)
-            .for(:invite_member_link)
-            .with_context(namespace: project.root_ancestor)
-            .on_next_instance
-
-          go
-        end
-      end
-
-      context 'when user can not invite' do
-        it 'does not track the event' do
-          expect(experiment(:invite_members_in_comment)).not_to track(:view)
-
-          go
-        end
-      end
-    end
-
     context 'with view param' do
       before do
         go(view: 'parallel')
@@ -82,23 +57,29 @@ RSpec.describe Projects::MergeRequestsController do
         merge_request.mark_as_unchecked!
       end
 
-      context 'check_mergeability_async_in_widget feature flag is disabled' do
-        before do
-          stub_feature_flags(check_mergeability_async_in_widget: false)
+      it 'checks mergeability asynchronously' do
+        expect_next_instance_of(MergeRequests::MergeabilityCheckService) do |service|
+          expect(service).not_to receive(:execute)
+          expect(service).to receive(:async_execute)
         end
 
-        it 'checks mergeability asynchronously' do
-          expect_next_instance_of(MergeRequests::MergeabilityCheckService) do |service|
-            expect(service).not_to receive(:execute)
-            expect(service).to receive(:async_execute)
-          end
-
-          go
-        end
+        go
       end
     end
 
     describe 'as html' do
+      it 'sets the endpoint_metadata_url' do
+        go
+
+        expect(assigns["endpoint_metadata_url"]).to eq(
+          diffs_metadata_project_json_merge_request_path(
+            project,
+            merge_request,
+            'json',
+            diff_head: true,
+            view: 'inline'))
+      end
+
       context 'when diff files were cleaned' do
         render_views
 
@@ -113,23 +94,6 @@ RSpec.describe Projects::MergeRequestsController do
           go(format: :html)
 
           expect(response).to be_successful
-        end
-      end
-
-      context 'with `default_merge_ref_for_diffs` feature flag enabled' do
-        before do
-          stub_feature_flags(default_merge_ref_for_diffs: true)
-          go
-        end
-
-        it 'adds the diff_head parameter' do
-          expect(assigns["endpoint_metadata_url"]).to eq(
-            diffs_metadata_project_json_merge_request_path(
-              project,
-              merge_request,
-              'json',
-              diff_head: true,
-              view: 'inline'))
         end
       end
 
@@ -349,6 +313,15 @@ RSpec.describe Projects::MergeRequestsController do
         end
       end
     end
+
+    it_behaves_like 'issuable list with anonymous search disabled' do
+      let(:params) { { namespace_id: project.namespace, project_id: project } }
+
+      before do
+        sign_out(user)
+        project.update!(visibility_level: Gitlab::VisibilityLevel::PUBLIC)
+      end
+    end
   end
 
   describe 'PUT update' do
@@ -357,7 +330,8 @@ RSpec.describe Projects::MergeRequestsController do
         namespace_id: project.namespace,
         project_id: project,
         id: merge_request.iid,
-        merge_request: mr_params
+        merge_request: mr_params,
+        serializer: 'basic'
       }.merge(additional_params)
 
       put :update, params: params
@@ -464,7 +438,7 @@ RSpec.describe Projects::MergeRequestsController do
 
     context 'when the merge request is not mergeable' do
       before do
-        merge_request.update!(title: "WIP: #{merge_request.title}")
+        merge_request.update!(title: "Draft: #{merge_request.title}")
 
         post :merge, params: base_params
       end
@@ -497,6 +471,7 @@ RSpec.describe Projects::MergeRequestsController do
       end
 
       it 'starts the merge immediately with permitted params' do
+        allow(MergeWorker).to receive(:with_status).and_return(MergeWorker)
         expect(MergeWorker).to receive(:perform_async).with(merge_request.id, anything, { 'sha' => merge_request.diff_head_sha })
 
         merge_with_sha
@@ -1366,7 +1341,7 @@ RSpec.describe Projects::MergeRequestsController do
                   'create' => 0,
                   'delete' => 0,
                   'update' => 1,
-                  'job_name' => build.options.dig(:artifacts, :name).to_s
+                  'job_name' => build.name
                 )
               )
             )
@@ -1867,8 +1842,7 @@ RSpec.describe Projects::MergeRequestsController do
       let(:sha)         { forked.commit.sha }
       let(:environment) { create(:environment, project: forked) }
       let(:pipeline)    { create(:ci_pipeline, sha: sha, project: forked) }
-      let(:build)       { create(:ci_build, pipeline: pipeline) }
-      let!(:deployment) { create(:deployment, :succeed, environment: environment, sha: sha, ref: 'master', deployable: build) }
+      let!(:build) { create(:ci_build, :with_deployment, environment: environment.name, pipeline: pipeline) }
 
       let(:merge_request) do
         create(:merge_request, source_project: forked, target_project: project, target_branch: 'master', head_pipeline: pipeline)
@@ -1892,8 +1866,7 @@ RSpec.describe Projects::MergeRequestsController do
           let(:source_environment)  { create(:environment, project: project) }
           let(:merge_commit_sha)    { project.repository.merge(user, forked.commit.id, merge_request, "merged in test") }
           let(:post_merge_pipeline) { create(:ci_pipeline, sha: merge_commit_sha, project: project) }
-          let(:post_merge_build)    { create(:ci_build, pipeline: post_merge_pipeline) }
-          let!(:source_deployment)  { create(:deployment, :succeed, environment: source_environment, sha: merge_commit_sha, ref: 'master', deployable: post_merge_build) }
+          let!(:post_merge_build)   { create(:ci_build, :with_deployment, environment: source_environment.name, pipeline: post_merge_pipeline) }
 
           before do
             merge_request.update!(merge_commit_sha: merge_commit_sha)
@@ -1935,9 +1908,6 @@ RSpec.describe Projects::MergeRequestsController do
 
     context 'when a merge request has multiple environments with deployments' do
       let(:sha) { merge_request.diff_head_sha }
-      let(:ref) { merge_request.source_branch }
-
-      let!(:build) { create(:ci_build, pipeline: pipeline) }
       let!(:pipeline) { create(:ci_pipeline, sha: sha, project: project) }
       let!(:environment) { create(:environment, name: 'env_a', project: project) }
       let!(:another_environment) { create(:environment, name: 'env_b', project: project) }
@@ -1945,8 +1915,8 @@ RSpec.describe Projects::MergeRequestsController do
       before do
         merge_request.update_head_pipeline
 
-        create(:deployment, :succeed, environment: environment, sha: sha, ref: ref, deployable: build)
-        create(:deployment, :succeed, environment: another_environment, sha: sha, ref: ref, deployable: build)
+        create(:ci_build, :with_deployment, environment: environment.name, pipeline: pipeline)
+        create(:ci_build, :with_deployment, environment: another_environment.name, pipeline: pipeline)
       end
 
       it 'exposes multiple environment statuses' do
@@ -2069,10 +2039,12 @@ RSpec.describe Projects::MergeRequestsController do
   end
 
   describe 'POST #rebase' do
-    let(:viewer) { user }
-
     def post_rebase
       post :rebase, params: { namespace_id: project.namespace, project_id: project, id: merge_request }
+    end
+
+    before do
+      allow(RebaseWorker).to receive(:with_status).and_return(RebaseWorker)
     end
 
     def expect_rebase_worker_for(user)
@@ -2081,7 +2053,7 @@ RSpec.describe Projects::MergeRequestsController do
 
     context 'successfully' do
       it 'enqeues a RebaseWorker' do
-        expect_rebase_worker_for(viewer)
+        expect_rebase_worker_for(user)
 
         post_rebase
 
@@ -2101,20 +2073,34 @@ RSpec.describe Projects::MergeRequestsController do
       end
     end
 
+    context 'when source branch is protected from force push' do
+      before do
+        create(:protected_branch, project: project, name: merge_request.source_branch, allow_force_push: false)
+      end
+
+      it 'returns 404' do
+        expect_rebase_worker_for(user).never
+
+        post_rebase
+
+        expect(response).to have_gitlab_http_status(:not_found)
+      end
+    end
+
     context 'with a forked project' do
       let(:forked_project) { fork_project(project, fork_owner, repository: true) }
       let(:fork_owner) { create(:user) }
-
-      before do
-        project.add_developer(fork_owner)
-
-        merge_request.update!(source_project: forked_project)
-        forked_project.add_reporter(user)
-      end
+      let(:merge_request_source_project) { forked_project }
 
       context 'user cannot push to source branch' do
+        before do
+          project.add_developer(fork_owner)
+
+          forked_project.add_reporter(user)
+        end
+
         it 'returns 404' do
-          expect_rebase_worker_for(viewer).never
+          expect_rebase_worker_for(user).never
 
           post_rebase
 

@@ -5,7 +5,7 @@ require 'spec_helper'
 RSpec.describe 'User page' do
   include ExternalAuthorizationServiceHelpers
 
-  let_it_be(:user) { create(:user, bio: '**Lorem** _ipsum_ dolor sit [amet](https://example.com)') }
+  let_it_be(:user) { create(:user, bio: '<b>Lorem</b> <i>ipsum</i> dolor sit <a href="https://example.com">amet</a>') }
 
   subject(:visit_profile) { visit(user_path(user)) }
 
@@ -81,6 +81,7 @@ RSpec.describe 'User page' do
 
     context 'timezone' do
       let_it_be(:timezone) { 'America/Los_Angeles' }
+      let_it_be(:local_time_selector) { '[data-testid="user-local-time"]' }
 
       before do
         travel_to Time.find_zone(timezone).local(2021, 7, 20, 15, 30, 45)
@@ -92,7 +93,19 @@ RSpec.describe 'User page' do
         it 'shows local time' do
           subject
 
-          expect(page).to have_content('3:30 PM')
+          within local_time_selector do
+            expect(page).to have_content('3:30 PM')
+          end
+        end
+      end
+
+      context 'when timezone is not set' do
+        let_it_be(:user) { create(:user, timezone: nil) }
+
+        it 'does not show local time' do
+          subject
+
+          expect(page).not_to have_selector(local_time_selector)
         end
       end
 
@@ -102,7 +115,9 @@ RSpec.describe 'User page' do
         it 'shows local time using the configured default timezone (UTC in this case)' do
           subject
 
-          expect(page).to have_content('10:30 PM')
+          within local_time_selector do
+            expect(page).to have_content('10:30 PM')
+          end
         end
       end
     end
@@ -192,34 +207,31 @@ RSpec.describe 'User page' do
         state: :blocked,
         organization: 'GitLab - work info test',
         job_title: 'Frontend Engineer',
-        pronunciation: 'pruh-nuhn-see-ay-shn'
+        pronunciation: 'pruh-nuhn-see-ay-shn',
+        bio: 'My personal bio'
       )
     end
 
     let_it_be(:status) { create(:user_status, user: user, message: "Working hard!") }
 
-    it 'shows no tab' do
-      subject
+    before do
+      visit_profile
+    end
 
+    it 'shows no tab' do
       expect(page).to have_css("div.profile-header")
       expect(page).not_to have_css("ul.nav-links")
     end
 
     it 'shows blocked message' do
-      subject
-
       expect(page).to have_content("This user is blocked")
     end
 
     it 'shows user name as blocked' do
-      subject
-
       expect(page).to have_css(".cover-title", text: 'Blocked user')
     end
 
     it 'shows no additional fields' do
-      subject
-
       expect(page).not_to have_css(".profile-user-bio")
       expect(page).not_to have_content('GitLab - work info test')
       expect(page).not_to have_content('Frontend Engineer')
@@ -228,10 +240,10 @@ RSpec.describe 'User page' do
     end
 
     it 'shows username' do
-      subject
-
       expect(page).to have_content("@#{user.username}")
     end
+
+    it_behaves_like 'default brand title page meta description'
   end
 
   context 'with unconfirmed user' do
@@ -241,7 +253,8 @@ RSpec.describe 'User page' do
         :unconfirmed,
         organization: 'GitLab - work info test',
         job_title: 'Frontend Engineer',
-        pronunciation: 'pruh-nuhn-see-ay-shn'
+        pronunciation: 'pruh-nuhn-see-ay-shn',
+        bio: 'My personal bio'
       )
     end
 
@@ -272,6 +285,8 @@ RSpec.describe 'User page' do
       it 'shows private profile message' do
         expect(page).to have_content("This user has a private profile")
       end
+
+      it_behaves_like 'default brand title page meta description'
     end
 
     context 'when visited by an authenticated user' do
@@ -411,7 +426,7 @@ RSpec.describe 'User page' do
   end
 
   context 'structured markup' do
-    let_it_be(:user) { create(:user, website_url: 'https://gitlab.com', organization: 'GitLab', job_title: 'Frontend Engineer', email: 'public@example.com', public_email: 'public@example.com', location: 'Country', created_at: Time.now, updated_at: Time.now) }
+    let_it_be(:user) { create(:user, website_url: 'https://gitlab.com', organization: 'GitLab', job_title: 'Frontend Engineer', email: 'public@example.com', public_email: 'public@example.com', location: 'Country', created_at: Time.zone.now, updated_at: Time.zone.now) }
 
     it 'shows Person structured markup' do
       subject

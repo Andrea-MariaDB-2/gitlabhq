@@ -68,10 +68,10 @@ GitLab is an open source project and we are very happy to accept community contr
 ## Install a development environment
 
 To work on GitLab itself, we recommend setting up your development environment with [the GitLab Development Kit](https://gitlab.com/gitlab-org/gitlab-development-kit).
-If you do not use the GitLab Development Kit you need to install and setup all the dependencies yourself, this is a lot of work and error prone.
+If you do not use the GitLab Development Kit you need to install and configure all the dependencies yourself, this is a lot of work and error prone.
 One small thing you also have to do when installing it yourself is to copy the example development Puma configuration file:
 
-    cp config/puma.rb.example.development config/puma.rb
+    cp config/puma.example.development.rb config/puma.rb
 
 Instructions on how to start GitLab and how to run the tests can be found in the [getting started section of the GitLab Development Kit](https://gitlab.com/gitlab-org/gitlab-development-kit#getting-started).
 
@@ -81,7 +81,7 @@ GitLab is a Ruby on Rails application that runs on the following software:
 
 - Ubuntu/Debian/CentOS/RHEL/OpenSUSE
 - Ruby (MRI) 2.7.4
-- Git 2.31+
+- Git 2.33+
 - Redis 5.0+
 - PostgreSQL 12+
 
@@ -121,4 +121,4 @@ Please see [Getting help for GitLab](https://about.gitlab.com/getting-help/) on 
 
 ## Is it awesome?
 
-[These people](https://twitter.com/gitlab/likes) seem to like it.
+[These people](https://twitter.com/gitlab/followers) seem to like it.

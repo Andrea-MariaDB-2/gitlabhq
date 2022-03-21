@@ -3,6 +3,7 @@ import {
   GlTooltipDirective,
   GlSafeHtmlDirective,
   GlIcon,
+  GlBadge,
   GlButton,
   GlButtonGroup,
   GlDropdown,
@@ -14,7 +15,6 @@ import {
 import { escape } from 'lodash';
 import { mapActions, mapGetters, mapState } from 'vuex';
 import { IdState } from 'vendor/vue-virtual-scroller';
-import { diffViewerModes } from '~/ide/constants';
 import { scrollToElement } from '~/lib/utils/common_utils';
 import { truncateSha } from '~/lib/utils/text_utility';
 import { __, s__, sprintf } from '~/locale';
@@ -35,6 +35,7 @@ export default {
     GlIcon,
     FileIcon,
     DiffStats,
+    GlBadge,
     GlButton,
     GlButtonGroup,
     GlDropdown,
@@ -50,7 +51,7 @@ export default {
   mixins: [glFeatureFlagsMixin(), IdState({ idProp: (vm) => vm.diffFile.file_hash })],
   i18n: {
     ...DIFF_FILE_HEADER,
-    compareButtonLabel: s__('Compare submodule commit revisions'),
+    compareButtonLabel: __('Compare submodule commit revisions'),
   },
   props: {
     discussionPath: {
@@ -130,7 +131,7 @@ export default {
         const truncatedOldSha = escape(truncateSha(this.diffFile.submodule_compare.old_sha));
         const truncatedNewSha = escape(truncateSha(this.diffFile.submodule_compare.new_sha));
         return sprintf(
-          s__('Compare %{oldCommitId}...%{newCommitId}'),
+          __('Compare %{oldCommitId}...%{newCommitId}'),
           {
             oldCommitId: `<span class="commit-sha">${truncatedOldSha}</span>`,
             newCommitId: `<span class="commit-sha">${truncatedNewSha}</span>`,
@@ -181,7 +182,7 @@ export default {
       return this.diffFile.renamed_file;
     },
     isModeChanged() {
-      return this.diffFile.viewer.name === diffViewerModes.mode_changed;
+      return this.diffFile.mode_changed;
     },
     expandDiffToFullFileTitle() {
       if (this.diffFile.isShowingFullFile) {
@@ -208,7 +209,7 @@ export default {
       handler(val) {
         const el = this.$el.closest('.vue-recycle-scroller__item-view');
 
-        if (this.glFeatures.diffsVirtualScrolling && el) {
+        if (el) {
           // We can't add a style with Vue because of the way the virtual
           // scroller library renders the diff files
           el.style.zIndex = val ? '1' : null;
@@ -221,7 +222,7 @@ export default {
       'toggleFileDiscussions',
       'toggleFileDiscussionWrappers',
       'toggleFullDiff',
-      'toggleActiveFileByHash',
+      'setCurrentFileHash',
       'reviewFile',
       'setFileCollapsedByUser',
     ]),
@@ -244,7 +245,7 @@ export default {
         scrollToElement(document.querySelector(selector));
         window.location.hash = selector;
         if (!this.viewDiffsFileByFile) {
-          this.toggleActiveFileByHash(this.diffFile.file_hash);
+          this.setCurrentFileHash(this.diffFile.file_hash);
         }
       }
     },
@@ -341,7 +342,7 @@ export default {
         :gfm="gfmCopyText"
         data-testid="diff-file-copy-clipboard"
         category="tertiary"
-        data-track-event="click_copy_file_button"
+        data-track-action="click_copy_file_button"
         data-track-label="diff_copy_file_path_button"
         data-track-property="diff_copy_file"
       />
@@ -350,7 +351,9 @@ export default {
         {{ diffFile.a_mode }} → {{ diffFile.b_mode }}
       </small>
 
-      <span v-if="isUsingLfs" class="badge label label-lfs gl-mr-2"> {{ __('LFS') }} </span>
+      <gl-badge v-if="isUsingLfs" variant="neutral" class="gl-mr-2" data-testid="label-lfs">{{
+        __('LFS')
+      }}</gl-badge>
     </div>
 
     <div
@@ -382,7 +385,7 @@ export default {
           :title="externalUrlLabel"
           :aria-label="externalUrlLabel"
           target="_blank"
-          data-track-event="click_toggle_external_button"
+          data-track-action="click_toggle_external_button"
           data-track-label="diff_toggle_external_button"
           data-track-property="diff_toggle_external"
           icon="external-link"
@@ -428,7 +431,7 @@ export default {
               class="js-ide-edit-blob"
               data-qa-selector="edit_in_ide_button"
             >
-              {{ __('Edit in Web IDE') }}
+              {{ __('Open in Web IDE') }}
             </gl-dropdown-item>
           </template>
 

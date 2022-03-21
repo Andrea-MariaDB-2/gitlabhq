@@ -53,8 +53,14 @@ export const receiveLatestPipelineSuccess = ({ rootGetters, commit }, { pipeline
   commit(types.RECEIVE_LASTEST_PIPELINE_SUCCESS, lastCommitPipeline);
 };
 
-export const fetchLatestPipeline = ({ dispatch, rootGetters }) => {
+export const fetchLatestPipeline = ({ commit, dispatch, rootGetters }) => {
   if (eTagPoll) return;
+
+  if (!rootGetters.lastCommit) {
+    commit(types.RECEIVE_LASTEST_PIPELINE_SUCCESS, null);
+    dispatch('stopPipelinePolling');
+    return;
+  }
 
   dispatch('requestLatestPipeline');
 
@@ -139,6 +145,7 @@ export const receiveJobLogsSuccess = ({ commit }, data) =>
 export const fetchJobLogs = ({ dispatch, state }) => {
   dispatch('requestJobLogs');
 
+  // update trace endpoint once BE compeletes trace re-naming in #340626
   return axios
     .get(`${state.detailJob.path}/trace`, { params: { format: 'json' } })
     .then(({ data }) => dispatch('receiveJobLogsSuccess', data))

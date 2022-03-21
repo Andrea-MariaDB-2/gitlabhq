@@ -10,6 +10,7 @@ import {
 import { shallowMount } from '@vue/test-utils';
 import MockAdapter from 'axios-mock-adapter';
 
+import { nextTick } from 'vue';
 import axios from '~/lib/utils/axios_utils';
 import IssuableMoveDropdown from '~/vue_shared/components/sidebar/issuable_move_dropdown.vue';
 
@@ -68,11 +69,13 @@ describe('IssuableMoveDropdown', () => {
     describe('searchKey', () => {
       it('calls `fetchProjects` with value of the prop', async () => {
         jest.spyOn(wrapper.vm, 'fetchProjects');
+        // setData usage is discouraged. See https://gitlab.com/groups/gitlab-org/-/epics/7330 for details
+        // eslint-disable-next-line no-restricted-syntax
         wrapper.setData({
           searchKey: 'foo',
         });
 
-        await wrapper.vm.$nextTick();
+        await nextTick();
 
         expect(wrapper.vm.fetchProjects).toHaveBeenCalledWith('foo');
       });
@@ -143,22 +146,26 @@ describe('IssuableMoveDropdown', () => {
       `(
         'returns $returnValue when selectedProject and provided project param $title',
         async ({ project, selectedProject, returnValue }) => {
+          // setData usage is discouraged. See https://gitlab.com/groups/gitlab-org/-/epics/7330 for details
+          // eslint-disable-next-line no-restricted-syntax
           wrapper.setData({
             selectedProject,
           });
 
-          await wrapper.vm.$nextTick();
+          await nextTick();
 
           expect(wrapper.vm.isSelectedProject(project)).toBe(returnValue);
         },
       );
 
       it('returns false when selectedProject is null', async () => {
+        // setData usage is discouraged. See https://gitlab.com/groups/gitlab-org/-/epics/7330 for details
+        // eslint-disable-next-line no-restricted-syntax
         wrapper.setData({
           selectedProject: null,
         });
 
-        await wrapper.vm.$nextTick();
+        await nextTick();
 
         expect(wrapper.vm.isSelectedProject(mockProjects[0])).toBe(false);
       });
@@ -206,22 +213,26 @@ describe('IssuableMoveDropdown', () => {
       });
 
       it('renders gl-loading-icon component when projectsListLoading prop is true', async () => {
+        // setData usage is discouraged. See https://gitlab.com/groups/gitlab-org/-/epics/7330 for details
+        // eslint-disable-next-line no-restricted-syntax
         wrapper.setData({
           projectsListLoading: true,
         });
 
-        await wrapper.vm.$nextTick();
+        await nextTick();
 
         expect(findDropdownEl().find(GlLoadingIcon).exists()).toBe(true);
       });
 
       it('renders gl-dropdown-item components for available projects', async () => {
+        // setData usage is discouraged. See https://gitlab.com/groups/gitlab-org/-/epics/7330 for details
+        // eslint-disable-next-line no-restricted-syntax
         wrapper.setData({
           projects: mockProjects,
           selectedProject: mockProjects[0],
         });
 
-        await wrapper.vm.$nextTick();
+        await nextTick();
 
         const dropdownItems = wrapper.findAll(GlDropdownItem);
 
@@ -234,19 +245,23 @@ describe('IssuableMoveDropdown', () => {
       });
 
       it('renders string "No matching results" when search does not yield any matches', async () => {
+        // setData usage is discouraged. See https://gitlab.com/groups/gitlab-org/-/epics/7330 for details
+        // eslint-disable-next-line no-restricted-syntax
         wrapper.setData({
           searchKey: 'foo',
         });
 
         // Wait for `searchKey` watcher to run.
-        await wrapper.vm.$nextTick();
+        await nextTick();
 
+        // setData usage is discouraged. See https://gitlab.com/groups/gitlab-org/-/epics/7330 for details
+        // eslint-disable-next-line no-restricted-syntax
         wrapper.setData({
           projects: [],
           projectsListLoading: false,
         });
 
-        await wrapper.vm.$nextTick();
+        await nextTick();
 
         const dropdownContentEl = wrapper.find('[data-testid="content"]');
 
@@ -254,13 +269,15 @@ describe('IssuableMoveDropdown', () => {
       });
 
       it('renders string "Failed to load projects" when loading projects list fails', async () => {
+        // setData usage is discouraged. See https://gitlab.com/groups/gitlab-org/-/epics/7330 for details
+        // eslint-disable-next-line no-restricted-syntax
         wrapper.setData({
           projects: [],
           projectsListLoading: false,
           projectsListLoadFailed: true,
         });
 
-        await wrapper.vm.$nextTick();
+        await nextTick();
 
         const dropdownContentEl = wrapper.find('[data-testid="content"]');
 
@@ -273,11 +290,13 @@ describe('IssuableMoveDropdown', () => {
         expect(moveButtonEl.text()).toBe('Move');
         expect(moveButtonEl.attributes('disabled')).toBe('true');
 
+        // setData usage is discouraged. See https://gitlab.com/groups/gitlab-org/-/epics/7330 for details
+        // eslint-disable-next-line no-restricted-syntax
         wrapper.setData({
           selectedProject: mockProjects[0],
         });
 
-        await wrapper.vm.$nextTick();
+        await nextTick();
 
         expect(
           wrapper.find('[data-testid="footer"]').find(GlButton).attributes('disabled'),
@@ -303,6 +322,8 @@ describe('IssuableMoveDropdown', () => {
       });
 
       it('gl-dropdown component prevents dropdown body from closing on `hide` event when `projectItemClick` prop is true', async () => {
+        // setData usage is discouraged. See https://gitlab.com/groups/gitlab-org/-/epics/7330 for details
+        // eslint-disable-next-line no-restricted-syntax
         wrapper.setData({
           projectItemClick: true,
         });
@@ -326,11 +347,13 @@ describe('IssuableMoveDropdown', () => {
       });
 
       it('sets project for clicked gl-dropdown-item to selectedProject', async () => {
+        // setData usage is discouraged. See https://gitlab.com/groups/gitlab-org/-/epics/7330 for details
+        // eslint-disable-next-line no-restricted-syntax
         wrapper.setData({
           projects: mockProjects,
         });
 
-        await wrapper.vm.$nextTick();
+        await nextTick();
 
         wrapper.findAll(GlDropdownItem).at(0).vm.$emit('click', mockEvent);
 
@@ -338,11 +361,13 @@ describe('IssuableMoveDropdown', () => {
       });
 
       it('hides dropdown and emits `move-issuable` event when move button is clicked', async () => {
+        // setData usage is discouraged. See https://gitlab.com/groups/gitlab-org/-/epics/7330 for details
+        // eslint-disable-next-line no-restricted-syntax
         wrapper.setData({
           selectedProject: mockProjects[0],
         });
 
-        await wrapper.vm.$nextTick();
+        await nextTick();
 
         wrapper.find('[data-testid="footer"]').find(GlButton).vm.$emit('click');
 

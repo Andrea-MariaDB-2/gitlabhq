@@ -132,16 +132,7 @@ For example, the following two definitions are equal:
 
 When a CI job runs in a Docker container, the `before_script`, `script`, and `after_script` commands run in the `/builds/<project-path>/` directory. Your image may have a different default `WORKDIR` defined. To move to your `WORKDIR`, save the `WORKDIR` as an environment variable so you can reference it in the container during the job's runtime.
 
-### Available settings for `image`
-
-> Introduced in GitLab and GitLab Runner 9.4.
-
-| Setting    | Required | Description |
-|------------|----------| ----------- |
-| `name`     | Yes, when used with any other option. | Full name of the image. It should contain the registry part if needed. |
-| `entrypoint` | No.     | Command or script to execute as the container's entrypoint. It's translated to Docker's `--entrypoint` option while creating the container. The syntax is similar to [`Dockerfile`'s `ENTRYPOINT`](https://docs.docker.com/engine/reference/builder/#entrypoint) directive, where each shell token is a separate string in the array. |
-
-### Overriding the entrypoint of an image
+### Override the entrypoint of an image
 
 > Introduced in GitLab and GitLab Runner 9.4. Read more about the [extended configuration options](../docker/using_docker_images.md#extended-docker-configuration-options).
 
@@ -214,7 +205,7 @@ Look for the `[runners.docker]` section:
 The image and services defined this way are added to all jobs run by
 that runner.
 
-## Define an image from a private Container Registry
+## Access an image from a private Container Registry
 
 To access private container registries, the GitLab Runner process can use:
 
@@ -224,18 +215,11 @@ To access private container registries, the GitLab Runner process can use:
 
 To define which option should be used, the runner process reads the configuration in this order:
 
-- A `DOCKER_AUTH_CONFIG` variable provided as either:
-  - A [CI/CD variable](../variables/index.md) in the `.gitlab-ci.yml` file.
-  - A project's variables stored on the project's **Settings > CI/CD** page.
-- A `DOCKER_AUTH_CONFIG` variable provided as environment variable in the runner's `config.toml` file.
+- A `DOCKER_AUTH_CONFIG` [CI/CD variable](../variables/index.md).
+- A `DOCKER_AUTH_CONFIG` environment variable set in the runner's `config.toml` file.
 - A `config.json` file in `$HOME/.docker` directory of the user running the process.
   If the `--user` flag is provided to run the child processes as unprivileged user,
   the home directory of the main runner process user is used.
-
-The runner reads this configuration **only** from the `config.toml` file and ignores it if
-it's provided as a CI/CD variable. This is because the runner uses **only**
-`config.toml` configuration and does not interpolate **any** CI/CD variables at
-runtime.
 
 ### Requirements and limitations
 
@@ -253,9 +237,9 @@ private registry. Both require setting the CI/CD variable
 `DOCKER_AUTH_CONFIG` with appropriate authentication information.
 
 1. Per-job: To configure one job to access a private registry, add
-   `DOCKER_AUTH_CONFIG` as a job variable.
+   `DOCKER_AUTH_CONFIG` as a [CI/CD variable](../variables/index.md).
 1. Per-runner: To configure a runner so all its jobs can access a
-   private registry, add `DOCKER_AUTH_CONFIG` to the environment in the
+   private registry, add `DOCKER_AUTH_CONFIG` as an environment variable in the
    runner's configuration.
 
 See below for examples of each.
@@ -274,7 +258,7 @@ Let's also assume that these are the sign-in credentials:
 | username | `my_username`               |
 | password | `my_password`               |
 
-Use one of the following methods to determine the value of `DOCKER_AUTH_CONFIG`:
+Use one of the following methods to determine the value for `DOCKER_AUTH_CONFIG`:
 
 - Do a `docker login` on your local machine:
 
@@ -417,10 +401,10 @@ pulling from Docker Hub fails. Docker daemon tries to use the same credentials f
 
 > Introduced in GitLab Runner 12.0.
 
-As an example, let's assume that you want to use the `aws_account_id.dkr.ecr.region.amazonaws.com/private/image:latest`
+As an example, let's assume that you want to use the `<aws_account_id>.dkr.ecr.<region>.amazonaws.com/private/image:latest`
 image. This image is private and requires you to log in into a private container registry.
 
-To configure access for `aws_account_id.dkr.ecr.region.amazonaws.com`, follow these steps:
+To configure access for `<aws_account_id>.dkr.ecr.<region>.amazonaws.com`, follow these steps:
 
 1. Make sure `docker-credential-ecr-login` is available in the GitLab Runner `$PATH`.
 1. Have any of the following [AWS credentials setup](https://github.com/awslabs/amazon-ecr-credential-helper#aws-credentials).
@@ -434,7 +418,7 @@ To configure access for `aws_account_id.dkr.ecr.region.amazonaws.com`, follow th
      ```json
      {
        "credHelpers": {
-         "aws_account_id.dkr.ecr.region.amazonaws.com": "ecr-login"
+         "<aws_account_id>.dkr.ecr.<region>.amazonaws.com": "ecr-login"
        }
      }
      ```
@@ -454,15 +438,38 @@ To configure access for `aws_account_id.dkr.ecr.region.amazonaws.com`, follow th
      GitLab Runner reads this configuration file and uses the needed helper for this
      specific repository.
 
-1. You can now use any private image from `aws_account_id.dkr.ecr.region.amazonaws.com` defined in
+1. You can now use any private image from `<aws_account_id>.dkr.ecr.<region>.amazonaws.com` defined in
    `image` and/or `services` in your `.gitlab-ci.yml` file:
 
    ```yaml
-   image: aws_account_id.dkr.ecr.region.amazonaws.com/private/image:latest
+   image: <aws_account_id>.dkr.ecr.<region>.amazonaws.com/private/image:latest
    ```
 
-   In the example, GitLab Runner looks at `aws_account_id.dkr.ecr.region.amazonaws.com` for the
+   In the example, GitLab Runner looks at `<aws_account_id>.dkr.ecr.<region>.amazonaws.com` for the
    image `private/image:latest`.
 
 You can add configuration for as many registries as you want, adding more
 registries to the `"credHelpers"` hash.
+
+### Use checksum to keep your image secure
+
+We recommend using the image checksum in your job definition in your `.gitlab-ci.yml` file to verify the integrity of the image. A failed image integrity verification will prevent you from using a modified container.
+
+To use the image checksum you have to append the checksum at the end:
+
+```yaml
+image: ruby:2.6.8@sha256:d1dbaf9665fe8b2175198e49438092fdbcf4d8934200942b94425301b17853c7
+```
+
+To get the image checksum, on the image `TAG` tab, view the `DIGEST` column.
+For example, view the [Ruby image](https://hub.docker.com/_/ruby?tab=tags).
+The checksum is a random string, like `6155f0235e95`.
+
+You can also get the checksum of any image on your system with the command `docker images --digests`:
+
+```shell
+❯ docker images --digests
+REPOSITORY                                                        TAG       DIGEST                                                                    (...)
+gitlab/gitlab-ee                                                  latest    sha256:723aa6edd8f122d50cae490b1743a616d54d4a910db892314d68470cc39dfb24   (...)
+gitlab/gitlab-runner                                              latest    sha256:4a18a80f5be5df44cb7575f6b89d1fdda343297c6fd666c015c0e778b276e726   (...)
+```

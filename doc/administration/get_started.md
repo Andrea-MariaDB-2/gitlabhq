@@ -1,5 +1,7 @@
 ---
 info: For assistance with this TAM Onboarding page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments-to-other-projects-and-subjects.
+stage: none
+group: unassigned
 ---
 
 # Get started administering GitLab **(FREE)**
@@ -37,30 +39,30 @@ Get started:
 - Create a [project](../user/project/working_with_projects.md#create-a-project).
 - Create a [group](../user/group/index.md#create-a-group).
 - [Add members](../user/group/index.md#add-users-to-a-group) to the group.
-- Create a [subgroup](../user/group/subgroups/index.md#creating-a-subgroup).
-- [Add members](../user/group/subgroups/index.md#membership) to the subgroup.
+- Create a [subgroup](../user/group/subgroups/index.md#create-a-subgroup).
+- [Add members](../user/group/subgroups/index.md#subgroup-membership) to the subgroup.
 - Enable [external authorization control](../user/admin_area/settings/external_authorization.md#configuration).
 
 **More resources**
 
 - Learn more about [running multiple Agile teams](https://www.youtube.com/watch?v=VR2r1TJCDew).
-- Sync group memberships [by using LDAP](../administration/auth/ldap/index.md#group-sync).
+- Sync group memberships [by using LDAP](../administration/auth/ldap/ldap_synchronization.md#group-sync).
 - Manage user access with inherited permissions. Use up to 20 levels of subgroups to organize both teams and projects.
   - Learn more about [inherited permissions](../user/project/members/index.md#inherited-membership).
-  - View [nested category examples](../user/group/subgroups/index.md#overview).
+  - View an [example](../user/group/subgroups/index.md).
 
 ## Import projects
 
 You may need to import projects from external sources like GitHub, Bitbucket, or another instance of GitLab. Many external sources can be imported into GitLab.
 
 - Review the [GitLab projects documentation](../user/project/index.md#project-integrations).
-- Consider [repository mirroring](../user/project/repository/repository_mirroring.md)—an [alternative to project migrations](../ci/ci_cd_for_external_repos/index.md).
+- Consider [repository mirroring](../user/project/repository/mirror/index.md)—an [alternative to project migrations](../ci/ci_cd_for_external_repos/index.md).
 - Check out our [migration index](../user/project/import/index.md) for documentation on common migration paths.
 - Schedule your project exports with our [import/export API](../api/project_import_export.md#schedule-an-export).
 
 ### Popular project imports
 
-- [GitHub Enterprise to self-managed GitLab](../integration/github.md#enabling-github-oauth): Enabling OAuth makes it easier for developers to find and import their projects.
+- [GitHub Enterprise to self-managed GitLab](../integration/github.md): Enabling OAuth makes it easier for developers to find and import their projects.
 - [Bitbucket Server](../user/project/import/bitbucket_server.md#limitations): There are certain data limitations.
   For assistance with these data types, contact your GitLab account manager or GitLab Support about our professional migration services.
 
@@ -128,7 +130,7 @@ The routine differs, depending on whether you deployed with Omnibus or the Helm 
 
 When you backing up an Omnibus (single node) GitLab server, you can use a single Rake task.
 
-Learn about [backing up Omnibus or Helm variations](../raketasks/backup_restore.md#back-up-gitlab).
+Learn about [backing up Omnibus or Helm variations](../raketasks/backup_restore.md).
 This process backs up your entire instance, but does not back up the configuration files. Ensure those are backed up separately.
 Keep your configuration files and backup archives in a separate location to ensure the encryption keys are not kept with the encrypted data.
 
@@ -137,7 +139,7 @@ Keep your configuration files and backup archives in a separate location to ensu
 You can restore a backup only to **the exact same version and type** (Community Edition/Enterprise Edition) of GitLab on which it was created.
 
 - Review the [Omnibus backup and restore documentation](https://docs.gitlab.com/omnibus/settings/backups).
-- Review the [Helm Chart backup and restore documentation](https://docs.gitlab.com/charts/backup-restore).
+- Review the [Helm Chart backup and restore documentation](https://docs.gitlab.com/charts/backup-restore/).
 
 ### Back up GitLab SaaS
 
@@ -177,7 +179,7 @@ The EC2 instance meets the requirements for an application data backup by taking
 In general, if you're running GitLab on a virtualized server, you can create VM snapshots of the entire GitLab server.
 It is common for a VM snapshot to require you to power down the server.
 
-#### Option 2: GitLab Geo
+#### Option 2: GitLab Geo **(PREMIUM SELF)**
 
 Geo provides local, read-only instances of your GitLab instances.
 
@@ -191,7 +193,7 @@ Learn more about [replication limitations](../administration/geo/replication/dat
 
 GitLab provides support for self-managed GitLab through different channels.
 
-- Priority support: Premium and Ultimate self-managed customers receive priority support with tiered response times.
+- Priority support: [Premium and Ultimate](https://about.gitlab.com/pricing/) self-managed customers receive priority support with tiered response times.
   Learn more about [upgrading to priority support](https://about.gitlab.com/support/#upgrading-to-priority-support).
 - Live upgrade assistance: Get one-on-one expert guidance during a production upgrade. With your **priority support plan**,
   you're eligible for a live, scheduled screen-sharing session with a member of our support team.
@@ -214,7 +216,7 @@ If you use GitLab SaaS, you have several channels with which to get support and 
 
 To get assistance for GitLab SaaS:
 
-- Access [GitLab Docs](../README.md) for self-service support.
+- Access [GitLab Docs](../index.md) for self-service support.
 - Join the [GitLab Forum](https://forum.gitlab.com/) for community support.
 - Gather [your subscription information](https://about.gitlab.com/support/#for-self-managed-users) before submitting a ticket.
 - Submit a support ticket for:
@@ -231,7 +233,7 @@ Rate limits also improve the security of your application.
 
 ### Configure rate limits for self-managed GitLab
 
-You can make changes to your default rate limits from the Admin Area. For more information about configuration, see the [Admin Area page](../security/rate_limits.md#admin-area-settings).
+You can make changes to your default rate limits from the Admin Area. For more information about configuration, see the [Admin Area page](../security/rate_limits.md#configurable-limits).
 
 - Define [issues rate limits](../user/admin_area/settings/rate_limit_on_issues_creation.md) to set a maximum number of issue creation requests per minute, per user.
 - Enforce [user and IP rate limits](../user/admin_area/settings/user_and_ip_rate_limits.md) for unauthenticated web requests.
@@ -249,7 +251,7 @@ Rate limits also improve the security of your application.
 
 ### Configure rate limits for GitLab SaaS
 
-You can make changes to your default rate limits from the Admin Area. For more information about configuration, see the [Admin Area page](../security/rate_limits.md#admin-area-settings).
+You can make changes to your default rate limits from the Admin Area. For more information about configuration, see the [Admin Area page](../security/rate_limits.md#configurable-limits).
 
 - Review the rate limit page.
 - Read our [API page](../api/index.md) for more information about API and rate limiting.

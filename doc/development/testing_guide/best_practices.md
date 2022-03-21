@@ -50,6 +50,23 @@ bundle exec guard
 
 When using spring and guard together, use `SPRING=1 bundle exec guard` instead to make use of spring.
 
+### Eager loading the application code
+
+By default, the application code:
+
+- Isn't eagerly loaded in the `test` environment.
+- Is eagerly loaded in CI/CD (when `ENV['CI'].present?`) to surface any potential loading issues.
+
+If you need to enable eager loading when executing tests,
+use the `GITLAB_TEST_EAGER_LOAD` environment variable:
+
+```shell
+GITLAB_TEST_EAGER_LOAD=1 bin/rspec spec/models/project_spec.rb
+```
+
+If your test depends on all the application code that is being loaded, add the `:eager_load` tag.
+This ensures that the application code is eagerly loaded before the test execution.
+
 ### Ruby warnings
 
 > [Introduced](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/47767) in GitLab 13.7.
@@ -68,7 +85,7 @@ SILENCE_DEPRECATIONS=1 bin/rspec spec/models/project_spec.rb
 
 ### Test speed
 
-GitLab has a massive test suite that, without [parallelization](ci.md#test-suite-parallelization-on-the-ci), can take hours
+GitLab has a massive test suite that, without [parallelization](../pipelines.md#test-suite-parallelization), can take hours
 to run. It's important that we make an effort to write tests that are accurate
 and effective _as well as_ fast.
 
@@ -466,6 +483,43 @@ expect(page).to have_css '[data-testid="weight"]', text: 2
 expect(page).to have_css '.atwho-view ul', visible: true
 ```
 
+##### Interacting with modals
+
+Use the `within_modal` helper to interact with [GitLab UI modals](https://gitlab-org.gitlab.io/gitlab-ui/?path=/story/base-modal--default).
+
+```ruby
+include Spec::Support::Helpers::ModalHelpers
+
+within_modal do
+  expect(page).to have_link _('UI testing docs')
+
+  fill_in _('Search projects'), with: 'gitlab'
+
+  click_button 'Continue'
+end
+```
+
+Furthermore, you can use `accept_gl_confirm` for confirmation modals that only need to be accepted.
+This is helpful when migrating [`window.confirm()`](https://developer.mozilla.org/en-US/docs/Web/API/Window/confirm) to [`confirmAction`](https://gitlab.com/gitlab-org/gitlab/-/blob/ee280ed2b763d1278ad38c6e7e8a0aff092f617a/app/assets/javascripts/lib/utils/confirm_via_gl_modal/confirm_via_gl_modal.js#L3).
+
+```ruby
+include Spec::Support::Helpers::ModalHelpers
+
+accept_gl_confirm do
+  click_button 'Delete user'
+end
+```
+
+You can also pass the expected confirmation message and button text to `accept_gl_confirm`.
+
+```ruby
+include Spec::Support::Helpers::ModalHelpers
+
+accept_gl_confirm('Are you sure you want to delete this user?', button_text: 'Delete') do
+  click_button 'Delete user'
+end
+```
+
 ##### Other useful methods
 
 After you retrieve an element using a [finder method](#finders), you can invoke a number of
@@ -588,6 +642,11 @@ should either:
 It takes around one second to load tests that are using `fast_spec_helper`
 instead of 30+ seconds in case of a regular `spec_helper`.
 
+WARNING:
+To verify that code and its specs are well-isolated from Rails, run the spec
+individually via `bin/rspec`. Don't use `bin/spring rspec` as it loads
+`spec_helper` automatically.
+
 ### `subject` and `let` variables
 
 The GitLab RSpec suite has made extensive use of `let`(along with its strict, non-lazy
@@ -661,6 +720,12 @@ let_it_be_with_refind(:project) { create(:project) }
 let_it_be(:project, refind: true) { create(:project) }
 ```
 
+Note that `let_it_be` cannot be used with factories that has stubs, such as `allow`.
+The reason is that `let_it_be` happens in a `before(:all)` block, and RSpec does not
+allow stubs in `before(:all)`.
+See this [issue](https://gitlab.com/gitlab-org/gitlab/-/issues/340487) for more details.
+To resolve, use `let`, or change the factory to not use stubs.
+
 ### Time-sensitive tests
 
 [`ActiveSupport::Testing::TimeHelpers`](https://api.rubyonrails.org/v6.0.3.1/classes/ActiveSupport/Testing/TimeHelpers.html)
@@ -676,6 +741,42 @@ it 'is overdue' do
   travel_to(3.days.from_now) do
     expect(issue).to be_overdue
   end
+end
+```
+
+#### RSpec helpers
+
+You can use the `:freeze_time` and `:time_travel_to` RSpec metadata tag helpers to help reduce the amount of
+boilerplate code needed to wrap entire specs with the [`ActiveSupport::Testing::TimeHelpers`](https://api.rubyonrails.org/v6.0.3.1/classes/ActiveSupport/Testing/TimeHelpers.html)
+methods.
+
+```ruby
+describe 'specs which require time to be frozen', :freeze_time do
+  it 'freezes time' do
+    right_now = Time.now
+
+    expect(Time.now).to eq(right_now)
+  end
+end
+
+describe 'specs which require time to be frozen to a specific date and/or time', time_travel_to: '2020-02-02 10:30:45 -0700' do
+  it 'freezes time to the specified date and time' do
+    expect(Time.now).to eq(Time.new(2020, 2, 2, 17, 30, 45, '+00:00'))
+  end
+end
+```
+
+[Under the hood](https://gitlab.com/gitlab-org/gitlab/-/blob/master/spec/support/time_travel.rb), these helpers use the `around(:each)` hook and the block syntax of the
+[`ActiveSupport::Testing::TimeHelpers`](https://api.rubyonrails.org/v6.0.3.1/classes/ActiveSupport/Testing/TimeHelpers.html)
+methods:
+
+```ruby
+around(:each) do |example|
+  freeze_time { example.run }
+end
+
+around(:each) do |example|
+  travel_to(date_or_time) { example.run }
 end
 ```
 
@@ -868,7 +969,7 @@ creates and deletes indices between examples to ensure a clean index, so that th
 for polluting the tests with nonessential data.
 Most tests for Elasticsearch logic relate to:
 
-- Creating data in Postgres and waiting for it to be indexed in Elasticsearch.
+- Creating data in PostgreSQL and waiting for it to be indexed in Elasticsearch.
 - Searching for that data.
 - Ensuring that the test gives the expected result.
 
@@ -884,7 +985,7 @@ You do NOT need to add `:clean_gitlab_redis_shared_state` manually.
 
 Specs using Elasticsearch require that you:
 
-- Create data in Postgres and then index it into Elasticsearch.
+- Create data in PostgreSQL and then index it into Elasticsearch.
 - Enable Application Settings for Elasticsearch (which is disabled by default).
 
 To do so, use:
@@ -898,7 +999,7 @@ end
 Additionally, you can use the `ensure_elasticsearch_index!` method to overcome the asynchronous nature of Elasticsearch.
 It uses the [Elasticsearch Refresh API](https://www.elastic.co/guide/en/elasticsearch/reference/current/indices-refresh.html#refresh-api-desc)
 to make sure all operations performed on an index since the last refresh are available for search. This method is typically
-called after loading data into Postgres to ensure the data is indexed and searchable.
+called after loading data into PostgreSQL to ensure the data is indexed and searchable.
 
 #### Test Snowplow events
 
@@ -1205,6 +1306,8 @@ GitLab uses [factory_bot](https://github.com/thoughtbot/factory_bot) as a test f
 - Factories don't have to be limited to `ActiveRecord` objects.
   [See example](https://gitlab.com/gitlab-org/gitlab-foss/commit/0b8cefd3b2385a21cfed779bd659978c0402766d).
 - Factories and their traits should produce valid objects that are [verified by specs](https://gitlab.com/gitlab-org/gitlab/-/blob/master/spec/factories_spec.rb).
+- Avoid the use of [`skip_callback`](https://api.rubyonrails.org/classes/ActiveSupport/Callbacks/ClassMethods.html#method-i-skip_callback) in factories.
+  See [issue #247865](https://gitlab.com/gitlab-org/gitlab/-/issues/247865) for details.
 
 ### Fixtures
 

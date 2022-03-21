@@ -1,12 +1,11 @@
 import { GlLink, GlIcon } from '@gitlab/ui';
 import { mount } from '@vue/test-utils';
 import { cloneDeep } from 'lodash';
-import { getJSONFixture } from 'helpers/fixtures';
+import { nextTick } from 'vue';
+import originalRelease from 'test_fixtures/api/releases/release.json';
 import { trimText } from 'helpers/text_helper';
 import { convertObjectPropsToCamelCase } from '~/lib/utils/common_utils';
 import ReleaseBlockFooter from '~/releases/components/release_block_footer.vue';
-
-const originalRelease = getJSONFixture('api/releases/release.json');
 
 // TODO: Encapsulate date helpers https://gitlab.com/gitlab-org/gitlab/-/issues/320883
 const MONTHS_IN_MS = 1000 * 60 * 60 * 24 * 31;
@@ -16,7 +15,7 @@ describe('Release block footer', () => {
   let wrapper;
   let release;
 
-  const factory = (props = {}) => {
+  const factory = async (props = {}) => {
     wrapper = mount(ReleaseBlockFooter, {
       propsData: {
         ...convertObjectPropsToCamelCase(release, { deep: true }),
@@ -24,7 +23,7 @@ describe('Release block footer', () => {
       },
     });
 
-    return wrapper.vm.$nextTick();
+    await nextTick();
   };
 
   beforeEach(() => {

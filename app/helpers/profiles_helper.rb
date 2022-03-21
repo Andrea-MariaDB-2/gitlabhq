@@ -12,10 +12,6 @@ module ProfilesHelper
     ]
   end
 
-  def selected_commit_email(user)
-    user.read_attribute(:commit_email) || user.commit_email
-  end
-
   def attribute_provider_label(attribute)
     user_synced_attributes_metadata = current_user.user_synced_attributes_metadata
     if user_synced_attributes_metadata&.synced?(attribute)
@@ -64,6 +60,11 @@ module ProfilesHelper
   # Overridden in EE::ProfilesHelper#ssh_key_expires_field_description
   def ssh_key_expires_field_description
     s_('Profiles|Key can still be used after expiration.')
+  end
+
+  # Overridden in EE::ProfilesHelper#ssh_key_expiration_policy_enabled?
+  def ssh_key_expiration_policy_enabled?
+    false
   end
 end
 

@@ -1,6 +1,6 @@
 ---
 stage: Monitor
-group: Monitor
+group: Respond
 info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
 ---
 
@@ -8,7 +8,7 @@ info: To determine the technical writer assigned to the Stage/Group associated w
 
 To enable the GitLab Prometheus metrics:
 
-1. Log in to GitLab as a user with Administrator [role](../../../user/permissions.md).
+1. Log in to GitLab as a user with administrator access.
 1. On the top bar, select **Menu > Admin**.
 1. On the left sidebar, select **Settings > Metrics and profiling**.
 1. Find the **Metrics - Prometheus** section, and select **Add link to Prometheus**.
@@ -22,10 +22,8 @@ GitLab monitors its own internal service metrics, and makes them available at th
 `/-/metrics` endpoint. Unlike other [Prometheus](https://prometheus.io) exporters, to access
 the metrics, the client IP address must be [explicitly allowed](../ip_whitelist.md).
 
-For [Omnibus GitLab](https://docs.gitlab.com/omnibus/) and Chart installations,
-these metrics are enabled and collected as of
-[GitLab 9.4](https://gitlab.com/gitlab-org/omnibus-gitlab/-/merge_requests/1702).
-For source installations, these metrics must be enabled
+These metrics are enabled and collected for [Omnibus GitLab](https://docs.gitlab.com/omnibus/)
+and Chart installations. For source installations, these metrics must be enabled
 manually and collected by a Prometheus server.
 
 For enabling and viewing metrics from Sidekiq nodes, see [Sidekiq metrics](#sidekiq-metrics).
@@ -41,6 +39,7 @@ The following metrics are available:
 | `gitlab_cache_misses_total`                                      | Counter     | 10.2    | Cache read miss                                                                                                       | `controller`, `action`                                    |
 | `gitlab_cache_operation_duration_seconds`                        | Histogram   | 10.2    | Cache access time                                                                                                     |                                                           |
 | `gitlab_cache_operations_total`                                  | Counter     | 12.2    | Cache operations by controller or action                                                                              | `controller`, `action`, `operation`                       |
+| `gitlab_ci_pipeline_builder_scoped_variables_duration`           | Histogram   | 14.5   | Time in seconds it takes to create the scoped variables for a CI/CD job
 | `gitlab_ci_pipeline_creation_duration_seconds`                   | Histogram   | 13.0    | Time in seconds it takes to create a CI/CD pipeline                                                                   |                                                           |
 | `gitlab_ci_pipeline_size_builds`                                 | Histogram   | 13.1    | Total number of builds within a pipeline grouped by a pipeline source                                                 | `source`                                                  |
 | `job_waiter_started_total`                                       | Counter     | 12.9    | Number of batches of jobs started where a web request is waiting for the jobs to complete                             | `worker`                                                  |
@@ -49,6 +48,7 @@ The following metrics are available:
 | `gitlab_database_transaction_seconds`                            | Histogram   | 12.1    | Time spent in database transactions, in seconds                                                                       |                                                           |
 | `gitlab_method_call_duration_seconds`                            | Histogram   | 10.2    | Method calls real duration                                                                                            | `controller`, `action`, `module`, `method`                |
 | `gitlab_page_out_of_bounds`                                      | Counter     | 12.8    | Counter for the PageLimiter pagination limit being hit                                                                | `controller`, `action`, `bot`                             |
+| `gitlab_rails_boot_time_seconds`                                 | Gauge       | 14.8    | Time elapsed for Rails primary process to finish startup                                               |                                                           |
 | `gitlab_rails_queue_duration_seconds`                            | Histogram   | 9.4     | Measures latency between GitLab Workhorse forwarding a request to Rails                                               |                                                           |
 | `gitlab_sql_duration_seconds`                                    | Histogram   | 10.2    | SQL execution time, excluding `SCHEMA` operations and `BEGIN` / `COMMIT`                                              |                                                           |
 | `gitlab_sql_<role>_duration_seconds`                             | Histogram   | 13.10   | SQL execution time, excluding `SCHEMA` operations and `BEGIN` / `COMMIT`, grouped by database roles (primary/replica) |                                                           |
@@ -88,7 +88,6 @@ The following metrics are available:
 | `gitlab_transaction_event_stuck_import_jobs_total`               | Counter     | 9.4     | Count of stuck import jobs                                                                                            | `projects_without_jid_count`, `projects_with_jid_count`   |
 | `gitlab_transaction_event_update_build_total`                    | Counter     | 9.4     | Counter for update build for API `/jobs/request/:id`                                                                  |                                                           |
 | `gitlab_transaction_new_redis_connections_total`                 | Counter     | 9.4     | Counter for new Redis connections                                                                                     |                                                           |
-| `gitlab_transaction_queue_duration_total`                        | Counter     | 9.4     | Duration jobs were enqueued before processing                                                                         |                                                           |
 | `gitlab_transaction_rails_queue_duration_total`                  | Counter     | 9.4     | Measures latency between GitLab Workhorse forwarding a request to Rails                                               | `controller`, `action`                                    |
 | `gitlab_transaction_view_duration_total`                         | Counter     | 9.4     | Duration for views                                                                                                    | `controller`, `action`, `view`                            |
 | `gitlab_view_rendering_duration_seconds`                         | Histogram   | 10.2    | Duration for views (histogram)                                                                                        | `controller`, `action`, `view`                            |
@@ -106,7 +105,7 @@ The following metrics are available:
 | `pipelines_created_total`                                        | Counter     | 9.4     | Counter of pipelines created                                                                                          |                                                           |
 | `rack_uncaught_errors_total`                                     | Counter     | 9.4     | Rack connections handling uncaught errors count                                                                       |                                                           |
 | `user_session_logins_total`                                      | Counter     | 9.4     | Counter of how many users have logged in since GitLab was started or restarted                                        |                                                           |
-| `upload_file_does_not_exist`                                     | Counter     | 10.7    | Number of times an upload record could not find its file. Made available in all tiers in GitLab 11.5.                 |                                                           |
+| `upload_file_does_not_exist`                                     | Counter     | 10.7    | Number of times an upload record could not find its file. |                                                           |
 | `failed_login_captcha_total`                                     | Gauge       | 11.0    | Counter of failed CAPTCHA attempts during login                                                                       |                                                           |
 | `successful_login_captcha_total`                                 | Gauge       | 11.0    | Counter of successful CAPTCHA attempts during login                                                                   |                                                           |
 | `auto_devops_pipelines_completed_total`                          | Counter     | 12.7    | Counter of completed Auto DevOps pipelines, labeled by status                                                         |                                                           |
@@ -119,12 +118,15 @@ The following metrics are available:
 | `action_cable_pool_largest_size`                                 | Gauge       | 13.4    | Largest number of worker threads observed so far in ActionCable thread pool                                           | `server_mode`                                             |
 | `action_cable_pool_pending_tasks`                                | Gauge       | 13.4    | Number of tasks waiting to be executed in ActionCable thread pool                                                     | `server_mode`                                             |
 | `action_cable_pool_tasks_total`                                  | Gauge       | 13.4    | Total number of tasks executed in ActionCable thread pool                                                             | `server_mode`                                             |
+| `gitlab_ci_trace_operations_total`                               | Counter     | 13.4    | Total amount of different operations on a build trace                                                                 | `operation`                                               |
+| `gitlab_ci_trace_bytes_total`                                    | Counter     | 13.4    | Total amount of build trace bytes transferred                                                                         |                                                           |
 | `action_cable_single_client_transmissions_total`                 | Counter     | 13.10   | The number of ActionCable messages transmitted to any client in any channel                                           | `server_mode`                                             |
 | `action_cable_subscription_confirmations_total`                  | Counter     | 13.10   | The number of ActionCable subscriptions from clients confirmed                                                        | `server_mode`                                             |
 | `action_cable_subscription_rejections_total`                     | Counter     | 13.10   | The number of ActionCable subscriptions from clients rejected                                                         | `server_mode`                                             |
-| `action_cable_transmitted_bytes`                | Histogram     | 14.1   | Message size, in bytes, transmitted over action cable                                           | `operation`, `channel` |
+| `action_cable_transmitted_bytes`                                 | Histogram   | 14.1    | Message size, in bytes, transmitted over action cable                                                                 | `operation`, `channel`                                    |
 | `gitlab_issuable_fast_count_by_state_total`                      | Counter     | 13.5    | Total number of row count operations on issue/merge request list pages                                                |                                                           |
 | `gitlab_issuable_fast_count_by_state_failures_total`             | Counter     | 13.5    | Number of soft-failed row count operations on issue/merge request list pages                                          |                                                           |
+| `gitlab_ci_trace_finalize_duration_seconds`                      | Histogram   | 13.6    | Duration of build trace chunks migration to object storage                                                            |                                                           |
 | `gitlab_external_http_total`                                     | Counter     | 13.8    | Total number of HTTP calls to external systems                                                                        | `controller`, `action`                                    |
 | `gitlab_external_http_duration_seconds`                          | Counter     | 13.8    | Duration in seconds spent on each HTTP call to external systems                                                       |                                                           |
 | `gitlab_external_http_exception_total`                           | Counter     | 13.8    | Total number of exceptions raised when making external HTTP calls                                                     |                                                           |
@@ -132,15 +134,15 @@ The following metrics are available:
 | `pipeline_graph_link_calculation_duration_seconds`               | Histogram   | 13.9    | Total time spent calculating links, in seconds                                                                        |                                                           |
 | `pipeline_graph_links_total`                                     | Histogram   | 13.9    | Number of links per graph                                                                                             |                                                           |
 | `pipeline_graph_links_per_job_ratio`                             | Histogram   | 13.9    | Ratio of links to job per graph                                                                                       |                                                           |
-| `gitlab_ci_pipeline_security_orchestration_policy_processing_duration_seconds` | Histogram   | 13.12    | Time in seconds it takes to process Security Policies in CI/CD pipeline                                                                    |                                                           |
-| `gitlab_ci_difference_live_vs_actual_minutes`                    | Histogram   | 13.12    | Difference between CI minute consumption counted while jobs were running (live) vs when jobs are complete (actual). Used to enforce CI minute consumption limits on long running jobs. | `plan` |
-| `gitlab_spamcheck_request_duration_seconds`                      | Histogram   | 13.12   | The duration for requests between Rails and the anti-spam engine                                                        |                                                           |
+| `gitlab_ci_pipeline_security_orchestration_policy_processing_duration_seconds` | Histogram   | 13.12    | Time in seconds it takes to process Security Policies in CI/CD pipeline                                |                                                           |
+| `gitlab_spamcheck_request_duration_seconds`                      | Histogram   | 13.12   | The duration for requests between Rails and the anti-spam engine                                                      |                                                           |
 | `service_desk_thank_you_email`                                   | Counter     | 14.0    | Total number of email responses to new service desk emails                                                            |                                                           |
 | `service_desk_new_note_email`                                    | Counter     | 14.0    | Total number of email notifications on new service desk comment                                                       |                                                           |
 | `email_receiver_error`                                           | Counter     | 14.1    | Total number of errors when processing incoming emails                                                                |                                                           |
 | `gitlab_snowplow_events_total`                                   | Counter     | 14.1    | Total number of GitLab Snowplow product intelligence events emitted                                                   |                                                           |
 | `gitlab_snowplow_failed_events_total`                            | Counter     | 14.1    | Total number of GitLab Snowplow product intelligence events emission failures                                         |                                                           |
 | `gitlab_snowplow_successful_events_total`                        | Counter     | 14.1    | Total number of GitLab Snowplow product intelligence events emission successes                                        |                                                           |
+| `gitlab_ci_build_trace_errors_total`                             | Counter     | 14.4    | Total amount of different error types on a build trace                                                                | `error_reason`                                            |
 
 ## Metrics controlled by a feature flag
 
@@ -183,9 +185,16 @@ configuration option in `gitlab.yml`. These metrics are served from the
 | `geo_repositories`                             | Gauge   | 10.2  | Total number of repositories available on primary | `url` |
 | `geo_repositories_synced`                      | Gauge   | 10.2  | Number of repositories synced on secondary | `url` |
 | `geo_repositories_failed`                      | Gauge   | 10.2  | Number of repositories failed to sync on secondary | `url` |
-| `geo_lfs_objects`                              | Gauge   | 10.2  | Total number of LFS objects available on primary | `url` |
-| `geo_lfs_objects_synced`                       | Gauge   | 10.2  | Number of LFS objects synced on secondary | `url` |
-| `geo_lfs_objects_failed`                       | Gauge   | 10.2  | Number of LFS objects failed to sync on secondary | `url` |
+| `geo_lfs_objects`                              | Gauge   | 10.2 | Number of LFS objects on primary | `url` |
+| `geo_lfs_objects_checksummed`                  | Gauge   | 14.6  | Number of LFS objects checksummed successfully on primary | `url` |
+| `geo_lfs_objects_checksum_failed`              | Gauge   | 14.6  | Number of LFS objects failed to calculate the checksum on primary | `url` |
+| `geo_lfs_objects_checksum_total`               | Gauge   | 14.6  | Number of LFS objects tried to checksum on primary | `url` |
+| `geo_lfs_objects_synced`                       | Gauge   | 10.2  | Number of syncable LFS objects synced on secondary | `url` |
+| `geo_lfs_objects_failed`                       | Gauge   | 10.2  | Number of syncable LFS objects failed to sync on secondary | `url` |
+| `geo_lfs_objects_registry`                     | Gauge   | 14.6  | Number of LFS objects in the registry | `url` |
+| `geo_lfs_objects_verified`                     | Gauge   | 14.6  | Number of LFS objects verified on secondary | `url` |
+| `geo_lfs_objects_verification_failed`          | Gauge   | 14.6 | Number of LFS objects' verifications failed on secondary | `url` |
+| `geo_lfs_objects_verification_total`           | Gauge   | 14.6  | Number of LFS objects' verifications tried on secondary | `url` |LFS objects failed to sync on secondary | `url` |
 | `geo_attachments`                              | Gauge   | 10.2  | Total number of file attachments available on primary | `url` |
 | `geo_attachments_synced`                       | Gauge   | 10.2  | Number of attachments synced on secondary | `url` |
 | `geo_attachments_failed`                       | Gauge   | 10.2  | Number of attachments failed to sync on secondary | `url` |
@@ -195,9 +204,7 @@ configuration option in `gitlab.yml`. These metrics are served from the
 | `geo_cursor_last_event_timestamp`              | Gauge   | 10.2  | Last UNIX timestamp of the event log processed by the secondary | `url` |
 | `geo_status_failed_total`                      | Counter | 10.2  | Number of times retrieving the status from the Geo Node failed | `url` |
 | `geo_last_successful_status_check_timestamp`   | Gauge   | 10.2  | Last timestamp when the status was successfully updated | `url` |
-| `geo_lfs_objects_synced_missing_on_primary`    | Gauge   | 10.7  | Number of LFS objects marked as synced due to the file missing on the primary | `url` |
 | `geo_job_artifacts_synced_missing_on_primary`  | Gauge   | 10.7  | Number of job artifacts marked as synced due to the file missing on the primary | `url` |
-| `geo_attachments_synced_missing_on_primary`    | Gauge   | 10.7  | Number of attachments marked as synced due to the file missing on the primary | `url` |
 | `geo_repositories_checksummed`                 | Gauge   | 10.7  | Number of repositories checksummed on primary | `url` |
 | `geo_repositories_checksum_failed`             | Gauge   | 10.7  | Number of repositories failed to calculate the checksum on primary | `url` |
 | `geo_wikis_checksummed`                        | Gauge   | 10.7  | Number of wikis checksummed on primary | `url` |
@@ -253,21 +260,43 @@ configuration option in `gitlab.yml`. These metrics are served from the
 | `geo_group_wiki_repositories_failed`           | Gauge   | 13.10 | Number of syncable group wikis failed on secondary | `url` |
 | `geo_group_wiki_repositories_registry`         | Gauge   | 13.10 | Number of syncable group wikis in the registry | `url` |
 | `geo_pages_deployments`                        | Gauge   | 14.3  | Number of pages deployments on primary | `url` |
-| `geo_pages_deployments_checksum_total`         | Gauge   | 14.3  | Number of pages deployments tried to checksum on primary | `url` |
-| `geo_pages_deployments_checksummed`            | Gauge   | 14.3  | Number of pages deployments successfully checksummed on primary | `url` |
-| `geo_pages_deployments_checksum_failed`        | Gauge   | 14.3  | Number of pages deployments failed to calculate the checksum on primary | `url` |
+| `geo_pages_deployments_checksum_total`         | Gauge   | 14.6  | Number of pages deployments tried to checksum on primary | `url` |
+| `geo_pages_deployments_checksummed`            | Gauge   | 14.6  | Number of pages deployments successfully checksummed on primary | `url` |
+| `geo_pages_deployments_checksum_failed`        | Gauge   | 14.6  | Number of pages deployments failed to calculate the checksum on primary | `url` |
 | `geo_pages_deployments_synced`                 | Gauge   | 14.3  | Number of syncable pages deployments synced on secondary | `url` |
 | `geo_pages_deployments_failed`                 | Gauge   | 14.3  | Number of syncable pages deployments failed to sync on secondary | `url` |
 | `geo_pages_deployments_registry`               | Gauge   | 14.3  | Number of pages deployments in the registry | `url` |
-| `geo_pages_deployments_verification_total`     | Gauge   | 14.3  | Number of pages deployments verifications tried on secondary | `url` |
-| `geo_pages_deployments_verified`               | Gauge   | 14.3  | Number of pages deployments verified on secondary | `url` |
-| `geo_pages_deployments_verification_failed`    | Gauge   | 14.3  | Number of pages deployments verifications failed on secondary | `url` |
+| `geo_pages_deployments_verification_total`     | Gauge   | 14.6  | Number of pages deployments verifications tried on secondary | `url` |
+| `geo_pages_deployments_verified`               | Gauge   | 14.6  | Number of pages deployments verified on secondary | `url` |
+| `geo_pages_deployments_verification_failed`    | Gauge   | 14.6  | Number of pages deployments verifications failed on secondary | `url` |
+| `geo_job_artifacts`                            | Gauge   | 14.8  | Number of job artifacts on primary | `url` |
+| `geo_job_artifacts_checksum_total`             | Gauge   | 14.8  | Number of job artifacts tried to checksum on primary | `url` |
+| `geo_job_artifacts_checksummed`                | Gauge   | 14.8  | Number of job artifacts successfully checksummed on primary | `url` |
+| `geo_job_artifacts_checksum_failed`            | Gauge   | 14.8  | Number of job artifacts failed to calculate the checksum on primary | `url` |
+| `geo_job_artifacts_synced`                     | Gauge   | 14.8  | Number of syncable job artifacts synced on secondary | `url` |
+| `geo_job_artifacts_failed`                     | Gauge   | 14.8  | Number of syncable job artifacts failed to sync on secondary | `url` |
+| `geo_job_artifacts_registry`                   | Gauge   | 14.8  | Number of job artifacts in the registry | `url` |
+| `geo_job_artifacts_verification_total`         | Gauge   | 14.8  | Number of job artifacts verifications tried on secondary | `url` |
+| `geo_job_artifacts_verified`                   | Gauge   | 14.8  | Number of job artifacts verified on secondary | `url` |
+| `geo_job_artifacts_verification_failed`        | Gauge   | 14.8  | Number of job artifacts verifications failed on secondary | `url` |
 | `limited_capacity_worker_running_jobs`         | Gauge   | 13.5  | Number of running jobs | `worker` |
 | `limited_capacity_worker_max_running_jobs`     | Gauge   | 13.5  | Maximum number of running jobs | `worker` |
 | `limited_capacity_worker_remaining_work_count` | Gauge   | 13.5  | Number of jobs waiting to be enqueued | `worker` |
 | `destroyed_job_artifacts_count_total`          | Counter | 13.6  | Number of destroyed expired job artifacts | |
 | `destroyed_pipeline_artifacts_count_total`     | Counter | 13.8  | Number of destroyed expired pipeline artifacts | |
 | `gitlab_optimistic_locking_retries`            | Histogram | 13.10  | Number of retry attempts to execute optimistic retry lock | |
+| `geo_uploads`                      | Gauge   | 14.1  | Number of uploads on primary | `url` |
+| `geo_uploads_synced`               | Gauge   | 14.1  | Number of uploads synced on secondary | `url` |
+| `geo_uploads_failed`               | Gauge   | 14.1  | Number of syncable uploads failed to sync on secondary | `url` |
+| `geo_uploads_registry`             | Gauge   | 14.1  | Number of uploads in the registry | `url` |
+| `geo_uploads_checksum_total`       | Gauge   | 14.6 | Number of uploads tried to checksum on primary | `url` |
+| `geo_uploads_checksummed`          | Gauge   | 14.6  | Number of uploads successfully checksummed on primary | `url` |
+| `geo_uploads_checksum_failed`      | Gauge   | 14.6  | Number of uploads failed to calculate the checksum on primary | `url` |
+| `geo_uploads_verification_total`   | Gauge   | 14.6 | Number of uploads verifications tried on secondary | `url` |
+| `geo_uploads_verified`             | Gauge   | 14.6 | Number of uploads verified on secondary | `url` |
+| `geo_uploads_verification_failed`  | Gauge   | 14.6 | Number of uploads verifications failed on secondary | `url` |
+| `gitlab_sli:rails_request_apdex:total` | Counter | 14.4 | The number of request-apdex measurements, [more information the development documentation](../../../development/application_slis/rails_request_apdex.md) | `endpoint_id`, `feature_category`, `request_urgency` |
+| `gitlab_sli:rails_request_apdex:success_total` | Counter | 14.4 | The number of successful requests that met the target duration for their urgency. Divide by `gitlab_sli:rails_requests_apdex:total` to get a success ratio | `endpoint_id`, `feature_category`, `request_urgency` |
 
 ## Database load balancing metrics **(PREMIUM SELF)**
 

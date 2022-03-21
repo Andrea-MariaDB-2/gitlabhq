@@ -4,8 +4,8 @@ import { getExperimentData } from '~/experimentation/utils';
 import {
   ACTION_ATTR_SELECTOR,
   LOAD_ACTION_ATTR_SELECTOR,
-  DEPRECATED_EVENT_ATTR_SELECTOR,
-  DEPRECATED_LOAD_EVENT_ATTR_SELECTOR,
+  URLS_CACHE_STORAGE_KEY,
+  REFERRER_TTL,
 } from './constants';
 
 export const addExperimentContext = (opts) => {
@@ -25,7 +25,6 @@ export const addExperimentContext = (opts) => {
 export const createEventPayload = (el, { suffix = '' } = {}) => {
   const {
     trackAction,
-    trackEvent,
     trackValue,
     trackExtra,
     trackExperiment,
@@ -34,7 +33,7 @@ export const createEventPayload = (el, { suffix = '' } = {}) => {
     trackProperty,
   } = el?.dataset || {};
 
-  const action = (trackAction || trackEvent) + (suffix || '');
+  const action = `${trackAction}${suffix || ''}`;
   let value = trackValue || el.value || undefined;
 
   if (el.type === 'checkbox' && !el.checked) {
@@ -72,8 +71,7 @@ export const createEventPayload = (el, { suffix = '' } = {}) => {
 
 export const eventHandler = (e, func, opts = {}) => {
   const actionSelector = `${ACTION_ATTR_SELECTOR}:not(${LOAD_ACTION_ATTR_SELECTOR})`;
-  const deprecatedEventSelector = `${DEPRECATED_EVENT_ATTR_SELECTOR}:not(${DEPRECATED_LOAD_EVENT_ATTR_SELECTOR})`;
-  const el = e.target.closest(`${actionSelector}, ${deprecatedEventSelector}`);
+  const el = e.target.closest(actionSelector);
 
   if (!el) {
     return;
@@ -99,4 +97,26 @@ export const renameKey = (o, oldKey, newKey) => {
   delete Object.assign(ret, o, { [newKey]: o[oldKey] })[oldKey];
 
   return ret;
+};
+
+export const filterOldReferrersCacheEntries = (cache) => {
+  const now = Date.now();
+
+  return cache.filter((entry) => entry.timestamp && entry.timestamp > now - REFERRER_TTL);
+};
+
+export const getReferrersCache = () => {
+  try {
+    const referrers = JSON.parse(window.localStorage.getItem(URLS_CACHE_STORAGE_KEY) || '[]');
+
+    return filterOldReferrersCacheEntries(referrers);
+  } catch {
+    return [];
+  }
+};
+
+export const addReferrersCacheEntry = (cache, entry) => {
+  const referrers = JSON.stringify([{ ...entry, timestamp: Date.now() }, ...cache]);
+
+  window.localStorage.setItem(URLS_CACHE_STORAGE_KEY, referrers);
 };

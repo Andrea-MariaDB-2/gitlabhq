@@ -8,6 +8,8 @@ module Gitlab
     class Receiver
       include Gitlab::Utils::StrongMemoize
 
+      RECEIVED_HEADER_REGEX = /for\s+\<(.+)\>/.freeze
+
       def initialize(raw)
         @raw = raw
       end
@@ -37,11 +39,17 @@ module Gitlab
           delivered_to: delivered_to.map(&:value),
           envelope_to: envelope_to.map(&:value),
           x_envelope_to: x_envelope_to.map(&:value),
+          # reduced down to what looks like an email in the received headers
+          received_recipients: recipients_from_received_headers,
           meta: {
             client_id: "email/#{mail.from.first}",
             project: handler&.project&.full_path
           }
         }
+      end
+
+      def mail
+        strong_memoize(:mail) { build_mail }
       end
 
       private
@@ -52,10 +60,6 @@ module Gitlab
 
       def find_handler
         Handler.for(mail, mail_key)
-      end
-
-      def mail
-        strong_memoize(:mail) { build_mail }
       end
 
       def build_mail
@@ -73,7 +77,7 @@ module Gitlab
 
       def key_from_to_header
         mail.to.find do |address|
-          key = Gitlab::IncomingEmail.key_from_address(address)
+          key = email_class.key_from_address(address)
           break key if key
         end
       end
@@ -82,7 +86,8 @@ module Gitlab
         find_key_from_references ||
           find_key_from_delivered_to_header ||
           find_key_from_envelope_to_header ||
-          find_key_from_x_envelope_to_header
+          find_key_from_x_envelope_to_header ||
+          find_first_key_from_received_headers
       end
 
       def ensure_references_array(references)
@@ -100,7 +105,7 @@ module Gitlab
 
       def find_key_from_references
         ensure_references_array(mail.references).find do |mail_id|
-          key = Gitlab::IncomingEmail.key_from_fallback_message_id(mail_id)
+          key = email_class.key_from_fallback_message_id(mail_id)
           break key if key
         end
       end
@@ -117,24 +122,43 @@ module Gitlab
         Array(mail[:x_envelope_to])
       end
 
+      def received
+        Array(mail[:received])
+      end
+
       def find_key_from_delivered_to_header
         delivered_to.find do |header|
-          key = Gitlab::IncomingEmail.key_from_address(header.value)
+          key = email_class.key_from_address(header.value)
           break key if key
         end
       end
 
       def find_key_from_envelope_to_header
         envelope_to.find do |header|
-          key = Gitlab::IncomingEmail.key_from_address(header.value)
+          key = email_class.key_from_address(header.value)
           break key if key
         end
       end
 
       def find_key_from_x_envelope_to_header
         x_envelope_to.find do |header|
-          key = Gitlab::IncomingEmail.key_from_address(header.value)
+          key = email_class.key_from_address(header.value)
           break key if key
+        end
+      end
+
+      def find_first_key_from_received_headers
+        return unless ::Feature.enabled?(:use_received_header_for_incoming_emails, default_enabled: :yaml)
+
+        recipients_from_received_headers.find do |email|
+          key = email_class.key_from_address(email)
+          break key if key
+        end
+      end
+
+      def recipients_from_received_headers
+        strong_memoize :emails_from_received_headers do
+          received.map { |header| header.value[RECEIVED_HEADER_REGEX, 1] }.compact
         end
       end
 
@@ -157,6 +181,10 @@ module Gitlab
         autoreply = mail.header['X-Autoreply']&.value
 
         autoreply && autoreply == 'yes'
+      end
+
+      def email_class
+        Gitlab::IncomingEmail
       end
     end
   end

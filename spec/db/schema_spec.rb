@@ -18,21 +18,24 @@ RSpec.describe 'Database schema' do
     approvals: %w[user_id],
     approver_groups: %w[target_id],
     approvers: %w[target_id user_id],
+    analytics_cycle_analytics_aggregations: %w[last_full_run_issues_id last_full_run_merge_requests_id last_incremental_issues_id last_incremental_merge_requests_id],
+    analytics_cycle_analytics_merge_request_stage_events: %w[author_id group_id merge_request_id milestone_id project_id stage_event_hash_id state_id],
+    analytics_cycle_analytics_issue_stage_events: %w[author_id group_id issue_id milestone_id project_id stage_event_hash_id state_id],
     audit_events: %w[author_id entity_id target_id],
     award_emoji: %w[awardable_id user_id],
     aws_roles: %w[role_external_id],
     boards: %w[milestone_id iteration_id],
     chat_names: %w[chat_id team_id user_id],
     chat_teams: %w[team_id],
-    ci_builds: %w[erased_by_id runner_id trigger_request_id user_id],
+    ci_builds: %w[erased_by_id trigger_request_id],
     ci_namespace_monthly_usages: %w[namespace_id],
-    ci_pipelines: %w[user_id],
     ci_runner_projects: %w[runner_id],
     ci_trigger_requests: %w[commit_id],
     cluster_providers_aws: %w[security_group_id vpc_id access_key_id],
     cluster_providers_gcp: %w[gcp_project_id operation_id],
     compliance_management_frameworks: %w[group_id],
     commit_user_mentions: %w[commit_id],
+    dep_ci_build_trace_sections: %w[build_id],
     deploy_keys_projects: %w[deploy_key_id],
     deployments: %w[deployable_id user_id],
     draft_notes: %w[discussion_id commit_id],
@@ -45,11 +48,11 @@ RSpec.describe 'Database schema' do
     geo_node_statuses: %w[last_event_id cursor_last_event_id],
     geo_nodes: %w[oauth_application_id],
     geo_repository_deleted_events: %w[project_id],
-    geo_upload_deleted_events: %w[upload_id model_id],
     gitlab_subscription_histories: %w[gitlab_subscription_id hosted_plan_id namespace_id],
     identities: %w[user_id],
     import_failures: %w[project_id],
     issues: %w[last_edited_by_id state_id],
+    issue_emails: %w[email_message_id],
     jira_tracker_data: %w[jira_issue_transition_id],
     keys: %w[user_id],
     label_links: %w[target_id],
@@ -63,8 +66,8 @@ RSpec.describe 'Database schema' do
     oauth_access_grants: %w[resource_owner_id application_id],
     oauth_access_tokens: %w[resource_owner_id application_id],
     oauth_applications: %w[owner_id],
-    open_project_tracker_data: %w[closed_status_id],
     product_analytics_events_experimental: %w[event_id txn_id user_id],
+    project_build_artifacts_size_refreshes: %w[last_job_artifact_id],
     project_group_links: %w[group_id],
     project_statistics: %w[namespace_id],
     projects: %w[creator_id ci_id mirror_user_id],
@@ -87,7 +90,8 @@ RSpec.describe 'Database schema' do
     users_star_projects: %w[user_id],
     vulnerability_identifiers: %w[external_id],
     vulnerability_scanners: %w[external_id],
-    security_scans: %w[pipeline_id] # foreign key is not added as ci_pipeline table will be moved into different db soon
+    security_scans: %w[pipeline_id], # foreign key is not added as ci_pipeline table will be moved into different db soon
+    vulnerability_reads: %w[cluster_agent_id]
   }.with_indifferent_access.freeze
 
   context 'for table' do
@@ -96,6 +100,8 @@ RSpec.describe 'Database schema' do
         let(:indexes) { connection.indexes(table) }
         let(:columns) { connection.columns(table) }
         let(:foreign_keys) { connection.foreign_keys(table) }
+        let(:loose_foreign_keys) { Gitlab::Database::LooseForeignKeys.definitions.group_by(&:from_table).fetch(table, []) }
+        let(:all_foreign_keys) { foreign_keys + loose_foreign_keys }
         # take the first column in case we're using a composite primary key
         let(:primary_key_column) { Array(connection.primary_key(table)).first }
 
@@ -108,7 +114,7 @@ RSpec.describe 'Database schema' do
               columns = columns.split(',') if columns.is_a?(String)
               columns.first.chomp
             end
-            foreign_keys_columns = foreign_keys.map(&:column)
+            foreign_keys_columns = all_foreign_keys.map(&:column)
 
             # Add the primary key column to the list of indexed columns because
             # postgres and mysql both automatically create an index on the primary
@@ -123,7 +129,7 @@ RSpec.describe 'Database schema' do
         context 'columns ending with _id' do
           let(:column_names) { columns.map(&:name) }
           let(:column_names_with_id) { column_names.select { |column_name| column_name.ends_with?('_id') } }
-          let(:foreign_keys_columns) { foreign_keys.map(&:column) }
+          let(:foreign_keys_columns) { all_foreign_keys.map(&:column).uniq } # we can have FK and loose FK present at the same time
           let(:ignored_columns) { ignored_fk_columns(table) }
 
           it 'do have the foreign keys' do
@@ -165,7 +171,7 @@ RSpec.describe 'Database schema' do
     'PrometheusMetric' => %w[group],
     'ResourceLabelEvent' => %w[action],
     'User' => %w[layout dashboard project_view],
-    'UserCallout' => %w[feature_name],
+    'Users::Callout' => %w[feature_name],
     'PrometheusAlert' => %w[operator]
   }.freeze
 
@@ -198,12 +204,13 @@ RSpec.describe 'Database schema' do
     "Operations::FeatureFlags::Strategy" => %w[parameters],
     "Packages::Composer::Metadatum" => %w[composer_json],
     "RawUsageData" => %w[payload], # Usage data payload changes often, we cannot use one schema
-    "Releases::Evidence" => %w[summary]
+    "Releases::Evidence" => %w[summary],
+    "Vulnerabilities::Finding::Evidence" => %w[data] # Validation work in progress
   }.freeze
 
   # We are skipping GEO models for now as it adds up complexity
   describe 'for jsonb columns' do
-    it 'uses json schema validator' do
+    it 'uses json schema validator', :eager_load do
       columns_name_with_jsonb.each do |hash|
         next if models_by_table_name[hash["table_name"]].nil?
 

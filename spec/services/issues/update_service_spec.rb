@@ -6,7 +6,8 @@ RSpec.describe Issues::UpdateService, :mailer do
   let_it_be(:user) { create(:user) }
   let_it_be(:user2) { create(:user) }
   let_it_be(:user3) { create(:user) }
-  let_it_be(:group) { create(:group, :public) }
+  let_it_be(:guest) { create(:user) }
+  let_it_be(:group) { create(:group, :public, :crm_enabled) }
   let_it_be(:project, reload: true) { create(:project, :repository, group: group) }
   let_it_be(:label) { create(:label, project: project) }
   let_it_be(:label2) { create(:label, project: project) }
@@ -21,12 +22,15 @@ RSpec.describe Issues::UpdateService, :mailer do
   end
 
   before_all do
-    project.add_maintainer(user)
-    project.add_developer(user2)
-    project.add_developer(user3)
+    group.add_maintainer(user)
+    group.add_developer(user2)
+    group.add_developer(user3)
+    group.add_guest(guest)
   end
 
   describe 'execute' do
+    let_it_be(:contact) { create(:contact, group: group) }
+
     def find_note(starting_with)
       issue.notes.find do |note|
         note && note.note.start_with?(starting_with)
@@ -55,7 +59,8 @@ RSpec.describe Issues::UpdateService, :mailer do
           due_date: Date.tomorrow,
           discussion_locked: true,
           severity: 'low',
-          milestone_id: milestone.id
+          milestone_id: milestone.id,
+          add_contacts: [contact.email]
         }
       end
 
@@ -74,6 +79,7 @@ RSpec.describe Issues::UpdateService, :mailer do
         expect(issue.discussion_locked).to be_truthy
         expect(issue.confidential).to be_falsey
         expect(issue.milestone).to eq milestone
+        expect(issue.issue_customer_relations_contacts.last.contact).to eq contact
       end
 
       it 'updates issue milestone when passing `milestone` param' do
@@ -95,9 +101,7 @@ RSpec.describe Issues::UpdateService, :mailer do
         end
 
         context 'user is a guest' do
-          before do
-            project.add_guest(user)
-          end
+          let(:user) { guest }
 
           it 'does not assign the sentry error' do
             update_issue(opts)
@@ -146,8 +150,11 @@ RSpec.describe Issues::UpdateService, :mailer do
       it 'refreshes the number of open issues when the issue is made confidential', :use_clean_rails_memory_store_caching do
         issue # make sure the issue is created first so our counts are correct.
 
-        expect { update_issue(confidential: true) }
-          .to change { project.open_issues_count }.from(1).to(0)
+        expect do
+          update_issue(confidential: true)
+
+          BatchLoader::Executor.clear_current
+        end.to change { project.open_issues_count }.from(1).to(0)
       end
 
       it 'enqueues ConfidentialIssueWorker when an issue is made confidential' do
@@ -184,17 +191,19 @@ RSpec.describe Issues::UpdateService, :mailer do
             end
           end
 
-          it 'adds a `incident` label if one does not exist' do
-            expect { update_issue(issue_type: 'incident') }.to change(issue.labels, :count).by(1)
-            expect(issue.labels.pluck(:title)).to eq(['incident'])
-          end
-
           it 'creates system note about issue type' do
             update_issue(issue_type: 'incident')
 
             note = find_note('changed issue type to incident')
 
             expect(note).not_to eq(nil)
+          end
+
+          it 'creates an escalation status' do
+            expect { update_issue(issue_type: 'incident') }
+            .to change { issue.reload.incident_management_issuable_escalation_status }
+            .from(nil)
+            .to(a_kind_of(IncidentManagement::IssuableEscalationStatus))
           end
 
           context 'for an issue with multiple labels' do
@@ -208,32 +217,22 @@ RSpec.describe Issues::UpdateService, :mailer do
               expect(issue.labels).to eq([label_1])
             end
           end
-
-          context 'filtering the incident label' do
-            let(:params) { { add_label_ids: [] } }
-
-            before do
-              update_issue(issue_type: 'incident')
-            end
-
-            it 'creates and add a incident label id to add_label_ids' do
-              expect(issue.label_ids).to contain_exactly(label_1.id)
-            end
-          end
         end
 
         context 'from incident to issue' do
           let(:issue) { create(:incident, project: project) }
 
+          it 'changed from an incident to an issue type' do
+            expect { update_issue(issue_type: 'issue') }
+              .to change(issue, :issue_type).from('incident').to('issue')
+              .and(change { issue.work_item_type.base_type }.from('incident').to('issue'))
+          end
+
           context 'for an incident with multiple labels' do
             let(:issue) { create(:incident, project: project, labels: [label_1, label_2]) }
 
-            before do
-              update_issue(issue_type: 'issue')
-            end
-
-            it 'removes an `incident` label if one exists on the incident' do
-              expect(issue.labels).to eq([label_2])
+            it 'does not remove an `incident` label if one exists on the incident' do
+              expect { update_issue(issue_type: 'issue') }.to not_change(issue, :label_ids)
             end
           end
 
@@ -241,23 +240,15 @@ RSpec.describe Issues::UpdateService, :mailer do
             let(:issue) { create(:incident, project: project, labels: [label_1, label_2]) }
             let(:params) { { label_ids: [label_1.id, label_2.id], remove_label_ids: [] } }
 
-            before do
-              update_issue(issue_type: 'issue')
-            end
-
-            it 'adds an incident label id to remove_label_ids for it to be removed' do
-              expect(issue.label_ids).to contain_exactly(label_2.id)
+            it 'does not add an incident label id to remove_label_ids for it to be removed' do
+              expect { update_issue(issue_type: 'issue') }.to not_change(issue, :label_ids)
             end
           end
         end
 
         context 'from issue to restricted issue types' do
           context 'without sufficient permissions' do
-            let(:user) { create(:user) }
-
-            before do
-              project.add_guest(user)
-            end
+            let(:user) { guest }
 
             it 'does nothing to the labels' do
               expect { update_issue(issue_type: 'issue') }.not_to change(issue.labels, :count)
@@ -318,7 +309,7 @@ RSpec.describe Issues::UpdateService, :mailer do
 
         opts[:move_between_ids] = [issue1.id, issue2.id]
 
-        expect(IssueRebalancingWorker).not_to receive(:perform_async)
+        expect(Issues::RebalancingWorker).not_to receive(:perform_async)
 
         update_issue(opts)
         expect(issue.relative_position).to be_between(issue1.relative_position, issue2.relative_position)
@@ -334,7 +325,7 @@ RSpec.describe Issues::UpdateService, :mailer do
 
         opts[:move_between_ids] = [issue1.id, issue2.id]
 
-        expect(IssueRebalancingWorker).to receive(:perform_async).with(nil, nil, project.root_namespace.id)
+        expect(Issues::RebalancingWorker).to receive(:perform_async).with(nil, nil, project.root_namespace.id)
 
         update_issue(opts)
         expect(issue.relative_position).to be_between(issue1.relative_position, issue2.relative_position)
@@ -348,7 +339,7 @@ RSpec.describe Issues::UpdateService, :mailer do
 
         opts[:move_between_ids] = [issue1.id, issue2.id]
 
-        expect(IssueRebalancingWorker).to receive(:perform_async).with(nil, nil, project.root_namespace.id)
+        expect(Issues::RebalancingWorker).to receive(:perform_async).with(nil, nil, project.root_namespace.id)
 
         update_issue(opts)
         expect(issue.relative_position).to be_between(issue1.relative_position, issue2.relative_position)
@@ -362,7 +353,7 @@ RSpec.describe Issues::UpdateService, :mailer do
 
         opts[:move_between_ids] = [issue1.id, issue2.id]
 
-        expect(IssueRebalancingWorker).to receive(:perform_async).with(nil, nil, project.root_namespace.id)
+        expect(Issues::RebalancingWorker).to receive(:perform_async).with(nil, nil, project.root_namespace.id)
 
         update_issue(opts)
         expect(issue.relative_position).to be_between(issue1.relative_position, issue2.relative_position)
@@ -394,7 +385,6 @@ RSpec.describe Issues::UpdateService, :mailer do
           [issue_1, issue_2, issue_3].map(&:save)
 
           opts[:move_between_ids] = [issue_1.id, issue_2.id]
-          opts[:board_group_id] = group.id
 
           described_class.new(project: issue_3.project, current_user: user, params: opts).execute(issue_3)
           expect(issue_2.relative_position).to be_between(issue_1.relative_position, issue_2.relative_position)
@@ -402,12 +392,6 @@ RSpec.describe Issues::UpdateService, :mailer do
       end
 
       context 'when current user cannot admin issues in the project' do
-        let(:guest) { create(:user) }
-
-        before do
-          project.add_guest(guest)
-        end
-
         it 'filters out params that cannot be set without the :admin_issue permission' do
           described_class.new(
             project: project, current_user: guest, params: opts.merge(
@@ -1108,6 +1092,24 @@ RSpec.describe Issues::UpdateService, :mailer do
 
             it_behaves_like 'does not change the severity'
           end
+
+          context 'as guest' do
+            let(:user) { guest }
+
+            it_behaves_like 'does not change the severity'
+
+            context 'and also author' do
+              let(:issue) { create(:incident, project: project, author: user) }
+
+              it_behaves_like 'does not change the severity'
+            end
+
+            context 'and also assignee' do
+              let(:issue) { create(:incident, project: project, assignee_ids: [user.id]) }
+
+              it_behaves_like 'does not change the severity'
+            end
+          end
         end
 
         context 'when severity has been set before' do
@@ -1137,6 +1139,97 @@ RSpec.describe Issues::UpdateService, :mailer do
 
       context 'when issue type is not incident' do
         it_behaves_like 'does not change the severity'
+      end
+    end
+
+    context 'updating escalation status' do
+      let(:opts) { { escalation_status: { status: 'acknowledged' } } }
+      let(:escalation_update_class) { ::IncidentManagement::IssuableEscalationStatuses::AfterUpdateService }
+
+      shared_examples 'updates the escalation status record' do |expected_status, expected_reason = nil|
+        let(:service_double) { instance_double(escalation_update_class) }
+
+        it 'has correct value' do
+          expect(escalation_update_class).to receive(:new).with(issue, user, status_change_reason: expected_reason).and_return(service_double)
+          expect(service_double).to receive(:execute)
+
+          update_issue(opts)
+
+          expect(issue.escalation_status.status_name).to eq(expected_status)
+        end
+
+        it 'triggers webhooks' do
+          expect(project).to receive(:execute_hooks).with(an_instance_of(Hash), :issue_hooks)
+          expect(project).to receive(:execute_integrations).with(an_instance_of(Hash), :issue_hooks)
+
+          update_issue(opts)
+        end
+      end
+
+      shared_examples 'does not change the status record' do
+        it 'retains the original value' do
+          expected_status = issue.escalation_status&.status_name
+
+          update_issue(opts)
+
+          expect(issue.escalation_status&.status_name).to eq(expected_status)
+        end
+
+        it 'does not trigger side-effects' do
+          expect(project).not_to receive(:execute_hooks)
+          expect(project).not_to receive(:execute_integrations)
+
+          update_issue(opts)
+        end
+      end
+
+      context 'when issue is an incident' do
+        let(:issue) { create(:incident, project: project) }
+
+        context 'with an escalation status record' do
+          before do
+            create(:incident_management_issuable_escalation_status, issue: issue)
+          end
+
+          it_behaves_like 'updates the escalation status record', :acknowledged
+
+          context 'with associated alert' do
+            let!(:alert) { create(:alert_management_alert, issue: issue, project: project) }
+
+            it 'syncs the update back to the alert' do
+              update_issue(opts)
+
+              expect(issue.escalation_status.status_name).to eq(:acknowledged)
+              expect(alert.reload.status_name).to eq(:acknowledged)
+            end
+          end
+
+          context 'with a status change reason provided' do
+            let(:opts) { { escalation_status: { status: 'acknowledged', status_change_reason: ' by changing the alert status' } } }
+
+            it_behaves_like 'updates the escalation status record', :acknowledged, ' by changing the alert status'
+          end
+
+          context 'with unsupported status value' do
+            let(:opts) { { escalation_status: { status: 'unsupported-status' } } }
+
+            it_behaves_like 'does not change the status record'
+          end
+
+          context 'with status value defined but unchanged' do
+            let(:opts) { { escalation_status: { status: issue.escalation_status.status_name } } }
+
+            it_behaves_like 'does not change the status record'
+          end
+        end
+
+        context 'without an escalation status record' do
+          it_behaves_like 'does not change the status record'
+        end
+      end
+
+      context 'when issue type is not incident' do
+        it_behaves_like 'does not change the status record'
       end
     end
 
@@ -1223,15 +1316,8 @@ RSpec.describe Issues::UpdateService, :mailer do
     end
 
     context 'when moving an issue ' do
-      it 'raises an error for invalid move ids within a project' do
+      it 'raises an error for invalid move ids' do
         opts = { move_between_ids: [9000, non_existing_record_id] }
-
-        expect { described_class.new(project: issue.project, current_user: user, params: opts).execute(issue) }
-            .to raise_error(ActiveRecord::RecordNotFound)
-      end
-
-      it 'raises an error for invalid move ids within a group' do
-        opts = { move_between_ids: [9000, non_existing_record_id], board_group_id: create(:group).id }
 
         expect { described_class.new(project: issue.project, current_user: user, params: opts).execute(issue) }
             .to raise_error(ActiveRecord::RecordNotFound)
@@ -1243,28 +1329,20 @@ RSpec.describe Issues::UpdateService, :mailer do
       let(:closed_issuable) { create(:closed_issue, project: project) }
     end
 
-    context 'real-time updates' do
-      using RSpec::Parameterized::TableSyntax
-
+    context 'broadcasting issue assignee updates' do
       let(:update_params) { { assignee_ids: [user2.id] } }
 
-      where(:action_cable_in_app_enabled, :feature_flag_enabled, :should_broadcast) do
-        true  | true  | true
-        true  | false | true
-        false | true  | true
-        false | false | false
+      it 'triggers the GraphQL subscription' do
+        expect(GraphqlTriggers).to receive(:issuable_assignees_updated).with(issue)
+
+        update_issue(update_params)
       end
 
-      with_them do
-        it 'broadcasts to the issues channel based on ActionCable and feature flag values' do
-          allow(Gitlab::ActionCable::Config).to receive(:in_app?).and_return(action_cable_in_app_enabled)
-          stub_feature_flags(broadcast_issue_updates: feature_flag_enabled)
+      context 'when assignee is not updated' do
+        let(:update_params) { { title: 'Some other title' } }
 
-          if should_broadcast
-            expect(GraphqlTriggers).to receive(:issuable_assignees_updated).with(issue)
-          else
-            expect(GraphqlTriggers).not_to receive(:issuable_assignees_updated).with(issue)
-          end
+        it 'does not trigger the GraphQL subscription' do
+          expect(GraphqlTriggers).not_to receive(:issuable_assignees_updated).with(issue)
 
           update_issue(update_params)
         end

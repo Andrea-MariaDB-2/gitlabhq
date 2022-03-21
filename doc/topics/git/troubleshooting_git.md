@@ -45,7 +45,7 @@ set to 50MB. The default is 1MB.
 **If pushing over SSH**, first check your SSH configuration as 'Broken pipe'
 errors can sometimes be caused by underlying issues with SSH (such as
 authentication). Make sure that SSH is correctly configured by following the
-instructions in the [SSH troubleshooting](../../ssh/index.md#troubleshooting-ssh-connections) documentation.
+instructions in the [SSH troubleshooting](../../ssh/index.md#password-prompt-with-git-clone) documentation.
 
 If you're a GitLab administrator with server access, you can also prevent
 session timeouts by configuring SSH `keep-alive` on the client or the server.
@@ -110,6 +110,13 @@ ssh_exchange_identification: Connection closed by remote host
 fatal: The remote end hung up unexpectedly
 ```
 
+or
+
+```plaintext
+kex_exchange_identification: Connection closed by remote host
+Connection closed by x.x.x.x port 22
+```
+
 This error usually indicates that SSH daemon's `MaxStartups` value is throttling
 SSH connections. This setting specifies the maximum number of concurrent, unauthenticated
 connections to the SSH daemon. This affects users with proper authentication
@@ -126,7 +133,14 @@ MaxStartups 100:30:200
 `100:30:200` means up to 100 SSH sessions are allowed without restriction,
 after which 30% of connections are dropped until reaching an absolute maximum of 200.
 
-Once configured, restart the SSH daemon for the change to take effect.
+After you modify the value of `MaxStartups`, check for any errors in the configuration.
+
+```shell
+sudo sshd -t -f /etc/ssh/sshd_config
+```
+
+If the configuration check runs without errors, it should be safe to restart the
+SSH daemon for the change to take effect.
 
 ```shell
 # Debian/Ubuntu
@@ -200,7 +214,7 @@ apply more than one:
      ```shell
      omnibus_gitconfig['system'] = {
        # Set the http.postBuffer size, in bytes
-       "http" => ["postBuffer" => 524288000]
+       "http" => ["postBuffer => 524288000"]
      }
      ```
 

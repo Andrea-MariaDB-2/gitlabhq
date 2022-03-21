@@ -1,22 +1,27 @@
 # frozen_string_literal: true
 
 class AuditEventService
+  include AuditEventSaveType
+
   # Instantiates a new service
   #
-  # @param [User] author the user who authors the change
+  # @param [User, token String] author the entity who authors the change
   # @param [User, Project, Group] entity the scope which audit event belongs to
   #   This param is also used to determine the visibility of the audit event.
   #   - Project: events are visible at Project and Instance level
   #   - Group: events are visible at Group and Instance level
   #   - User: events are visible at Instance level
   # @param [Hash] details extra data of audit event
+  # @param [Symbol] save_type the type to save the event
+  #   Can be selected from the following, :database, :stream, :database_and_stream .
   #
   # @return [AuditEventService]
-  def initialize(author, entity, details = {})
+  def initialize(author, entity, details = {}, save_type = :database_and_stream)
     @author = build_author(author)
     @entity = entity
     @details = details
     @ip_address = resolve_ip_address(@author)
+    @save_type = save_type
   end
 
   # Builds the @details attribute for authentication
@@ -39,7 +44,7 @@ class AuditEventService
 
   # Writes event to a file and creates an event record in DB
   #
-  # @return [AuditEvent] persited if saves and non-persisted if fails
+  # @return [AuditEvent] persisted if saves and non-persisted if fails
   def security_event
     log_security_event_to_file
     log_authentication_event_to_database
@@ -119,6 +124,10 @@ class AuditEventService
     event
   end
 
+  def stream_event_to_external_destinations(_event)
+    # Defined in EE
+  end
+
   def log_authentication_event_to_database
     return unless Gitlab::Database.read_write? && authentication_event?
 
@@ -129,9 +138,10 @@ class AuditEventService
   end
 
   def save_or_track(event)
-    event.save!
+    event.save! if should_save_database?(@save_type)
+    stream_event_to_external_destinations(event) if should_save_stream?(@save_type)
   rescue StandardError => e
-    Gitlab::ErrorTracking.track_exception(e, audit_event_type: event.class.to_s)
+    Gitlab::ErrorTracking.track_and_raise_for_dev_exception(e, audit_event_type: event.class.to_s)
   end
 end
 

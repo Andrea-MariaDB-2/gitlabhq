@@ -9,6 +9,7 @@ allowlist
 allowlisted
 allowlisting
 allowlists
+AlmaLinux
 anonymization
 anonymized
 Ansible
@@ -45,8 +46,8 @@ autoscales
 autoscaling
 awardable
 awardables
-Ayoa
 Axios
+Ayoa
 Azure
 B-tree
 backfilling
@@ -93,9 +94,9 @@ canonicalized
 captcha
 CentOS
 Certbot
+chai
 changeset
 changesets
-chai
 ChaosKube
 chatbot
 chatbots
@@ -128,7 +129,7 @@ crosslinked
 crosslinking
 crosslinks
 Crossplane
-CrowdIn
+Crowdin
 CSV
 cybersecurity
 Dangerfile
@@ -150,6 +151,7 @@ denormalized
 denormalizes
 denormalizing
 denylist
+denylisted
 denylisting
 denylists
 deployer
@@ -161,6 +163,10 @@ deprovisions
 dequarantine
 dequarantined
 dequarantining
+deserialization
+deserialize
+deserializers
+deserializes
 DevOps
 Dhall
 disambiguates
@@ -182,6 +188,7 @@ downvotes
 Dpl
 Dreamweaver
 Ecto
+ElastiCache
 Elasticsearch
 enablement
 enqueued
@@ -214,6 +221,7 @@ Fluentd
 Flycheck
 Forgerock
 formatters
+Fortinet
 Fugit
 fuzzer
 Gantt
@@ -221,6 +229,7 @@ Gemfile
 Gemnasium
 Gemojione
 Getter
+getters
 Getters
 gettext
 Git
@@ -358,7 +367,7 @@ Microsoft
 middleware
 middlewares
 migratus
-Minikube
+minikube
 MinIO
 misconfiguration
 misconfigurations
@@ -472,6 +481,7 @@ queryable
 Quicktime
 Rackspace
 Raspbian
+rbenv
 rbtrace
 Rdoc
 reachability
@@ -567,6 +577,7 @@ sharded
 sharding
 shfmt
 Shibboleth
+Shimo
 Shopify
 Sidekiq
 Silverlight
@@ -678,8 +689,8 @@ triaged
 triages
 triaging
 Trivy
-truthy
 Truststore
+truthy
 Twilio
 Twitter
 TypeScript
@@ -822,5 +833,6 @@ ytt
 Yubico
 Zeitwerk
 Zendesk
+ZenTao
 zsh
 Zstandard

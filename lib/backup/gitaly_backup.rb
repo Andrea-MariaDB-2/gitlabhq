@@ -2,14 +2,23 @@
 
 module Backup
   # Backup and restores repositories using gitaly-backup
+  #
+  # gitaly-backup can work in parallel and accepts a list of repositories
+  # through input pipe using a specific json format for both backup and restore
   class GitalyBackup
-    def initialize(progress, parallel: nil, parallel_storage: nil)
+    # @param [StringIO] progress IO interface to output progress
+    # @param [Integer] max_parallelism max parallelism when running backups
+    # @param [Integer] storage_parallelism max parallelism per storage (is affected by max_parallelism)
+    # @param [String] backup_id unique identifier for the backup
+    def initialize(progress, max_parallelism: nil, storage_parallelism: nil, incremental: false, backup_id: nil)
       @progress = progress
-      @parallel = parallel
-      @parallel_storage = parallel_storage
+      @max_parallelism = max_parallelism
+      @storage_parallelism = storage_parallelism
+      @incremental = incremental
+      @backup_id = backup_id
     end
 
-    def start(type)
+    def start(type, backup_repos_path)
       raise Error, 'already started' if started?
 
       command = case type
@@ -22,20 +31,27 @@ module Backup
                 end
 
       args = []
-      args += ['-parallel', @parallel.to_s] if type == :create && @parallel
-      args += ['-parallel-storage', @parallel_storage.to_s] if type == :create && @parallel_storage
+      args += ['-parallel', @max_parallelism.to_s] if @max_parallelism
+      args += ['-parallel-storage', @storage_parallelism.to_s] if @storage_parallelism
+      if Feature.enabled?(:incremental_repository_backup, default_enabled: :yaml)
+        args += ['-layout', 'pointer']
+        if type == :create
+          args += ['-incremental'] if @incremental
+          args += ['-id', @backup_id] if @backup_id
+        end
+      end
 
-      @stdin, stdout, @thread = Open3.popen2(ENV, bin_path, command, '-path', backup_repos_path, *args)
+      @input_stream, stdout, @thread = Open3.popen2(build_env, bin_path, command, '-path', backup_repos_path, *args)
 
       @out_reader = Thread.new do
         IO.copy_stream(stdout, @progress)
       end
     end
 
-    def wait
+    def finish!
       return unless started?
 
-      @stdin.close
+      @input_stream.close
       [@thread, @out_reader].each(&:join)
       status =  @thread.value
 
@@ -49,12 +65,7 @@ module Backup
 
       repository = repo_type.repository_for(container)
 
-      @stdin.puts({
-        storage_name: repository.storage,
-        relative_path: repository.relative_path,
-        gl_project_path: repository.gl_project_path,
-        always_create: repo_type.project?
-      }.merge(Gitlab::GitalyClient.connection_data(repository.storage)).to_json)
+      schedule_backup_job(repository, always_create: repo_type.project?)
     end
 
     def parallel_enqueue?
@@ -63,12 +74,33 @@ module Backup
 
     private
 
-    def started?
-      @thread.present?
+    # Schedule a new backup job through a non-blocking JSON based pipe protocol
+    #
+    # @see https://gitlab.com/gitlab-org/gitaly/-/blob/master/doc/gitaly-backup.md
+    def schedule_backup_job(repository, always_create:)
+      connection_params = Gitlab::GitalyClient.connection_data(repository.storage)
+
+      json_job = {
+        address: connection_params['address'],
+        token: connection_params['token'],
+        storage_name: repository.storage,
+        relative_path: repository.relative_path,
+        gl_project_path: repository.gl_project_path,
+        always_create: always_create
+      }.to_json
+
+      @input_stream.puts(json_job)
     end
 
-    def backup_repos_path
-      File.absolute_path(File.join(Gitlab.config.backup.path, 'repositories'))
+    def build_env
+      {
+        'SSL_CERT_FILE' => OpenSSL::X509::DEFAULT_CERT_FILE,
+        'SSL_CERT_DIR'  => OpenSSL::X509::DEFAULT_CERT_DIR
+      }.merge(ENV)
+    end
+
+    def started?
+      @thread.present?
     end
 
     def bin_path

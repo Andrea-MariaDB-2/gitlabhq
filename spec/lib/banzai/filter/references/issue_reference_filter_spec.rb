@@ -116,6 +116,24 @@ RSpec.describe Banzai::Filter::References::IssueReferenceFilter do
       expect(doc.children.first.attr('data-original')).to eq inner_html
     end
 
+    it 'includes a data-reference-format attribute' do
+      doc = reference_filter("Issue #{reference}+")
+      link = doc.css('a').first
+
+      expect(link).to have_attribute('data-reference-format')
+      expect(link.attr('data-reference-format')).to eq('+')
+      expect(link.attr('href')).to eq(issue_url)
+    end
+
+    it 'includes a data-reference-format attribute for URL references' do
+      doc = reference_filter("Issue #{issue_url}+")
+      link = doc.css('a').first
+
+      expect(link).to have_attribute('data-reference-format')
+      expect(link.attr('data-reference-format')).to eq('+')
+      expect(link.attr('href')).to eq(issue_url)
+    end
+
     it 'supports an :only_path context' do
       doc = reference_filter("Issue #{reference}", only_path: true)
       link = doc.css('a').first.attr('href')
@@ -497,7 +515,7 @@ RSpec.describe Banzai::Filter::References::IssueReferenceFilter do
       enable_design_management(enabled)
     end
 
-    let(:current_user) { project.owner }
+    let(:current_user) { project.first_owner }
     let(:enabled) { true }
     let(:matches) { Issue.link_reference_pattern.match(input_text) }
     let(:extras) { subject.object_link_text_extras(issue, matches) }

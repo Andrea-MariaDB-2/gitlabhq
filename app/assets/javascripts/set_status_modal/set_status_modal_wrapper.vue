@@ -1,5 +1,4 @@
 <script>
-/* eslint-disable vue/no-v-html */
 import {
   GlToast,
   GlModal,
@@ -8,6 +7,7 @@ import {
   GlFormCheckbox,
   GlDropdown,
   GlDropdownItem,
+  GlSafeHtmlDirective,
 } from '@gitlab/ui';
 import $ from 'jquery';
 import Vue from 'vue';
@@ -49,6 +49,7 @@ export default {
   },
   directives: {
     GlTooltip: GlTooltipDirective,
+    SafeHtml: GlSafeHtmlDirective,
   },
   mixins: [glFeatureFlagsMixin()],
   props: {
@@ -234,6 +235,9 @@ export default {
     },
   },
   statusTimeRanges,
+  safeHtmlConfig: { ADD_TAGS: ['gl-emoji'] },
+  actionPrimary: { text: s__('SetStatusModal|Set status') },
+  actionSecondary: { text: s__('SetStatusModal|Remove status') },
 };
 </script>
 
@@ -241,14 +245,13 @@ export default {
   <gl-modal
     :title="s__('SetStatusModal|Set a status')"
     :modal-id="modalId"
-    :ok-title="s__('SetStatusModal|Set status')"
-    :cancel-title="s__('SetStatusModal|Remove status')"
-    ok-variant="success"
+    :action-primary="$options.actionPrimary"
+    :action-secondary="$options.actionSecondary"
     modal-class="set-user-status-modal"
     @shown="setupEmojiListAndAutocomplete"
     @hide="hideEmojiMenu"
-    @ok="setStatus"
-    @cancel="removeStatus"
+    @primary="setStatus"
+    @secondary="removeStatus"
   >
     <div>
       <input
@@ -264,10 +267,12 @@ export default {
               v-if="glFeatures.improvedEmojiPicker"
               dropdown-class="gl-h-full"
               toggle-class="btn emoji-menu-toggle-button gl-px-4! gl-rounded-top-right-none! gl-rounded-bottom-right-none!"
+              boundary="viewport"
+              :right="false"
               @click="setEmoji"
             >
               <template #button-content>
-                <span v-html="emojiTag"></span>
+                <span v-safe-html:[$options.safeHtmlConfig]="emojiTag"></span>
                 <span
                   v-show="noEmoji"
                   class="js-no-emoji-placeholder no-emoji-placeholder position-relative"
@@ -289,7 +294,7 @@ export default {
               class="js-toggle-emoji-menu emoji-menu-toggle-button btn"
               @click="showEmojiMenu"
             >
-              <span v-html="emojiTag"></span>
+              <span v-safe-html:[$options.safeHtmlConfig]="emojiTag"></span>
               <span
                 v-show="noEmoji"
                 class="js-no-emoji-placeholder no-emoji-placeholder position-relative"
@@ -337,7 +342,7 @@ export default {
           </div>
           <div class="gl-display-flex">
             <span class="gl-text-gray-600 gl-ml-5">
-              {{ s__('SetStatusModal|A busy indicator is shown next to your name and avatar.') }}
+              {{ s__('SetStatusModal|An indicator appears next to your name and avatar') }}
             </span>
           </div>
         </div>

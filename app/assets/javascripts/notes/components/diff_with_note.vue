@@ -1,6 +1,8 @@
 <script>
-/* eslint-disable vue/no-v-html */
-import { GlDeprecatedSkeletonLoading as GlSkeletonLoading } from '@gitlab/ui';
+import {
+  GlDeprecatedSkeletonLoading as GlSkeletonLoading,
+  GlSafeHtmlDirective as SafeHtml,
+} from '@gitlab/ui';
 import { mapState, mapActions } from 'vuex';
 import DiffFileHeader from '~/diffs/components/diff_file_header.vue';
 import ImageDiffOverlay from '~/diffs/components/image_diff_overlay.vue';
@@ -17,6 +19,9 @@ export default {
     GlSkeletonLoading,
     DiffViewer,
     ImageDiffOverlay,
+  },
+  directives: {
+    SafeHtml,
   },
   props: {
     discussion: {
@@ -93,7 +98,7 @@ export default {
           >
             <td :class="line.type" class="diff-line-num old_line">{{ line.old_line }}</td>
             <td :class="line.type" class="diff-line-num new_line">{{ line.new_line }}</td>
-            <td :class="line.type" class="line_content" v-html="trimChar(line.rich_text)"></td>
+            <td v-safe-html="trimChar(line.rich_text)" :class="line.type" class="line_content"></td>
           </tr>
         </template>
         <tr v-if="!hasTruncatedDiffLines" class="line_holder line-holder-placeholder">
@@ -102,7 +107,7 @@ export default {
           <td v-if="error" class="js-error-lazy-load-diff diff-loading-error-block">
             {{ __('Unable to load the diff') }}
             <button
-              class="btn-link btn-link-retry btn-no-padding js-toggle-lazy-diff-retry-button"
+              class="btn-link btn-link-retry gl-p-0 js-toggle-lazy-diff-retry-button"
               @click="fetchDiff"
             >
               {{ __('Try again') }}

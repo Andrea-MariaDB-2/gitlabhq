@@ -57,7 +57,7 @@ RSpec.describe 'Group or Project invitations', :aggregate_failures do
         end
 
         it 'renders sign up page with sign up notice' do
-          expect(current_path).to eq(new_user_registration_path)
+          expect(page).to have_current_path(new_user_registration_path, ignore_query: true)
           expect(page).to have_content('To accept this invitation, create an account or sign in')
         end
 
@@ -85,7 +85,7 @@ RSpec.describe 'Group or Project invitations', :aggregate_failures do
 
             fill_in_sign_in_form(user)
 
-            expect(current_path).to eq(activity_group_path(group))
+            expect(page).to have_current_path(activity_group_path(group), ignore_query: true)
           end
         end
 
@@ -98,9 +98,23 @@ RSpec.describe 'Group or Project invitations', :aggregate_failures do
             end
 
             it 'shows message user already a member' do
-              expect(current_path).to eq(invite_path(group_invite.raw_invite_token))
+              expect(page).to have_current_path(invite_path(group_invite.raw_invite_token), ignore_query: true)
               expect(page).to have_link(user.name, href: user_path(user))
               expect(page).to have_content('You are already a member of this group.')
+            end
+          end
+
+          context 'when email case doesnt match', :js do
+            let(:invite_email) { 'User@example.com' }
+            let(:user) { create(:user, email: 'user@example.com') }
+
+            before do
+              sign_in(user)
+              visit invite_path(group_invite.raw_invite_token)
+            end
+
+            it 'accepts invite' do
+              expect(page).to have_content('You have been granted Developer access to group Owned.')
             end
           end
         end
@@ -113,7 +127,7 @@ RSpec.describe 'Group or Project invitations', :aggregate_failures do
             end
 
             it 'declines application and redirects to dashboard' do
-              expect(current_path).to eq(dashboard_projects_path)
+              expect(page).to have_current_path(dashboard_projects_path, ignore_query: true)
               expect(page).to have_content('You have declined the invitation to join group Owned.')
               expect { group_invite.reload }.to raise_error ActiveRecord::RecordNotFound
             end
@@ -125,7 +139,7 @@ RSpec.describe 'Group or Project invitations', :aggregate_failures do
             end
 
             it 'declines application and redirects to sign in page' do
-              expect(current_path).to eq(decline_invite_path(group_invite.raw_invite_token))
+              expect(page).to have_current_path(decline_invite_path(group_invite.raw_invite_token), ignore_query: true)
               expect(page).not_to have_content('You have declined the invitation to join')
               expect(page).to have_content('You successfully declined the invitation')
               expect { group_invite.reload }.to raise_error ActiveRecord::RecordNotFound
@@ -160,7 +174,7 @@ RSpec.describe 'Group or Project invitations', :aggregate_failures do
         it 'does not sign the user in' do
           fill_in_sign_up_form(new_user)
 
-          expect(current_path).to eq(new_user_session_path)
+          expect(page).to have_current_path(new_user_session_path, ignore_query: true)
           expect(page).to have_content('You have signed up successfully. However, we could not sign you in because your account is awaiting approval from your GitLab administrator')
         end
       end
@@ -172,7 +186,7 @@ RSpec.describe 'Group or Project invitations', :aggregate_failures do
           fill_in_sign_up_form(new_user)
           fill_in_welcome_form
 
-          expect(current_path).to eq(activity_group_path(group))
+          expect(page).to have_current_path(activity_group_path(group), ignore_query: true)
           expect(page).to have_content('You have been granted Owner access to group Owned.')
         end
 
@@ -183,7 +197,7 @@ RSpec.describe 'Group or Project invitations', :aggregate_failures do
             fill_in_sign_up_form(new_user)
             fill_in_welcome_form
 
-            expect(current_path).to eq(activity_group_path(group))
+            expect(page).to have_current_path(activity_group_path(group), ignore_query: true)
           end
         end
       end
@@ -195,7 +209,7 @@ RSpec.describe 'Group or Project invitations', :aggregate_failures do
           it 'fails sign up and redirects back to sign up', :aggregate_failures do
             expect { fill_in_sign_up_form(new_user) }.not_to change { User.count }
             expect(page).to have_content('prohibited this user from being saved')
-            expect(current_path).to eq(user_registration_path)
+            expect(page).to have_current_path(user_registration_path, ignore_query: true)
           end
         end
 
@@ -212,39 +226,11 @@ RSpec.describe 'Group or Project invitations', :aggregate_failures do
           end
         end
 
-        context 'with invite email acceptance for the invite_email_preview_text experiment', :experiment do
-          let(:extra_params) do
-            { invite_type: Emails::Members::INITIAL_INVITE, experiment_name: 'invite_email_preview_text' }
-          end
-
-          it 'tracks the accepted invite' do
-            expect(experiment(:invite_email_preview_text)).to track(:accepted)
-                                                                .with_context(actor: group_invite)
-                                                                .on_next_instance
-
-            fill_in_sign_up_form(new_user)
-          end
-        end
-
-        context 'with invite email acceptance for the invite_email_from experiment', :experiment do
-          let(:extra_params) do
-            { invite_type: Emails::Members::INITIAL_INVITE, experiment_name: 'invite_email_from' }
-          end
-
-          it 'tracks the accepted invite' do
-            expect(experiment(:invite_email_from)).to track(:accepted)
-                                                                .with_context(actor: group_invite)
-                                                                .on_next_instance
-
-            fill_in_sign_up_form(new_user)
-          end
-        end
-
         it 'signs up and redirects to the group activity page with all the project/groups invitation automatically accepted' do
           fill_in_sign_up_form(new_user)
           fill_in_welcome_form
 
-          expect(current_path).to eq(activity_group_path(group))
+          expect(page).to have_current_path(activity_group_path(group), ignore_query: true)
         end
 
         context 'the user sign-up using a different email address' do
@@ -262,7 +248,7 @@ RSpec.describe 'Group or Project invitations', :aggregate_failures do
               fill_in_sign_in_form(new_user)
               fill_in_welcome_form
 
-              expect(current_path).to eq(activity_group_path(group))
+              expect(page).to have_current_path(activity_group_path(group), ignore_query: true)
             end
           end
 
@@ -276,7 +262,7 @@ RSpec.describe 'Group or Project invitations', :aggregate_failures do
               fill_in_sign_up_form(new_user)
               fill_in_welcome_form
 
-              expect(current_path).to eq(activity_group_path(group))
+              expect(page).to have_current_path(activity_group_path(group), ignore_query: true)
             end
           end
         end
@@ -287,11 +273,11 @@ RSpec.describe 'Group or Project invitations', :aggregate_failures do
       it 'lands on sign up page and then registers' do
         visit invite_path(group_invite.raw_invite_token)
 
-        expect(current_path).to eq(new_user_registration_path)
+        expect(page).to have_current_path(new_user_registration_path, ignore_query: true)
 
         fill_in_sign_up_form(new_user, 'Register')
 
-        expect(current_path).to eq(users_sign_up_welcome_path)
+        expect(page).to have_current_path(users_sign_up_welcome_path, ignore_query: true)
       end
     end
 
@@ -299,7 +285,7 @@ RSpec.describe 'Group or Project invitations', :aggregate_failures do
       it 'declines application and shows a decline page' do
         visit decline_invite_path(group_invite.raw_invite_token)
 
-        expect(current_path).to eq(decline_invite_path(group_invite.raw_invite_token))
+        expect(page).to have_current_path(decline_invite_path(group_invite.raw_invite_token), ignore_query: true)
         expect(page).to have_content('You successfully declined the invitation')
         expect { group_invite.reload }.to raise_error ActiveRecord::RecordNotFound
       end

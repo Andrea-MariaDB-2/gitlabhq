@@ -113,7 +113,7 @@ module ExtractsRef
     best_match = valid_refs.max_by(&:length)
 
     # Partition the string into the ref and the path, ignoring the empty first value
-    id.partition(best_match)[1..-1]
+    id.partition(best_match)[1..]
   end
 
   def use_first_path_segment?(ref)
@@ -126,8 +126,10 @@ module ExtractsRef
 
   # overridden in subclasses, do not remove
   def get_id
-    id = [params[:id] || params[:ref]]
-    id << "/" + params[:path] unless params[:path].blank?
+    allowed_params = params.permit(:id, :ref, :path)
+
+    id = [allowed_params[:id] || allowed_params[:ref]]
+    id << "/" + allowed_params[:path] unless allowed_params[:path].blank?
     id.join
   end
 

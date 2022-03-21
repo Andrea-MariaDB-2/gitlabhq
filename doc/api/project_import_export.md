@@ -1,13 +1,10 @@
 ---
 stage: Create
 group: Source Code
-info: "To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments"
-type: reference, api
+info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
 ---
 
 # Project import/export API **(FREE)**
-
-> [Introduced](https://gitlab.com/gitlab-org/gitlab-foss/-/issues/41899) in GitLab 10.6.
 
 See also:
 
@@ -23,7 +20,7 @@ all the necessary information to upload the exported project to a web server or
 to any S3-compatible platform. At the moment we only support binary
 data file uploads to the final server.
 
-From GitLab 10.7, the `upload[url]` parameter is required if the `upload` parameter is present.
+The `upload[url]` parameter is required if the `upload` parameter is present.
 
 ```plaintext
 POST /projects/:id/export
@@ -191,9 +188,9 @@ As an administrator, you can modify the maximum import file size. To do so, use 
 
 ## Import a file from a remote object storage
 
-> [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/282503) in GitLab 13.12 in [Beta](https://about.gitlab.com/handbook/product/gitlab-the-product/#beta).
+> [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/282503) in GitLab 13.12 in [Beta](../policy/alpha-beta-support.md#beta-features).
 
-This endpoint is behind a feature flag that is disabled by default.
+This endpoint is behind a feature flag that is enabled by default.
 
 To enable this endpoint:
 
@@ -225,6 +222,7 @@ The passed override parameters take precedence over all values defined in the ex
 ```shell
 curl --request POST \
   --header "PRIVATE-TOKEN: <your_access_token>" \
+  --header "Content-Type: application/json" \
   --url "https://gitlab.example.com/api/v4/projects/remote-import" \
   --data '{"url":"https://remoteobject/file?token=123123","path":"remote-project"}'
 ```
@@ -245,8 +243,63 @@ curl --request POST \
 }
 ```
 
-The `ContentType` header must return a valid number. The maximum file size is 10 gigabytes.
-The `ContentLength` header must be `application/gzip`.
+The `Content-Length` header must return a valid number. The maximum file size is 10 gigabytes.
+The `Content-Type` header must be `application/gzip`.
+
+## Import a file from AWS S3
+
+> [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/348874) in GitLab 14.9 in [Beta](https://about.gitlab.com/handbook/product/gitlab-the-product/#beta), [with a flag](../administration/feature_flags.md) named `import_project_from_remote_file_s3`. Disabled by default.
+
+FLAG:
+On self-managed GitLab and GitLab.com, by default this feature is not available. To make it available, ask an administrator to [enable the feature flag](../administration/feature_flags.md) named `import_project_from_remote_file_s3`. This feature is not ready for production use.
+
+```plaintext
+POST /projects/remote-import-s3
+```
+
+| Attribute           | Type           | Required | Description                              |
+| ------------------- | -------------- | -------- | ---------------------------------------- |
+| `namespace`         | integer/string | no       | The ID or path of the namespace to import the project to. Defaults to the current user's namespace. |
+| `name`              | string         | no       | The name of the project to import. If not provided, defaults to the path of the project. |
+| `region`            | string         | yes      | [AWS S3 region name where the file is stored.](https://docs.aws.amazon.com/AmazonS3/latest/userguide/Welcome.html#Regions) |
+| `bucket_name`       | string         | yes      | [AWS S3 bucket name where the file is stored.](https://docs.aws.amazon.com/AmazonS3/latest/userguide/bucketnamingrules.html) |
+| `file_key`          | string         | yes      | [AWS S3 file key to identify the file.](https://docs.aws.amazon.com/AmazonS3/latest/userguide/UsingObjects.html) |
+| `access_key_id`     | string         | yes      | [AWS S3 access key ID.](https://docs.aws.amazon.com/general/latest/gr/aws-sec-cred-types.html#access-keys-and-secret-access-keys). |
+| `secret_access_key` | string         | yes      | [AWS S3 secret access key.](https://docs.aws.amazon.com/general/latest/gr/aws-sec-cred-types.html#access-keys-and-secret-access-keys) |
+
+The passed override parameters take precedence over all values defined in the export file.
+
+```shell
+curl --request POST \
+  --url "http://localhost:3000/api/v4/projects/remote-import-s3" \
+  --header "PRIVATE-TOKEN: <your gitlab access key>" \
+  --header 'Content-Type: application/json' \
+  --data '{
+  "name": "Sample Project",
+  "path": "sample-project",
+  "region": "<Your S3 region name>",
+  "bucket_name": "<Your S3 bucket name>",
+  "file_key": "<Your S3 file key>",
+  "access_key_id": "<Your AWS access key id>",
+  "secret_access_key": "<Your AWS secret access key>"
+}'
+```
+
+```json
+{
+  "id": 1,
+  "description": null,
+  "name": "Sample project",
+  "name_with_namespace": "Administrator / sample-project",
+  "path": "sample-project",
+  "path_with_namespace": "root/sample-project",
+  "created_at": "2018-02-13T09:05:58.023Z",
+  "import_status": "scheduled",
+  "correlation_id": "mezklWso3Za",
+  "failed_relations": [],
+  "import_error": null
+}
+```
 
 ## Import status
 
@@ -293,6 +346,7 @@ The `failed_relations` array is capped to 100 items.
   "path_with_namespace": "gitlab-org/gitlab-test",
   "created_at": "2017-08-29T04:36:44.383Z",
   "import_status": "started",
+  "import_type": "github",
   "correlation_id": "mezklWso3Za",
   "failed_relations": [
     {
@@ -301,8 +355,58 @@ The `failed_relations` array is capped to 100 items.
       "exception_class": "RuntimeError",
       "exception_message": "A failure occurred",
       "source": "custom error context",
-      "relation_name": "merge_requests"
+      "relation_name": "merge_requests",
+      "line_number": 0
     }
   ]
+}
+```
+
+When importing from GitHub, the a `stats` field lists how many objects were already fetched from
+GitHub and how many were already imported:
+
+```json
+{
+  "id": 1,
+  "description": "Itaque perspiciatis minima aspernatur corporis consequatur.",
+  "name": "Gitlab Test",
+  "name_with_namespace": "Gitlab Org / Gitlab Test",
+  "path": "gitlab-test",
+  "path_with_namespace": "gitlab-org/gitlab-test",
+  "created_at": "2017-08-29T04:36:44.383Z",
+  "import_status": "started",
+  "import_type": "github",
+  "correlation_id": "mezklWso3Za",
+  "failed_relations": [
+    {
+      "id": 42,
+      "created_at": "2020-04-02T14:48:59.526Z",
+      "exception_class": "RuntimeError",
+      "exception_message": "A failure occurred",
+      "source": "custom error context",
+      "relation_name": "merge_requests",
+      "line_number": 0
+    }
+  ],
+  "stats": {
+    "fetched": {
+      "diff_note": 19,
+      "issue": 3,
+      "label": 1,
+      "note": 3,
+      "pull_request": 2,
+      "pull_request_merged_by": 1,
+      "pull_request_review": 16
+    },
+    "imported": {
+      "diff_note": 19,
+      "issue": 3,
+      "label": 1,
+      "note": 3,
+      "pull_request": 2,
+      "pull_request_merged_by": 1,
+      "pull_request_review": 16
+    }
+  }
 }
 ```

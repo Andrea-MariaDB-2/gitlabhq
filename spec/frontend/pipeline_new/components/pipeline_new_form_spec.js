@@ -1,6 +1,7 @@
 import { GlForm, GlSprintf, GlLoadingIcon } from '@gitlab/ui';
 import { mount, shallowMount } from '@vue/test-utils';
 import MockAdapter from 'axios-mock-adapter';
+import { nextTick } from 'vue';
 import CreditCardValidationRequiredAlert from 'ee_component/billings/components/cc_validation_required_alert.vue';
 import { TEST_HOST } from 'helpers/test_constants';
 import waitForPromises from 'helpers/wait_for_promises';
@@ -45,6 +46,7 @@ describe('Pipeline New Form', () => {
   const findWarningAlertSummary = () => findWarningAlert().find(GlSprintf);
   const findWarnings = () => wrapper.findAll('[data-testid="run-pipeline-warning"]');
   const findLoadingIcon = () => wrapper.find(GlLoadingIcon);
+  const findCCAlert = () => wrapper.findComponent(CreditCardValidationRequiredAlert);
   const getFormPostParams = () => JSON.parse(mock.history.post[0].data);
 
   const selectBranch = (branch) => {
@@ -121,7 +123,7 @@ describe('Pipeline New Form', () => {
     it('removes ci variable row on remove icon button click', async () => {
       findRemoveIcons().at(1).trigger('click');
 
-      await wrapper.vm.$nextTick();
+      await nextTick();
 
       expect(findVariableRows()).toHaveLength(2);
     });
@@ -131,7 +133,7 @@ describe('Pipeline New Form', () => {
       input.element.value = 'test_var_2';
       input.trigger('change');
 
-      await wrapper.vm.$nextTick();
+      await nextTick();
 
       expect(findVariableRows()).toHaveLength(4);
       expect(findKeyInputs().at(3).element.value).toBe('');
@@ -204,7 +206,7 @@ describe('Pipeline New Form', () => {
       mainInput.element.value = 'build_var';
       mainInput.trigger('change');
 
-      await wrapper.vm.$nextTick();
+      await nextTick();
 
       selectBranch('branch-1');
 
@@ -214,7 +216,7 @@ describe('Pipeline New Form', () => {
       branchOneInput.element.value = 'deploy_var';
       branchOneInput.trigger('change');
 
-      await wrapper.vm.$nextTick();
+      await nextTick();
 
       selectBranch('main');
 
@@ -308,7 +310,7 @@ describe('Pipeline New Form', () => {
         findKeyInputs().at(0).element.value = 'yml_var_modified';
         findKeyInputs().at(0).trigger('change');
 
-        await wrapper.vm.$nextTick();
+        await nextTick();
 
         expect(findVariableRows().at(0).text()).not.toContain(mockYmlDesc);
       });
@@ -387,7 +389,7 @@ describe('Pipeline New Form', () => {
       });
 
       it('does not show the credit card validation required alert', () => {
-        expect(wrapper.findComponent(CreditCardValidationRequiredAlert).exists()).toBe(false);
+        expect(findCCAlert().exists()).toBe(false);
       });
 
       describe('when the error response is credit card validation required', () => {
@@ -408,7 +410,19 @@ describe('Pipeline New Form', () => {
 
         it('shows credit card validation required alert', () => {
           expect(findErrorAlert().exists()).toBe(false);
-          expect(wrapper.findComponent(CreditCardValidationRequiredAlert).exists()).toBe(true);
+          expect(findCCAlert().exists()).toBe(true);
+        });
+
+        it('clears error and hides the alert on dismiss', async () => {
+          expect(findCCAlert().exists()).toBe(true);
+          expect(wrapper.vm.$data.error).toBe(mockCreditCardValidationRequiredError.errors[0]);
+
+          findCCAlert().vm.$emit('dismiss');
+
+          await nextTick();
+
+          expect(findCCAlert().exists()).toBe(false);
+          expect(wrapper.vm.$data.error).toBe(null);
         });
       });
     });

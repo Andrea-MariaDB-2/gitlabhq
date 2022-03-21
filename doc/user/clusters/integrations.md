@@ -4,14 +4,19 @@ group: Configure
 info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
 ---
 
-# Cluster integrations **(FREE)**
+# Cluster integrations (DEPRECATED) **(FREE)**
+
+> [Deprecated](https://gitlab.com/groups/gitlab-org/configure/-/epics/8) in GitLab 14.5.
+
+WARNING:
+This feature was [deprecated](https://gitlab.com/groups/gitlab-org/configure/-/epics/8) in GitLab 14.5.
 
 GitLab provides several ways to integrate applications to your
 Kubernetes cluster.
 
 To enable cluster integrations, first add a Kubernetes cluster to a GitLab
 [project](../project/clusters/add_remove_clusters.md) or
-[group](../group/clusters/index.md#group-level-kubernetes-clusters) or
+[group](../group/clusters/index.md) or
 [instance](../instance/clusters/index.md).
 
 You can install your applications manually as shown in the following sections, or use the
@@ -25,16 +30,25 @@ or [Enable Elastic Stack integration for your cluster](#enable-elastic-stack-int
 depending on which application you are installing. [An issue exists](https://gitlab.com/gitlab-org/gitlab/-/issues/326565)
 to automate this step.
 
+Prometheus and Elastic Stack cluster integrations can only be enabled for clusters [connected through cluster certificates](../project/clusters/add_existing_cluster.md).
+
+To enable Prometheus for your cluster connected through the [GitLab agent](agent/index.md), you can [integrate it manually](../project/integrations/prometheus.md#manual-configuration-of-prometheus).
+
+There is no option to enable Elastic Stack for your cluster if it is connected with the GitLab agent.
+Follow this [issue](https://gitlab.com/gitlab-org/gitlab/-/issues/300230) for updates.
+
 ## Prometheus cluster integration
 
 > [Introduced](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/55244) in GitLab 13.11.
 
+WARNING:
+This feature was [deprecated](https://gitlab.com/groups/gitlab-org/configure/-/epics/8) in GitLab 14.5. However, you can **still use** Prometheus
+for Kubernetes clusters connected to GitLab through the
+[agent](agent/index.md) by [enabling Prometheus manually](../project/integrations/prometheus.md#manual-configuration-of-prometheus).
+
 You can integrate your Kubernetes cluster with
 [Prometheus](https://prometheus.io/) for monitoring key metrics of your
 apps directly from the GitLab UI.
-
-[Alerts](../../operations/metrics/alerts.md) can be configured the same way as
-for [external Prometheus instances](../../operations/metrics/alerts.md#external-prometheus-instances).
 
 Once enabled, you can see metrics from services available in the
 [metrics library](../project/integrations/prometheus_library/index.md).
@@ -99,9 +113,9 @@ To use this integration:
    `gitlab-managed-apps` namespace.
 1. The `Service` resource must be called `elastic-stack-elasticsearch-master`
    and expose the Elasticsearch API on port `9200`.
-1. The logs are expected to be [Filebeat container logs](https://www.elastic.co/guide/en/beats/filebeat/7.x/filebeat-input-container.html)
-   following the [7.x log structure](https://www.elastic.co/guide/en/beats/filebeat/7.x/exported-fields-log.html)
-   and include [Kubernetes metadata](https://www.elastic.co/guide/en/beats/filebeat/7.x/add-kubernetes-metadata.html).
+1. The logs are expected to be [Filebeat container logs](https://www.elastic.co/guide/en/beats/filebeat/7.16/filebeat-input-container.html)
+   following the [7.x log structure](https://www.elastic.co/guide/en/beats/filebeat/7.16/exported-fields-log.html)
+   and include [Kubernetes metadata](https://www.elastic.co/guide/en/beats/filebeat/7.16/add-kubernetes-metadata.html).
 
 You can manage your Elastic Stack however you like, but as an example, you can
 use [this Elastic Stack chart](https://gitlab.com/gitlab-org/charts/elastic-stack) to get up and

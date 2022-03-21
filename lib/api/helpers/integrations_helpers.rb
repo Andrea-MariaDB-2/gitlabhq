@@ -2,7 +2,7 @@
 
 module API
   module Helpers
-    # Helpers module for API::Services
+    # Helpers module for API::Integrations
     #
     # The data structures inside this model are returned using class methods,
     # allowing EE to extend them where necessary.
@@ -197,6 +197,12 @@ module API
               desc: 'Bamboo root URL like https://bamboo.example.com'
             },
             {
+              required: false,
+              name: :enable_ssl_verification,
+              type: Boolean,
+              desc: 'Enable SSL verification'
+            },
+            {
               required: true,
               name: :build_key,
               type: String,
@@ -254,7 +260,7 @@ module API
               type: Boolean,
               desc: 'DEPRECATED: This parameter has no effect since SSL verification will always be enabled'
             }
-        ],
+          ],
           'campfire' => [
             {
               required: true,
@@ -314,25 +320,39 @@ module API
               required: false,
               name: :datadog_site,
               type: String,
-              desc: 'Choose the Datadog site to send data to. Set to "datadoghq.eu" to send data to the EU site'
+              desc: 'The Datadog site to send data to. To send data to the EU site, use datadoghq.eu'
             },
             {
               required: false,
               name: :api_url,
               type: String,
-              desc: '(Advanced) Define the full URL for your Datadog site directly'
+              desc: '(Advanced) The full URL for your Datadog site'
             },
+            # TODO: uncomment this field once :datadog_integration_logs_collection is rolled out
+            # https://gitlab.com/gitlab-org/gitlab/-/issues/346339
+            # {
+            #   required: false,
+            #   name: :archive_trace_events,
+            #   type: Boolean,
+            #   desc: 'When enabled, job logs will be collected by Datadog and shown along pipeline execution traces'
+            # },
             {
               required: false,
               name: :datadog_service,
               type: String,
-              desc: 'Name of this GitLab instance that all data will be tagged with'
+              desc: 'Tag all data from this GitLab instance in Datadog. Useful when managing several self-managed deployments'
             },
             {
               required: false,
               name: :datadog_env,
               type: String,
-              desc: 'The environment tag that traces will be tagged with'
+              desc: 'For self-managed deployments, set the env tag for all the data sent to Datadog'
+            },
+            {
+              required: false,
+              name: :datadog_tags,
+              type: String,
+              desc: 'Custom tags in Datadog. Specify one tag per line in the format: "key:value\nkey2:value2"'
             }
           ],
           'discord' => [
@@ -340,7 +360,7 @@ module API
               required: true,
               name: :webhook,
               type: String,
-              desc: 'Discord webhook. e.g. https://discordapp.com/api/webhooks/…'
+              desc: 'Discord webhook. For example, https://discord.com/api/webhooks/…'
             }
           ],
           'drone-ci' => [
@@ -360,7 +380,7 @@ module API
               required: false,
               name: :enable_ssl_verification,
               type: Boolean,
-              desc: 'Enable SSL verification for communication'
+              desc: 'Enable SSL verification'
             }
           ],
           'emails-on-push' => [
@@ -420,6 +440,32 @@ module API
             },
             chat_notification_events
           ].flatten,
+          'harbor' => [
+            {
+              required: true,
+              name: :url,
+              type: String,
+              desc: 'The base URL to the Harbor instance which is being linked to this GitLab project. For example, https://demo.goharbor.io.'
+            },
+            {
+              required: true,
+              name: :project_name,
+              type: String,
+              desc: 'The Project name to the Harbor instance. For example, testproject.'
+            },
+            {
+              required: true,
+              name: :username,
+              type: String,
+              desc: 'The username created from Harbor interface.'
+            },
+            {
+              required: true,
+              name: :password,
+              type: String,
+              desc: 'The password of the user.'
+            }
+          ],
           'irker' => [
             {
               required: true,
@@ -458,6 +504,12 @@ module API
               name: :jenkins_url,
               type: String,
               desc: 'Jenkins root URL like https://jenkins.example.com'
+            },
+            {
+              required: false,
+              name: :enable_ssl_verification,
+              type: Boolean,
+              desc: 'Enable SSL verification'
             },
             {
               required: true,
@@ -528,6 +580,14 @@ module API
               name: :token,
               type: String,
               desc: 'The Mattermost token'
+            }
+          ],
+          'shimo' => [
+            {
+              required: true,
+              name: :external_wiki_url,
+              type: String,
+              desc: 'Shimo workspace URL'
             }
           ],
           'slack-slash-commands' => [
@@ -733,6 +793,12 @@ module API
               desc: 'TeamCity root URL like https://teamcity.example.com'
             },
             {
+              required: false,
+              name: :enable_ssl_verification,
+              type: Boolean,
+              desc: 'Enable SSL verification'
+            },
+            {
               required: true,
               name: :build_type,
               type: String,
@@ -768,7 +834,33 @@ module API
               desc: 'The Webex Teams webhook. For example, https://api.ciscospark.com/v1/webhooks/incoming/...'
             },
             chat_notification_events
-          ].flatten
+          ].flatten,
+          'zentao' => [
+            {
+              required: true,
+              name: :url,
+              type: String,
+              desc: 'The base URL to the ZenTao instance web interface which is being linked to this GitLab project. For example, https://www.zentao.net'
+            },
+            {
+              required: false,
+              name: :api_url,
+              type: String,
+              desc: 'The base URL to the ZenTao instance API. Web URL value will be used if not set. For example, https://www.zentao.net'
+            },
+            {
+              required: true,
+              name: :api_token,
+              type: String,
+              desc: 'The API token created from ZenTao dashboard'
+            },
+            {
+              required: true,
+              name: :zentao_product_xid,
+              type: String,
+              desc: 'The product ID of ZenTao project'
+            }
+          ]
         }
       end
 
@@ -790,6 +882,7 @@ module API
           ::Integrations::ExternalWiki,
           ::Integrations::Flowdock,
           ::Integrations::HangoutsChat,
+          ::Integrations::Harbor,
           ::Integrations::Irker,
           ::Integrations::Jenkins,
           ::Integrations::Jira,
@@ -805,7 +898,8 @@ module API
           ::Integrations::Slack,
           ::Integrations::SlackSlashCommands,
           ::Integrations::Teamcity,
-          ::Integrations::Youtrack
+          ::Integrations::Youtrack,
+          ::Integrations::Zentao
         ]
       end
 

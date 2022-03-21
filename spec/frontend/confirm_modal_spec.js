@@ -1,4 +1,3 @@
-import Vue from 'vue';
 import { TEST_HOST } from 'helpers/test_constants';
 import initConfirmModal from '~/confirm_modal';
 
@@ -50,7 +49,6 @@ describe('ConfirmModal', () => {
   const findModal = () => document.querySelector('.gl-modal');
   const findModalOkButton = (modal, variant) =>
     modal.querySelector(`.modal-footer .btn-${variant}`);
-  const findModalCancelButton = (modal) => modal.querySelector('.modal-footer .btn-secondary');
   const modalIsHidden = () => findModal() === null;
 
   const serializeModal = (modal, buttonIndex) => {
@@ -72,7 +70,7 @@ describe('ConfirmModal', () => {
 
   it('starts with only JsHooks', () => {
     expect(findJsHooks()).toHaveLength(buttons.length);
-    expect(findModal()).not.toExist();
+    expect(findModal()).toBe(null);
   });
 
   describe('when button clicked', () => {
@@ -87,22 +85,8 @@ describe('ConfirmModal', () => {
 
     describe('GlModal', () => {
       it('is rendered', () => {
-        expect(findModal()).toExist();
+        expect(findModal()).not.toBe(null);
         expect(modalIsHidden()).toBe(false);
-      });
-
-      describe('Cancel Button', () => {
-        beforeEach(() => {
-          findModalCancelButton(findModal()).click();
-
-          return Vue.nextTick();
-        });
-
-        it('closes the modal', () => {
-          setImmediate(() => {
-            expect(modalIsHidden()).toBe(true);
-          });
-        });
       });
     });
   });

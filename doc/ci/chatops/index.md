@@ -7,8 +7,9 @@ type: index, concepts, howto
 
 # GitLab ChatOps **(FREE)**
 
-> - [Introduced](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/4466) in [GitLab Ultimate](https://about.gitlab.com/pricing/) 10.6.
-> - [Moved](https://gitlab.com/gitlab-org/gitlab-foss/-/merge_requests/24780) to [GitLab Free](https://about.gitlab.com/pricing/) in 11.9.
+> - [Introduced](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/4466) in GitLab Ultimate 10.6.
+> - [Moved](https://gitlab.com/gitlab-org/gitlab-foss/-/merge_requests/24780) to GitLab Free in 11.9.
+> - `CHAT_USER_ID` was [introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/341798) in GitLab 14.4.
 
 GitLab ChatOps provides a method to interact with CI/CD jobs through chat services
 like Slack. Many organizations' discussion, collaboration, and troubleshooting takes
@@ -17,7 +18,7 @@ posted back to the channel can significantly augment your team's workflow.
 
 ## How GitLab ChatOps works
 
-GitLab ChatOps is built upon [GitLab CI/CD](../README.md) and
+GitLab ChatOps is built upon [GitLab CI/CD](../index.md) and
 [Slack Slash Commands](../../user/project/integrations/slack_slash_commands.md).
 ChatOps provides a `run` action for [slash commands](../../integration/slash_commands.md)
 with the following arguments:
@@ -30,6 +31,7 @@ to the job:
 
 - `CHAT_INPUT` contains any additional arguments.
 - `CHAT_CHANNEL` is set to the name of channel the action was triggered in.
+- `CHAT_USER_ID` is set to the chat service's user ID of the user who triggered the slash command.
 
 When executed, ChatOps looks up the specified job name and attempts to match it
 to a corresponding job in [`.gitlab-ci.yml`](../yaml/index.md). If a matching job
@@ -41,7 +43,7 @@ job completes:
   [Slack API](https://api.slack.com/) to send data to the channel.
 
 To use the `run` command, you must have at least the
-[Developer role](../../user/permissions.md#project-members-permissions).
+Developer role.
 If a job shouldn't be able to be triggered from chat, you can set the job to `except: [chat]`.
 
 ## Best practices for ChatOps CI jobs
@@ -53,7 +55,7 @@ functions available. Consider these best practices when creating ChatOps jobs:
   of the standard CI pipeline.
 - If the job is set to `when: manual`, ChatOps creates the pipeline, but the job waits to be started.
 - ChatOps provides limited support for access control. If the user triggering the
-  slash command has at least the [Developer role](../../user/permissions.md#project-members-permissions)
+  slash command has at least the Developer role
   in the project, the job runs. The job itself can use existing
   [CI/CD variables](../variables/index.md#predefined-cicd-variables) like
   `GITLAB_USER_ID` to perform additional rights validation, but

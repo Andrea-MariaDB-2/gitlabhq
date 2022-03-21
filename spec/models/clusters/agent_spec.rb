@@ -11,6 +11,8 @@ RSpec.describe Clusters::Agent do
   it { is_expected.to have_many(:last_used_agent_tokens).class_name('Clusters::AgentToken') }
   it { is_expected.to have_many(:group_authorizations).class_name('Clusters::Agents::GroupAuthorization') }
   it { is_expected.to have_many(:authorized_groups).through(:group_authorizations) }
+  it { is_expected.to have_many(:project_authorizations).class_name('Clusters::Agents::ProjectAuthorization') }
+  it { is_expected.to have_many(:authorized_projects).through(:project_authorizations).class_name('::Project') }
 
   it { is_expected.to validate_presence_of(:name) }
   it { is_expected.to validate_length_of(:name).is_at_most(63) }
@@ -72,5 +74,61 @@ RSpec.describe Clusters::Agent do
     it 'does not have access to other projects' do
       expect(agent.has_access_to?(create(:project))).to be_falsey
     end
+  end
+
+  describe '#connected?' do
+    let_it_be(:agent) { create(:cluster_agent) }
+
+    let!(:token) { create(:cluster_agent_token, agent: agent, last_used_at: last_used_at) }
+
+    subject { agent.connected? }
+
+    context 'agent has never connected' do
+      let(:last_used_at) { nil }
+
+      it { is_expected.to be_falsey }
+    end
+
+    context 'agent has connected, but not recently' do
+      let(:last_used_at) { 2.hours.ago }
+
+      it { is_expected.to be_falsey }
+    end
+
+    context 'agent has connected recently' do
+      let(:last_used_at) { 2.minutes.ago }
+
+      it { is_expected.to be_truthy }
+
+      context 'agent token has been revoked' do
+        before do
+          token.revoked!
+        end
+
+        it { is_expected.to be_falsey }
+      end
+    end
+
+    context 'agent has multiple tokens' do
+      let!(:inactive_token) { create(:cluster_agent_token, agent: agent, last_used_at: 2.hours.ago) }
+      let(:last_used_at) { 2.minutes.ago }
+
+      it { is_expected.to be_truthy }
+    end
+  end
+
+  describe '#activity_event_deletion_cutoff' do
+    let_it_be(:agent) { create(:cluster_agent) }
+    let_it_be(:event1) { create(:agent_activity_event, agent: agent, recorded_at: 1.hour.ago) }
+    let_it_be(:event2) { create(:agent_activity_event, agent: agent, recorded_at: 2.hours.ago) }
+    let_it_be(:event3) { create(:agent_activity_event, agent: agent, recorded_at: 3.hours.ago) }
+
+    subject { agent.activity_event_deletion_cutoff }
+
+    before do
+      stub_const("#{described_class}::ACTIVITY_EVENT_LIMIT", 2)
+    end
+
+    it { is_expected.to be_like_time(event2.recorded_at) }
   end
 end

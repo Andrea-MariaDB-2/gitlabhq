@@ -210,7 +210,7 @@ function UsersSelect(currentUser, els, options = {}) {
 
       return axios.put(issueURL, data).then(({ data }) => {
         let user = {};
-        let tooltipTitle = user.name;
+        let tooltipTitle;
         $dropdown.trigger('loaded.gl.dropdown');
         $loading.addClass('gl-display-none');
         if (data.assignee) {
@@ -806,7 +806,9 @@ UsersSelect.prototype.renderRow = function (
           </strong>
           ${
             username
-              ? `<span class="dropdown-menu-user-username gl-text-gray-400">${username}</span>`
+              ? `<span class="dropdown-menu-user-username gl-text-gray-400">${escape(
+                  username,
+                )}</span>`
               : ''
           }
           ${this.renderApprovalRules(elsClassName, user.applicable_approval_rules)}
@@ -842,7 +844,7 @@ UsersSelect.prototype.renderApprovalRules = function (elsClassName, approvalRule
   const [rule] = approvalRules;
   const countText = sprintf(__('(+%{count}&nbsp;rules)'), { count });
   const renderApprovalRulesCount = count > 1 ? `<span class="ml-1">${countText}</span>` : '';
-  const ruleName = rule.rule_type === 'code_owner' ? __('Code Owner') : rule.name;
+  const ruleName = rule.rule_type === 'code_owner' ? __('Code Owner') : escape(rule.name);
 
   return `<div class="gl-display-flex gl-font-sm">
     <span class="gl-text-truncate" title="${ruleName}">${ruleName}</span>

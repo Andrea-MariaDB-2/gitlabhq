@@ -5,10 +5,11 @@ require 'spec_helper'
 RSpec.describe 'Dashboard Todos' do
   include DesignManagementTestHelpers
 
-  let_it_be(:user)    { create(:user, username: 'john') }
-  let_it_be(:author)  { create(:user) }
+  let_it_be(:user) { create(:user, username: 'john') }
+  let_it_be(:user2) { create(:user, username: 'diane') }
+  let_it_be(:author) { create(:user) }
   let_it_be(:project) { create(:project, :public) }
-  let_it_be(:issue)   { create(:issue, project: project, due_date: Date.today, title: "Fix bug") }
+  let_it_be(:issue) { create(:issue, project: project, due_date: Date.today, title: "Fix bug") }
 
   before_all do
     project.add_developer(user)
@@ -22,6 +23,19 @@ RSpec.describe 'Dashboard Todos' do
 
     it 'shows "All done" message' do
       expect(page).to have_content 'Your To-Do List shows what to work on next'
+    end
+
+    context 'when user was assigned to an issue and marked it as done' do
+      before do
+        sign_in(user)
+      end
+
+      it 'shows "Are you looking for things to do?" message' do
+        create(:todo, :assigned, :done, user: user, project: project, target: issue, author: user2)
+        visit dashboard_todos_path
+
+        expect(page).to have_content 'Are you looking for things to do? Take a look at open issues, contribute to a merge request, or mention someone in a comment to automatically assign them a new to-do item.'
+      end
     end
   end
 
@@ -386,7 +400,7 @@ RSpec.describe 'Dashboard Todos' do
     end
 
     it 'shows the todo' do
-      expect(page).to have_content 'The build failed for merge request'
+      expect(page).to have_content 'The pipeline failed in merge request'
     end
 
     it 'links to the pipelines for the merge request' do
@@ -427,7 +441,7 @@ RSpec.describe 'Dashboard Todos' do
         target.project, target.issue, target.filename
       )
 
-      expect(current_path).to eq(expectation)
+      expect(page).to have_current_path(expectation, ignore_query: true)
     end
   end
 end

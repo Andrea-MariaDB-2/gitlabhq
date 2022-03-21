@@ -1,5 +1,4 @@
-import { uniq } from 'lodash';
-import { isBlockTablesFeatureEnabled } from './feature_flags';
+import { uniq, isString } from 'lodash';
 
 const defaultAttrs = {
   td: { colspan: 1, rowspan: 1, colwidth: null },
@@ -75,7 +74,7 @@ function getChildren(node) {
   return children;
 }
 
-function shouldRenderHTMLTable(table) {
+export function shouldRenderHTMLTable(table) {
   const { rows, cells } = getRowsAndCells(table);
 
   const cellChildCount = Math.max(...cells.map((cell) => cell.childCount));
@@ -260,11 +259,16 @@ export function renderContent(state, node, forceRenderInline) {
   }
 }
 
-export function renderHTMLNode(tagName, forceRenderInline = false) {
+export function renderHTMLNode(tagName, forceRenderContentInline = false) {
   return (state, node) => {
     renderTagOpen(state, tagName, node.attrs);
-    renderContent(state, node, forceRenderInline);
+    renderContent(state, node, forceRenderContentInline);
     renderTagClose(state, tagName, false);
+
+    if (forceRenderContentInline) {
+      state.closeBlock(node);
+      state.flushClose();
+    }
   };
 }
 
@@ -282,11 +286,6 @@ export function renderOrderedList(state, node) {
 }
 
 export function renderTableCell(state, node) {
-  if (!isBlockTablesFeatureEnabled()) {
-    state.renderInline(node);
-    return;
-  }
-
   if (!isInBlockTable(node) || containsParagraphWithOnlyText(node)) {
     state.renderInline(node.child(0));
   } else {
@@ -303,9 +302,7 @@ export function renderTableRow(state, node) {
 }
 
 export function renderTable(state, node) {
-  if (isBlockTablesFeatureEnabled()) {
-    setIsInBlockTable(node, shouldRenderHTMLTable(node));
-  }
+  setIsInBlockTable(node, shouldRenderHTMLTable(node));
 
   if (isInBlockTable(node)) renderTagOpen(state, 'table');
 
@@ -317,9 +314,7 @@ export function renderTable(state, node) {
   state.closeBlock(node);
   state.flushClose();
 
-  if (isBlockTablesFeatureEnabled()) {
-    unsetIsInBlockTable(node);
-  }
+  unsetIsInBlockTable(node);
 }
 
 export function renderHardBreak(state, node, parent, index) {
@@ -335,9 +330,12 @@ export function renderHardBreak(state, node, parent, index) {
 
 export function renderImage(state, node) {
   const { alt, canonicalSrc, src, title } = node.attrs;
-  const quotedTitle = title ? ` ${state.quote(title)}` : '';
 
-  state.write(`![${state.esc(alt || '')}](${state.esc(canonicalSrc || src)}${quotedTitle})`);
+  if (isString(src) || isString(canonicalSrc)) {
+    const quotedTitle = title ? ` ${state.quote(title)}` : '';
+
+    state.write(`![${state.esc(alt || '')}](${state.esc(canonicalSrc || src)}${quotedTitle})`);
+  }
 }
 
 export function renderPlayable(state, node) {

@@ -18,6 +18,7 @@
 class NotificationService
   class Async
     attr_reader :parent
+
     delegate :respond_to_missing, to: :parent
 
     def initialize(parent)
@@ -64,6 +65,13 @@ class NotificationService
     end
   end
 
+  # Notify the owner of the account when a new personal access token is created
+  def access_token_created(user, token_name)
+    return unless user.can?(:receive_notifications)
+
+    mailer.access_token_created_email(user, token_name).deliver_later
+  end
+
   # Notify the owner of the personal access token, when it is about to expire
   # And mark the token with about_to_expire_delivered
   def access_token_about_to_expire(user, token_names)
@@ -99,6 +107,13 @@ class NotificationService
     return unless user.can?(:receive_notifications)
 
     mailer.unknown_sign_in_email(user, ip, time).deliver_later
+  end
+
+  # Notify a user when a new email address is added to the their account
+  def new_email_address_added(user, email)
+    return unless user.can?(:receive_notifications)
+
+    mailer.new_email_address_added_email(user, email).deliver_later
   end
 
   # When create an issue we should send an email to:
@@ -298,6 +313,14 @@ class NotificationService
 
     recipients.each do |recipient|
       mailer.request_review_merge_request_email(recipient.user.id, merge_request.id, current_user.id, recipient.reason).deliver_later
+    end
+  end
+
+  def attention_requested_of_merge_request(merge_request, current_user, user)
+    recipients = NotificationRecipients::BuildService.build_attention_requested_recipients(merge_request, current_user, user)
+
+    recipients.each do |recipient|
+      mailer.attention_requested_merge_request_email(recipient.user.id, merge_request.id, current_user.id, recipient.reason).deliver_later
     end
   end
 
@@ -598,8 +621,8 @@ class NotificationService
       user.notification_email_for(pipeline.project.group)
     end
 
-    if recipients.any?
-      mailer.public_send(email_template, pipeline, recipients).deliver_later
+    recipients.each do |recipient|
+      mailer.public_send(email_template, pipeline, recipient).deliver_later
     end
   end
 

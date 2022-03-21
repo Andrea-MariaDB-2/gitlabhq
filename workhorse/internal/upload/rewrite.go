@@ -6,8 +6,10 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"mime"
 	"mime/multipart"
 	"net/http"
+	"net/textproto"
 	"os"
 	"path/filepath"
 	"strings"
@@ -19,13 +21,18 @@ import (
 	"golang.org/x/image/tiff"
 
 	"gitlab.com/gitlab-org/gitlab/workhorse/internal/api"
-	"gitlab.com/gitlab-org/gitlab/workhorse/internal/filestore"
 	"gitlab.com/gitlab-org/gitlab/workhorse/internal/lsif_transformer/parser"
+	"gitlab.com/gitlab-org/gitlab/workhorse/internal/upload/destination"
 	"gitlab.com/gitlab-org/gitlab/workhorse/internal/upload/exif"
 )
 
+const maxFilesAllowed = 10
+
 // ErrInjectedClientParam means that the client sent a parameter that overrides one of our own fields
-var ErrInjectedClientParam = errors.New("injected client parameter")
+var (
+	ErrInjectedClientParam  = errors.New("injected client parameter")
+	ErrTooManyFilesUploaded = fmt.Errorf("upload request contains more than %v files", maxFilesAllowed)
+)
 
 var (
 	multipartUploadRequests = promauto.NewCounterVec(
@@ -61,7 +68,7 @@ type rewriter struct {
 	finalizedFields map[string]bool
 }
 
-func rewriteFormFilesFromMultipart(r *http.Request, writer *multipart.Writer, preauth *api.Response, filter MultipartFormProcessor, opts *filestore.SaveFileOpts) error {
+func rewriteFormFilesFromMultipart(r *http.Request, writer *multipart.Writer, preauth *api.Response, filter MultipartFormProcessor, opts *destination.UploadOpts) error {
 	// Create multipart reader
 	reader, err := r.MultipartReader()
 	if err != nil {
@@ -90,7 +97,8 @@ func rewriteFormFilesFromMultipart(r *http.Request, writer *multipart.Writer, pr
 			return err
 		}
 
-		name := p.FormName()
+		name, filename := parseAndNormalizeContentDisposition(p.Header)
+
 		if name == "" {
 			continue
 		}
@@ -99,7 +107,7 @@ func rewriteFormFilesFromMultipart(r *http.Request, writer *multipart.Writer, pr
 			return ErrInjectedClientParam
 		}
 
-		if p.FileName() != "" {
+		if filename != "" {
 			err = rew.handleFilePart(r.Context(), name, p, opts)
 		} else {
 			err = rew.copyPart(r.Context(), name, p)
@@ -113,7 +121,18 @@ func rewriteFormFilesFromMultipart(r *http.Request, writer *multipart.Writer, pr
 	return nil
 }
 
-func (rew *rewriter) handleFilePart(ctx context.Context, name string, p *multipart.Part, opts *filestore.SaveFileOpts) error {
+func parseAndNormalizeContentDisposition(header textproto.MIMEHeader) (string, string) {
+	const key = "Content-Disposition"
+	mediaType, params, _ := mime.ParseMediaType(header.Get(key))
+	header.Set(key, mime.FormatMediaType(mediaType, params))
+	return params["name"], params["filename"]
+}
+
+func (rew *rewriter) handleFilePart(ctx context.Context, name string, p *multipart.Part, opts *destination.UploadOpts) error {
+	if rew.filter.Count() >= maxFilesAllowed {
+		return ErrTooManyFilesUploaded
+	}
+
 	multipartFiles.WithLabelValues(rew.filter.Name()).Inc()
 
 	filename := filepath.Base(p.FileName())
@@ -145,10 +164,10 @@ func (rew *rewriter) handleFilePart(ctx context.Context, name string, p *multipa
 
 	defer inputReader.Close()
 
-	fh, err := filestore.SaveFileFromReader(ctx, inputReader, -1, opts)
+	fh, err := destination.Upload(ctx, inputReader, -1, opts)
 	if err != nil {
 		switch err {
-		case filestore.ErrEntityTooLarge, exif.ErrRemovingExif:
+		case destination.ErrEntityTooLarge, exif.ErrRemovingExif:
 			return err
 		default:
 			return fmt.Errorf("persisting multipart file: %v", err)
@@ -226,7 +245,7 @@ func handleExifUpload(ctx context.Context, r io.Reader, filename string, imageTy
 }
 
 func isTIFF(r io.Reader) bool {
-	_, err := tiff.Decode(r)
+	_, err := tiff.DecodeConfig(r)
 	if err == nil {
 		return true
 	}

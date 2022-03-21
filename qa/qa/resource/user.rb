@@ -7,13 +7,18 @@ module QA
 
       attr_reader :unique_id
       attr_writer :username, :password
-      attr_accessor :admin, :provider, :extern_uid, :expect_fabrication_success, :hard_delete_on_api_removal
+      attr_accessor :admin,
+                    :provider,
+                    :extern_uid,
+                    :expect_fabrication_success,
+                    :hard_delete_on_api_removal,
+                    :access_level
 
-      attribute :id
-      attribute :name
-      attribute :first_name
-      attribute :last_name
-      attribute :email
+      attributes :id,
+                 :name,
+                 :first_name,
+                 :last_name,
+                 :email
 
       def initialize
         @admin = false
@@ -93,6 +98,12 @@ module QA
         super
       end
 
+      def exists?
+        api_get
+      rescue ResourceNotFoundError
+        false
+      end
+
       def api_delete
         super
 
@@ -123,6 +134,10 @@ module QA
         "/users/#{id}/block"
       end
 
+      def api_approve_path
+        "/users/#{id}/approve"
+      end
+
       def api_post_body
         {
           admin: admin,
@@ -148,6 +163,13 @@ module QA
         end
       end
 
+      def approve!
+        response = post(Runtime::API::Request.new(api_client, api_approve_path).url, nil)
+        return if response.code == 201
+
+        raise ResourceUpdateFailedError, "Failed to approve user. Request returned (#{response.code}): `#{response}`"
+      end
+
       def block!
         response = post(Runtime::API::Request.new(api_client, api_block_path).url, nil)
         return if response.code == HTTP_STATUS_CREATED
@@ -163,6 +185,15 @@ module QA
           ResourceUpdateFailedError,
           "Failed to set public email. Request returned (#{response.code}): `#{response}`."
         )
+      end
+
+      protected
+
+      # Compare users by username and password
+      #
+      # @return [Array]
+      def comparable
+        [username, password]
       end
 
       private
@@ -187,7 +218,8 @@ module QA
       end
 
       def fetching_own_data?
-        api_user&.username == username || Runtime::User.username == username
+        runtime_username = Runtime::User.ldap_user? ? Runtime::User.ldap_username : Runtime::User.username
+        api_user&.username == username || runtime_username == username
       end
     end
   end

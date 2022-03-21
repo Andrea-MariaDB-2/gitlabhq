@@ -78,13 +78,69 @@ RSpec.describe Ci::BuildRunnerPresenter do
               artifact_format: Ci::JobArtifact::TYPE_AND_FORMAT_PAIRS.fetch(file_type),
               paths: [filename],
               when: 'always'
-            }
+            }.compact
           end
 
           it 'presents correct hash' do
-            expect(presenter.artifacts.first).to include(report_expectation)
+            expect(presenter.artifacts).to contain_exactly(report_expectation)
           end
         end
+      end
+    end
+
+    context 'when a specific coverage_report type is given' do
+      let(:coverage_format) { :cobertura }
+      let(:filename) { 'cobertura-coverage.xml' }
+      let(:coverage_report) { { path: filename, coverage_format: coverage_format } }
+      let(:report) { { coverage_report: coverage_report } }
+      let(:build) { create(:ci_build, options: { artifacts: { reports: report } }) }
+
+      let(:expected_coverage_report) do
+        {
+          name: filename,
+          artifact_type: coverage_format,
+          artifact_format: Ci::JobArtifact::TYPE_AND_FORMAT_PAIRS.fetch(coverage_format),
+          paths: [filename],
+          when: 'always'
+        }
+      end
+
+      it 'presents the coverage report hash with the coverage format' do
+        expect(presenter.artifacts).to contain_exactly(expected_coverage_report)
+      end
+    end
+
+    context 'when a specific coverage_report type is given with another report type' do
+      let(:coverage_format) { :cobertura }
+      let(:coverage_filename) { 'cobertura-coverage.xml' }
+      let(:coverage_report) { { path: coverage_filename, coverage_format: coverage_format } }
+      let(:ds_filename) { 'gl-dependency-scanning-report.json' }
+
+      let(:report) { { coverage_report: coverage_report, dependency_scanning: [ds_filename] } }
+      let(:build) { create(:ci_build, options: { artifacts: { reports: report } }) }
+
+      let(:expected_coverage_report) do
+        {
+          name: coverage_filename,
+          artifact_type: coverage_format,
+          artifact_format: Ci::JobArtifact::TYPE_AND_FORMAT_PAIRS.fetch(coverage_format),
+          paths: [coverage_filename],
+          when: 'always'
+        }
+      end
+
+      let(:expected_ds_report) do
+        {
+          name: ds_filename,
+          artifact_type: :dependency_scanning,
+          artifact_format: Ci::JobArtifact::TYPE_AND_FORMAT_PAIRS.fetch(:dependency_scanning),
+          paths: [ds_filename],
+          when: 'always'
+        }
+      end
+
+      it 'presents both reports' do
+        expect(presenter.artifacts).to contain_exactly(expected_coverage_report, expected_ds_report)
       end
     end
 
@@ -173,11 +229,7 @@ RSpec.describe Ci::BuildRunnerPresenter do
 
     it 'returns the correct refspecs' do
       is_expected.to contain_exactly("+refs/heads/#{build.ref}:refs/remotes/origin/#{build.ref}",
-                                     "+#{pipeline.sha}:refs/pipelines/#{pipeline.id}")
-    end
-
-    it 'uses a SHA in the persistent refspec' do
-      expect(subject[0]).to match(%r{^\+[0-9a-f]{40}:refs/pipelines/[0-9]+$})
+                                     "+refs/pipelines/#{pipeline.id}:refs/pipelines/#{pipeline.id}")
     end
 
     context 'when ref is tag' do
@@ -185,7 +237,7 @@ RSpec.describe Ci::BuildRunnerPresenter do
 
       it 'returns the correct refspecs' do
         is_expected.to contain_exactly("+refs/tags/#{build.ref}:refs/tags/#{build.ref}",
-                                       "+#{pipeline.sha}:refs/pipelines/#{pipeline.id}")
+                                       "+refs/pipelines/#{pipeline.id}:refs/pipelines/#{pipeline.id}")
       end
 
       context 'when GIT_DEPTH is zero' do
@@ -196,7 +248,7 @@ RSpec.describe Ci::BuildRunnerPresenter do
         it 'returns the correct refspecs' do
           is_expected.to contain_exactly('+refs/tags/*:refs/tags/*',
                                          '+refs/heads/*:refs/remotes/origin/*',
-                                         "+#{pipeline.sha}:refs/pipelines/#{pipeline.id}")
+                                         "+refs/pipelines/#{pipeline.id}:refs/pipelines/#{pipeline.id}")
         end
       end
     end
@@ -212,7 +264,7 @@ RSpec.describe Ci::BuildRunnerPresenter do
 
       it 'returns the correct refspecs' do
         is_expected
-          .to contain_exactly("+#{pipeline.sha}:refs/pipelines/#{pipeline.id}")
+          .to contain_exactly("+refs/pipelines/#{pipeline.id}:refs/pipelines/#{pipeline.id}")
       end
 
       context 'when GIT_DEPTH is zero' do
@@ -222,7 +274,7 @@ RSpec.describe Ci::BuildRunnerPresenter do
 
         it 'returns the correct refspecs' do
           is_expected
-            .to contain_exactly("+#{pipeline.sha}:refs/pipelines/#{pipeline.id}",
+            .to contain_exactly("+refs/pipelines/#{pipeline.id}:refs/pipelines/#{pipeline.id}",
                                 '+refs/heads/*:refs/remotes/origin/*',
                                 '+refs/tags/*:refs/tags/*')
         end
@@ -232,7 +284,7 @@ RSpec.describe Ci::BuildRunnerPresenter do
         let(:merge_request) { create(:merge_request, :with_legacy_detached_merge_request_pipeline) }
 
         it 'returns the correct refspecs' do
-          is_expected.to contain_exactly("+#{pipeline.sha}:refs/pipelines/#{pipeline.id}",
+          is_expected.to contain_exactly("+refs/pipelines/#{pipeline.id}:refs/pipelines/#{pipeline.id}",
                                          "+refs/heads/#{build.ref}:refs/remotes/origin/#{build.ref}")
         end
       end
@@ -250,7 +302,7 @@ RSpec.describe Ci::BuildRunnerPresenter do
 
       it 'exposes the persistent pipeline ref' do
         is_expected
-          .to contain_exactly("+#{pipeline.sha}:refs/pipelines/#{pipeline.id}",
+          .to contain_exactly("+refs/pipelines/#{pipeline.id}:refs/pipelines/#{pipeline.id}",
                               "+refs/heads/#{build.ref}:refs/remotes/origin/#{build.ref}")
       end
     end
@@ -259,12 +311,7 @@ RSpec.describe Ci::BuildRunnerPresenter do
   describe '#runner_variables' do
     subject { presenter.runner_variables }
 
-    let_it_be(:project_with_flag_disabled) { create(:project, :repository) }
-    let_it_be(:project_with_flag_enabled) { create(:project, :repository) }
-
-    before do
-      stub_feature_flags(variable_inside_variable: [project_with_flag_enabled])
-    end
+    let_it_be(:project) { create(:project, :repository) }
 
     shared_examples 'returns an array with the expected variables' do
       it 'returns an array' do
@@ -276,21 +323,11 @@ RSpec.describe Ci::BuildRunnerPresenter do
       end
     end
 
-    context 'when FF :variable_inside_variable is disabled' do
-      let(:sha) { project_with_flag_disabled.repository.commit.sha }
-      let(:pipeline) { create(:ci_pipeline, sha: sha, project: project_with_flag_disabled) }
-      let(:build) { create(:ci_build, pipeline: pipeline) }
+    let(:sha) { project.repository.commit.sha }
+    let(:pipeline) { create(:ci_pipeline, sha: sha, project: project) }
+    let(:build) { create(:ci_build, pipeline: pipeline) }
 
-      it_behaves_like 'returns an array with the expected variables'
-    end
-
-    context 'when FF :variable_inside_variable is enabled' do
-      let(:sha) { project_with_flag_enabled.repository.commit.sha }
-      let(:pipeline) { create(:ci_pipeline, sha: sha, project: project_with_flag_enabled) }
-      let(:build) { create(:ci_build, pipeline: pipeline) }
-
-      it_behaves_like 'returns an array with the expected variables'
-    end
+    it_behaves_like 'returns an array with the expected variables'
   end
 
   describe '#runner_variables subset' do
@@ -305,32 +342,12 @@ RSpec.describe Ci::BuildRunnerPresenter do
         create(:ci_pipeline_variable, key: 'C', value: 'value', pipeline: build.pipeline)
       end
 
-      context 'when FF :variable_inside_variable is disabled' do
-        before do
-          stub_feature_flags(variable_inside_variable: false)
-        end
-
-        it 'returns non-expanded variables' do
-          is_expected.to eq [
-                              { key: 'A', value: 'refA-$B', public: false, masked: false },
-                              { key: 'B', value: 'refB-$C-$D', public: false, masked: false },
-                              { key: 'C', value: 'value', public: false, masked: false }
-                            ]
-        end
-      end
-
-      context 'when FF :variable_inside_variable is enabled' do
-        before do
-          stub_feature_flags(variable_inside_variable: [build.project])
-        end
-
-        it 'returns expanded and sorted variables' do
-          is_expected.to eq [
-                              { key: 'C', value: 'value', public: false, masked: false },
-                              { key: 'B', value: 'refB-value-$D', public: false, masked: false },
-                              { key: 'A', value: 'refA-refB-value-$D', public: false, masked: false }
-                            ]
-        end
+      it 'returns expanded and sorted variables' do
+        is_expected.to eq [
+                            { key: 'C', value: 'value', public: false, masked: false },
+                            { key: 'B', value: 'refB-value-$D', public: false, masked: false },
+                            { key: 'A', value: 'refA-refB-value-$D', public: false, masked: false }
+                          ]
       end
     end
   end

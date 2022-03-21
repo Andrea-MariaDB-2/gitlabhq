@@ -4,8 +4,10 @@ module API
   module Entities
     class User < UserBasic
       include UsersHelper
+      include TimeZoneHelper
+
       expose :created_at, if: ->(user, opts) { Ability.allowed?(opts[:current_user], :read_user_profile, user) }
-      expose :bio, :bio_html, :location, :public_email, :skype, :linkedin, :twitter, :website_url, :organization, :job_title, :pronouns
+      expose :bio, :location, :public_email, :skype, :linkedin, :twitter, :website_url, :organization, :job_title, :pronouns
       expose :bot?, as: :bot
       expose :work_information do |user|
         work_information(user)
@@ -15,6 +17,9 @@ module API
       end
       expose :following, if: ->(user, opts) { Ability.allowed?(opts[:current_user], :read_user_profile, user) } do |user|
         user.followees.size
+      end
+      expose :local_time do |user|
+        local_time(user.timezone)
       end
     end
   end

@@ -13,13 +13,16 @@ require 'marginalia'
 # matching against the raw SQL, and prepending the comment prevents color
 # coding from working in the development log.
 Marginalia::Comment.prepend_comment = true if Rails.env.production?
-Marginalia::Comment.components = [:application, :correlation_id, :jid, :endpoint_id]
+Marginalia::Comment.components = [:application, :correlation_id, :jid, :endpoint_id, :db_config_name]
 
 # As mentioned in https://github.com/basecamp/marginalia/pull/93/files,
 # adding :line has some overhead because a regexp on the backtrace has
 # to be run on every SQL query. Only enable this in development because
 # we've seen it slow things down.
-Marginalia::Comment.components << :line if Rails.env.development?
+if Rails.env.development?
+  Marginalia::Comment.components << :line
+  Marginalia::Comment.lines_to_ignore = Regexp.union(Gitlab::BacktraceCleaner::IGNORE_BACKTRACES + %w(lib/ruby/gems/ lib/gem_extensions/ lib/ruby/))
+end
 
 Gitlab::Marginalia.set_application_name
 

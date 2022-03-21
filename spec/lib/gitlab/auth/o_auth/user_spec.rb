@@ -67,7 +67,7 @@ RSpec.describe Gitlab::Auth::OAuth::User do
         create(:omniauth_user, extern_uid: 'my-uid', provider: provider)
         stub_omniauth_config(allow_single_sign_on: [provider], external_providers: [provider])
 
-        oauth_user.save
+        oauth_user.save # rubocop:disable Rails/SaveBang
 
         expect(gl_user).to be_valid
         expect(gl_user.external).to be_falsey
@@ -83,7 +83,7 @@ RSpec.describe Gitlab::Auth::OAuth::User do
         it 'creates the user' do
           stub_omniauth_config(allow_single_sign_on: [provider])
 
-          oauth_user.save
+          oauth_user.save # rubocop:disable Rails/SaveBang
 
           expect(gl_user).to be_persisted
         end
@@ -97,7 +97,7 @@ RSpec.describe Gitlab::Auth::OAuth::User do
         it 'creates and confirms the user anyway' do
           stub_omniauth_config(allow_single_sign_on: [provider])
 
-          oauth_user.save
+          oauth_user.save # rubocop:disable Rails/SaveBang
 
           expect(gl_user).to be_persisted
           expect(gl_user).to be_confirmed
@@ -112,7 +112,7 @@ RSpec.describe Gitlab::Auth::OAuth::User do
         it 'creates the user' do
           stub_omniauth_config(allow_single_sign_on: [provider])
 
-          oauth_user.save
+          oauth_user.save # rubocop:disable Rails/SaveBang
 
           expect(gl_user).to be_persisted
         end
@@ -121,7 +121,7 @@ RSpec.describe Gitlab::Auth::OAuth::User do
       it 'marks user as having password_automatically_set' do
         stub_omniauth_config(allow_single_sign_on: [provider], external_providers: [provider])
 
-        oauth_user.save
+        oauth_user.save # rubocop:disable Rails/SaveBang
 
         expect(gl_user).to be_persisted
         expect(gl_user).to be_password_automatically_set
@@ -131,7 +131,7 @@ RSpec.describe Gitlab::Auth::OAuth::User do
         context 'provider is marked as external' do
           it 'marks user as external' do
             stub_omniauth_config(allow_single_sign_on: [provider], external_providers: [provider])
-            oauth_user.save
+            oauth_user.save # rubocop:disable Rails/SaveBang
             expect(gl_user).to be_valid
             expect(gl_user.external).to be_truthy
           end
@@ -141,7 +141,7 @@ RSpec.describe Gitlab::Auth::OAuth::User do
           it 'does not mark external user as internal' do
             create(:omniauth_user, extern_uid: 'my-uid', provider: provider, external: true)
             stub_omniauth_config(allow_single_sign_on: [provider], external_providers: ['facebook'])
-            oauth_user.save
+            oauth_user.save # rubocop:disable Rails/SaveBang
             expect(gl_user).to be_valid
             expect(gl_user.external).to be_truthy
           end
@@ -151,9 +151,9 @@ RSpec.describe Gitlab::Auth::OAuth::User do
           context 'when adding a new OAuth identity' do
             it 'does not promote an external user to internal' do
               user = create(:user, email: 'john@mail.com', external: true)
-              user.identities.create(provider: provider, extern_uid: uid)
+              user.identities.create!(provider: provider, extern_uid: uid)
 
-              oauth_user.save
+              oauth_user.save # rubocop:disable Rails/SaveBang
               expect(gl_user).to be_valid
               expect(gl_user.external).to be_truthy
             end
@@ -166,7 +166,7 @@ RSpec.describe Gitlab::Auth::OAuth::User do
           end
 
           it "creates a user from Omniauth" do
-            oauth_user.save
+            oauth_user.save # rubocop:disable Rails/SaveBang
 
             expect(gl_user).to be_valid
             identity = gl_user.identities.first
@@ -181,7 +181,7 @@ RSpec.describe Gitlab::Auth::OAuth::User do
           end
 
           it "creates a user from Omniauth" do
-            oauth_user.save
+            oauth_user.save # rubocop:disable Rails/SaveBang
 
             expect(gl_user).to be_valid
             identity = gl_user.identities.first
@@ -196,7 +196,7 @@ RSpec.describe Gitlab::Auth::OAuth::User do
           end
 
           it 'throws an error' do
-            expect { oauth_user.save }.to raise_error StandardError
+            expect { oauth_user.save }.to raise_error StandardError # rubocop:disable Rails/SaveBang
           end
         end
 
@@ -206,7 +206,7 @@ RSpec.describe Gitlab::Auth::OAuth::User do
           end
 
           it 'throws an error' do
-            expect { oauth_user.save }.to raise_error StandardError
+            expect { oauth_user.save }.to raise_error StandardError # rubocop:disable Rails/SaveBang
           end
         end
       end
@@ -228,7 +228,7 @@ RSpec.describe Gitlab::Auth::OAuth::User do
           let!(:existing_user) { create(:user, email: 'john@mail.com', username: 'john') }
 
           it "adds the OmniAuth identity to the GitLab user account" do
-            oauth_user.save
+            oauth_user.save # rubocop:disable Rails/SaveBang
 
             expect(gl_user).not_to be_valid
           end
@@ -248,7 +248,7 @@ RSpec.describe Gitlab::Auth::OAuth::User do
           let!(:existing_user) { create(:user, email: 'john@mail.com', username: 'john') }
 
           it "adds the OmniAuth identity to the GitLab user account" do
-            oauth_user.save
+            oauth_user.save # rubocop:disable Rails/SaveBang
 
             expect(gl_user).to be_valid
             expect(gl_user.username).to eql 'john'
@@ -277,7 +277,7 @@ RSpec.describe Gitlab::Auth::OAuth::User do
           let!(:existing_user) { create(:user, email: 'john@mail.com', username: 'john') }
 
           it "adds the OmniAuth identity to the GitLab user account" do
-            oauth_user.save
+            oauth_user.save # rubocop:disable Rails/SaveBang
 
             expect(gl_user).to be_valid
             expect(gl_user.username).to eql 'john'
@@ -337,7 +337,7 @@ RSpec.describe Gitlab::Auth::OAuth::User do
                 before do
                   allow(Gitlab::Auth::Ldap::Person).to receive(:find_by_uid).and_return(ldap_user)
 
-                  oauth_user.save
+                  oauth_user.save # rubocop:disable Rails/SaveBang
                 end
 
                 it "creates a user with dual LDAP and omniauth identities" do
@@ -376,7 +376,7 @@ RSpec.describe Gitlab::Auth::OAuth::User do
                   allow(Gitlab::Auth::Ldap::Person).to receive(:find_by_email).with(uid, any_args).and_return(nil)
                   allow(Gitlab::Auth::Ldap::Person).to receive(:find_by_email).with(info_hash[:email], any_args).and_return(ldap_user)
 
-                  oauth_user.save
+                  oauth_user.save # rubocop:disable Rails/SaveBang
                 end
 
                 it 'creates the LDAP identity' do
@@ -392,7 +392,7 @@ RSpec.describe Gitlab::Auth::OAuth::User do
               it "adds the omniauth identity to the LDAP account" do
                 allow(Gitlab::Auth::Ldap::Person).to receive(:find_by_uid).and_return(ldap_user)
 
-                oauth_user.save
+                oauth_user.save # rubocop:disable Rails/SaveBang
 
                 expect(gl_user).to be_valid
                 expect(gl_user.username).to eql 'john'
@@ -414,7 +414,7 @@ RSpec.describe Gitlab::Auth::OAuth::User do
                 allow(Gitlab::Auth::Ldap::Person).to receive(:find_by_uid).and_return(nil)
                 allow(Gitlab::Auth::Ldap::Person).to receive(:find_by_email).and_return(ldap_user)
 
-                oauth_user.save
+                oauth_user.save # rubocop:disable Rails/SaveBang
 
                 identities_as_hash = gl_user.identities.map { |id| { provider: id.provider, extern_uid: id.extern_uid } }
                 expect(identities_as_hash).to match_array(result_identities(dn, uid))
@@ -426,7 +426,7 @@ RSpec.describe Gitlab::Auth::OAuth::User do
                   allow(Gitlab::Auth::Ldap::Person).to receive(:find_by_email).and_return(nil)
                   allow(Gitlab::Auth::Ldap::Person).to receive(:find_by_dn).and_return(ldap_user)
 
-                  oauth_user.save
+                  oauth_user.save # rubocop:disable Rails/SaveBang
 
                   identities_as_hash = gl_user.identities.map { |id| { provider: id.provider, extern_uid: id.extern_uid } }
                   expect(identities_as_hash).to match_array(result_identities(dn, uid))
@@ -447,7 +447,7 @@ RSpec.describe Gitlab::Auth::OAuth::User do
               end
 
               it 'does not save the identity' do
-                oauth_user.save
+                oauth_user.save # rubocop:disable Rails/SaveBang
 
                 identities_as_hash = gl_user.identities.map { |id| { provider: id.provider, extern_uid: id.extern_uid } }
                 expect(identities_as_hash).to match_array([{ provider: 'twitter', extern_uid: uid }])
@@ -467,7 +467,7 @@ RSpec.describe Gitlab::Auth::OAuth::User do
               it 'creates a user favoring the LDAP username and strips email domain' do
                 allow(Gitlab::Auth::Ldap::Person).to receive(:find_by_uid).and_return(ldap_user)
 
-                oauth_user.save
+                oauth_user.save # rubocop:disable Rails/SaveBang
 
                 expect(gl_user).to be_valid
                 expect(gl_user.username).to eql 'johndoe'
@@ -510,7 +510,7 @@ RSpec.describe Gitlab::Auth::OAuth::User do
               before do
                 allow(Gitlab::Auth::Ldap::Person).to receive(:find_by_uid).and_return(ldap_user)
 
-                oauth_user.save
+                oauth_user.save # rubocop:disable Rails/SaveBang
               end
 
               it "creates a user with dual LDAP and omniauth identities" do
@@ -549,7 +549,7 @@ RSpec.describe Gitlab::Auth::OAuth::User do
               it "adds the omniauth identity to the LDAP account" do
                 allow(Gitlab::Auth::Ldap::Person).to receive(:find_by_uid).and_return(ldap_user)
 
-                oauth_user.save
+                oauth_user.save # rubocop:disable Rails/SaveBang
 
                 expect(gl_user).to be_valid
                 expect(gl_user.username).to eql 'john'
@@ -577,28 +577,66 @@ RSpec.describe Gitlab::Auth::OAuth::User do
         stub_omniauth_config(allow_single_sign_on: ['twitter'])
       end
 
-      context 'signup with omniauth only' do
-        context 'dont block on create' do
-          before do
-            stub_omniauth_config(block_auto_created_users: false)
+      shared_examples 'being blocked on creation' do
+        context 'when blocking on creation' do
+          it 'creates a blocked user' do
+            oauth_user.save # rubocop:disable Rails/SaveBang
+            expect(gl_user).to be_valid
+            expect(gl_user).to be_blocked
           end
 
-          it do
-            oauth_user.save
+          context 'when a sign up user cap has been set up but has not been reached yet' do
+            it 'still creates a blocked user' do
+              stub_application_setting(new_user_signups_cap: 999)
+
+              oauth_user.save # rubocop:disable Rails/SaveBang
+              expect(gl_user).to be_valid
+              expect(gl_user).to be_blocked
+            end
+          end
+        end
+      end
+
+      shared_examples 'not being blocked on creation' do
+        context 'when not blocking on creation' do
+          it 'creates a non-blocked user' do
+            oauth_user.save # rubocop:disable Rails/SaveBang
             expect(gl_user).to be_valid
             expect(gl_user).not_to be_blocked
           end
         end
+      end
 
-        context 'block on create' do
+      context 'signup with SAML' do
+        let(:provider) { 'saml' }
+
+        before do
+          stub_omniauth_config({
+            allow_single_sign_on: ['saml'],
+            auto_link_saml_user: true,
+            block_auto_created_users: block_auto_created_users
+          })
+        end
+
+        it_behaves_like 'being blocked on creation' do
+          let(:block_auto_created_users) { true }
+        end
+
+        it_behaves_like 'not being blocked on creation' do
+          let(:block_auto_created_users) { false }
+        end
+      end
+
+      context 'signup with omniauth only' do
+        it_behaves_like 'being blocked on creation' do
           before do
             stub_omniauth_config(block_auto_created_users: true)
           end
+        end
 
-          it do
-            oauth_user.save
-            expect(gl_user).to be_valid
-            expect(gl_user).to be_blocked
+        it_behaves_like 'not being blocked on creation' do
+          before do
+            stub_omniauth_config(block_auto_created_users: false)
           end
         end
       end
@@ -614,31 +652,19 @@ RSpec.describe Gitlab::Auth::OAuth::User do
         end
 
         context "and no account for the LDAP user" do
-          context 'dont block on create (LDAP)' do
-            before do
-              allow_next_instance_of(Gitlab::Auth::Ldap::Config) do |instance|
-                allow(instance).to receive_messages(block_auto_created_users: false)
-              end
-            end
-
-            it do
-              oauth_user.save
-              expect(gl_user).to be_valid
-              expect(gl_user).not_to be_blocked
-            end
-          end
-
-          context 'block on create (LDAP)' do
+          it_behaves_like 'being blocked on creation' do
             before do
               allow_next_instance_of(Gitlab::Auth::Ldap::Config) do |instance|
                 allow(instance).to receive_messages(block_auto_created_users: true)
               end
             end
+          end
 
-            it do
-              oauth_user.save
-              expect(gl_user).to be_valid
-              expect(gl_user).to be_blocked
+          it_behaves_like 'not being blocked on creation' do
+            before do
+              allow_next_instance_of(Gitlab::Auth::Ldap::Config) do |instance|
+                allow(instance).to receive_messages(block_auto_created_users: false)
+              end
             end
           end
         end
@@ -646,31 +672,19 @@ RSpec.describe Gitlab::Auth::OAuth::User do
         context 'and LDAP user has an account already' do
           let!(:existing_user) { create(:omniauth_user, email: 'john@example.com', extern_uid: dn, provider: 'ldapmain', username: 'john') }
 
-          context 'dont block on create (LDAP)' do
+          it_behaves_like 'not being blocked on creation' do
             before do
               allow_next_instance_of(Gitlab::Auth::Ldap::Config) do |instance|
                 allow(instance).to receive_messages(block_auto_created_users: false)
               end
             end
-
-            it do
-              oauth_user.save
-              expect(gl_user).to be_valid
-              expect(gl_user).not_to be_blocked
-            end
           end
 
-          context 'block on create (LDAP)' do
+          it_behaves_like 'not being blocked on creation' do
             before do
               allow_next_instance_of(Gitlab::Auth::Ldap::Config) do |instance|
                 allow(instance).to receive_messages(block_auto_created_users: true)
               end
-            end
-
-            it do
-              oauth_user.save
-              expect(gl_user).to be_valid
-              expect(gl_user).not_to be_blocked
             end
           end
         end
@@ -678,59 +692,35 @@ RSpec.describe Gitlab::Auth::OAuth::User do
 
       context 'sign-in' do
         before do
-          oauth_user.save
+          oauth_user.save # rubocop:disable Rails/SaveBang
           oauth_user.gl_user.activate
         end
 
-        context 'dont block on create' do
+        it_behaves_like 'not being blocked on creation' do
           before do
             stub_omniauth_config(block_auto_created_users: false)
           end
-
-          it do
-            oauth_user.save
-            expect(gl_user).to be_valid
-            expect(gl_user).not_to be_blocked
-          end
         end
 
-        context 'block on create' do
+        it_behaves_like 'not being blocked on creation' do
           before do
             stub_omniauth_config(block_auto_created_users: true)
           end
-
-          it do
-            oauth_user.save
-            expect(gl_user).to be_valid
-            expect(gl_user).not_to be_blocked
-          end
         end
 
-        context 'dont block on create (LDAP)' do
+        it_behaves_like 'not being blocked on creation' do
           before do
             allow_next_instance_of(Gitlab::Auth::Ldap::Config) do |instance|
               allow(instance).to receive_messages(block_auto_created_users: false)
             end
           end
-
-          it do
-            oauth_user.save
-            expect(gl_user).to be_valid
-            expect(gl_user).not_to be_blocked
-          end
         end
 
-        context 'block on create (LDAP)' do
+        it_behaves_like 'not being blocked on creation' do
           before do
             allow_next_instance_of(Gitlab::Auth::Ldap::Config) do |instance|
               allow(instance).to receive_messages(block_auto_created_users: true)
             end
-          end
-
-          it do
-            oauth_user.save
-            expect(gl_user).to be_valid
-            expect(gl_user).not_to be_blocked
           end
         end
       end
@@ -791,7 +781,7 @@ RSpec.describe Gitlab::Auth::OAuth::User do
 
     context 'when collision with existing user' do
       it 'generates the username with a counter' do
-        oauth_user.save
+        oauth_user.save # rubocop:disable Rails/SaveBang
         oauth_user2 = described_class.new(OmniAuth::AuthHash.new(uid: 'my-uid2', provider: provider, info: { nickname: 'johngitlab-ETC@othermail.com', email: 'john@othermail.com' }))
 
         expect(oauth_user2.gl_user.username).to eq('johngitlab-ETC1')
@@ -1055,6 +1045,12 @@ RSpec.describe Gitlab::Auth::OAuth::User do
     it "when provider not in allow_bypass_two_factor array" do
       stub_omniauth_config(allow_bypass_two_factor: ["foo"])
       expect(oauth_user.bypass_two_factor?).to be_falsey
+    end
+  end
+
+  describe '#protocol_name' do
+    it 'is OAuth' do
+      expect(oauth_user.protocol_name).to eq('OAuth')
     end
   end
 end

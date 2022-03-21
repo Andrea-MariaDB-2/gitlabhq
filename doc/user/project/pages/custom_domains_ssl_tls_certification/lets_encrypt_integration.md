@@ -67,7 +67,7 @@ associated Pages domain. GitLab also renews it automatically.
 
 > [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/30146) in GitLab 13.0.
 
-If you get an error **Something went wrong while obtaining the Let's Encrypt certificate**, first, make sure that your pages site is set to "Everyone" in your project's **Settings > General > Visbility**. This allows the Let's Encrypt Servers reach your pages site. Once this is confirmed, you can try obtaining the certificate again by following these steps:
+If you get an error **Something went wrong while obtaining the Let's Encrypt certificate**, first, make sure that your pages site is set to "Everyone" in your project's **Settings > General > Visibility**. This allows the Let's Encrypt Servers reach your pages site. Once this is confirmed, you can try obtaining the certificate again by following these steps:
 
 1. Go to your project's **Settings > Pages**.
 1. Click **Edit** on your domain.
@@ -78,6 +78,8 @@ If you get an error **Something went wrong while obtaining the Let's Encrypt cer
     1. If you have a `CAA` DNS record for your domain or any higher level domains, make sure [it includes `letsencrypt.org`](https://letsencrypt.org/docs/caa/).
     1. Make sure [your domain is verified](index.md#1-add-a-custom-domain-to-pages).
     1. Go to step 1.
+
+Another possible cause of this error is the `_redirects` file because the current implementation relies on an HTTP ACME challenge. If you redirect the `.acme-challenge/` endpoint Let's Encrypt cannot validate the domain. Make sure you don't have a wildcard (`*`) redirect either as that too breaks validation. The problem with wildcard redirects is tracked in the [Wildcard redirects break Let's Encrypt integration](https://gitlab.com/gitlab-org/gitlab-pages/-/issues/649) issue.
 
 ### Message "GitLab is obtaining a Let's Encrypt SSL certificate for this domain. This process can take some time. Please try again later." hangs for more than an hour
 

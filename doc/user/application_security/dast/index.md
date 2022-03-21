@@ -51,8 +51,9 @@ results. On failure, the analyzer outputs an
 ## Prerequisites
 
 - [GitLab Runner](../../../ci/runners/index.md) available, with the
-[`docker` executor](https://docs.gitlab.com/runner/executors/docker.html).
+[`docker` executor](https://docs.gitlab.com/runner/executors/docker.html) on Linux/amd64.
 - Target application deployed. For more details, read [Deployment options](#deployment-options).
+- DAST runs in the `dast` stage, which must be added manually to your `.gitlab-ci.yml`.
 
 ### Deployment options
 
@@ -104,7 +105,7 @@ services: # use services to link your app container to the dast job
 
 variables:
   DAST_FULL_SCAN_ENABLED: "true" # do a full scan
-  DAST_ZAP_USE_AJAX_SPIDER: "true" # use the ajax spider
+  DAST_BROWSER_SCAN: "true" # use the browser-based GitLab DAST crawler
 ```
 
 Most applications depend on multiple services such as databases or caching services. By default, services defined in the services fields cannot communicate
@@ -254,7 +255,7 @@ The included template creates a `dast` job in your CI/CD pipeline and scans
 your project's running application for possible vulnerabilities.
 
 The results are saved as a
-[DAST report artifact](../../../ci/yaml/index.md#artifactsreportsdast)
+[DAST report artifact](../../../ci/yaml/artifacts_reports.md#artifactsreportsdast)
 that you can later download and analyze. Due to implementation limitations, we
 always take the latest DAST artifact available. Behind the scenes, the
 [GitLab DAST Docker image](https://gitlab.com/security-products/dast)
@@ -269,7 +270,7 @@ image. Using the `DAST_VERSION` variable, you can choose how DAST updates:
 - Only update fixes by pinning to a minor version (such as `1.6`).
 - Prevent all updates by pinning to a specific version (such as `1.6.4`).
 
-Find the latest DAST versions on the [Releases](https://gitlab.com/security-products/dast/-/releases)
+Find the latest DAST versions on the [Releases](https://gitlab.com/gitlab-org/security-products/dast/-/releases)
 page.
 
 #### Configure DAST using the UI
@@ -313,6 +314,7 @@ include:
 
 variables:
   DAST_FULL_SCAN_ENABLED: "true"
+  DAST_BROWSER_SCAN: "true" # use the browser-based GitLab DAST crawler
 ```
 
 If your DAST job exceeds the job timeout and you need to reduce the scan duration, we shared some
@@ -320,13 +322,15 @@ tips for optimizing DAST scans in a [blog post](https://about.gitlab.com/blog/20
 
 ### API scan
 
-> - [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/10928) in [GitLab Ultimate](https://about.gitlab.com/pricing/) 12.10.
-> - A new DAST API scanning engine was introduced in [GitLab Ultimate](https://about.gitlab.com/pricing/) 13.10.
+> - [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/10928) in GitLab 12.10.
+> - A new DAST API scanning engine was introduced in GitLab 13.10.
 
 Using an API specification as a scan's target is a useful way to seed URLs for scanning an API.
 Vulnerability rules in an API scan are different than those in a normal website scan.
 
 A new DAST API scanning engine is available in GitLab 13.12 and later. For more details, see [DAST API scanning engine](../dast_api). The new scanning engine supports REST, SOAP, GraphQL, and generic APIs using forms, XML, and JSON. Testing can be performed using OpenAPI, Postman Collections, and HTTP Archive (HAR) documents.
+
+The target API instance’s base URL is provided by using the `DAST_API_TARGET_URL` variable or an `environment_url.txt` file.
 
 #### Specification format
 
@@ -339,7 +343,7 @@ The specification does not have to be hosted on the same host as the API being t
 
 ```yaml
 include:
-  - template: DAST.gitlab-ci.yml
+  - template: DAST-API.gitlab-ci.yml
 
 variables:
   DAST_API_OPENAPI: http://my.api/api-specification.yml
@@ -390,7 +394,7 @@ the following DAST configuration can be used:
 
 ```yaml
 include:
-  - template: DAST.gitlab-ci.yml
+  - template: DAST-API.gitlab-ci.yml
 
 variables:
   DAST_API_OPENAPI: http://api-test.host.com/api-specification.yml
@@ -405,7 +409,7 @@ Headers are applied to every request DAST makes.
 
 ```yaml
 include:
-  - template: DAST.gitlab-ci.yml
+  - template: DAST-API.gitlab-ci.yml
 
 variables:
   DAST_API_OPENAPI: http://api-test.api.com/api-specification.yml
@@ -414,7 +418,7 @@ variables:
 
 ### URL scan
 
-> - [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/214120) in [GitLab Ultimate](https://about.gitlab.com/pricing/) 13.4.
+> - [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/214120) in GitLab 13.4.
 > - [Improved](https://gitlab.com/gitlab-org/gitlab/-/issues/273141) in GitLab 13.11.
 
 A URL scan allows you to specify which parts of a website are scanned by DAST.
@@ -452,6 +456,7 @@ include:
 variables:
   GIT_STRATEGY: fetch
   DAST_PATHS_FILE: url_file.txt  # url_file.txt lives in the root directory of the project
+  DAST_BROWSER_SCAN: "true" # use the browser-based GitLab DAST crawler
 ```
 
 ##### Use `DAST_PATHS` CI/CD variable
@@ -467,6 +472,7 @@ include:
 
 variables:
   DAST_PATHS: "/page1.html,/category1/page1.html,/page3.html"
+  DAST_BROWSER_SCAN: "true" # use the browser-based GitLab DAST crawler
 ```
 
 When using `DAST_PATHS` and `DAST_PATHS_FILE`, note the following:
@@ -481,9 +487,16 @@ When using `DAST_PATHS` and `DAST_PATHS_FILE`, note the following:
 
 To perform a [full scan](#full-scan) on the listed paths, use the `DAST_FULL_SCAN_ENABLED` CI/CD variable.
 
+### List URLs scanned
+
+When DAST completes scanning, the merge request page states the number of URLs scanned.
+Click **View details** to view the web console output which includes the list of scanned URLs.
+
+![DAST Widget](img/dast_urls_scanned_v12_10.png)
+
 ### View details of a vulnerability detected by DAST
 
-> [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/36332) in [GitLab Ultimate](https://about.gitlab.com/pricing/) 13.1.
+> [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/36332) in GitLab 13.1.
 
 Vulnerabilities detected by DAST occur in the live web application. Addressing these types of
 vulnerabilities requires specific information. DAST provides the information required to
@@ -513,15 +526,20 @@ To view details of vulnerabilities detected by DAST:
    | Links            | Links to further details of the detected vulnerability.            |
    | Solution         | Details of a recommended solution to the vulnerability (optional). |
 
-### Customizing the DAST settings
+## Customize DAST settings
+
+You can customize the behavior of DAST using both CI/CD variables and command-line options. Use of CI/CD
+variables overrides the values contained in the DAST template.
+
+### Customize DAST using CI/CD variables
 
 WARNING:
 Beginning in GitLab 13.0, the use of [`only` and `except`](../../../ci/yaml/index.md#only--except)
-is no longer supported. When overriding the template, you must use [`rules`](../../../ci/yaml/index.md#rules) instead.
+is no longer supported. You must use [`rules`](../../../ci/yaml/index.md#rules) instead.
 
 The DAST settings can be changed through CI/CD variables by using the
-[`variables`](../../../ci/yaml/index.md#variables) parameter in `.gitlab-ci.yml`.
-These variables are documented in [available variables](#available-cicd-variables).
+[`variables`](../../../ci/yaml/index.md#variables) parameter in `.gitlab-ci.yml`. For details of
+all DAST CI/CD variables, read [Available CI/CD variables](#available-cicd-variables).
 
 For example:
 
@@ -532,15 +550,16 @@ include:
 variables:
   DAST_WEBSITE: https://example.com
   DAST_SPIDER_MINS: 120
+  DAST_BROWSER_SCAN: "true" # use the browser-based GitLab DAST crawler
 ```
 
 Because the template is [evaluated before](../../../ci/yaml/index.md#include) the pipeline
 configuration, the last mention of the variable takes precedence.
 
-#### Enabling and disabling rules
+#### Enable or disable rules
 
 A complete list of the rules that DAST uses to scan for vulnerabilities can be
-found in the [ZAP docs](https://www.zaproxy.org/docs/alerts/).
+found in the [ZAP documentation](https://www.zaproxy.org/docs/alerts/).
 
 `DAST_EXCLUDE_RULES` disables the rules with the given IDs.
 
@@ -554,7 +573,10 @@ By default, several rules are disabled because they either take a long time to
 run or frequently generate false positives. The complete list of disabled rules
 can be found in [exclude_rules.yml](https://gitlab.com/gitlab-org/security-products/dast/-/blob/main/src/config/exclude_rules.yml).
 
-### Hide sensitive information
+The lists for `DAST_EXCLUDE_RULES` and `DAST_ONLY_INCLUDE_RULES` **must** be enclosed in double
+quotes (`"`), otherwise they are interpreted as numeric values.
+
+#### Hide sensitive information
 
 > [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/36332) in GitLab 13.1.
 
@@ -568,181 +590,31 @@ authorization credentials. By default, the following headers are masked:
 
 Using the [`DAST_MASK_HTTP_HEADERS` CI/CD variable](#available-cicd-variables), you can list the
 headers whose values you want masked. For details on how to mask headers, see
-[Customizing the DAST settings](#customizing-the-dast-settings).
+[Customizing the DAST settings](#customize-dast-settings).
 
-## Authentication
+#### Use Mutual TLS
 
-NOTE:
-We highly recommend you configure the scanner to authenticate to the application. If you don't, it cannot check most of the application for security risks, as most
-of your application is likely not accessible without authentication. We also recommend
-you periodically confirm the scanner's authentication is still working, as this tends to break over
-time due to authentication changes to the application.
+> [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/299596) in GitLab 14.8.
 
-Create masked CI/CD variables to pass the credentials that DAST uses.
-To create masked variables for the username and password, see [Create a custom variable in the UI](../../../ci/variables/index.md#custom-cicd-variables).
-The key of the username variable must be `DAST_USERNAME`,
-and the key of the password variable must be `DAST_PASSWORD`.
+Mutual TLS allows a target application server to verify that requests are from a known source. Browser-based scans do not support Mutual TLS.
 
-After DAST has authenticated with the application, all cookies are collected from the web browser.
-For each cookie a matching session token is created for use by ZAP. This ensures ZAP is recognized
-by the application as correctly authenticated.
+**Requirements**
 
-Authentication supports single form logins, multi-step login forms, and authenticating to URLs outside of the configured target URL.
+- Base64-encoded PKCS12 certificate
+- Password of the base64-encoded PKCS12 certificate
 
-WARNING:
-**NEVER** run an authenticated scan against a production server. When an authenticated
-scan is run, it may perform *any* function that the authenticated user can. This
-includes actions like modifying and deleting data, submitting forms, and following links.
-Only run an authenticated scan against a test server.
+To enable Mutual TLS:
 
-### Log in using automatic detection of the login form
+1. If the PKCS12 certificate is not already base64-encoded, convert it to base64 encoding. For security reasons, we recommend encoding the certificate locally, **not** using a web-hosted conversion service. For example, to encode the certificate on either macOS or Linux:
 
-By providing a `DAST_USERNAME`, `DAST_PASSWORD`, and `DAST_AUTH_URL`, DAST will attempt to authenticate to the
-target application by locating the login form based on a determination about whether or not the form contains username or password fields.
+   ```shell
+   base64 <path-to-pkcs12-certificate-file>
+   ```
 
-Automatic detection is "best-effort", and depending on the application being scanned may provide either a resilient login experience or one that fails to authenticate the user.
+1. Create a [masked variable](../../../ci/variables/index.md) named `DAST_PKCS12_CERTIFICATE_BASE64` and store the base64-encoded PKCS12 certificate's value in that variable.
+1. Create a masked variable `DAST_PKCS12_PASSWORD` and store the PKCS12 certificate's password in that variable.
 
-Login process:
-
-1. The `DAST_AUTH_URL` is loaded into the browser, and any forms on the page are located.
-   1. If a form contains a username and password field, `DAST_USERNAME` and `DAST_PASSWORD` is inputted into the respective fields, the form submit button is clicked and the user is logged in.
-   1. If a form contains only a username field, it is assumed that the login form is multi-step.
-      1. The `DAST_USERNAME` is inputted into the username field and the form submit button is clicked.
-      1. The subsequent pages loads where it is expected that a form exists and contains a password field. If found, `DAST_PASSWORD` is inputted, form submit button is clicked and the user is logged in.
-
-### Log in using explicit selection of the login form
-
-By providing a `DAST_USERNAME_FIELD`, `DAST_PASSWORD_FIELD`, and `DAST_SUBMIT_FIELD`, in addition to the fields required for automatic login,
-DAST will attempt to authenticate to the target application by locating the login form based on the selectors provided.
-Most applications will benefit from this approach to authentication.
-
-Login process:
-
-1. The `DAST_AUTH_URL` is loaded into the browser, and any forms on the page are located.
-   1. If the `DAST_FIRST_SUBMIT_FIELD` is not defined, then `DAST_USERNAME` is inputted into `DAST_USERNAME_FIELD`, `DAST_PASSWORD` is inputted into `DAST_PASSWORD_FIELD`, `DAST_SUBMIT_FIELD` is clicked and the user is logged in.
-   1. If the `DAST_FIRST_SUBMIT_FIELD` is defined, then it is assumed that the login form is multi-step.
-      1. The `DAST_USERNAME` is inputted into the `DAST_USERNAME_FIELD` field and the `DAST_FIRST_SUBMIT_FIELD` is clicked.
-      1. The subsequent pages loads where the `DAST_PASSWORD` is inputted into the `DAST_PASSWORD_FIELD` field, the `DAST_SUBMIT_FIELD` is clicked and the user is logged in.
-
-### Verifying successful login
-
-Once the login form has been submitted, DAST determines if the login was successful. Unsuccessful attempts at authentication cause the scan to halt.
-
-Following the submission of the login form, authentication is determined to be unsuccessful when:
-
-- A `400` or `500` series HTTP response status code is returned.
-- A new cookie/browser storage value determined to be sufficiently random has not been set.
-
-In addition to these checks, the user can configure their own verification checks.
-Each of the following checks can be used in conjunction with one another, if none are configured by default the presence of a login form is checked.
-
-#### Verifying based on the URL
-
-When `DAST_AUTH_VERIFICATION_URL` is configured, the URL displayed in the browser tab post login form submission is directly compared to the URL in the CI/CD variable.
-If these are not exactly the same, authentication is deemed to be unsuccessful.
-
-For example:
-
-```yaml
-include:
-  - template: DAST.gitlab-ci.yml
-
-dast:
-  variables:
-    DAST_WEBSITE: "https://example.com"
-    ...
-    DAST_AUTH_VERIFICATION_URL: "https://example.com/user/welcome"
-```
-
-#### Verify based on presence of an element
-
-When `DAST_AUTH_VERIFICATION_SELECTOR` is configured, the page displayed in the browser tab is searched for an element described by the selector in the CI/CD variable.
-If no element is found, authentication is deemed to be unsuccessful.
-
-For example:
-
-```yaml
-include:
-  - template: DAST.gitlab-ci.yml
-
-dast:
-  variables:
-    DAST_WEBSITE: "https://example.com"
-    ...
-    DAST_AUTH_VERIFICATION_SELECTOR: "css:.welcome-user"
-```
-
-#### Verify based on presence of a login form
-
-When `DAST_AUTH_VERIFICATION_LOGIN_FORM` is configured, the page displayed in the browser tab is searched for a form that is detected to be a login form.
-If any such form is found, authentication is deemed to be unsuccessful.
-
-For example:
-
-```yaml
-include:
-  - template: DAST.gitlab-ci.yml
-
-dast:
-  variables:
-    DAST_WEBSITE: "https://example.com"
-    ...
-    DAST_AUTH_VERIFICATION_LOGIN_FORM: "true"
-```
-
-### View the login form
-
-Many web applications show the user the login form in a pop-up (modal) window.
-For these applications, navigating to the form requires both:
-
-- A starting URL.
-- A list of elements to click to display the modal window.
-
-When `DAST_BROWSER_PATH_TO_LOGIN_FORM` is present, like in this example:
-
-```yaml
-include:
-  - template: DAST.gitlab-ci.yml
-
-dast:
-  variables:
-    DAST_WEBSITE: "https://my.site.com"
-    ...
-    DAST_AUTH_URL: "https://my.site.com/admin"
-    DAST_BROWSER_PATH_TO_LOGIN_FORM: "css:.navigation-menu,css:.login-menu-item"
-```
-
-DAST performs these actions:
-
-1. Load the `DAST_AUTH_URL` page, such as `https://my.site.com/admin`.
-1. After the page loads, DAST selects elements found by the selectors described
-   in `DAST_BROWSER_PATH_TO_LOGIN_FORM`. This example opens the navigation menu
-   and selects the login menu, to display the login modal window.
-1. To continue the authentication process, DAST fills in the username and password
-   on the login form.
-
-### Configure the authentication debug output
-
-It is often difficult to understand the cause of an authentication failure when running DAST in a CI/CD pipeline.
-To assist users in debugging authentication issues, a debug report can be generated and saved as a job artifact.
-This HTML report contains all steps made during the login process, along with HTTP requests and responses, the Document Object Model (DOM) and screenshots.
-
-![dast-auth-report](img/dast_auth_report.jpg)
-
-An example configuration where the authentication debug report is exported may look like the following:
-
-```yaml
-dast:
-  variables:
-    DAST_WEBSITE: "https://example.com"
-    ...
-    DAST_AUTH_REPORT: "true"
-  artifacts:
-    paths: [gl-dast-debug-auth-report.html]
-    when: always
-```
-
-### Available CI/CD variables
+#### Available CI/CD variables
 
 These CI/CD variables are specific to DAST. They can be used to customize the behavior of DAST to your requirements.
 
@@ -760,7 +632,7 @@ These CI/CD variables are specific to DAST. They can be used to customize the be
 | `DAST_AUTH_VERIFICATION_SELECTOR` <sup>2</sup>   | selector      | Verifies successful authentication by checking for presence of a selector once the login form has been submitted. Example: `css:.user-photo`. |
 | `DAST_AUTH_VERIFICATION_URL` <sup>1,2</sup>      | URL           | A URL only accessible to logged in users that DAST can use to confirm successful authentication. If provided, DAST exits if it cannot access the URL. Example: `"http://example.com/loggedin_page"`. [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/207335) in GitLab 13.8. |
 | `DAST_AUTO_UPDATE_ADDONS`                        | boolean       | ZAP add-ons are pinned to specific versions in the DAST Docker image. Set to `true` to download the latest versions when the scan starts. Default: `false`. |
-| `DAST_BROWSER_PATH_TO_LOGIN_FORM` <sup>1,2</sup> | selector      | Comma-separated list of selectors that will be clicked on prior to attempting to enter `DAST_USERNAME` and `DAST_PASSWORD` into the login form. Example: `"css:.navigation-menu,css:.login-menu-item"`. [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/326633) in GitLab 14.1. |
+| `DAST_BROWSER_PATH_TO_LOGIN_FORM` <sup>1,2</sup> | selector      | Comma-separated list of selectors that are clicked on prior to attempting to enter `DAST_USERNAME` and `DAST_PASSWORD` into the login form. Example: `"css:.navigation-menu,css:.login-menu-item"`. [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/326633) in GitLab 14.1. |
 | `DAST_DEBUG` <sup>1</sup>                        | boolean       | Enable debug message output. Default: `false`. [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/12652) in GitLab 13.1. |
 | `DAST_EXCLUDE_RULES`                             | string        | Set to a comma-separated list of Vulnerability Rule IDs to exclude them from running during the scan. Rule IDs are numbers and can be found from the DAST log or on the [ZAP project](https://www.zaproxy.org/docs/alerts/). For example, `HTTP Parameter Override` has a rule ID of `10026`. Cannot be used when `DAST_ONLY_INCLUDE_RULES` is set. **Note:** In earlier versions of GitLab the excluded rules were executed but vulnerabilities they generated were suppressed. [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/118641) in GitLab 12.10. |
 | `DAST_EXCLUDE_URLS` <sup>1,2</sup>               | URLs          | The URLs to skip during the authenticated scan; comma-separated. Regular expression syntax can be used to match multiple URLs. For example, `.*` matches an arbitrary character sequence. Not supported for API scans. Example, `http://example.com/sign-out`. |
@@ -777,6 +649,8 @@ These CI/CD variables are specific to DAST. They can be used to customize the be
 | `DAST_PASSWORD_FIELD` <sup>1,2</sup>             | string        | The selector of password field at the sign-in HTML form. Example: `id:password` |
 | `DAST_PATHS`                                     | string        | Set to a comma-separated list of URLs for DAST to scan. For example, `/page1.html,/category1/page3.html,/page2.html`. [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/214120) in GitLab 13.4. |
 | `DAST_PATHS_FILE`                                | string        | The file path containing the paths within `DAST_WEBSITE` to scan. The file must be plain text with one path per line. [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/258825) in GitLab 13.6. |
+| `DAST_PKCS12_CERTIFICATE_BASE64`                 | string        | The PKCS12 certificate used for sites that require Mutual TLS. Must be encoded as base64 text. |
+| `DAST_PKCS12_PASSWORD`                           | string        | The password of the certificate used in `DAST_PKCS12_CERTIFICATE_BASE64`. |
 | `DAST_REQUEST_HEADERS` <sup>1</sup>              | string        | Set to a comma-separated list of request header names and values. Headers are added to every request made by DAST. For example, `Cache-control: no-cache,User-Agent: DAST/1.0` |
 | `DAST_SKIP_TARGET_CHECK`                         | boolean       | Set to `true` to prevent DAST from checking that the target is available before scanning. Default: `false`. [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/229067) in GitLab 13.8. |
 | `DAST_SPIDER_MINS` <sup>1</sup>                  | number        | The maximum duration of the spider scan in minutes. Set to `0` for unlimited. Default: One minute, or unlimited when the scan is a full scan. [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/12652) in GitLab 13.1. |
@@ -789,61 +663,13 @@ These CI/CD variables are specific to DAST. They can be used to customize the be
 | `DAST_XML_REPORT`                                | string        | The filename of the XML report written at the end of a scan. [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/12652) in GitLab 13.1. |
 | `DAST_WEBSITE` <sup>1</sup>                      | URL           | The URL of the website to scan. The variable `DAST_API_OPENAPI` must be specified if this is omitted. |
 | `DAST_ZAP_CLI_OPTIONS`                           | string        | ZAP server command-line options. For example, `-Xmx3072m` would set the Java maximum memory allocation pool size. [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/12652) in GitLab 13.1. |
-| `DAST_ZAP_LOG_CONFIGURATION`                     | string        | Set to a semicolon-separated list of additional log4j properties for the ZAP Server. Example: `log4j.logger.org.parosproxy.paros.network.HttpSender=DEBUG;log4j.logger.com.crawljax=DEBUG` |
+| `DAST_ZAP_LOG_CONFIGURATION`                     | string        | Set to a semicolon-separated list of additional log4j properties for the ZAP Server. Example: `logger.httpsender.name=org.parosproxy.paros.network.HttpSender;logger.httpsender.level=debug;logger.sitemap.name=org.parosproxy.paros.model.SiteMap;logger.sitemap.level=debug;` |
 | `SECURE_ANALYZERS_PREFIX`                        | URL           | Set the Docker registry base address from which to download the analyzer. |
 
 1. Available to an on-demand DAST scan.
 1. Used for authentication.
 
-#### Selectors
-
-Selectors are used by CI/CD variables to specify the location of an element displayed on a page in a browser.
-Selectors have the format `type`:`search string`. The crawler will search for the selector using the search string based on the type.
-
-| Selector type | Example                            | Description |
-| ------------- | ---------------------------------- | ----------- |
-| `css`         | `css:.password-field`              | Searches for a HTML element having the supplied CSS selector. Selectors should be as specific as possible for performance reasons. |
-| `id`          | `id:element`                       | Searches for an HTML element with the provided element ID. |
-| `name`        | `name:element`                     | Searches for an HTML element with the provided element name. |
-| `xpath`       | `xpath://input[@id="my-button"]/a` | Searches for a HTML element with the provided XPath. Note that XPath searches are expected to be less performant than other searches. |
-| None provided | `a.click-me`                       | Defaults to searching using a CSS selector. |
-
-##### Find selectors with Google Chrome
-
-Chrome DevTools element selector tool is an effective way to find a selector.
-
-1. Open Chrome and navigate to the page where you would like to find a selector, for example, the login page for your site.
-1. Open the `Elements` tab in Chrome DevTools with the keyboard shortcut `Command + Shift + c` in macOS or `Ctrl + Shift + c` in Windows.
-1. Select the `Select an element in the page to select it` tool.
-   ![search-elements](img/dast_auth_browser_scan_search_elements.png)
-1. Select the field on your page that you would like to know the selector for.
-1. Once the tool is active, highlight a field you wish to view the details of.
-   ![highlight](img/dast_auth_browser_scan_highlight.png)
-1. Once highlighted, you can see the element's details, including attributes that would make a good candidate for a selector.
-
-In this example, the `id="user_login"` appears to be a good candidate. You can use this as a selector as the DAST username field by setting
-`DAST_USERNAME_FIELD: "id:user_login"`.
-
-##### Choose the right selector
-
-Judicious choice of selector leads to a scan that is resilient to the application changing.
-
-In order of preference, it is recommended to choose as selectors:
-
-- `id` fields. These are generally unique on a page, and rarely change.
-- `name` fields. These are generally unique on a page, and rarely change.
-- `class` values specific to the field, such as the selector `"css:.username"` for the `username` class on the username field.
-- Presence of field specific data attributes, such as the selector, `"css:[data-username]"` when the `data-username` field has any value on the username field.
-- Multiple `class` hierarchy values, such as the selector `"css:.login-form .username"` when there are multiple elements with class `username` but only one nested inside the element with the class `login-form`.
-
-When using selectors to locate specific fields we recommend you avoid searching on:
-
-- Any `id`, `name`, `attribute`, `class` or `value` that is dynamically generated.
-- Generic class names, such as `column-10` and `dark-grey`.
-- XPath searches as they are less performant than other selector searches.
-- Unscoped searches, such as those beginning with `css:*` and `xpath://*`.
-
-### DAST command-line options
+### Customize DAST using command-line options
 
 Not all DAST configuration is available via CI/CD variables. To find out all
 possible options, run the following configuration.
@@ -888,6 +714,231 @@ variables:
   DAST_ZAP_CLI_OPTIONS: "-config replacer.full_list(0).description=auth -config replacer.full_list(0).enabled=true -config replacer.full_list(0).matchtype=REQ_HEADER -config replacer.full_list(0).matchstr=Authorization -config replacer.full_list(0).regex=false -config replacer.full_list(0).replacement=TOKEN"
 ```
 
+## Authentication
+
+NOTE:
+We highly recommend you configure the scanner to authenticate to the application. If you don't, it cannot check most of the application for security risks, as most
+of your application is likely not accessible without authentication. We also recommend
+you periodically confirm the scanner's authentication is still working, as this tends to break over
+time due to authentication changes to the application.
+
+Create masked CI/CD variables to pass the credentials that DAST uses.
+To create masked variables for the username and password, see [Create a custom variable in the UI](../../../ci/variables/index.md#custom-cicd-variables).
+The key of the username variable must be `DAST_USERNAME`,
+and the key of the password variable must be `DAST_PASSWORD`.
+
+After DAST has authenticated with the application, all cookies are collected from the web browser.
+For each cookie a matching session token is created for use by ZAP. This ensures ZAP is recognized
+by the application as correctly authenticated.
+
+Authentication supports single form logins, multi-step login forms, and authenticating to URLs outside of the configured target URL.
+
+WARNING:
+**NEVER** run an authenticated scan against a production server. When an authenticated
+scan is run, it may perform *any* function that the authenticated user can. This
+includes actions like modifying and deleting data, submitting forms, and following links.
+Only run an authenticated scan against a test server.
+
+### Log in using automatic detection of the login form
+
+By providing a `DAST_USERNAME`, `DAST_PASSWORD`, and `DAST_AUTH_URL`, DAST attempts to authenticate to the
+target application by locating the login form based on a determination about whether or not the form contains username or password fields.
+
+Automatic detection is "best-effort", and depending on the application being scanned may provide either a resilient login experience or one that fails to authenticate the user.
+
+Login process:
+
+1. The `DAST_AUTH_URL` is loaded into the browser, and any forms on the page are located.
+   1. If a form contains a username and password field, `DAST_USERNAME` and `DAST_PASSWORD` is inputted into the respective fields, the form submit button is clicked and the user is logged in.
+   1. If a form contains only a username field, it is assumed that the login form is multi-step.
+      1. The `DAST_USERNAME` is inputted into the username field and the form submit button is clicked.
+      1. The subsequent pages loads where it is expected that a form exists and contains a password field. If found, `DAST_PASSWORD` is inputted, form submit button is clicked and the user is logged in.
+
+### Log in using explicit selection of the login form
+
+By providing a `DAST_USERNAME_FIELD`, `DAST_PASSWORD_FIELD`, and `DAST_SUBMIT_FIELD`, in addition to the fields required for automatic login,
+DAST attempts to authenticate to the target application by locating the login form based on the selectors provided.
+Most applications benefit from this approach to authentication.
+
+Login process:
+
+1. The `DAST_AUTH_URL` is loaded into the browser, and any forms on the page are located.
+   1. If the `DAST_FIRST_SUBMIT_FIELD` is not defined, then `DAST_USERNAME` is inputted into `DAST_USERNAME_FIELD`, `DAST_PASSWORD` is inputted into `DAST_PASSWORD_FIELD`, `DAST_SUBMIT_FIELD` is clicked and the user is logged in.
+   1. If the `DAST_FIRST_SUBMIT_FIELD` is defined, then it is assumed that the login form is multi-step.
+      1. The `DAST_USERNAME` is inputted into the `DAST_USERNAME_FIELD` field and the `DAST_FIRST_SUBMIT_FIELD` is clicked.
+      1. The subsequent pages loads where the `DAST_PASSWORD` is inputted into the `DAST_PASSWORD_FIELD` field, the `DAST_SUBMIT_FIELD` is clicked and the user is logged in.
+
+### Verifying successful login
+
+Once the login form has been submitted, DAST determines if the login was successful. Unsuccessful attempts at authentication cause the scan to halt.
+
+Following the submission of the login form, authentication is determined to be unsuccessful when:
+
+- A `400` or `500` series HTTP response status code is returned.
+- A new cookie/browser storage value determined to be sufficiently random has not been set.
+
+In addition to these checks, the user can configure their own verification checks.
+Each of the following checks can be used in conjunction with one another, if none are configured by default the presence of a login form is checked.
+
+#### Verifying based on the URL
+
+When `DAST_AUTH_VERIFICATION_URL` is configured, the URL displayed in the browser tab post login form submission is directly compared to the URL in the CI/CD variable.
+If these are not exactly the same, authentication is deemed to be unsuccessful.
+
+For example:
+
+```yaml
+include:
+  - template: DAST.gitlab-ci.yml
+
+dast:
+  variables:
+    DAST_WEBSITE: "https://example.com"
+    DAST_BROWSER_SCAN: "true" # use the browser-based GitLab DAST crawler
+    ...
+    DAST_AUTH_VERIFICATION_URL: "https://example.com/user/welcome"
+```
+
+#### Verify based on presence of an element
+
+When `DAST_AUTH_VERIFICATION_SELECTOR` is configured, the page displayed in the browser tab is searched for an element described by the selector in the CI/CD variable.
+If no element is found, authentication is deemed to be unsuccessful.
+
+For example:
+
+```yaml
+include:
+  - template: DAST.gitlab-ci.yml
+
+dast:
+  variables:
+    DAST_WEBSITE: "https://example.com"
+    DAST_BROWSER_SCAN: "true" # use the browser-based GitLab DAST crawler
+    ...
+    DAST_AUTH_VERIFICATION_SELECTOR: "css:.welcome-user"
+```
+
+#### Verify based on presence of a login form
+
+When `DAST_AUTH_VERIFICATION_LOGIN_FORM` is configured, the page displayed in the browser tab is searched for a form that is detected to be a login form.
+If any such form is found, authentication is deemed to be unsuccessful.
+
+For example:
+
+```yaml
+include:
+  - template: DAST.gitlab-ci.yml
+
+dast:
+  variables:
+    DAST_WEBSITE: "https://example.com"
+    DAST_BROWSER_SCAN: "true" # use the browser-based GitLab DAST crawler
+    ...
+    DAST_AUTH_VERIFICATION_LOGIN_FORM: "true"
+```
+
+### View the login form
+
+Many web applications show the user the login form in a pop-up (modal) window.
+For these applications, navigating to the form requires both:
+
+- A starting URL.
+- A list of elements to click to display the modal window.
+
+When `DAST_BROWSER_PATH_TO_LOGIN_FORM` is present, like in this example:
+
+```yaml
+include:
+  - template: DAST.gitlab-ci.yml
+
+dast:
+  variables:
+    DAST_WEBSITE: "https://my.site.com"
+    DAST_BROWSER_SCAN: "true" # use the browser-based GitLab DAST crawler
+    ...
+    DAST_AUTH_URL: "https://my.site.com/admin"
+    DAST_BROWSER_PATH_TO_LOGIN_FORM: "css:.navigation-menu,css:.login-menu-item"
+```
+
+DAST performs these actions:
+
+1. Load the `DAST_AUTH_URL` page, such as `https://my.site.com/admin`.
+1. After the page loads, DAST selects elements found by the selectors described
+   in `DAST_BROWSER_PATH_TO_LOGIN_FORM`. This example opens the navigation menu
+   and selects the login menu, to display the login modal window.
+1. To continue the authentication process, DAST fills in the username and password
+   on the login form.
+
+### Configure the authentication debug output
+
+It is often difficult to understand the cause of an authentication failure when running DAST in a CI/CD pipeline.
+To assist users in debugging authentication issues, a debug report can be generated and saved as a job artifact.
+This HTML report contains all steps made during the login process, along with HTTP requests and responses, the Document Object Model (DOM) and screenshots.
+
+![dast-auth-report](img/dast_auth_report.jpg)
+
+An example configuration where the authentication debug report is exported may look like the following:
+
+```yaml
+dast:
+  variables:
+    DAST_WEBSITE: "https://example.com"
+    DAST_BROWSER_SCAN: "true" # use the browser-based GitLab DAST crawler
+    ...
+    DAST_AUTH_REPORT: "true"
+  artifacts:
+    paths: [gl-dast-debug-auth-report.html]
+    when: always
+```
+
+### Selectors
+
+Selectors are used by CI/CD variables to specify the location of an element displayed on a page in a browser.
+Selectors have the format `type`:`search string`. The crawler searches for the selector using the search string based on the type.
+
+| Selector type | Example                            | Description |
+| ------------- | ---------------------------------- | ----------- |
+| `css`         | `css:.password-field`              | Searches for a HTML element having the supplied CSS selector. Selectors should be as specific as possible for performance reasons. |
+| `id`          | `id:element`                       | Searches for an HTML element with the provided element ID. |
+| `name`        | `name:element`                     | Searches for an HTML element with the provided element name. |
+| `xpath`       | `xpath://input[@id="my-button"]/a` | Searches for a HTML element with the provided XPath. Note that XPath searches are expected to be less performant than other searches. |
+| None provided | `a.click-me`                       | Defaults to searching using a CSS selector. |
+
+#### Find selectors with Google Chrome
+
+Chrome DevTools element selector tool is an effective way to find a selector.
+
+1. Open Chrome and navigate to the page where you would like to find a selector, for example, the login page for your site.
+1. Open the `Elements` tab in Chrome DevTools with the keyboard shortcut `Command + Shift + c` in macOS or `Ctrl + Shift + c` in Windows.
+1. Select the `Select an element in the page to select it` tool.
+   ![search-elements](img/dast_auth_browser_scan_search_elements.png)
+1. Select the field on your page that you would like to know the selector for.
+1. Once the tool is active, highlight a field you wish to view the details of.
+   ![highlight](img/dast_auth_browser_scan_highlight.png)
+1. Once highlighted, you can see the element's details, including attributes that would make a good candidate for a selector.
+
+In this example, the `id="user_login"` appears to be a good candidate. You can use this as a selector as the DAST username field by setting
+`DAST_USERNAME_FIELD: "id:user_login"`.
+
+#### Choose the right selector
+
+Judicious choice of selector leads to a scan that is resilient to the application changing.
+
+In order of preference, it is recommended to choose as selectors:
+
+- `id` fields. These are generally unique on a page, and rarely change.
+- `name` fields. These are generally unique on a page, and rarely change.
+- `class` values specific to the field, such as the selector `"css:.username"` for the `username` class on the username field.
+- Presence of field specific data attributes, such as the selector, `"css:[data-username]"` when the `data-username` field has any value on the username field.
+- Multiple `class` hierarchy values, such as the selector `"css:.login-form .username"` when there are multiple elements with class `username` but only one nested inside the element with the class `login-form`.
+
+When using selectors to locate specific fields we recommend you avoid searching on:
+
+- Any `id`, `name`, `attribute`, `class` or `value` that is dynamically generated.
+- Generic class names, such as `column-10` and `dark-grey`.
+- XPath searches as they are less performant than other selector searches.
+- Unscoped searches, such as those beginning with `css:*` and `xpath://*`.
+
 ### Bleeding-edge vulnerability definitions
 
 ZAP first creates rules in the `alpha` class. After a testing period with
@@ -919,7 +970,7 @@ The DAST job does not require the project's repository to be present when runnin
 > - Auditing for DAST profile management was [introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/217872) in GitLab 14.1.
 
 An on-demand DAST scan runs outside the DevOps life cycle. Changes in your repository don't trigger
-the scan. You must start it manually.
+the scan. You must either start it manually, or schedule it to run.
 
 An on-demand DAST scan:
 
@@ -927,8 +978,6 @@ An on-demand DAST scan:
   [scanner profile](#scanner-profile).
 - Is associated with your project's default branch.
 - Is saved on creation so it can be run later.
-
-In GitLab 13.10 and later, you can select to run an on-demand scan against a specific branch.
 
 ### On-demand scan modes
 
@@ -939,89 +988,150 @@ An on-demand scan can be run in active or passive mode:
   minimize the risk of accidental damage, running an active scan requires a [validated site
   profile](#site-profile-validation).
 
-### Run an on-demand DAST scan
+### View on-demand DAST scans
 
-NOTE:
-You must have permission to run an on-demand DAST scan against a protected branch.
-The default branch is automatically protected. For more information, see
-[Pipeline security on protected branches](../../../ci/pipelines/index.md#pipeline-security-on-protected-branches).
+To view running completed and scheduled on-demand DAST scans for a project, go to
+**Security & Compliance > On-demand Scans** in the left sidebar.
+
+- To view both running and completed scans, select **All**.
+- To view running scans only, select **Running**.
+- To view finished scans, select **Finished**. A finished scan is a scan that either succeeded,
+  failed, or was canceled.
+- To view scheduled scans, select **Scheduled**. It shows on-demand scans that have a schedule
+  set up. Those are _not_ included in the **All** tab.
+- To view saved on-demand scan profiles, select **Scan library**.
+  Those are _not_ included in the **All** tab.
+
+#### Cancel an on-demand scan
+
+To cancel a pending or running on-demand scan, select **Cancel** (**{cancel}**) in the
+on-demand scans list.
+
+#### Retry an on-demand scan
+
+To retry a scan that failed or succeeded with warnings, select **Retry** (**{retry}**) in the
+on-demand scans list.
+
+#### View an on-demand scan's results
+
+To view a finished scan's results, select **View results** in the on-demand scans list.
+
+#### Edit an on-demand scan
+
+To edit an on-demand scan's settings, select **Edit** (**{pencil}**) in the **Scheduled** tab.
+
+### Run an on-demand DAST scan
 
 Prerequisites:
 
+- You must have permission to run an on-demand DAST scan against a protected branch. The default
+  branch is automatically protected. For more information, read
+  [Pipeline security on protected branches](../../../ci/pipelines/index.md#pipeline-security-on-protected-branches).
 - A [scanner profile](#create-a-scanner-profile).
 - A [site profile](#create-a-site-profile).
-- If you are running an active scan the site profile must be [validated](#validate-a-site-profile).
+- If you are running an active scan the site profile must have been [validated](#validate-a-site-profile).
 
-To run an on-demand scan, either:
+You can run an on-demand scan immediately, once at a scheduled date and time or at a specified
+frequency:
 
-- [Create and run an on-demand scan](#create-and-run-an-on-demand-scan).
+- Every day
+- Every week
+- Every month
+- Every 3 months
+- Every 6 months
+- Every year
+
+To run an on-demand scan immediately, either:
+
+- [Create and run an on-demand scan immediately](#create-and-run-an-on-demand-scan-immediately).
 - [Run a previously saved on-demand scan](#run-a-saved-on-demand-scan).
 
-#### Create and run an on-demand scan
+To run an on-demand scan either at a scheduled date or frequency, read
+[Schedule an on-demand scan](#schedule-an-on-demand-scan).
+
+#### Create and run an on-demand scan immediately
 
 1. From your project's home page, go to **Security & Compliance > On-demand Scans** in the left
    sidebar.
+1. Select **New DAST scan**.
 1. Complete the **Scan name** and **Description** fields.
 1. In GitLab 13.10 and later, select the desired branch from the **Branch** dropdown.
 1. In **Scanner profile**, select a scanner profile from the dropdown.
 1. In **Site profile**, select a site profile from the dropdown.
-1. To run the on-demand scan now, select **Save and run scan**. Otherwise select **Save scan** to
-   [run](#run-a-saved-on-demand-scan) it later.
+1. To run the on-demand scan immediately, select **Save and run scan**. Otherwise, select
+   **Save scan** to [run](#run-a-saved-on-demand-scan) it later.
 
 The on-demand DAST scan runs and the project's dashboard shows the results.
 
-### List saved on-demand scans
-
-To list saved on-demand scans:
-
-1. From your project's home page, go to **Security & Compliance > Configuration**.
-1. Select the **Saved Scans** tab.
-
-### View details of an on-demand scan
-
-To view details of an on-demand scan:
-
-1. From your project's home page, go to **Security & Compliance > Configuration**.
-1. Select **Manage DAST scans**.
-1. Select **Manage** in the **DAST Profiles** row.
-1. Select the **Saved Scans** tab.
-1. In the saved scan's row select **More actions** (**{ellipsis_v}**), then select **Edit**.
-
-### Run a saved on-demand scan
+#### Run a saved on-demand scan
 
 To run a saved on-demand scan:
 
-1. From your project's home page, go to **Security & Compliance > Configuration**.
-1. Select **Manage DAST scans**.
-1. Select **Manage** in the **DAST Profiles** row.
-1. Select the **Saved Scans** tab.
-1. In the scan's row select **Run scan**.
+1. On the top bar, select **Menu > Projects** and find your project.
+1. On the left sidebar, select **Security & Compliance > On-demand Scans**.
+1. Select the **Scan library** tab.
+1. In the scan's row, select **Run scan**.
 
    If the branch saved in the scan no longer exists, you must first
    [edit the scan](#edit-an-on-demand-scan), select a new branch, and save the edited scan.
 
-The on-demand DAST scan runs and the project's dashboard shows the results.
+The on-demand DAST scan runs, and the project's dashboard shows the results.
 
-### Edit an on-demand scan
+#### Schedule an on-demand scan
+
+> - [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/328749) in GitLab 14.3. [Deployed behind the `dast_on_demand_scans_scheduler` flag](../../../administration/feature_flags.md), disabled by default.
+> - [Enabled on GitLab.com](https://gitlab.com/gitlab-org/gitlab/-/issues/328749) in GitLab 14.4.
+> - [Enabled on self-managed](https://gitlab.com/gitlab-org/gitlab/-/issues/328749) in GitLab 14.4.
+> - [Feature flag `dast_on_demand_scans_scheduler` removed](https://gitlab.com/gitlab-org/gitlab/-/issues/328749) in GitLab 14.5.
+
+To schedule a scan:
+
+1. On the top bar, select **Menu > Projects** and find your project.
+1. On the left sidebar, select **Security & Compliance > On-demand Scans**.
+1. Select **New DAST scan**.
+1. Complete the **Scan name** and **Description** text boxes.
+1. In GitLab 13.10 and later, from the **Branch** dropdown list, select the desired branch.
+1. In the **Scanner profile** section, from the dropdown list, select a scanner profile.
+1. In the **Site profile** section, from the dropdown list, select a site profile.
+1. Select **Schedule scan**.
+1. In the **Start time** section, select a time zone, date, and time.
+1. From the **Repeats** dropdown list, select your desired frequency:
+    - To run the scan once, select **Never**.
+    - For a recurring scan, select any other option.
+1. To run the on-demand scan immediately, select **Save and run scan**. To [run](#run-a-saved-on-demand-scan) it according to the schedule you set, select
+   **Save scan**.
+
+#### List saved on-demand scans
+
+To list saved on-demand scans:
+
+1. From your project's home page, go to **Security & Compliance > On-demand Scans**.
+1. Select the **Scan library** tab.
+
+#### View details of an on-demand scan
+
+To view details of an on-demand scan:
+
+1. From your project's home page, go to **Security & Compliance > On-demand Scans**.
+1. Select the **Scan library** tab.
+1. In the saved scan's row select **More actions** (**{ellipsis_v}**), then select **Edit**.
+
+#### Edit an on-demand scan
 
 To edit an on-demand scan:
 
-1. From your project's home page, go to **Security & Compliance > Configuration**.
-1. Select **Manage DAST scans**.
-1. Select **Manage** in the **DAST Profiles** row.
-1. Select the **Saved Scans** tab.
+1. From your project's home page, go to **Security & Compliance > On-demand Scans**.
+1. Select the **Scan library** tab.
 1. In the saved scan's row select **More actions** (**{ellipsis_v}**), then select **Edit**.
 1. Edit the form.
 1. Select **Save scan**.
 
-### Delete an on-demand scan
+#### Delete an on-demand scan
 
 To delete an on-demand scan:
 
-1. From your project's home page, go to **Security & Compliance > Configuration**.
-1. Select **Manage DAST scans**.
-1. Select **Manage** in the **DAST Profiles** row.
-1. Select the **Saved Scans** tab.
+1. From your project's home page, go to **Security & Compliance > On-demand Scans**.
+1. Select the **Scan library** tab.
 1. In the saved scan's row select **More actions** (**{ellipsis_v}**), then select **Delete**.
 1. Select **Delete** to confirm the deletion.
 
@@ -1045,6 +1155,9 @@ A site profile contains the following:
   - **Password form field**: The name of password field at the sign-in HTML form.
 
 When an API site type is selected, a [host override](#host-override) is used to ensure the API being scanned is on the same host as the target. This is done to reduce the risk of running an active scan against the wrong API.
+
+When configured, request headers and password fields are encrypted using [`aes-256-gcm`](https://en.wikipedia.org/wiki/Advanced_Encryption_Standard) before being stored in the database.
+This data can only be read and decrypted with a valid secrets file.
 
 #### Site profile validation
 
@@ -1092,7 +1205,7 @@ To edit an existing site profile:
 1. Edit the fields then select **Save profile**.
 
 If a site profile is linked to a security policy, a user cannot edit the profile from this page. See
-[Scan Policies](../policies/index.md)
+[Scan execution policies](../policies/scan-execution-policies.md)
 for more information.
 
 #### Delete a site profile
@@ -1106,7 +1219,7 @@ To delete an existing site profile:
 1. Select **Delete** to confirm the deletion.
 
 If a site profile is linked to a security policy, a user cannot delete the profile from this page.
-See [Scan Policies](../policies/index.md)
+See [Scan execution policies](../policies/scan-execution-policies.md)
 for more information.
 
 #### Validate a site profile
@@ -1142,6 +1255,19 @@ To validate a site profile:
 The site is validated and an active scan can run against it.
 
 If a validated site profile's target URL is edited, the site's validation status is revoked.
+
+#### Retry a failed validation
+
+> - [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/322609) in GitLab 14.3.
+> - [Deployed behind the `dast_failed_site_validations` flag](../../../administration/feature_flags.md), enabled by default.
+> - [Feature flag `dast_failed_site_validations` removed](https://gitlab.com/gitlab-org/gitlab/-/issues/323961) in GitLab 14.4.
+
+If a site profile's validation fails, you can retry it by selecting the **Retry validation** button
+in the profiles list.
+
+When loading the DAST profiles library, past failed validations are listed above the profiles
+list. You can also retry the validation from there by selecting the **Retry validation** link in
+the alert. You can also dismiss the alert to revoke failed validations.
 
 #### Revoke a site profile's validation status
 
@@ -1236,7 +1362,7 @@ To edit a scanner profile:
 1. Select **Save profile**.
 
 If a scanner profile is linked to a security policy, a user cannot edit the profile from this page.
-See [Scan Policies](../policies/index.md)
+See [Scan execution policies](../policies/scan-execution-policies.md)
 for more information.
 
 #### Delete a scanner profile
@@ -1250,10 +1376,10 @@ To delete a scanner profile:
 1. Select **Delete**.
 
 If a scanner profile is linked to a security policy, a user cannot delete the profile from this
-page. See [Scan Policies](../policies/index.md)
+page. See [Scan execution policies](../policies/scan-execution-policies.md)
 for more information.
 
-### Auditing
+## Auditing
 
 > [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/217872) in GitLab 14.1.
 
@@ -1265,13 +1391,6 @@ and DAST site profiles are included in the [audit log](../../../administration/a
 The DAST tool outputs a report file in JSON format by default. However, this tool can also generate reports in
 Markdown, HTML, and XML. For more information, see the [schema for DAST reports](https://gitlab.com/gitlab-org/security-products/security-report-schemas/-/blob/master/dist/dast-report-format.json).
 
-### List of URLs scanned
-
-When DAST completes scanning, the merge request page states the number of URLs scanned.
-Click **View details** to view the web console output which includes the list of scanned URLs.
-
-![DAST Widget](img/dast_urls_scanned_v12_10.png)
-
 ### JSON
 
 WARNING:
@@ -1279,28 +1398,7 @@ The JSON report artifacts are not a public API of DAST and their format is expec
 
 The DAST tool always emits a JSON report file called `gl-dast-report.json` and
 sample reports can be found in the
-[DAST repository](https://gitlab.com/gitlab-org/security-products/dast/-/tree/master/test/end-to-end/expect).
-
-### Other formats
-
-Reports can also be generated in Markdown, HTML, and XML. These can be published as artifacts using the following configuration:
-
-```yaml
-include:
-  template: DAST.gitlab-ci.yml
-
-dast:
-  variables:
-    DAST_HTML_REPORT: report.html
-    DAST_MARKDOWN_REPORT: report.md
-    DAST_XML_REPORT: report.xml
-  artifacts:
-    paths:
-      - $DAST_HTML_REPORT
-      - $DAST_MARKDOWN_REPORT
-      - $DAST_XML_REPORT
-      - gl-dast-report.json
-```
+[DAST repository](https://gitlab.com/gitlab-org/security-products/dast/-/tree/main/test/end-to-end/expect).
 
 ## Optimizing DAST
 

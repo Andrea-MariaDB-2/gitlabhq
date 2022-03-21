@@ -23,6 +23,17 @@ they found that "ARIA correlated to higher detectable errors".
 It is likely that *misuse* of ARIA is a big cause of increased errors,
 so when in doubt don't use `aria-*`, `role`, and `tabindex` and stick with semantic HTML.
 
+## Enable keyboard navigation on macOS
+
+By default, macOS limits the <kbd>tab</kbd> key to **Text boxes and lists only**. To enable full keyboard navigation:
+
+1. Open **System Preferences**.
+1. Select **Keyboard**.
+1. Open the **Shortcuts** tab.
+1. Enable the setting **Use keyboard navigation to move focus between controls**.
+
+You can read more about enabling browser-specific keyboard navigation on [a11yproject](https://www.a11yproject.com/posts/2017-12-29-macos-browser-keyboard-navigation/).
+
 ## Quick checklist
 
 - [Text](#text-inputs-with-accessible-names),
@@ -334,7 +345,7 @@ Keep in mind that:
 - When you add `:hover` styles, in most cases you should add `:focus` styles too so that the styling is applied for both mouse **and** keyboard users.
 - If you remove an interactive element's `outline`, make sure you maintain visual focus state in another way such as with `box-shadow`.
 
-See the [Pajamas Keyboard-only page](https://design.gitlab.com/accessibility-audits/2-keyboard-only/) for more detail.
+See the [Pajamas Keyboard-only page](https://design.gitlab.com/accessibility-audits/keyboard-only/) for more detail.
 
 ## Tabindex
 
@@ -510,7 +521,7 @@ Proper research and testing should be done to ensure compliance with [WCAG](http
 ### Viewing the browser accessibility tree
 
 - [Firefox DevTools guide](https://developer.mozilla.org/en-US/docs/Tools/Accessibility_inspector#accessing_the_accessibility_inspector)
-- [Chrome DevTools guide](https://developer.chrome.com/docs/devtools/accessibility/reference#pane)
+- [Chrome DevTools guide](https://developer.chrome.com/docs/devtools/accessibility/reference/#pane)
 
 ### Browser extensions
 

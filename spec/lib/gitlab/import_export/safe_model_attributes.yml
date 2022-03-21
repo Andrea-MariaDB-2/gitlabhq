@@ -33,6 +33,7 @@ Issue:
 - health_status
 - external_key
 - issue_type
+- email_message_id
 Event:
 - id
 - target_type
@@ -167,6 +168,7 @@ ProjectMember:
 - expires_at
 - ldap
 - override
+- invite_email_success
 User:
 - id
 - username
@@ -400,15 +402,6 @@ Ci::Variable:
 - encrypted_value
 - encrypted_value_salt
 - encrypted_value_iv
-Ci::Trigger:
-- id
-- token
-- project_id
-- created_at
-- updated_at
-- owner_id
-- description
-- ref
 Ci::PipelineSchedule:
 - id
 - description
@@ -555,7 +548,6 @@ Project:
 - disable_overriding_approvers_per_merge_request
 - merge_requests_ff_only_enabled
 - issues_template
-- repository_size_limit
 - sync_time
 - service_desk_enabled
 - last_repository_updated_at
@@ -565,12 +557,13 @@ Project:
 - merge_requests_rebase_enabled
 - jobs_cache_index
 - external_authorization_classification_label
-- external_webhook_token
 - pages_https_only
 - merge_requests_disable_committers_approval
 - require_password_to_approve
 - autoclose_referenced_issues
 - suggestion_commit_message
+- merge_commit_template
+- squash_commit_template
 ProjectTracingSetting:
 - external_url
 Author:
@@ -699,9 +692,11 @@ Badge:
 - type
 ProjectCiCdSetting:
 - group_runners_enabled
+- runner_token_expiration_interval
 ProjectSetting:
 - allow_merge_on_skipped_pipeline
 - has_confluence
+- has_shimo
 - has_vulnerabilities
 ProtectedEnvironment:
 - id
@@ -761,6 +756,7 @@ Board:
 - group_id
 - milestone_id
 - iteration_id
+- iteration_cadence_id
 - weight
 - name
 - hide_backlog_list
@@ -861,6 +857,7 @@ Epic:
   - health_status
   - external_key
   - confidential
+  - color
 EpicIssue:
   - id
   - relative_position

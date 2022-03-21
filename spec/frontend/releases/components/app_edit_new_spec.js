@@ -3,7 +3,8 @@ import axios from 'axios';
 import MockAdapter from 'axios-mock-adapter';
 import { merge } from 'lodash';
 import Vuex from 'vuex';
-import { getJSONFixture } from 'helpers/fixtures';
+import { nextTick } from 'vue';
+import originalRelease from 'test_fixtures/api/releases/release.json';
 import setWindowLocation from 'helpers/set_window_location_helper';
 import { TEST_HOST } from 'helpers/test_constants';
 import * as commonUtils from '~/lib/utils/common_utils';
@@ -11,7 +12,6 @@ import ReleaseEditNewApp from '~/releases/components/app_edit_new.vue';
 import AssetLinksForm from '~/releases/components/asset_links_form.vue';
 import { BACK_URL_PARAM } from '~/releases/constants';
 
-const originalRelease = getJSONFixture('api/releases/release.json');
 const originalMilestones = originalRelease.milestones;
 const releasesPagePath = 'path/to/releases/page';
 
@@ -72,7 +72,7 @@ describe('Release edit/new component', () => {
       },
     });
 
-    await wrapper.vm.$nextTick();
+    await nextTick();
 
     wrapper.element.querySelectorAll('input').forEach((input) => jest.spyOn(input, 'focus'));
   };

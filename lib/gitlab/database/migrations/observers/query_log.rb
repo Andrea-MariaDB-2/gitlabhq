@@ -7,7 +7,7 @@ module Gitlab
         class QueryLog < MigrationObserver
           def before
             @logger_was = ActiveRecord::Base.logger
-            file_path = File.join(Instrumentation::RESULT_DIR, "#{observation.version}_#{observation.name}.log")
+            file_path = File.join(output_dir, "migration.log")
             @logger = Logger.new(file_path)
             ActiveRecord::Base.logger = @logger
           end

@@ -9,6 +9,8 @@ class SessionsController < Devise::SessionsController
   include RendersLdapServers
   include KnownSignIn
   include Gitlab::Utils::StrongMemoize
+  include OneTrustCSP
+  include BizibleCSP
 
   skip_before_action :check_two_factor_requirement, only: [:destroy]
   skip_before_action :check_password_expiration, only: [:destroy]
@@ -31,7 +33,7 @@ class SessionsController < Devise::SessionsController
   before_action :load_recaptcha
   before_action :set_invite_params, only: [:new]
   before_action do
-    push_frontend_feature_flag(:webauthn)
+    push_frontend_feature_flag(:webauthn, default_enabled: :yaml)
   end
 
   after_action :log_failed_login, if: :action_new_and_failed_login?
@@ -83,6 +85,8 @@ class SessionsController < Devise::SessionsController
   end
 
   def destroy
+    headers['Clear-Site-Data'] = '"*"'
+
     Gitlab::AppLogger.info("User Logout: username=#{current_user.username} ip=#{request.remote_ip}")
     super
     # hide the signed_out notice
@@ -302,9 +306,9 @@ class SessionsController < Devise::SessionsController
   def authentication_method
     if user_params[:otp_attempt]
       AuthenticationEvent::TWO_FACTOR
-    elsif user_params[:device_response] && Feature.enabled?(:webauthn)
+    elsif user_params[:device_response] && Feature.enabled?(:webauthn, default_enabled: :yaml)
       AuthenticationEvent::TWO_FACTOR_WEBAUTHN
-    elsif user_params[:device_response] && !Feature.enabled?(:webauthn)
+    elsif user_params[:device_response] && !Feature.enabled?(:webauthn, default_enabled: :yaml)
       AuthenticationEvent::TWO_FACTOR_U2F
     else
       AuthenticationEvent::STANDARD

@@ -9,17 +9,20 @@ import {
   GlModalDirective,
 } from '@gitlab/ui';
 import { throttle } from 'lodash';
-import { mapGetters, mapState } from 'vuex';
+import { mapActions, mapGetters, mapState } from 'vuex';
 
 import BoardForm from 'ee_else_ce/boards/components/board_form.vue';
 
 import { getIdFromGraphQLId } from '~/graphql_shared/utils';
-import axios from '~/lib/utils/axios_utils';
-import httpStatusCodes from '~/lib/utils/http_status';
+import { s__ } from '~/locale';
 
 import eventHub from '../eventhub';
-import groupQuery from '../graphql/group_boards.query.graphql';
-import projectQuery from '../graphql/project_boards.query.graphql';
+import groupBoardsQuery from '../graphql/group_boards.query.graphql';
+import projectBoardsQuery from '../graphql/project_boards.query.graphql';
+import groupBoardQuery from '../graphql/group_board.query.graphql';
+import projectBoardQuery from '../graphql/project_board.query.graphql';
+import groupRecentBoardsQuery from '../graphql/group_recent_boards.query.graphql';
+import projectRecentBoardsQuery from '../graphql/project_recent_boards.query.graphql';
 
 const MIN_BOARDS_TO_VIEW_RECENT = 10;
 
@@ -37,12 +40,8 @@ export default {
   directives: {
     GlModalDirective,
   },
-  inject: ['fullPath', 'recentBoardsEndpoint'],
+  inject: ['fullPath'],
   props: {
-    currentBoard: {
-      type: Object,
-      required: true,
-    },
     throttleDuration: {
       type: Number,
       default: 200,
@@ -64,22 +63,6 @@ export default {
       type: Boolean,
       required: true,
     },
-    labelsPath: {
-      type: String,
-      required: true,
-    },
-    labelsWebUrl: {
-      type: String,
-      required: true,
-    },
-    projectId: {
-      type: Number,
-      required: true,
-    },
-    groupId: {
-      type: Number,
-      required: true,
-    },
     scopedIssueBoardFeatureEnabled: {
       type: Boolean,
       required: true,
@@ -87,11 +70,6 @@ export default {
     weights: {
       type: Array,
       required: true,
-    },
-    enabledScopedLabels: {
-      type: Boolean,
-      required: false,
-      default: false,
     },
   },
   data() {
@@ -107,13 +85,47 @@ export default {
       maxPosition: 0,
       filterTerm: '',
       currentPage: '',
+      board: {},
     };
   },
+  apollo: {
+    board: {
+      query() {
+        return this.currentBoardQuery;
+      },
+      variables() {
+        return {
+          fullPath: this.fullPath,
+          boardId: this.fullBoardId,
+        };
+      },
+      update(data) {
+        const board = data.workspace?.board;
+        this.setBoardConfig(board);
+        return {
+          ...board,
+          labels: board?.labels?.nodes,
+        };
+      },
+      error() {
+        this.setError({ message: this.$options.i18n.errorFetchingBoard });
+      },
+    },
+  },
   computed: {
-    ...mapState(['boardType']),
-    ...mapGetters(['isGroupBoard']),
+    ...mapState(['boardType', 'fullBoardId']),
+    ...mapGetters(['isGroupBoard', 'isProjectBoard']),
     parentType() {
       return this.boardType;
+    },
+    currentBoardQueryCE() {
+      return this.isGroupBoard ? groupBoardQuery : projectBoardQuery;
+    },
+    currentBoardQuery() {
+      return this.currentBoardQueryCE;
+    },
+    isBoardLoading() {
+      return this.$apollo.queries.board.loading;
     },
     loading() {
       return this.loadingRecentBoards || Boolean(this.loadingBoards);
@@ -122,9 +134,6 @@ export default {
       return this.boards.filter((board) =>
         board.name.toLowerCase().includes(this.filterTerm.toLowerCase()),
       );
-    },
-    board() {
-      return this.currentBoard;
     },
     showCreate() {
       return this.multipleIssueBoardsAvailable;
@@ -150,6 +159,10 @@ export default {
       this.scrollFadeInitialized = false;
       this.$nextTick(this.setScrollFade);
     },
+    recentBoards() {
+      this.scrollFadeInitialized = false;
+      this.$nextTick(this.setScrollFade);
+    },
   },
   created() {
     eventHub.$on('showBoardModal', this.showPage);
@@ -158,23 +171,27 @@ export default {
     eventHub.$off('showBoardModal', this.showPage);
   },
   methods: {
+    ...mapActions(['setError', 'setBoardConfig']),
     showPage(page) {
       this.currentPage = page;
     },
     cancel() {
       this.showPage('');
     },
-    boardUpdate(data) {
+    boardUpdate(data, boardType) {
       if (!data?.[this.parentType]) {
         return [];
       }
-      return data[this.parentType].boards.edges.map(({ node }) => ({
+      return data[this.parentType][boardType].edges.map(({ node }) => ({
         id: getIdFromGraphQLId(node.id),
         name: node.name,
       }));
     },
     boardQuery() {
-      return this.isGroupBoard ? groupQuery : projectQuery;
+      return this.isGroupBoard ? groupBoardsQuery : projectBoardsQuery;
+    },
+    recentBoardsQuery() {
+      return this.isGroupBoard ? groupRecentBoardsQuery : projectRecentBoardsQuery;
     },
     loadBoards(toggleDropdown = true) {
       if (toggleDropdown && this.boards.length > 0) {
@@ -187,39 +204,20 @@ export default {
         },
         query: this.boardQuery,
         loadingKey: 'loadingBoards',
-        update: this.boardUpdate,
+        update: (data) => this.boardUpdate(data, 'boards'),
       });
 
       this.loadRecentBoards();
     },
     loadRecentBoards() {
-      this.loadingRecentBoards = true;
-      // Follow up to fetch recent boards using GraphQL
-      // https://gitlab.com/gitlab-org/gitlab/-/issues/300985
-      axios
-        .get(this.recentBoardsEndpoint)
-        .then((res) => {
-          this.recentBoards = res.data;
-        })
-        .catch((err) => {
-          /**
-           *  If user is unauthorized we'd still want to resolve the
-           *  request to display all boards.
-           */
-          if (err?.response?.status === httpStatusCodes.UNAUTHORIZED) {
-            this.recentBoards = []; // recent boards are empty
-            return;
-          }
-          throw err;
-        })
-        .then(() => this.$nextTick()) // Wait for boards list in DOM
-        .then(() => {
-          this.setScrollFade();
-        })
-        .catch(() => {})
-        .finally(() => {
-          this.loadingRecentBoards = false;
-        });
+      this.$apollo.addSmartQuery('recentBoards', {
+        variables() {
+          return { fullPath: this.fullPath };
+        },
+        query: this.recentBoardsQuery,
+        loadingKey: 'loadingRecentBoards',
+        update: (data) => this.boardUpdate(data, 'recentIssueBoards'),
+      });
     },
     isScrolledUp() {
       const { content } = this.$refs;
@@ -250,6 +248,9 @@ export default {
       this.hasScrollFade = this.isScrolledUp();
     },
   },
+  i18n: {
+    errorFetchingBoard: s__('Board|An error occurred while fetching the board, please try again.'),
+  },
 };
 </script>
 
@@ -260,6 +261,7 @@ export default {
         data-qa-selector="boards_dropdown"
         toggle-class="dropdown-menu-toggle js-dropdown-toggle"
         menu-class="flex-column dropdown-extended-height"
+        :loading="isBoardLoading"
         :text="board.name"
         @show="loadBoards"
       >
@@ -314,9 +316,7 @@ export default {
 
           <gl-dropdown-item v-if="hasMissingBoards" class="no-pointer-events">
             {{
-              s__(
-                'IssueBoards|Some of your boards are hidden, activate a license to see them again.',
-              )
+              s__('IssueBoards|Some of your boards are hidden, add a license to see them again.')
             }}
           </gl-dropdown-item>
         </div>
@@ -336,6 +336,9 @@ export default {
             v-if="showCreate"
             v-gl-modal-directive="'board-config-modal'"
             data-qa-selector="create_new_board_button"
+            data-track-action="click_button"
+            data-track-label="create_new_board"
+            data-track-property="dropdown"
             @click.prevent="showPage('new')"
           >
             {{ s__('IssueBoards|Create new board') }}
@@ -354,15 +357,10 @@ export default {
 
       <board-form
         v-if="currentPage"
-        :labels-path="labelsPath"
-        :labels-web-url="labelsWebUrl"
-        :project-id="projectId"
-        :group-id="groupId"
         :can-admin-board="canAdminBoard"
         :scoped-issue-board-feature-enabled="scopedIssueBoardFeatureEnabled"
         :weights="weights"
-        :enable-scoped-labels="enabledScopedLabels"
-        :current-board="currentBoard"
+        :current-board="board"
         :current-page="currentPage"
         @cancel="cancel"
       />

@@ -20,8 +20,7 @@
       = expanded_by_default? ? _('Collapse') : _('Expand')
     %p
       = _('Customize CI/CD settings, including Auto DevOps, shared runners, and job artifacts.')
-  .settings-content
-    = render 'ci_cd'
+  = render 'ci_cd'
 
 = render_if_exists 'admin/application_settings/required_instance_ci_setting', expanded: expanded_by_default?
 
@@ -39,7 +38,7 @@
     .settings-content
       = render 'registry'
 
-- if Feature.enabled?(:runner_registration_control)
+- if Feature.enabled?(:runner_registration_control, default_enabled: :yaml)
   %section.settings.as-runner.no-animate#js-runner-settings{ class: ('expanded' if expanded_by_default?) }
     .settings-header
       %h4

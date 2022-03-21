@@ -9,11 +9,14 @@ RSpec.describe API::Users do
   let_it_be(:gpg_key) { create(:gpg_key, user: user) }
   let_it_be(:email) { create(:email, user: user) }
 
+  let(:blocked_user) { create(:user, :blocked) }
   let(:omniauth_user) { create(:omniauth_user) }
+  let(:ldap_user) { create(:omniauth_user, provider: 'ldapmain') }
   let(:ldap_blocked_user) { create(:omniauth_user, provider: 'ldapmain', state: 'ldap_blocked') }
   let(:private_user) { create(:user, private_profile: true) }
   let(:deactivated_user) { create(:user, state: 'deactivated') }
   let(:banned_user) { create(:user, :banned) }
+  let(:internal_user) { create(:user, :bot) }
 
   context 'admin notes' do
     let_it_be(:admin) { create(:admin, note: '2019-10-06 | 2FA added | user requested | www.gitlab.com') }
@@ -46,37 +49,6 @@ RSpec.describe API::Users do
             post api('/users', user), params: attributes_for(:user)
 
             expect(response).to have_gitlab_http_status(:forbidden)
-          end
-        end
-      end
-    end
-
-    describe 'GET /users/:id' do
-      context 'when unauthenticated' do
-        it 'does not contain the note of the user' do
-          get api("/users/#{user.id}")
-
-          expect(json_response).not_to have_key('note')
-        end
-      end
-
-      context 'when authenticated' do
-        context 'as an admin' do
-          it 'contains the note of the user' do
-            get api("/users/#{user.id}", admin)
-
-            expect(json_response).to have_key('note')
-            expect(json_response['note']).to eq(user.note)
-            expect(json_response).to have_key('sign_in_count')
-          end
-        end
-
-        context 'as a regular user' do
-          it 'does not contain the note of the user' do
-            get api("/users/#{user.id}", user)
-
-            expect(json_response).not_to have_key('note')
-            expect(json_response).not_to have_key('sign_in_count')
           end
         end
       end
@@ -525,6 +497,13 @@ RSpec.describe API::Users do
   end
 
   describe "GET /users/:id" do
+    let_it_be(:user2, reload: true) { create(:user, username: 'another_user') }
+
+    before do
+      allow(Gitlab::ApplicationRateLimiter).to receive(:throttled?)
+        .with(:users_get_by_id, scope: user, users_allowlist: []).and_return(false)
+    end
+
     it "returns a user by id" do
       get api("/users/#{user.id}", user)
 
@@ -562,6 +541,117 @@ RSpec.describe API::Users do
       expect(json_response.keys).not_to include 'trial'
     end
 
+    it 'returns a 404 if the target user is present but inaccessible' do
+      allow(Ability).to receive(:allowed?).and_call_original
+      allow(Ability).to receive(:allowed?).with(user, :read_user, user2).and_return(false)
+
+      get api("/users/#{user2.id}", user)
+
+      expect(response).to have_gitlab_http_status(:not_found)
+    end
+
+    it 'returns the `created_at` field for public users' do
+      get api("/users/#{user2.id}", user)
+
+      expect(response).to match_response_schema('public_api/v4/user/basic')
+      expect(json_response.keys).to include('created_at')
+    end
+
+    it 'does not return the `created_at` field for private users' do
+      get api("/users/#{private_user.id}", user)
+
+      expect(response).to match_response_schema('public_api/v4/user/basic')
+      expect(json_response.keys).not_to include('created_at')
+    end
+
+    it 'returns the `followers` field for public users' do
+      get api("/users/#{user2.id}", user)
+
+      expect(response).to match_response_schema('public_api/v4/user/basic')
+      expect(json_response.keys).to include('followers')
+    end
+
+    it 'does not return the `followers` field for private users' do
+      get api("/users/#{private_user.id}", user)
+
+      expect(response).to match_response_schema('public_api/v4/user/basic')
+      expect(json_response.keys).not_to include('followers')
+    end
+
+    it 'returns the `following` field for public users' do
+      get api("/users/#{user2.id}", user)
+
+      expect(response).to match_response_schema('public_api/v4/user/basic')
+      expect(json_response.keys).to include('following')
+    end
+
+    it 'does not return the `following` field for private users' do
+      get api("/users/#{private_user.id}", user)
+
+      expect(response).to match_response_schema('public_api/v4/user/basic')
+      expect(json_response.keys).not_to include('following')
+    end
+
+    it 'does not contain the note of the user' do
+      get api("/users/#{user.id}", user)
+
+      expect(json_response).not_to have_key('note')
+      expect(json_response).not_to have_key('sign_in_count')
+    end
+
+    context 'when the rate limit is not exceeded' do
+      it 'returns a success status' do
+        expect(Gitlab::ApplicationRateLimiter)
+          .to receive(:throttled?).with(:users_get_by_id, scope: user, users_allowlist: [])
+          .and_return(false)
+
+        get api("/users/#{user.id}", user)
+
+        expect(response).to have_gitlab_http_status(:ok)
+      end
+    end
+
+    context 'when the rate limit is exceeded' do
+      context 'when feature flag is enabled' do
+        it 'returns "too many requests" status' do
+          expect(Gitlab::ApplicationRateLimiter)
+            .to receive(:throttled?).with(:users_get_by_id, scope: user, users_allowlist: [])
+            .and_return(true)
+
+          get api("/users/#{user.id}", user)
+
+          expect(response).to have_gitlab_http_status(:too_many_requests)
+        end
+
+        it 'still allows admin users' do
+          expect(Gitlab::ApplicationRateLimiter)
+            .not_to receive(:throttled?)
+
+          get api("/users/#{user.id}", admin)
+
+          expect(response).to have_gitlab_http_status(:ok)
+        end
+
+        it 'allows users whose username is in the allowlist' do
+          allowlist = [user.username]
+          current_settings = Gitlab::CurrentSettings.current_application_settings
+
+          # Necessary to ensure the same object is returned on each call
+          allow(Gitlab::CurrentSettings).to receive(:current_application_settings).and_return current_settings
+
+          allow(current_settings).to receive(:users_get_by_id_limit_allowlist).and_return(allowlist)
+
+          expect(Gitlab::ApplicationRateLimiter)
+            .to receive(:throttled?).with(:users_get_by_id, scope: user, users_allowlist: allowlist)
+            .and_call_original
+
+          get api("/users/#{user.id}", user)
+
+          expect(response).to have_gitlab_http_status(:ok)
+        end
+      end
+    end
+
     context 'when job title is present' do
       let(:job_title) { 'Fullstack Engineer' }
 
@@ -578,6 +668,14 @@ RSpec.describe API::Users do
     end
 
     context 'when authenticated as admin' do
+      it 'contains the note of the user' do
+        get api("/users/#{user.id}", admin)
+
+        expect(json_response).to have_key('note')
+        expect(json_response['note']).to eq(user.note)
+        expect(json_response).to have_key('sign_in_count')
+      end
+
       it 'includes the `is_admin` field' do
         get api("/users/#{user.id}", admin)
 
@@ -638,62 +736,10 @@ RSpec.describe API::Users do
     end
 
     context 'for an anonymous user' do
-      it "returns a user by id" do
+      it 'returns 403' do
         get api("/users/#{user.id}")
 
-        expect(response).to match_response_schema('public_api/v4/user/basic')
-        expect(json_response['username']).to eq(user.username)
-      end
-
-      it "returns a 404 if the target user is present but inaccessible" do
-        allow(Ability).to receive(:allowed?).and_call_original
-        allow(Ability).to receive(:allowed?).with(nil, :read_user, user).and_return(false)
-
-        get api("/users/#{user.id}")
-
-        expect(response).to have_gitlab_http_status(:not_found)
-      end
-
-      it "returns the `created_at` field for public users" do
-        get api("/users/#{user.id}")
-
-        expect(response).to match_response_schema('public_api/v4/user/basic')
-        expect(json_response.keys).to include 'created_at'
-      end
-
-      it "does not return the `created_at` field for private users" do
-        get api("/users/#{private_user.id}")
-
-        expect(response).to match_response_schema('public_api/v4/user/basic')
-        expect(json_response.keys).not_to include 'created_at'
-      end
-
-      it "returns the `followers` field for public users" do
-        get api("/users/#{user.id}")
-
-        expect(response).to match_response_schema('public_api/v4/user/basic')
-        expect(json_response.keys).to include 'followers'
-      end
-
-      it "does not return the `followers` field for private users" do
-        get api("/users/#{private_user.id}")
-
-        expect(response).to match_response_schema('public_api/v4/user/basic')
-        expect(json_response.keys).not_to include 'followers'
-      end
-
-      it "returns the `following` field for public users" do
-        get api("/users/#{user.id}")
-
-        expect(response).to match_response_schema('public_api/v4/user/basic')
-        expect(json_response.keys).to include 'following'
-      end
-
-      it "does not return the `following` field for private users" do
-        get api("/users/#{private_user.id}")
-
-        expect(response).to match_response_schema('public_api/v4/user/basic')
-        expect(json_response.keys).not_to include 'following'
+        expect(response).to have_gitlab_http_status(:forbidden)
       end
     end
 
@@ -786,6 +832,14 @@ RSpec.describe API::Users do
   describe 'GET /users/:id/followers' do
     let(:follower) { create(:user) }
 
+    context 'for an anonymous user' do
+      it 'returns 403' do
+        get api("/users/#{user.id}")
+
+        expect(response).to have_gitlab_http_status(:forbidden)
+      end
+    end
+
     context 'user has followers' do
       it 'lists followers' do
         follower.follow(user)
@@ -820,6 +874,14 @@ RSpec.describe API::Users do
 
   describe 'GET /users/:id/following' do
     let(:followee) { create(:user) }
+
+    context 'for an anonymous user' do
+      it 'returns 403' do
+        get api("/users/#{user.id}")
+
+        expect(response).to have_gitlab_http_status(:forbidden)
+      end
+    end
 
     context 'user has followers' do
       it 'lists following user' do
@@ -971,7 +1033,7 @@ RSpec.describe API::Users do
       post api('/users', admin),
         params: {
           email: 'invalid email',
-          password: 'password',
+          password: Gitlab::Password.test_default,
           name: 'test'
         }
       expect(response).to have_gitlab_http_status(:bad_request)
@@ -1037,7 +1099,7 @@ RSpec.describe API::Users do
         post api('/users', admin),
           params: {
             email: 'test@example.com',
-            password: 'password',
+            password: Gitlab::Password.test_default,
             username: 'test',
             name: 'foo'
           }
@@ -1049,7 +1111,7 @@ RSpec.describe API::Users do
             params: {
               name: 'foo',
               email: 'test@example.com',
-              password: 'password',
+              password: Gitlab::Password.test_default,
               username: 'foo'
             }
         end.to change { User.count }.by(0)
@@ -1063,7 +1125,7 @@ RSpec.describe API::Users do
             params: {
               name: 'foo',
               email: 'foo@example.com',
-              password: 'password',
+              password: Gitlab::Password.test_default,
               username: 'test'
             }
         end.to change { User.count }.by(0)
@@ -1077,7 +1139,7 @@ RSpec.describe API::Users do
             params: {
               name: 'foo',
               email: 'foo@example.com',
-              password: 'password',
+              password: Gitlab::Password.test_default,
               username: 'TEST'
             }
         end.to change { User.count }.by(0)
@@ -1201,7 +1263,7 @@ RSpec.describe API::Users do
 
     it 'updates user with a new email' do
       old_email = user.email
-      old_notification_email = user.notification_email
+      old_notification_email = user.notification_email_or_default
       put api("/users/#{user.id}", admin), params: { email: 'new@email.com' }
 
       user.reload
@@ -1209,7 +1271,7 @@ RSpec.describe API::Users do
       expect(response).to have_gitlab_http_status(:ok)
       expect(user).to be_confirmed
       expect(user.email).to eq(old_email)
-      expect(user.notification_email).to eq(old_notification_email)
+      expect(user.notification_email_or_default).to eq(old_notification_email)
       expect(user.unconfirmed_email).to eq('new@email.com')
     end
 
@@ -1232,10 +1294,10 @@ RSpec.describe API::Users do
     end
 
     it "updates user's existing identity" do
-      put api("/users/#{omniauth_user.id}", admin), params: { provider: 'ldapmain', extern_uid: '654321' }
+      put api("/users/#{ldap_user.id}", admin), params: { provider: 'ldapmain', extern_uid: '654321' }
 
       expect(response).to have_gitlab_http_status(:ok)
-      expect(omniauth_user.reload.identities.first.extern_uid).to eq('654321')
+      expect(ldap_user.reload.identities.first.extern_uid).to eq('654321')
     end
 
     it 'updates user with new identity' do
@@ -1422,8 +1484,8 @@ RSpec.describe API::Users do
 
     context "with existing user" do
       before do
-        post api("/users", admin), params: { email: 'test@example.com', password: 'password', username: 'test', name: 'test' }
-        post api("/users", admin), params: { email: 'foo@bar.com', password: 'password', username: 'john', name: 'john' }
+        post api("/users", admin), params: { email: 'test@example.com', password: Gitlab::Password.test_default, username: 'test', name: 'test' }
+        post api("/users", admin), params: { email: 'foo@bar.com', password: Gitlab::Password.test_default, username: 'john', name: 'john' }
         @user = User.all.last
       end
 
@@ -1454,10 +1516,21 @@ RSpec.describe API::Users do
 
   describe "PUT /user/:id/credit_card_validation" do
     let(:credit_card_validated_time) { Time.utc(2020, 1, 1) }
+    let(:expiration_year) { Date.today.year + 10 }
+    let(:params) do
+      {
+        credit_card_validated_at: credit_card_validated_time,
+        credit_card_expiration_year: expiration_year,
+        credit_card_expiration_month: 1,
+        credit_card_holder_name: 'John Smith',
+        credit_card_type: 'AmericanExpress',
+        credit_card_mask_number: '1111'
+      }
+    end
 
     context 'when unauthenticated' do
       it 'returns authentication error' do
-        put api("/user/#{user.id}/credit_card_validation"), params: { credit_card_validated_at: credit_card_validated_time }
+        put api("/user/#{user.id}/credit_card_validation"), params: {}
 
         expect(response).to have_gitlab_http_status(:unauthorized)
       end
@@ -1465,7 +1538,7 @@ RSpec.describe API::Users do
 
     context 'when authenticated as non-admin' do
       it "does not allow updating user's credit card validation", :aggregate_failures do
-        put api("/user/#{user.id}/credit_card_validation", user), params: { credit_card_validated_at: credit_card_validated_time }
+        put api("/user/#{user.id}/credit_card_validation", user), params: params
 
         expect(response).to have_gitlab_http_status(:forbidden)
       end
@@ -1473,10 +1546,18 @@ RSpec.describe API::Users do
 
     context 'when authenticated as admin' do
       it "updates user's credit card validation", :aggregate_failures do
-        put api("/user/#{user.id}/credit_card_validation", admin), params: { credit_card_validated_at: credit_card_validated_time }
+        put api("/user/#{user.id}/credit_card_validation", admin), params: params
+
+        user.reload
 
         expect(response).to have_gitlab_http_status(:ok)
-        expect(user.reload.credit_card_validated_at).to eq(credit_card_validated_time)
+        expect(user.credit_card_validation).to have_attributes(
+          credit_card_validated_at: credit_card_validated_time,
+          expiration_date: Date.new(expiration_year, 1, 31),
+          last_digits: 1111,
+          network: 'AmericanExpress',
+          holder_name: 'John Smith'
+        )
       end
 
       it "returns 400 error if credit_card_validated_at is missing" do
@@ -1486,7 +1567,7 @@ RSpec.describe API::Users do
       end
 
       it 'returns 404 error if user not found' do
-        put api("/user/#{non_existing_record_id}/credit_card_validation", admin), params: { credit_card_validated_at: credit_card_validated_time }
+        put api("/user/#{non_existing_record_id}/credit_card_validation", admin), params: params
 
         expect(response).to have_gitlab_http_status(:not_found)
         expect(json_response['message']).to eq('404 User Not Found')
@@ -1638,6 +1719,33 @@ RSpec.describe API::Users do
       expect(response).to include_pagination_headers
       expect(json_response).to be_an Array
       expect(json_response.first['title']).to eq(key.title)
+    end
+  end
+
+  describe 'GET /user/:id/keys/:key_id' do
+    it 'gets existing key', :aggregate_failures do
+      user.keys << key
+
+      get api("/users/#{user.id}/keys/#{key.id}")
+
+      expect(response).to have_gitlab_http_status(:ok)
+      expect(json_response['title']).to eq(key.title)
+    end
+
+    it 'returns 404 error if user not found', :aggregate_failures do
+      user.keys << key
+
+      get api("/users/0/keys/#{key.id}")
+
+      expect(response).to have_gitlab_http_status(:not_found)
+      expect(json_response['message']).to eq('404 User Not Found')
+    end
+
+    it 'returns 404 error if key not found', :aggregate_failures do
+      get api("/users/#{user.id}/keys/#{non_existing_record_id}")
+
+      expect(response).to have_gitlab_http_status(:not_found)
+      expect(json_response['message']).to eq('404 Key Not Found')
     end
   end
 
@@ -1826,7 +1934,7 @@ RSpec.describe API::Users do
     end
   end
 
-  describe "POST /users/:id/emails" do
+  describe "POST /users/:id/emails", :mailer do
     it "does not create invalid email" do
       post api("/users/#{user.id}/emails", admin), params: {}
 
@@ -1836,11 +1944,15 @@ RSpec.describe API::Users do
 
     it "creates unverified email" do
       email_attrs = attributes_for :email
-      expect do
-        post api("/users/#{user.id}/emails", admin), params: email_attrs
-      end.to change { user.emails.count }.by(1)
+
+      perform_enqueued_jobs do
+        expect do
+          post api("/users/#{user.id}/emails", admin), params: email_attrs
+        end.to change { user.emails.count }.by(1)
+      end
 
       expect(json_response['confirmed_at']).to be_nil
+      should_email(user)
     end
 
     it "returns a 400 for invalid ID" do
@@ -1884,7 +1996,8 @@ RSpec.describe API::Users do
         expect(response).to have_gitlab_http_status(:ok)
         expect(response).to include_pagination_headers
         expect(json_response).to be_an Array
-        expect(json_response.first['email']).to eq(email.email)
+        expect(json_response.first['email']).to eq(user.email)
+        expect(json_response.second['email']).to eq(email.email)
       end
 
       it "returns a 404 for invalid ID" do
@@ -2466,7 +2579,8 @@ RSpec.describe API::Users do
         expect(response).to have_gitlab_http_status(:ok)
         expect(response).to include_pagination_headers
         expect(json_response).to be_an Array
-        expect(json_response.first["email"]).to eq(email.email)
+        expect(json_response.first['email']).to eq(user.email)
+        expect(json_response.second['email']).to eq(email.email)
       end
 
       context "scopes" do
@@ -2601,15 +2715,13 @@ RSpec.describe API::Users do
         let(:api_user) { admin }
 
         context 'for a deactivated user' do
-          before do
-            user.deactivate
-          end
+          let(:user_id) { deactivated_user.id }
 
           it 'activates a deactivated user' do
             activate
 
             expect(response).to have_gitlab_http_status(:created)
-            expect(user.reload.state).to eq('active')
+            expect(deactivated_user.reload.state).to eq('active')
           end
         end
 
@@ -2627,16 +2739,14 @@ RSpec.describe API::Users do
         end
 
         context 'for a blocked user' do
-          before do
-            user.block
-          end
+          let(:user_id) { blocked_user.id }
 
           it 'returns 403' do
             activate
 
             expect(response).to have_gitlab_http_status(:forbidden)
             expect(json_response['message']).to eq('403 Forbidden - A blocked user must be unblocked to be activated')
-            expect(user.reload.state).to eq('blocked')
+            expect(blocked_user.reload.state).to eq('blocked')
           end
         end
 
@@ -2713,29 +2823,25 @@ RSpec.describe API::Users do
         end
 
         context 'for a deactivated user' do
-          before do
-            user.deactivate
-          end
+          let(:user_id) { deactivated_user.id }
 
           it 'returns 201' do
             deactivate
 
             expect(response).to have_gitlab_http_status(:created)
-            expect(user.reload.state).to eq('deactivated')
+            expect(deactivated_user.reload.state).to eq('deactivated')
           end
         end
 
         context 'for a blocked user' do
-          before do
-            user.block
-          end
+          let(:user_id) { blocked_user.id }
 
           it 'returns 403' do
             deactivate
 
             expect(response).to have_gitlab_http_status(:forbidden)
             expect(json_response['message']).to eq('403 Forbidden - A blocked user cannot be deactivated by the API')
-            expect(user.reload.state).to eq('blocked')
+            expect(blocked_user.reload.state).to eq('blocked')
           end
         end
 
@@ -2777,7 +2883,9 @@ RSpec.describe API::Users do
     end
   end
 
-  context 'approve pending user' do
+  context 'approve and reject pending user' do
+    let(:pending_user) { create(:user, :blocked_pending_approval) }
+
     shared_examples '404' do
       it 'returns 404' do
         expect(response).to have_gitlab_http_status(:not_found)
@@ -2787,10 +2895,6 @@ RSpec.describe API::Users do
 
     describe 'POST /users/:id/approve' do
       subject(:approve) { post api("/users/#{user_id}/approve", api_user) }
-
-      let_it_be(:pending_user) { create(:user, :blocked_pending_approval) }
-      let_it_be(:deactivated_user) { create(:user, :deactivated) }
-      let_it_be(:blocked_user) { create(:user, :blocked) }
 
       context 'performed by a non-admin user' do
         let(:api_user) { user }
@@ -2867,102 +2971,252 @@ RSpec.describe API::Users do
         end
       end
     end
+
+    describe 'POST /users/:id/reject', :aggregate_failures do
+      subject(:reject) { post api("/users/#{user_id}/reject", api_user) }
+
+      shared_examples 'returns 409' do
+        it 'returns 409' do
+          reject
+
+          expect(response).to have_gitlab_http_status(:conflict)
+          expect(json_response['message']).to eq('User does not have a pending request')
+        end
+      end
+
+      context 'performed by a non-admin user' do
+        let(:api_user) { user }
+        let(:user_id) { pending_user.id }
+
+        it 'returns 403' do
+          expect { reject }.not_to change { pending_user.reload.state }
+          expect(response).to have_gitlab_http_status(:forbidden)
+          expect(json_response['message']).to eq('You are not allowed to reject a user')
+        end
+      end
+
+      context 'performed by an admin user' do
+        let(:api_user) { admin }
+
+        context 'for an pending approval user' do
+          let(:user_id) { pending_user.id }
+
+          it 'returns 200' do
+            reject
+
+            expect(response).to have_gitlab_http_status(:ok)
+            expect(json_response['message']).to eq('Success')
+          end
+        end
+
+        context 'for a deactivated user' do
+          let(:user_id) { deactivated_user.id }
+
+          it 'does not reject a deactivated user' do
+            expect { reject }.not_to change { deactivated_user.reload.state }
+          end
+
+          it_behaves_like 'returns 409'
+        end
+
+        context 'for an active user' do
+          let(:user_id) { user.id }
+
+          it 'does not reject an active user' do
+            expect { reject }.not_to change { user.reload.state }
+          end
+
+          it_behaves_like 'returns 409'
+        end
+
+        context 'for a blocked user' do
+          let(:user_id) { blocked_user.id }
+
+          it 'does not reject a blocked user' do
+            expect { reject }.not_to change { blocked_user.reload.state }
+          end
+
+          it_behaves_like 'returns 409'
+        end
+
+        context 'for a ldap blocked user' do
+          let(:user_id) { ldap_blocked_user.id }
+
+          it 'does not reject a ldap blocked user' do
+            expect { reject }.not_to change { ldap_blocked_user.reload.state }
+          end
+
+          it_behaves_like 'returns 409'
+        end
+
+        context 'for a user that does not exist' do
+          let(:user_id) { non_existing_record_id }
+
+          before do
+            reject
+          end
+
+          it_behaves_like '404'
+        end
+      end
+    end
   end
 
-  describe 'POST /users/:id/block' do
-    let(:blocked_user) { create(:user, state: 'blocked') }
+  describe 'POST /users/:id/block', :aggregate_failures do
+    context 'when admin' do
+      subject(:block_user) { post api("/users/#{user_id}/block", admin) }
 
-    it 'blocks existing user' do
-      post api("/users/#{user.id}/block", admin)
+      context 'with an existing user' do
+        let(:user_id) { user.id }
 
-      aggregate_failures do
-        expect(response).to have_gitlab_http_status(:created)
-        expect(response.body).to eq('true')
-        expect(user.reload.state).to eq('blocked')
+        it 'blocks existing user' do
+          block_user
+
+          expect(response).to have_gitlab_http_status(:created)
+          expect(response.body).to eq('true')
+          expect(user.reload.state).to eq('blocked')
+        end
+      end
+
+      context 'with an ldap blocked user' do
+        let(:user_id) { ldap_blocked_user.id }
+
+        it 'does not re-block ldap blocked users' do
+          block_user
+
+          expect(response).to have_gitlab_http_status(:forbidden)
+          expect(ldap_blocked_user.reload.state).to eq('ldap_blocked')
+        end
+      end
+
+      context 'with a non existent user' do
+        let(:user_id) { non_existing_record_id }
+
+        it 'does not block non existent user, returns 404' do
+          block_user
+
+          expect(response).to have_gitlab_http_status(:not_found)
+          expect(json_response['message']).to eq('404 User Not Found')
+        end
+      end
+
+      context 'with an internal user' do
+        let(:user_id) { internal_user.id }
+
+        it 'does not block internal user, returns 403' do
+          block_user
+
+          expect(response).to have_gitlab_http_status(:forbidden)
+          expect(json_response['message']).to eq('An internal user cannot be blocked')
+        end
+      end
+
+      context 'with a blocked user' do
+        let(:user_id) { blocked_user.id }
+
+        it 'returns a 201 if user is already blocked' do
+          block_user
+
+          expect(response).to have_gitlab_http_status(:created)
+          expect(response.body).to eq('null')
+        end
+      end
+
+      context 'with the API initiating user' do
+        let(:user_id) { admin.id }
+
+        it 'does not block the API initiating user, returns 403' do
+          block_user
+
+          expect(response).to have_gitlab_http_status(:forbidden)
+          expect(json_response['message']).to eq('403 Forbidden - The API initiating user cannot be blocked by the API')
+          expect(admin.reload.state).to eq('active')
+        end
       end
     end
 
-    it 'does not re-block ldap blocked users' do
-      post api("/users/#{ldap_blocked_user.id}/block", admin)
-      expect(response).to have_gitlab_http_status(:forbidden)
-      expect(ldap_blocked_user.reload.state).to eq('ldap_blocked')
-    end
-
-    it 'does not be available for non admin users' do
+    it 'is not available for non admin users' do
       post api("/users/#{user.id}/block", user)
+
       expect(response).to have_gitlab_http_status(:forbidden)
       expect(user.reload.state).to eq('active')
-    end
-
-    it 'returns a 404 error if user id not found' do
-      post api('/users/0/block', admin)
-      expect(response).to have_gitlab_http_status(:not_found)
-      expect(json_response['message']).to eq('404 User Not Found')
-    end
-
-    it 'returns a 403 error if user is internal' do
-      internal_user = create(:user, :bot)
-
-      post api("/users/#{internal_user.id}/block", admin)
-
-      expect(response).to have_gitlab_http_status(:forbidden)
-      expect(json_response['message']).to eq('An internal user cannot be blocked')
-    end
-
-    it 'returns a 201 if user is already blocked' do
-      post api("/users/#{blocked_user.id}/block", admin)
-
-      aggregate_failures do
-        expect(response).to have_gitlab_http_status(:created)
-        expect(response.body).to eq('null')
-      end
     end
   end
 
-  describe 'POST /users/:id/unblock' do
-    let(:blocked_user) { create(:user, state: 'blocked') }
-    let(:deactivated_user) { create(:user, state: 'deactivated') }
+  describe 'POST /users/:id/unblock', :aggregate_failures do
+    context 'when admin' do
+      subject(:unblock_user) { post api("/users/#{user_id}/unblock", admin) }
 
-    it 'unblocks existing user' do
-      post api("/users/#{user.id}/unblock", admin)
-      expect(response).to have_gitlab_http_status(:created)
-      expect(user.reload.state).to eq('active')
-    end
+      context 'with an existing user' do
+        let(:user_id) { user.id }
 
-    it 'unblocks a blocked user' do
-      post api("/users/#{blocked_user.id}/unblock", admin)
-      expect(response).to have_gitlab_http_status(:created)
-      expect(blocked_user.reload.state).to eq('active')
-    end
+        it 'unblocks existing user' do
+          unblock_user
 
-    it 'does not unblock ldap blocked users' do
-      post api("/users/#{ldap_blocked_user.id}/unblock", admin)
-      expect(response).to have_gitlab_http_status(:forbidden)
-      expect(ldap_blocked_user.reload.state).to eq('ldap_blocked')
-    end
+          expect(response).to have_gitlab_http_status(:created)
+          expect(user.reload.state).to eq('active')
+        end
+      end
 
-    it 'does not unblock deactivated users' do
-      post api("/users/#{deactivated_user.id}/unblock", admin)
-      expect(response).to have_gitlab_http_status(:forbidden)
-      expect(deactivated_user.reload.state).to eq('deactivated')
+      context 'with a blocked user' do
+        let(:user_id) { blocked_user.id }
+
+        it 'unblocks a blocked user' do
+          unblock_user
+
+          expect(response).to have_gitlab_http_status(:created)
+          expect(blocked_user.reload.state).to eq('active')
+        end
+      end
+
+      context 'with a ldap blocked user' do
+        let(:user_id) { ldap_blocked_user.id }
+
+        it 'does not unblock ldap blocked users' do
+          unblock_user
+
+          expect(response).to have_gitlab_http_status(:forbidden)
+          expect(ldap_blocked_user.reload.state).to eq('ldap_blocked')
+        end
+      end
+
+      context 'with a deactivated user' do
+        let(:user_id) { deactivated_user.id }
+
+        it 'does not unblock deactivated users' do
+          unblock_user
+
+          expect(response).to have_gitlab_http_status(:forbidden)
+          expect(deactivated_user.reload.state).to eq('deactivated')
+        end
+      end
+
+      context 'with a non existent user' do
+        let(:user_id) { non_existing_record_id }
+
+        it 'returns a 404 error if user id not found' do
+          unblock_user
+
+          expect(response).to have_gitlab_http_status(:not_found)
+          expect(json_response['message']).to eq('404 User Not Found')
+        end
+      end
+
+      context 'with an invalid user id' do
+        let(:user_id) { 'ASDF' }
+
+        it 'returns a 404' do
+          unblock_user
+
+          expect(response).to have_gitlab_http_status(:not_found)
+        end
+      end
     end
 
     it 'is not available for non admin users' do
       post api("/users/#{user.id}/unblock", user)
       expect(response).to have_gitlab_http_status(:forbidden)
       expect(user.reload.state).to eq('active')
-    end
-
-    it 'returns a 404 error if user id not found' do
-      post api('/users/0/block', admin)
-      expect(response).to have_gitlab_http_status(:not_found)
-      expect(json_response['message']).to eq('404 User Not Found')
-    end
-
-    it "returns a 404 for invalid ID" do
-      post api("/users/ASDF/block", admin)
-
-      expect(response).to have_gitlab_http_status(:not_found)
     end
   end
 

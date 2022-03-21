@@ -15,6 +15,7 @@ const mockOverlayData = {
 };
 
 describe('Design management design presentation component', () => {
+  const originalGon = window.gon;
   let wrapper;
 
   function createComponent(
@@ -39,6 +40,8 @@ describe('Design management design presentation component', () => {
       stubs,
     });
 
+    // setData usage is discouraged. See https://gitlab.com/groups/gitlab-org/-/epics/7330 for details
+    // eslint-disable-next-line no-restricted-syntax
     wrapper.setData(data);
     wrapper.element.scrollTo = jest.fn();
   }
@@ -71,7 +74,7 @@ describe('Design management design presentation component', () => {
       .mockReturnValue((childDimensions.height - viewportDimensions.height) * scrollTopPerc);
   }
 
-  function clickDragExplore(startCoords, endCoords, { useTouchEvents, mouseup } = {}) {
+  async function clickDragExplore(startCoords, endCoords, { useTouchEvents, mouseup } = {}) {
     const event = useTouchEvents
       ? {
           mousedown: 'touchstart',
@@ -93,31 +96,29 @@ describe('Design management design presentation component', () => {
       clientX: startCoords.clientX,
       clientY: startCoords.clientY,
     });
-    return wrapper.vm
-      .$nextTick()
-      .then(() => {
-        addCommentOverlay.trigger(event.mousemove, {
-          clientX: endCoords.clientX,
-          clientY: endCoords.clientY,
-        });
+    await nextTick();
+    addCommentOverlay.trigger(event.mousemove, {
+      clientX: endCoords.clientX,
+      clientY: endCoords.clientY,
+    });
 
-        return nextTick();
-      })
-      .then(() => {
-        if (mouseup) {
-          addCommentOverlay.trigger(event.mouseup);
-          return nextTick();
-        }
-
-        return undefined;
-      });
+    await nextTick();
+    if (mouseup) {
+      addCommentOverlay.trigger(event.mouseup);
+      await nextTick();
+    }
   }
+
+  beforeEach(() => {
+    window.gon = { current_user_id: 1 };
+  });
 
   afterEach(() => {
     wrapper.destroy();
+    window.gon = originalGon;
   });
 
-  it('renders image and overlay when image provided', () => {
+  it('renders image and overlay when image provided', async () => {
     createComponent(
       {
         image: 'test.jpg',
@@ -126,20 +127,18 @@ describe('Design management design presentation component', () => {
       mockOverlayData,
     );
 
-    return nextTick().then(() => {
-      expect(wrapper.element).toMatchSnapshot();
-    });
+    await nextTick();
+    expect(wrapper.element).toMatchSnapshot();
   });
 
-  it('renders empty state when no image provided', () => {
+  it('renders empty state when no image provided', async () => {
     createComponent();
 
-    return nextTick().then(() => {
-      expect(wrapper.element).toMatchSnapshot();
-    });
+    await nextTick();
+    expect(wrapper.element).toMatchSnapshot();
   });
 
-  it('openCommentForm event emits correct data', () => {
+  it('openCommentForm event emits correct data', async () => {
     createComponent(
       {
         image: 'test.jpg',
@@ -150,15 +149,14 @@ describe('Design management design presentation component', () => {
 
     wrapper.vm.openCommentForm({ x: 1, y: 1 });
 
-    return nextTick().then(() => {
-      expect(wrapper.emitted('openCommentForm')).toEqual([
-        [{ ...mockOverlayData.overlayDimensions, x: 1, y: 1 }],
-      ]);
-    });
+    await nextTick();
+    expect(wrapper.emitted('openCommentForm')).toEqual([
+      [{ ...mockOverlayData.overlayDimensions, x: 1, y: 1 }],
+    ]);
   });
 
   describe('currentCommentForm', () => {
-    it('is null when isAnnotating is false', () => {
+    it('is null when isAnnotating is false', async () => {
       createComponent(
         {
           image: 'test.jpg',
@@ -167,13 +165,12 @@ describe('Design management design presentation component', () => {
         mockOverlayData,
       );
 
-      return nextTick().then(() => {
-        expect(wrapper.vm.currentCommentForm).toBeNull();
-        expect(wrapper.element).toMatchSnapshot();
-      });
+      await nextTick();
+      expect(wrapper.vm.currentCommentForm).toBeNull();
+      expect(wrapper.element).toMatchSnapshot();
     });
 
-    it('is null when isAnnotating is true but annotation position is falsey', () => {
+    it('is null when isAnnotating is true but annotation position is falsey', async () => {
       createComponent(
         {
           image: 'test.jpg',
@@ -183,13 +180,12 @@ describe('Design management design presentation component', () => {
         mockOverlayData,
       );
 
-      return nextTick().then(() => {
-        expect(wrapper.vm.currentCommentForm).toBeNull();
-        expect(wrapper.element).toMatchSnapshot();
-      });
+      await nextTick();
+      expect(wrapper.vm.currentCommentForm).toBeNull();
+      expect(wrapper.element).toMatchSnapshot();
     });
 
-    it('is equal to current annotation position when isAnnotating is true', () => {
+    it('is equal to current annotation position when isAnnotating is true', async () => {
       createComponent(
         {
           image: 'test.jpg',
@@ -207,15 +203,14 @@ describe('Design management design presentation component', () => {
         },
       );
 
-      return nextTick().then(() => {
-        expect(wrapper.vm.currentCommentForm).toEqual({
-          x: 1,
-          y: 1,
-          width: 100,
-          height: 100,
-        });
-        expect(wrapper.element).toMatchSnapshot();
+      await nextTick();
+      expect(wrapper.vm.currentCommentForm).toEqual({
+        x: 1,
+        y: 1,
+        width: 100,
+        height: 100,
       });
+      expect(wrapper.element).toMatchSnapshot();
     });
   });
 
@@ -380,7 +375,7 @@ describe('Design management design presentation component', () => {
   });
 
   describe('onImageResize', () => {
-    beforeEach(() => {
+    beforeEach(async () => {
       createComponent(
         {
           image: 'test.jpg',
@@ -393,7 +388,7 @@ describe('Design management design presentation component', () => {
       jest.spyOn(wrapper.vm, 'scaleZoomFocalPoint');
       jest.spyOn(wrapper.vm, 'scrollToFocalPoint');
       wrapper.vm.onImageResize({ width: 10, height: 10 });
-      return nextTick();
+      await nextTick();
     });
 
     it('sets zoom focal point on initial load', () => {
@@ -401,12 +396,11 @@ describe('Design management design presentation component', () => {
       expect(wrapper.vm.initialLoad).toBe(false);
     });
 
-    it('calls scaleZoomFocalPoint and scrollToFocalPoint after initial load', () => {
+    it('calls scaleZoomFocalPoint and scrollToFocalPoint after initial load', async () => {
       wrapper.vm.onImageResize({ width: 10, height: 10 });
-      return nextTick().then(() => {
-        expect(wrapper.vm.scaleZoomFocalPoint).toHaveBeenCalled();
-        expect(wrapper.vm.scrollToFocalPoint).toHaveBeenCalled();
-      });
+      await nextTick();
+      expect(wrapper.vm.scaleZoomFocalPoint).toHaveBeenCalled();
+      expect(wrapper.vm.scrollToFocalPoint).toHaveBeenCalled();
     });
   });
 
@@ -490,7 +484,7 @@ describe('Design management design presentation component', () => {
       );
     });
 
-    it('opens a comment form if design was not dragged', () => {
+    it('opens a comment form if design was not dragged', async () => {
       const addCommentOverlay = findOverlayCommentButton();
       const startCoords = {
         clientX: 1,
@@ -502,15 +496,10 @@ describe('Design management design presentation component', () => {
         clientY: startCoords.clientY,
       });
 
-      return wrapper.vm
-        .$nextTick()
-        .then(() => {
-          addCommentOverlay.trigger('mouseup');
-          return nextTick();
-        })
-        .then(() => {
-          expect(wrapper.emitted('openCommentForm')).toBeDefined();
-        });
+      await nextTick();
+      addCommentOverlay.trigger('mouseup');
+      await nextTick();
+      expect(wrapper.emitted('openCommentForm')).toBeDefined();
     });
 
     describe('when clicking and dragging', () => {
@@ -547,6 +536,25 @@ describe('Design management design presentation component', () => {
         ).then(() => {
           expect(wrapper.emitted('openCommentForm')).toBeDefined();
         });
+      });
+    });
+  });
+
+  describe('when user is not logged in', () => {
+    beforeEach(() => {
+      window.gon = { current_user_id: null };
+      createComponent(
+        {
+          image: 'test.jpg',
+          imageName: 'test',
+        },
+        mockOverlayData,
+      );
+    });
+
+    it('disables commenting from design overlay', () => {
+      expect(wrapper.findComponent(DesignOverlay).props()).toMatchObject({
+        disableCommenting: true,
       });
     });
   });

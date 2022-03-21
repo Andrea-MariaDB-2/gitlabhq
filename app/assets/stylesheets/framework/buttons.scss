@@ -158,12 +158,6 @@
     line-height: $gl-btn-small-line-height;
   }
 
-  &.btn-xs {
-    padding: 2px $gl-btn-padding;
-    font-size: $gl-btn-xs-font-size;
-    line-height: $gl-btn-xs-line-height;
-  }
-
   &.btn-success {
     @include btn-green;
   }
@@ -247,13 +241,6 @@
   }
 }
 
-.btn-terminal {
-  svg {
-    height: 14px;
-    width: $default-icon-size;
-  }
-}
-
 .btn-lg {
   padding: 12px 20px;
 }
@@ -279,12 +266,6 @@
   &.btn {
     padding: 6px 0;
   }
-}
-
-.btn-align-content {
-  display: flex;
-  justify-content: center;
-  align-items: center;
 }
 
 .btn-group {
@@ -347,16 +328,6 @@
   }
 }
 
-.btn-static {
-  background-color: $gray-light !important;
-  border: 1px solid $border-gray-normal;
-  cursor: default;
-
-  &:active {
-    box-shadow: inset 0 0 0 $white;
-  }
-}
-
 .btn-inverted {
   &-secondary {
     @include btn-outline($white, $blue-500, $blue-500, $blue-100, $blue-700, $blue-500, $blue-200, $blue-600, $blue-800);
@@ -394,29 +365,6 @@
     text-decoration: underline;
     background-color: transparent;
     border-color: transparent;
-  }
-
-  &.btn-secondary-hover-link,
-  &.btn-default-hover-link {
-    color: $gl-text-color-secondary;
-
-    &:hover,
-    &:active,
-    &:focus {
-      color: $blue-600;
-      text-decoration: none;
-    }
-  }
-
-  &.btn-primary-hover-link {
-    color: inherit;
-
-    &:hover,
-    &:active,
-    &:focus {
-      color: $blue-600;
-      text-decoration: none;
-    }
   }
 }
 
@@ -461,10 +409,6 @@ fieldset[disabled] .btn,
   cursor: default;
 }
 
-.btn-no-padding {
-  padding: 0;
-}
-
 // This class helps convert `.gl-button` children so that they consistently
 // match the style of `.btn` elements which might be around them. Ideally we
 // wouldn't need this class.
@@ -473,4 +417,18 @@ fieldset[disabled] .btn,
 .gl-button-deprecated-adapter .gl-button {
   box-shadow: none;
   border-width: 1px;
+}
+
+copy-code {
+  @include gl-absolute;
+  @include gl-transition-medium;
+  @include gl-opacity-0;
+
+  top: 7px;
+  right: $input-horizontal-padding;
+
+  .markdown-code-block:hover &,
+  &:focus-within {
+    @include gl-opacity-10;
+  }
 }

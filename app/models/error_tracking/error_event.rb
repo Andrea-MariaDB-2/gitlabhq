@@ -3,10 +3,15 @@
 class ErrorTracking::ErrorEvent < ApplicationRecord
   belongs_to :error, counter_cache: :events_count
 
+  # Scrub null bytes
+  attribute :payload, Gitlab::Database::Type::JsonPgSafe.new
+
   validates :payload, json_schema: { filename: 'error_tracking_event_payload' }
 
   validates :error, presence: true
-  validates :description, presence: true
+  validates :description, presence: true, length: { maximum: 1024 }
+  validates :level, length: { maximum: 255 }
+  validates :environment, length: { maximum: 255 }
   validates :occurred_at, presence: true
 
   def stacktrace
@@ -20,6 +25,10 @@ class ErrorTracking::ErrorEvent < ApplicationRecord
       date_received: occurred_at,
       stack_trace_entries: stacktrace
     )
+  end
+
+  def release
+    payload.dig('release')
   end
 
   private
@@ -57,9 +66,9 @@ class ErrorTracking::ErrorEvent < ApplicationRecord
     pre_context = entry['pre_context']
     post_context = entry['post_context']
 
-    context += lines_with_position(pre_context, error_line_no - pre_context.size)
+    context += lines_with_position(pre_context, error_line_no - pre_context.size) if pre_context
     context += lines_with_position([error_line], error_line_no)
-    context += lines_with_position(post_context, error_line_no + 1)
+    context += lines_with_position(post_context, error_line_no + 1) if post_context
 
     context.reject(&:blank?)
   end

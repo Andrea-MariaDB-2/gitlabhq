@@ -1,9 +1,19 @@
-import { mountSidebar, getSidebarOptions } from './mount_sidebar';
+import { mountSidebar, getSidebarOptions } from 'ee_else_ce/sidebar/mount_sidebar';
 import Mediator from './sidebar_mediator';
 
-export default () => {
+export default (store) => {
   const mediator = new Mediator(getSidebarOptions());
-  mediator.fetch();
+  mediator
+    .fetch()
+    .then(() => {
+      if (window.gon?.features?.mrAttentionRequests) {
+        return import('~/attention_requests');
+      }
 
-  mountSidebar(mediator);
+      return null;
+    })
+    .then((module) => module?.initSideNavPopover())
+    .catch(() => {});
+
+  mountSidebar(mediator, store);
 };

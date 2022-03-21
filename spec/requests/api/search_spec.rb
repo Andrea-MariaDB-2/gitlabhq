@@ -8,6 +8,11 @@ RSpec.describe API::Search do
   let_it_be(:project, reload: true) { create(:project, :wiki_repo, :public, name: 'awesome project', group: group) }
   let_it_be(:repo_project) { create(:project, :public, :repository, group: group) }
 
+  before do
+    allow(Gitlab::ApplicationRateLimiter).to receive(:threshold).with(:search_rate_limit).and_return(1000)
+    allow(Gitlab::ApplicationRateLimiter).to receive(:threshold).with(:search_rate_limit_unauthenticated).and_return(1000)
+  end
+
   shared_examples 'response is correct' do |schema:, size: 1|
     it { expect(response).to have_gitlab_http_status(:ok) }
     it { expect(response).to match_response_schema(schema) }
@@ -119,6 +124,23 @@ RSpec.describe API::Search do
         get api(endpoint), params: { scope: 'projects', search: 'awesome' }
 
         expect(response).to have_gitlab_http_status(:unauthorized)
+      end
+    end
+
+    context 'when DB timeouts occur from global searches', :aggregate_errors do
+      %w(
+        issues
+        merge_requests
+        milestones
+        projects
+        snippet_titles
+        users
+      ).each do |scope|
+        it "returns a 408 error if search with scope: #{scope} times out" do
+          allow(SearchService).to receive(:new).and_raise ActiveRecord::QueryCanceled
+          get api(endpoint, user), params: { scope: scope, search: 'awesome' }
+          expect(response).to have_gitlab_http_status(:request_timeout)
+        end
       end
     end
 
@@ -329,6 +351,14 @@ RSpec.describe API::Search do
         end
       end
     end
+
+    it_behaves_like 'rate limited endpoint', rate_limit_key: :search_rate_limit do
+      let(:current_user) { user }
+
+      def request
+        get api(endpoint, current_user), params: { scope: 'users', search: 'foo@bar.com' }
+      end
+    end
   end
 
   describe "GET /groups/:id/search" do
@@ -495,6 +525,14 @@ RSpec.describe API::Search do
         end
 
         it_behaves_like 'response is correct', schema: 'public_api/v4/user/basics'
+      end
+
+      it_behaves_like 'rate limited endpoint', rate_limit_key: :search_rate_limit do
+        let(:current_user) { user }
+
+        def request
+          get api(endpoint, current_user), params: { scope: 'users', search: 'foo@bar.com' }
+        end
       end
     end
   end
@@ -767,6 +805,14 @@ RSpec.describe API::Search do
             expect(response).to have_gitlab_http_status(:ok)
             expect(json_response.size).to eq(1)
           end
+        end
+      end
+
+      it_behaves_like 'rate limited endpoint', rate_limit_key: :search_rate_limit do
+        let(:current_user) { user }
+
+        def request
+          get api(endpoint, current_user), params: { scope: 'users', search: 'foo@bar.com' }
         end
       end
     end

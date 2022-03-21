@@ -1,16 +1,11 @@
 - blame = local_assigns.fetch(:blame, false)
+- blob = local_assigns.fetch(:blob, nil)
 .js-file-title.file-title-flex-parent
   = render 'projects/blob/header_content', blob: blob
 
   .file-actions.gl-display-flex.gl-align-items-center.gl-flex-wrap.gl-md-justify-content-end<
     = render 'projects/blob/viewer_switcher', blob: blob unless blame
-    - if Feature.enabled?(:consolidated_edit_button, @project)
-      = render 'shared/web_ide_button', blob: blob
-    - else
-      = edit_blob_button(@project, @ref, @path, blob: blob)
-      = ide_edit_button(@project, @ref, @path, blob: blob)
-    - if can_view_pipeline_editor?(@project) && @path == @project.ci_config_path_or_default
-      = link_to "Pipeline Editor", project_ci_pipeline_editor_path(@project), class: "btn gl-button btn-confirm-secondary gl-ml-3"
+    = render 'shared/web_ide_button', blob: blob
     .btn-group{ role: "group", class: ("gl-ml-3" if current_user) }>
       = render_if_exists 'projects/blob/header_file_locks_link'
       - if current_user

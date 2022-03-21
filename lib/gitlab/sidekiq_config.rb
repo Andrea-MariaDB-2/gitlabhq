@@ -6,11 +6,14 @@ module Gitlab
   module SidekiqConfig
     FOSS_QUEUE_CONFIG_PATH = 'app/workers/all_queues.yml'
     EE_QUEUE_CONFIG_PATH = 'ee/app/workers/all_queues.yml'
+    JH_QUEUE_CONFIG_PATH = 'jh/app/workers/all_queues.yml'
     SIDEKIQ_QUEUES_PATH = 'config/sidekiq_queues.yml'
+    JH_SIDEKIQ_QUEUES_PATH = 'jh/config/sidekiq_queues.yml'
 
     QUEUE_CONFIG_PATHS = [
       FOSS_QUEUE_CONFIG_PATH,
-      (EE_QUEUE_CONFIG_PATH if Gitlab.ee?)
+      (EE_QUEUE_CONFIG_PATH if Gitlab.ee?),
+      (JH_QUEUE_CONFIG_PATH if Gitlab.jh?)
     ].compact.freeze
 
     # This maps workers not in our application code to queues. We need
@@ -23,17 +26,17 @@ module Gitlab
     DEFAULT_WORKERS = {
       '_' => DummyWorker.new(
         queue: 'default',
-        weight: 1, tags: []
+        weight: 1,
+        tags: []
       ),
       'ActionMailer::MailDeliveryJob' => DummyWorker.new(
         name: 'ActionMailer::MailDeliveryJob',
         queue: 'mailers',
-        feature_category: :issue_tracking,
         urgency: 'low',
         weight: 2,
         tags: []
       )
-    }.transform_values { |worker| Gitlab::SidekiqConfig::Worker.new(worker, ee: false) }.freeze
+    }.transform_values { |worker| Gitlab::SidekiqConfig::Worker.new(worker, ee: false, jh: false) }.freeze
 
     class << self
       include Gitlab::SidekiqConfig::CliMethods
@@ -58,10 +61,14 @@ module Gitlab
         @workers ||= begin
           result = []
           result.concat(DEFAULT_WORKERS.values)
-          result.concat(find_workers(Rails.root.join('app', 'workers'), ee: false))
+          result.concat(find_workers(Rails.root.join('app', 'workers'), ee: false, jh: false))
 
           if Gitlab.ee?
-            result.concat(find_workers(Rails.root.join('ee', 'app', 'workers'), ee: true))
+            result.concat(find_workers(Rails.root.join('ee', 'app', 'workers'), ee: true, jh: false))
+          end
+
+          if Gitlab.jh?
+            result.concat(find_workers(Rails.root.join('jh', 'app', 'workers'), ee: false, jh: true))
           end
 
           result
@@ -69,31 +76,47 @@ module Gitlab
       end
 
       def workers_for_all_queues_yml
-        workers.partition(&:ee?).reverse.map(&:sort)
+        workers.each_with_object([[], [], []]) do |worker, array|
+          if worker.jh?
+            array[2].push(worker)
+          elsif worker.ee?
+            array[1].push(worker)
+          else
+            array[0].push(worker)
+          end
+        end.map(&:sort)
       end
 
       # YAML.load_file is OK here as we control the file contents
       def all_queues_yml_outdated?
-        foss_workers, ee_workers = workers_for_all_queues_yml
+        foss_workers, ee_workers, jh_workers = workers_for_all_queues_yml
 
         return true if foss_workers != YAML.load_file(FOSS_QUEUE_CONFIG_PATH)
 
-        Gitlab.ee? && ee_workers != YAML.load_file(EE_QUEUE_CONFIG_PATH)
+        return true if Gitlab.ee? && ee_workers != YAML.load_file(EE_QUEUE_CONFIG_PATH)
+
+        Gitlab.jh? && File.exist?(JH_QUEUE_CONFIG_PATH) && jh_workers != YAML.load_file(JH_QUEUE_CONFIG_PATH)
       end
 
       def queues_for_sidekiq_queues_yml
         namespaces_with_equal_weights =
           workers
+            .reject { |worker| worker.jh? }
             .group_by(&:queue_namespace)
             .map(&:last)
             .select { |workers| workers.map(&:get_weight).uniq.count == 1 }
             .map(&:first)
 
         namespaces = namespaces_with_equal_weights.map(&:queue_namespace).to_set
-        remaining_queues = workers.reject { |worker| namespaces.include?(worker.queue_namespace) }
+        remaining_queues = workers.reject { |worker| worker.jh? }.reject { |worker| namespaces.include?(worker.queue_namespace) }
 
         (namespaces_with_equal_weights.map(&:namespace_and_weight) +
          remaining_queues.map(&:queue_and_weight)).sort
+      end
+
+      # Override in JH repo
+      def jh_queues_for_sidekiq_queues_yml
+        []
       end
 
       # YAML.load_file is OK here as we control the file contents
@@ -120,14 +143,14 @@ module Gitlab
 
       private
 
-      def find_workers(root, ee:)
+      def find_workers(root, ee:, jh:)
         concerns = root.join('concerns').to_s
 
         Dir[root.join('**', '*.rb')]
           .reject { |path| path.start_with?(concerns) }
           .map { |path| worker_from_path(path, root) }
           .select { |worker| worker < Sidekiq::Worker }
-          .map { |worker| Gitlab::SidekiqConfig::Worker.new(worker, ee: ee) }
+          .map { |worker| Gitlab::SidekiqConfig::Worker.new(worker, ee: ee, jh: jh) }
       end
 
       def worker_from_path(path, root)
@@ -138,3 +161,5 @@ module Gitlab
     end
   end
 end
+
+Gitlab::SidekiqConfig.prepend_mod

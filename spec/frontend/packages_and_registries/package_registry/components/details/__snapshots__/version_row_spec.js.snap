@@ -5,7 +5,7 @@ exports[`VersionRow renders 1`] = `
   class="gl-display-flex gl-flex-direction-column gl-border-b-solid gl-border-t-solid gl-border-t-1 gl-border-b-1 gl-border-t-transparent gl-border-b-gray-100"
 >
   <div
-    class="gl-display-flex gl-align-items-center gl-py-3 gl-px-5"
+    class="gl-display-flex gl-align-items-center gl-py-3"
   >
     <!---->
      
@@ -27,6 +27,7 @@ exports[`VersionRow renders 1`] = `
             >
               <span
                 class="gl-truncate"
+                data-testid="truncate-end-container"
                 title="@gitlab-org/package-15"
               >
                 <span
@@ -71,12 +72,14 @@ exports[`VersionRow renders 1`] = `
         <div
           class="gl-display-flex gl-align-items-center gl-min-h-6"
         >
-          Created 
-          <time-ago-tooltip-stub
-            cssclass=""
-            time="2021-08-10T09:33:54Z"
-            tooltipplacement="top"
-          />
+          <span>
+            Created 
+            <time-ago-tooltip-stub
+              cssclass=""
+              time="2021-08-10T09:33:54Z"
+              tooltipplacement="top"
+            />
+          </span>
         </div>
       </div>
     </div>

@@ -66,7 +66,7 @@ continue to apply. However, there are a few things that deserve special emphasis
 Danger is a powerful tool and flexible tool, but not always the most appropriate
 way to solve a given problem or workflow.
 
-First, be aware of the GitLab [commitment to dogfooding](https://about.gitlab.com/handbook/engineering/#dogfooding).
+First, be aware of the GitLab [commitment to dogfooding](https://about.gitlab.com/handbook/engineering/principles/#dogfooding).
 The code we write for Danger is GitLab-specific, and it **may not** be most
 appropriate place to implement functionality that addresses a need we encounter.
 Our users, customers, and even our own satellite projects, such as [Gitaly](https://gitlab.com/gitlab-org/gitaly),
@@ -118,11 +118,48 @@ However, you can speed these cycles up somewhat by emptying the
 `.gitlab/ci/rails.gitlab-ci.yml` file in your merge request. Just don't forget
 to revert the change before merging!
 
-To enable the Dangerfile on another existing GitLab project, run the following
-extra steps:
+#### Adding labels via Danger
 
-1. Create a [Project access tokens](../user/project/settings/project_access_tokens.md).
-1. Add the token as a CI/CD project variable named `DANGER_GITLAB_API_TOKEN`.
+NOTE:
+This is applicable to all the projects that use the [`gitlab-dangerfiles` gem](https://rubygems.org/gems/gitlab-dangerfiles).
+
+Danger is often used to improve MR hygiene by adding labels. Instead of calling the
+API directly in your `Dangerfile`, add the labels to `helper.labels_to_add` array (with `helper.labels_to_add << label`
+or `helper.labels_to_add.concat(array_of_labels)`.
+`gitlab-dangerfiles` will then take care of adding the labels to the MR with a single API call after all the rules
+have had the chance to add to `helper.labels_to_add`.
+
+#### Shared rules and plugins
+
+If the rule or plugin you implement can be useful for other projects, think about
+upstreaming them to the [`gitlab-dangerfiles`](https://gitlab.com/gitlab-org/ruby/gems/gitlab-dangerfiles) project.
+
+#### Enable Danger on a project
+
+To enable the Dangerfile on another existing GitLab project, complete the following steps:
+
+1. Add [`gitlab-dangerfiles`](https://rubygems.org/gems/gitlab-dangerfiles) to your `Gemfile`.
+1. Create a `Dangerfile` with the following content:
+
+    ```ruby
+    require_relative "lib/gitlab-dangerfiles"
+
+    Gitlab::Dangerfiles.for_project(self, &:import_defaults)
+    ```
+
+1. Add the following to your CI/CD configuration:
+
+    ```yaml
+    include:
+      - project: 'gitlab-org/quality/pipeline-common'
+        file:
+          - '/ci/danger-review.yml'
+    ```
+
+1. If your project is in the `gitlab-org` group, you don't need to set up any token as the `DANGER_GITLAB_API_TOKEN`
+  variable is available at the group level. If not, follow these last steps:
+    1. Create a [Project access tokens](../user/project/settings/project_access_tokens.md).
+    1. Add the token as a CI/CD project variable named `DANGER_GITLAB_API_TOKEN`.
 
 You should add the ~"Danger bot" label to the merge request before sending it
 for review.
@@ -141,7 +178,7 @@ at GitLab so far:
   - Their availability:
     - No "OOO"/"PTO"/"Parental Leave" in their GitLab or Slack status.
     - No `:red_circle:`/`:palm_tree:`/`:beach:`/`:beach_umbrella:`/`:beach_with_umbrella:` emojis in GitLab or Slack status.
-  - (Experimental) Their timezone: people for which the local hour is between
+  - (Experimental) Their time zone: people for which the local hour is between
     6 AM and 2 PM are eligible to be picked. This is to ensure they have a good
     chance to get to perform a review during their current work day. The experimentation is tracked in
     [this issue](https://gitlab.com/gitlab-org/quality/team-tasks/-/issues/563)

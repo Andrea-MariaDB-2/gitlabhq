@@ -20,6 +20,118 @@ RSpec.describe 'gitlab:db namespace rake task', :silence_stdout do
     allow(Rake::Task['db:seed_fu']).to receive(:invoke).and_return(true)
   end
 
+  describe 'clear_all_connections' do
+    it 'calls clear_all_connections!' do
+      expect(ActiveRecord::Base).to receive(:clear_all_connections!)
+
+      run_rake_task('gitlab:db:clear_all_connections')
+    end
+  end
+
+  describe 'mark_migration_complete' do
+    context 'with a single database' do
+      let(:main_model) { ActiveRecord::Base }
+
+      before do
+        skip_if_multiple_databases_are_setup
+      end
+
+      it 'marks the migration complete on the given database' do
+        expect(main_model.connection).to receive(:quote).and_call_original
+        expect(main_model.connection).to receive(:execute)
+          .with("INSERT INTO schema_migrations (version) VALUES ('123')")
+
+        run_rake_task('gitlab:db:mark_migration_complete', '[123]')
+      end
+    end
+
+    context 'with multiple databases' do
+      let(:main_model) { double(:model, connection: double(:connection)) }
+      let(:ci_model) { double(:model, connection: double(:connection)) }
+      let(:base_models) { { 'main' => main_model, 'ci' => ci_model } }
+
+      before do
+        skip_if_multiple_databases_not_setup
+
+        allow(Gitlab::Database).to receive(:database_base_models).and_return(base_models)
+      end
+
+      it 'marks the migration complete on each database' do
+        expect(main_model.connection).to receive(:quote).with('123').and_return("'123'")
+        expect(main_model.connection).to receive(:execute)
+          .with("INSERT INTO schema_migrations (version) VALUES ('123')")
+
+        expect(ci_model.connection).to receive(:quote).with('123').and_return("'123'")
+        expect(ci_model.connection).to receive(:execute)
+          .with("INSERT INTO schema_migrations (version) VALUES ('123')")
+
+        run_rake_task('gitlab:db:mark_migration_complete', '[123]')
+      end
+
+      context 'when the single database task is used' do
+        it 'marks the migration complete for the given database' do
+          expect(main_model.connection).to receive(:quote).with('123').and_return("'123'")
+          expect(main_model.connection).to receive(:execute)
+            .with("INSERT INTO schema_migrations (version) VALUES ('123')")
+
+          expect(ci_model.connection).not_to receive(:quote)
+          expect(ci_model.connection).not_to receive(:execute)
+
+          run_rake_task('gitlab:db:mark_migration_complete:main', '[123]')
+        end
+      end
+
+      context 'with geo configured' do
+        before do
+          skip_unless_geo_configured
+        end
+
+        it 'does not create a task for the geo database' do
+          expect { run_rake_task('gitlab:db:mark_migration_complete:geo') }
+            .to raise_error(/Don't know how to build task 'gitlab:db:mark_migration_complete:geo'/)
+        end
+      end
+    end
+
+    context 'when the migration is already marked complete' do
+      let(:main_model) { double(:model, connection: double(:connection)) }
+      let(:base_models) { { 'main' => main_model } }
+
+      before do
+        allow(Gitlab::Database).to receive(:database_base_models).and_return(base_models)
+      end
+
+      it 'prints a warning message' do
+        allow(main_model.connection).to receive(:quote).with('123').and_return("'123'")
+
+        expect(main_model.connection).to receive(:execute)
+          .with("INSERT INTO schema_migrations (version) VALUES ('123')")
+          .and_raise(ActiveRecord::RecordNotUnique)
+
+        expect { run_rake_task('gitlab:db:mark_migration_complete', '[123]') }
+          .to output(/Migration version '123' is already marked complete on database main/).to_stdout
+      end
+    end
+
+    context 'when an invalid version is given' do
+      let(:main_model) { double(:model, connection: double(:connection)) }
+      let(:base_models) { { 'main' => main_model } }
+
+      before do
+        allow(Gitlab::Database).to receive(:database_base_models).and_return(base_models)
+      end
+
+      it 'prints an error and exits' do
+        expect(main_model).not_to receive(:quote)
+        expect(main_model.connection).not_to receive(:execute)
+
+        expect { run_rake_task('gitlab:db:mark_migration_complete', '[abc]') }
+          .to output(/Must give a version argument that is a non-zero integer/).to_stdout
+          .and raise_error(SystemExit) { |error| expect(error.status).to eq(1) }
+      end
+    end
+  end
+
   describe 'configure' do
     it 'invokes db:migrate when schema has already been loaded' do
       allow(ActiveRecord::Base.connection).to receive(:tables).and_return(%w[table1 table2])
@@ -138,6 +250,10 @@ RSpec.describe 'gitlab:db namespace rake task', :silence_stdout do
         stub_file_read(structure_file, content: input)
         allow(File).to receive(:open).with(structure_file.to_s, any_args).and_yield(output)
       end
+
+      if Gitlab.ee?
+        allow(File).to receive(:open).with(Rails.root.join(Gitlab::Database::GEO_DATABASE_DIR, 'structure.sql').to_s, any_args).and_yield(output)
+      end
     end
 
     after do
@@ -156,111 +272,221 @@ RSpec.describe 'gitlab:db namespace rake task', :silence_stdout do
   end
 
   describe 'drop_tables' do
-    subject { run_rake_task('gitlab:db:drop_tables') }
-
-    let(:tables) { %w(one two) }
+    let(:tables) { %w(one two schema_migrations) }
     let(:views) { %w(three four) }
-    let(:connection) { ActiveRecord::Base.connection }
+    let(:schemas) { Gitlab::Database::EXTRA_SCHEMAS }
 
-    before do
-      allow(connection).to receive(:execute).and_return(nil)
+    context 'with a single database' do
+      let(:connection) { ActiveRecord::Base.connection }
 
-      allow(connection).to receive(:tables).and_return(tables)
-      allow(connection).to receive(:views).and_return(views)
+      before do
+        skip_if_multiple_databases_are_setup
+
+        allow(connection).to receive(:execute).and_return(nil)
+
+        allow(connection).to receive(:tables).and_return(tables)
+        allow(connection).to receive(:views).and_return(views)
+      end
+
+      it 'drops all objects for the database', :aggregate_failures do
+        expect_objects_to_be_dropped(connection)
+
+        run_rake_task('gitlab:db:drop_tables')
+      end
     end
 
-    it 'drops all tables, except schema_migrations' do
+    context 'with multiple databases', :aggregate_failures do
+      let(:main_model) { double(:model, connection: double(:connection, tables: tables, views: views)) }
+      let(:ci_model) { double(:model, connection: double(:connection, tables: tables, views: views)) }
+      let(:base_models) { { 'main' => main_model, 'ci' => ci_model } }
+
+      before do
+        skip_if_multiple_databases_not_setup
+
+        allow(Gitlab::Database).to receive(:database_base_models).and_return(base_models)
+
+        allow(main_model.connection).to receive(:table_exists?).with('schema_migrations').and_return(true)
+        allow(ci_model.connection).to receive(:table_exists?).with('schema_migrations').and_return(true)
+
+        (tables + views + schemas).each do |name|
+          allow(main_model.connection).to receive(:quote_table_name).with(name).and_return("\"#{name}\"")
+          allow(ci_model.connection).to receive(:quote_table_name).with(name).and_return("\"#{name}\"")
+        end
+      end
+
+      it 'drops all objects for all databases', :aggregate_failures do
+        expect_objects_to_be_dropped(main_model.connection)
+        expect_objects_to_be_dropped(ci_model.connection)
+
+        run_rake_task('gitlab:db:drop_tables')
+      end
+
+      context 'when the single database task is used' do
+        it 'drops all objects for the given database', :aggregate_failures do
+          expect_objects_to_be_dropped(main_model.connection)
+
+          expect(ci_model.connection).not_to receive(:execute)
+
+          run_rake_task('gitlab:db:drop_tables:main')
+        end
+      end
+
+      context 'with geo configured' do
+        before do
+          skip_unless_geo_configured
+        end
+
+        it 'does not create a task for the geo database' do
+          expect { run_rake_task('gitlab:db:drop_tables:geo') }
+            .to raise_error(/Don't know how to build task 'gitlab:db:drop_tables:geo'/)
+        end
+      end
+    end
+
+    def expect_objects_to_be_dropped(connection)
       expect(connection).to receive(:execute).with('DROP TABLE IF EXISTS "one" CASCADE')
       expect(connection).to receive(:execute).with('DROP TABLE IF EXISTS "two" CASCADE')
 
-      subject
-    end
-
-    it 'drops all views' do
       expect(connection).to receive(:execute).with('DROP VIEW IF EXISTS "three" CASCADE')
       expect(connection).to receive(:execute).with('DROP VIEW IF EXISTS "four" CASCADE')
 
-      subject
-    end
-
-    it 'truncates schema_migrations table' do
       expect(connection).to receive(:execute).with('TRUNCATE schema_migrations')
 
-      subject
-    end
-
-    it 'drops extra schemas' do
       Gitlab::Database::EXTRA_SCHEMAS.each do |schema|
-        expect(connection).to receive(:execute).with("DROP SCHEMA IF EXISTS \"#{schema}\"")
+        expect(connection).to receive(:execute).with("DROP SCHEMA IF EXISTS \"#{schema}\" CASCADE")
+      end
+    end
+  end
+
+  describe 'create_dynamic_partitions' do
+    context 'with a single database' do
+      before do
+        skip_if_multiple_databases_are_setup
       end
 
-      subject
+      it 'delegates syncing of partitions without limiting databases' do
+        expect(Gitlab::Database::Partitioning).to receive(:sync_partitions)
+
+        run_rake_task('gitlab:db:create_dynamic_partitions')
+      end
+    end
+
+    context 'with multiple databases' do
+      before do
+        skip_if_multiple_databases_not_setup
+      end
+
+      context 'when running the multi-database variant' do
+        it 'delegates syncing of partitions without limiting databases' do
+          expect(Gitlab::Database::Partitioning).to receive(:sync_partitions)
+
+          run_rake_task('gitlab:db:create_dynamic_partitions')
+        end
+      end
+
+      context 'when running a single-database variant' do
+        it 'delegates syncing of partitions for the chosen database' do
+          expect(Gitlab::Database::Partitioning).to receive(:sync_partitions).with(only_on: 'main')
+
+          run_rake_task('gitlab:db:create_dynamic_partitions:main')
+        end
+      end
+    end
+
+    context 'with geo configured' do
+      before do
+        skip_unless_geo_configured
+      end
+
+      it 'does not create a task for the geo database' do
+        expect { run_rake_task('gitlab:db:create_dynamic_partitions:geo') }
+          .to raise_error(/Don't know how to build task 'gitlab:db:create_dynamic_partitions:geo'/)
+      end
     end
   end
 
   describe 'reindex' do
-    let(:reindex) { double('reindex') }
-    let(:indexes) { double('indexes') }
+    context 'with a single database' do
+      before do
+        skip_if_multiple_databases_are_setup
+      end
 
-    it 'cleans up any leftover indexes' do
-      expect(Gitlab::Database::Reindexing).to receive(:cleanup_leftovers!)
-
-      run_rake_task('gitlab:db:reindex')
-    end
-
-    context 'when async index creation is enabled' do
-      it 'executes async index creation prior to any reindexing actions' do
-        stub_feature_flags(database_async_index_creation: true)
-
-        expect(Gitlab::Database::AsyncIndexes).to receive(:create_pending_indexes!).ordered
-        expect(Gitlab::Database::Reindexing).to receive(:perform).ordered
+      it 'delegates to Gitlab::Database::Reindexing' do
+        expect(Gitlab::Database::Reindexing).to receive(:invoke).with(no_args)
 
         run_rake_task('gitlab:db:reindex')
       end
-    end
 
-    context 'when async index creation is disabled' do
-      it 'does not execute async index creation' do
-        stub_feature_flags(database_async_index_creation: false)
+      context 'when reindexing is not enabled' do
+        it 'is a no-op' do
+          expect(Gitlab::Database::Reindexing).to receive(:enabled?).and_return(false)
+          expect(Gitlab::Database::Reindexing).not_to receive(:invoke)
 
-        expect(Gitlab::Database::AsyncIndexes).not_to receive(:create_pending_indexes!)
-
-        run_rake_task('gitlab:db:reindex')
+          expect { run_rake_task('gitlab:db:reindex') }.to raise_error(SystemExit)
+        end
       end
     end
 
-    context 'when no index_name is given' do
-      it 'uses all candidate indexes' do
-        expect(Gitlab::Database::PostgresIndex).to receive(:reindexing_support).and_return(indexes)
-        expect(Gitlab::Database::Reindexing).to receive(:perform).with(indexes)
-
-        run_rake_task('gitlab:db:reindex')
-      end
-    end
-
-    context 'with index name given' do
-      let(:index) { double('index') }
+    context 'with multiple databases' do
+      let(:base_models) { { 'main' => double(:model), 'ci' => double(:model) } }
 
       before do
-        allow(Gitlab::Database::PostgresIndex).to receive(:reindexing_support).and_return(indexes)
+        skip_if_multiple_databases_not_setup
+
+        allow(Gitlab::Database).to receive(:database_base_models).and_return(base_models)
       end
 
-      it 'calls the index rebuilder with the proper arguments' do
-        allow(indexes).to receive(:where).with(identifier: 'public.foo_idx').and_return([index])
-        expect(Gitlab::Database::Reindexing).to receive(:perform).with([index])
+      it 'delegates to Gitlab::Database::Reindexing without a specific database' do
+        expect(Gitlab::Database::Reindexing).to receive(:invoke).with(no_args)
 
-        run_rake_task('gitlab:db:reindex', '[public.foo_idx]')
+        run_rake_task('gitlab:db:reindex')
       end
 
-      it 'raises an error if the index does not exist' do
-        allow(indexes).to receive(:where).with(identifier: 'public.absent_index').and_return([])
+      context 'when the single database task is used' do
+        it 'delegates to Gitlab::Database::Reindexing with a specific database' do
+          expect(Gitlab::Database::Reindexing).to receive(:invoke).with('ci')
 
-        expect { run_rake_task('gitlab:db:reindex', '[public.absent_index]') }.to raise_error(/Index not found/)
+          run_rake_task('gitlab:db:reindex:ci')
+        end
+
+        context 'when reindexing is not enabled' do
+          it 'is a no-op' do
+            expect(Gitlab::Database::Reindexing).to receive(:enabled?).and_return(false)
+            expect(Gitlab::Database::Reindexing).not_to receive(:invoke)
+
+            expect { run_rake_task('gitlab:db:reindex:ci') }.to raise_error(SystemExit)
+          end
+        end
       end
 
-      it 'raises an error if the index is not fully qualified with a schema' do
-        expect { run_rake_task('gitlab:db:reindex', '[foo_idx]') }.to raise_error(/Index name is not fully qualified/)
+      context 'with geo configured' do
+        before do
+          skip_unless_geo_configured
+        end
+
+        it 'does not create a task for the geo database' do
+          expect { run_rake_task('gitlab:db:reindex:geo') }
+            .to raise_error(/Don't know how to build task 'gitlab:db:reindex:geo'/)
+        end
       end
+    end
+  end
+
+  describe 'enqueue_reindexing_action' do
+    let(:index_name) { 'public.users_pkey' }
+
+    it 'creates an entry in the queue' do
+      expect do
+        run_rake_task('gitlab:db:enqueue_reindexing_action', "[#{index_name}, main]")
+      end.to change { Gitlab::Database::PostgresIndex.find(index_name).queued_reindexing_actions.size }.from(0).to(1)
+    end
+
+    it 'defaults to main database' do
+      expect(Gitlab::Database::SharedModel).to receive(:using_connection).with(ActiveRecord::Base.connection).and_call_original
+
+      expect do
+        run_rake_task('gitlab:db:enqueue_reindexing_action', "[#{index_name}]")
+      end.to change { Gitlab::Database::PostgresIndex.find(index_name).queued_reindexing_actions.size }.from(0).to(1)
     end
   end
 
@@ -293,53 +519,24 @@ RSpec.describe 'gitlab:db namespace rake task', :silence_stdout do
   end
 
   describe '#migrate_with_instrumentation' do
-    subject { run_rake_task('gitlab:db:migration_testing') }
+    describe '#up' do
+      subject { run_rake_task('gitlab:db:migration_testing:up') }
 
-    let(:ctx) { double('ctx', migrations: all_migrations, schema_migration: double, get_all_versions: existing_versions) }
-    let(:instrumentation) { instance_double(Gitlab::Database::Migrations::Instrumentation, observations: observations) }
-    let(:existing_versions) { [1] }
-    let(:all_migrations) { [double('migration1', version: 1, name: 'test'), pending_migration] }
-    let(:pending_migration) { double('migration2', version: 2, name: 'test') }
-    let(:filename) { Gitlab::Database::Migrations::Instrumentation::STATS_FILENAME }
-    let(:result_dir) { Dir.mktmpdir }
-    let(:observations) { %w[some data] }
+      it 'delegates to the migration runner' do
+        expect(::Gitlab::Database::Migrations::Runner).to receive_message_chain(:up, :run)
 
-    before do
-      allow(ActiveRecord::Base.connection).to receive(:migration_context).and_return(ctx)
-      allow(Gitlab::Database::Migrations::Instrumentation).to receive(:new).and_return(instrumentation)
-      allow(ActiveRecord::Migrator).to receive_message_chain('new.run').with(any_args).with(no_args)
-
-      allow(instrumentation).to receive(:observe).and_yield
-
-      stub_const('Gitlab::Database::Migrations::Instrumentation::RESULT_DIR', result_dir)
+        subject
+      end
     end
 
-    after do
-      FileUtils.rm_rf(result_dir)
-    end
+    describe '#down' do
+      subject { run_rake_task('gitlab:db:migration_testing:down') }
 
-    it 'creates result directory when one does not exist' do
-      FileUtils.rm_rf(result_dir)
+      it 'delegates to the migration runner' do
+        expect(::Gitlab::Database::Migrations::Runner).to receive_message_chain(:down, :run)
 
-      expect { subject }.to change { Dir.exist?(result_dir) }.from(false).to(true)
-    end
-
-    it 'instruments the pending migration' do
-      expect(instrumentation).to receive(:observe).with(version: 2, name: 'test').and_yield
-
-      subject
-    end
-
-    it 'executes the pending migration' do
-      expect(ActiveRecord::Migrator).to receive_message_chain('new.run').with(:up, ctx.migrations, ctx.schema_migration, pending_migration.version).with(no_args)
-
-      subject
-    end
-
-    it 'writes observations out to JSON file' do
-      subject
-
-      expect(File.read(File.join(result_dir, filename))).to eq(observations.to_json)
+        subject
+      end
     end
   end
 
@@ -363,6 +560,86 @@ RSpec.describe 'gitlab:db namespace rake task', :silence_stdout do
     end
   end
 
+  context 'with multiple databases', :reestablished_active_record_base do
+    before do
+      skip_if_multiple_databases_not_setup
+    end
+
+    describe 'db:structure:dump against a single database' do
+      it 'invokes gitlab:db:clean_structure_sql' do
+        expect(Rake::Task['gitlab:db:clean_structure_sql']).to receive(:invoke).twice.and_return(true)
+
+        expect { run_rake_task('db:structure:dump:main') }.not_to raise_error
+      end
+    end
+
+    describe 'db:schema:dump against a single database' do
+      it 'invokes gitlab:db:clean_structure_sql' do
+        expect(Rake::Task['gitlab:db:clean_structure_sql']).to receive(:invoke).once.and_return(true)
+
+        expect { run_rake_task('db:schema:dump:main') }.not_to raise_error
+      end
+    end
+
+    describe 'db:migrate against a single database' do
+      it 'invokes gitlab:db:create_dynamic_partitions for the same database' do
+        expect(Rake::Task['gitlab:db:create_dynamic_partitions:main']).to receive(:invoke).once.and_return(true)
+
+        expect { run_rake_task('db:migrate:main') }.not_to raise_error
+      end
+    end
+
+    describe 'db:migrate:geo' do
+      before do
+        skip_unless_geo_configured
+      end
+
+      it 'does not invoke gitlab:db:create_dynamic_partitions' do
+        expect(Rake::Task['gitlab:db:create_dynamic_partitions']).not_to receive(:invoke)
+
+        expect { run_rake_task('db:migrate:geo') }.not_to raise_error
+      end
+    end
+  end
+
+  describe 'gitlab:db:reset_as_non_superuser' do
+    let(:connection_pool) { instance_double(ActiveRecord::ConnectionAdapters::ConnectionPool ) }
+    let(:connection) { instance_double(ActiveRecord::ConnectionAdapters::PostgreSQLAdapter) }
+    let(:configurations) { double(ActiveRecord::DatabaseConfigurations) }
+    let(:configuration) { instance_double(ActiveRecord::DatabaseConfigurations::HashConfig) }
+    let(:config_hash) { { username: 'foo' } }
+
+    it 'migrate as nonsuperuser check with default username' do
+      allow(Rake::Task['db:drop']).to receive(:invoke)
+      allow(Rake::Task['db:create']).to receive(:invoke)
+      allow(ActiveRecord::Base).to receive(:configurations).and_return(configurations)
+      allow(configurations).to receive(:configs_for).and_return([configuration])
+      allow(configuration).to receive(:configuration_hash).and_return(config_hash)
+      allow(ActiveRecord::Base).to receive(:establish_connection).and_return(connection_pool)
+
+      expect(config_hash).to receive(:merge).with({ username: 'gitlab' })
+      expect(Gitlab::Database).to receive(:check_for_non_superuser)
+      expect(Rake::Task['db:migrate']).to receive(:invoke)
+
+      run_rake_task('gitlab:db:reset_as_non_superuser')
+    end
+
+    it 'migrate as nonsuperuser check with specified username' do
+      allow(Rake::Task['db:drop']).to receive(:invoke)
+      allow(Rake::Task['db:create']).to receive(:invoke)
+      allow(ActiveRecord::Base).to receive(:configurations).and_return(configurations)
+      allow(configurations).to receive(:configs_for).and_return([configuration])
+      allow(configuration).to receive(:configuration_hash).and_return(config_hash)
+      allow(ActiveRecord::Base).to receive(:establish_connection).and_return(connection_pool)
+
+      expect(config_hash).to receive(:merge).with({ username: 'foo' })
+      expect(Gitlab::Database).to receive(:check_for_non_superuser)
+      expect(Rake::Task['db:migrate']).to receive(:invoke)
+
+      run_rake_task('gitlab:db:reset_as_non_superuser', '[foo]')
+    end
+  end
+
   def run_rake_task(task_name, arguments = '')
     Rake::Task[task_name].reenable
     Rake.application.invoke_task("#{task_name}#{arguments}")
@@ -378,5 +655,13 @@ RSpec.describe 'gitlab:db namespace rake task', :silence_stdout do
     end
 
     run_rake_task(test_task_name)
+  end
+
+  def skip_unless_geo_configured
+    skip 'Skipping because the geo database is not configured' unless geo_configured?
+  end
+
+  def geo_configured?
+    !!ActiveRecord::Base.configurations.configs_for(env_name: Rails.env, name: 'geo')
   end
 end

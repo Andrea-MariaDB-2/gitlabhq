@@ -25,8 +25,8 @@ RSpec.describe 'User Cluster', :js do
     before do
       visit project_clusters_path(project)
 
-      click_link 'Integrate with a cluster certificate'
-      click_link 'Connect existing cluster'
+      click_link 'Certificate'
+      click_link 'Connect with a certificate'
     end
 
     context 'when user filled form with valid parameters' do
@@ -81,16 +81,7 @@ RSpec.describe 'User Cluster', :js do
       expect(page).to have_button('Save changes')
     end
 
-    context 'when user disables the cluster' do
-      before do
-        page.find(:css, '.js-cluster-enable-toggle-area .js-project-feature-toggle').click
-        page.within('.js-cluster-details-form') { click_button 'Save changes' }
-      end
-
-      it 'user sees the successful message' do
-        expect(page).to have_content('Kubernetes cluster was successfully updated.')
-      end
-    end
+    include_examples "user disables a cluster"
 
     context 'when user changes cluster parameters' do
       before do
@@ -112,11 +103,12 @@ RSpec.describe 'User Cluster', :js do
         click_button 'Remove integration and resources'
         fill_in 'confirm_cluster_name_input', with: cluster.name
         click_button 'Remove integration'
+        click_link 'Certificate'
       end
 
       it 'user sees creation form with the successful message' do
         expect(page).to have_content('Kubernetes cluster integration was successfully removed.')
-        expect(page).to have_link('Integrate with a cluster certificate')
+        expect(page).to have_link('Connect with a certificate')
       end
     end
   end

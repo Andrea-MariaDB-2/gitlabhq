@@ -8,9 +8,9 @@ module Gitlab
           @expression = expression
         end
 
-        def satisfied_by?(pipeline, context)
+        def satisfied_by?(_pipeline, context)
           ::Gitlab::Ci::Pipeline::Expression::Statement.new(
-            @expression, context.variables).truthful?
+            @expression, context.variables_hash).truthful?
         end
       end
     end

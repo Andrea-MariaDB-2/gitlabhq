@@ -3,12 +3,12 @@ stage: Create
 group: Source Code
 info: "To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments"
 type: reference, concepts
-disqus_identifier: 'https://docs.gitlab.com/ee/user/project/merge_requests/merge_request_approvals.html'
+disqus_identifier: 'https://docs.gitlab.com/ee/user/project/merge_requests/approvals/index.html'
 ---
 
 # Merge request approvals **(FREE)**
 
-> Redesign [introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/1979) in [GitLab Premium](https://about.gitlab.com/pricing/) 11.8 and [feature flag removed](https://gitlab.com/gitlab-org/gitlab/-/issues/10685) in 12.0.
+> Redesign [introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/1979) in GitLab 11.8 and [feature flag removed](https://gitlab.com/gitlab-org/gitlab/-/issues/10685) in 12.0.
 
 You can configure your merge requests so that they must be approved before
 they can be merged. While [GitLab Free](https://about.gitlab.com/pricing/) allows
@@ -61,7 +61,9 @@ GitLab displays one of these buttons after the body of the merge request:
 
 Eligible approvers can also use the `/approve`
 [quick action](../../../project/quick_actions.md) when adding a comment to
-a merge request.
+a merge request.  [In GitLab 13.10 and later](https://gitlab.com/gitlab-org/gitlab/-/issues/292936),
+if a user approves a merge request and is shown in the reviewer list, a green check mark
+(**{check-circle-filled}**) displays next to their name.
 
 After a merge request receives the [number and type of approvals](rules.md) you configure, it can merge
 unless it's blocked for another reason. Merge requests can be blocked by other problems,
@@ -87,7 +89,7 @@ a merge request from merging without approval.
 
 ## Required approvals **(PREMIUM)**
 
-> Moved to [GitLab Premium](https://about.gitlab.com/pricing/) in 13.9.
+> Moved to GitLab Premium in 13.9.
 
 Required approvals enforce code reviews by the number and type of users you specify.
 Without the approvals, the work cannot merge. Required approvals enable multiple use cases:
@@ -101,9 +103,9 @@ Without the approvals, the work cannot merge. Required approvals enable multiple
   to determine who should review the work.
 - Require an [approval before merging code that causes test coverage to decline](../../../../ci/pipelines/settings.md#coverage-check-approval-rule)
 - [Require approval from a security team](../../../application_security/index.md#security-approvals-in-merge-requests)
-  before merging code that could introduce a vulnerability. **(ULTIMATE)**
+  before merging code that could introduce a vulnerability.
 
-## Related links
+## Related topics
 
 - [Merge request approvals API](../../../../api/merge_request_approvals.md)
 - [Instance-level approval rules](../../../admin_area/merge_requests_approvals.md) for self-managed installations

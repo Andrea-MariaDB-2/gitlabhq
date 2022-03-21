@@ -1,18 +1,43 @@
 # frozen_string_literal: true
 
-# Make sure we have loaded partitioned models here
-# (even with eager loading disabled).
-
-Gitlab::Database::Partitioning::PartitionManager.register(AuditEvent)
-Gitlab::Database::Partitioning::PartitionManager.register(WebHookLog)
+Gitlab::Database::Partitioning.register_models([
+  AuditEvent,
+  WebHookLog,
+  LooseForeignKeys::DeletedRecord,
+  Gitlab::Database::BackgroundMigration::BatchedJobTransitionLog
+])
 
 if Gitlab.ee?
-  Gitlab::Database::Partitioning::PartitionManager.register(IncidentManagement::PendingEscalations::Alert)
-  Gitlab::Database::Partitioning::PartitionManager.register(IncidentManagement::PendingEscalations::Issue)
+  Gitlab::Database::Partitioning.register_models([
+    IncidentManagement::PendingEscalations::Alert,
+    IncidentManagement::PendingEscalations::Issue
+  ])
+else
+  Gitlab::Database::Partitioning.register_tables([
+    {
+      limit_connection_names: %i[main],
+      table_name: 'incident_management_pending_alert_escalations',
+      partitioned_column: :process_at, strategy: :monthly
+    },
+    {
+      limit_connection_names: %i[main],
+      table_name: 'incident_management_pending_issue_escalations',
+      partitioned_column: :process_at, strategy: :monthly
+    }
+  ])
 end
 
-begin
-  Gitlab::Database::Partitioning::PartitionManager.new.sync_partitions unless ENV['DISABLE_POSTGRES_PARTITION_CREATION_ON_STARTUP']
-rescue ActiveRecord::ActiveRecordError, PG::Error
-  # ignore - happens when Rake tasks yet have to create a database, e.g. for testing
+# The following tables are already defined as models
+unless Gitlab.jh?
+  Gitlab::Database::Partitioning.register_tables([
+    # This should be synchronized with the following model:
+    # https://jihulab.com/gitlab-cn/gitlab/-/blob/main-jh/jh/app/models/phone/verification_code.rb
+    {
+      limit_connection_names: %i[main],
+      table_name: 'verification_codes',
+      partitioned_column: :created_at, strategy: :monthly
+    }
+  ])
 end
+
+Gitlab::Database::Partitioning.sync_partitions_ignore_db_error

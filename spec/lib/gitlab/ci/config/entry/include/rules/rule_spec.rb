@@ -1,11 +1,12 @@
 # frozen_string_literal: true
 
 require 'fast_spec_helper'
+require_dependency 'active_model'
 
 RSpec.describe Gitlab::Ci::Config::Entry::Include::Rules::Rule do
   let(:factory) do
     Gitlab::Config::Entry::Factory.new(described_class)
-      .value(config)
+                                  .value(config)
   end
 
   subject(:entry) { factory.create! }
@@ -21,6 +22,12 @@ RSpec.describe Gitlab::Ci::Config::Entry::Include::Rules::Rule do
 
     context 'when specifying an if: clause' do
       let(:config) { { if: '$THIS || $THAT' } }
+
+      it { is_expected.to be_valid }
+    end
+
+    context 'when specifying an exists: clause' do
+      let(:config) { { exists: './this.md' } }
 
       it { is_expected.to be_valid }
     end
@@ -52,9 +59,7 @@ RSpec.describe Gitlab::Ci::Config::Entry::Include::Rules::Rule do
     context 'when using an if: clause with lookahead regex character "?"' do
       let(:config) { { if: '$CI_COMMIT_REF =~ /^(?!master).+/' } }
 
-      context 'when allow_unsafe_ruby_regexp is disabled' do
-        it_behaves_like 'an invalid config', /invalid expression syntax/
-      end
+      it_behaves_like 'an invalid config', /invalid expression syntax/
     end
 
     context 'when specifying unknown policy' do
@@ -84,6 +89,14 @@ RSpec.describe Gitlab::Ci::Config::Entry::Include::Rules::Rule do
 
       it 'returns the config' do
         expect(subject).to eq(if: '$THIS || $THAT')
+      end
+    end
+
+    context 'when specifying an exists: clause' do
+      let(:config) { { exists: './test.md' } }
+
+      it 'returns the config' do
+        expect(subject).to eq(exists: './test.md')
       end
     end
   end

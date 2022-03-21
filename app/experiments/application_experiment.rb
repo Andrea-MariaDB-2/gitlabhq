@@ -1,30 +1,11 @@
 # frozen_string_literal: true
 
-class ApplicationExperiment < Gitlab::Experiment # rubocop:disable Gitlab/NamespacedClass
-  def enabled?
-    return false if Feature::Definition.get(feature_flag_name).nil? # there has to be a feature flag yaml file
-    return false unless Gitlab.dev_env_or_com? # we have to be in an environment that allows experiments
-
-    # the feature flag has to be rolled out
-    Feature.get(feature_flag_name).state != :off # rubocop:disable Gitlab/AvoidFeatureGet
-  end
-
-  def publish(_result = nil)
-    super
-
-    publish_to_client
-    publish_to_database if @record
-  end
-
-  def publish_to_client
-    return unless should_track?
-
-    Gon.push({ experiment: { name => signature } }, true)
-  rescue NoMethodError
-    # means we're not in the request cycle, and can't add to Gon. Log a warning maybe?
-  end
+class ApplicationExperiment < Gitlab::Experiment
+  control { nil } # provide a default control for anonymous experiments
 
   def publish_to_database
+    ActiveSupport::Deprecation.warn('publish_to_database is deprecated and should not be used for reporting anymore')
+
     return unless should_track?
 
     # if the context contains a namespace, group, project, user, or actor
@@ -32,12 +13,8 @@ class ApplicationExperiment < Gitlab::Experiment # rubocop:disable Gitlab/Namesp
     subject = value[:namespace] || value[:group] || value[:project] || value[:user] || value[:actor]
     return unless ExperimentSubject.valid_subject?(subject)
 
-    variant = :experimental if @variant_name != :control
-    Experiment.add_subject(name, variant: variant || :control, subject: subject)
-  end
-
-  def record!
-    @record = true
+    variant_name = :experimental if variant&.name != 'control'
+    Experiment.add_subject(name, variant: variant_name || :control, subject: subject)
   end
 
   def control_behavior
@@ -57,13 +34,22 @@ class ApplicationExperiment < Gitlab::Experiment # rubocop:disable Gitlab/Namesp
     Digest::MD5.hexdigest(ingredients.join('|'))
   end
 
-  private
-
-  def feature_flag_name
-    name.tr('/', '_')
+  def nest_experiment(other)
+    instance_exec(:nested, { label: other.name }, &Configuration.tracking_behavior)
   end
 
-  def experiment_group?
-    Feature.enabled?(feature_flag_name, self, type: :experiment, default_enabled: :yaml)
+  private
+
+  def tracking_context(event_args)
+    {
+      namespace: context.try(:namespace) || context.try(:group),
+      project: context.try(:project),
+      user: user_or_actor
+    }.merge(event_args)
+  end
+
+  def user_or_actor
+    actor = context.try(:actor)
+    actor.respond_to?(:id) ? actor : context.try(:user)
   end
 end

@@ -66,6 +66,14 @@
     - 'i_code_review_user_load_conflict_ui'
     - 'i_code_review_user_resolve_conflict'
     - 'i_code_review_user_searches_diff'
+    - 'i_code_review_user_resolve_thread_in_issue'
+    - 'i_code_review_widget_nothing_merge_click_new_file'
+    - 'i_code_review_post_merge_delete_branch'
+    - 'i_code_review_post_merge_click_revert'
+    - 'i_code_review_post_merge_click_cherry_pick'
+    - 'i_code_review_post_merge_submit_revert_modal'
+    - 'i_code_review_post_merge_submit_cherry_pick_modal'
+    - 'i_code_review_user_jetbrains_api_request'
 - name: code_review_category_monthly_active_users
   operator: OR
   source: redis
@@ -124,9 +132,17 @@
     - 'i_code_review_user_load_conflict_ui'
     - 'i_code_review_user_resolve_conflict'
     - 'i_code_review_user_searches_diff'
+    - 'i_code_review_user_resolve_thread_in_issue'
+    - 'i_code_review_widget_nothing_merge_click_new_file'
+    - 'i_code_review_post_merge_delete_branch'
+    - 'i_code_review_post_merge_click_revert'
+    - 'i_code_review_post_merge_click_cherry_pick'
+    - 'i_code_review_post_merge_submit_revert_modal'
+    - 'i_code_review_post_merge_submit_cherry_pick_modal'
 - name: code_review_extension_category_monthly_active_users
   operator: OR
   source: redis
   time_frame: [7d, 28d]
   events:
     - 'i_code_review_user_vs_code_api_request'
+    - 'i_code_review_user_jetbrains_api_request'

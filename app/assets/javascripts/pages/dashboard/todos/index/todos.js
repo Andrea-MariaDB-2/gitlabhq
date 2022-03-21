@@ -1,4 +1,4 @@
-/* eslint-disable class-methods-use-this, no-unneeded-ternary */
+/* eslint-disable class-methods-use-this */
 
 import $ from 'jquery';
 import { getGroups } from '~/api/groups_api';
@@ -78,7 +78,7 @@ export default class Todos {
     initDeprecatedJQueryDropdown($dropdown, {
       fieldName,
       selectable: true,
-      filterable: searchFields ? true : false,
+      filterable: Boolean(searchFields),
       search: { fields: searchFields },
       data: $dropdown.data('data'),
       clicked: () => {
@@ -95,6 +95,8 @@ export default class Todos {
     const { target } = e;
     target.setAttribute('disabled', true);
     target.classList.add('disabled');
+
+    target.querySelector('.gl-spinner-container').classList.add('gl-mr-2');
 
     axios[target.dataset.method](target.dataset.href)
       .then(({ data }) => {
@@ -118,6 +120,8 @@ export default class Todos {
     target.removeAttribute('disabled');
     target.classList.remove('disabled');
 
+    target.querySelector('.gl-spinner-container').classList.remove('gl-mr-2');
+
     if (isInactive === true) {
       restoreBtn.classList.add('hidden');
       doneBtn.classList.remove('hidden');
@@ -139,6 +143,8 @@ export default class Todos {
     const target = e.currentTarget;
     target.setAttribute('disabled', true);
     target.classList.add('disabled');
+
+    target.querySelector('.gl-spinner-container').classList.add('gl-mr-2');
 
     axios[target.dataset.method](target.dataset.href, {
       ids: this.todo_ids,
@@ -163,6 +169,8 @@ export default class Todos {
     target.removeAttribute('disabled');
     target.classList.remove('disabled');
 
+    target.querySelector('.gl-spinner-container').classList.remove('gl-mr-2');
+
     this.todo_ids = target === markAllDoneBtn ? data.updated_ids : [];
     undoAllBtn.classList.toggle('hidden');
     markAllDoneBtn.classList.toggle('hidden');
@@ -172,8 +180,12 @@ export default class Todos {
 
   updateBadges(data) {
     $(document).trigger('todo:toggle', data.count);
-    document.querySelector('.todos-pending .badge').innerHTML = addDelimiter(data.count);
-    document.querySelector('.todos-done .badge').innerHTML = addDelimiter(data.done_count);
+    document.querySelector('.js-todos-pending .js-todos-badge').innerHTML = addDelimiter(
+      data.count,
+    );
+    document.querySelector('.js-todos-done .js-todos-badge').innerHTML = addDelimiter(
+      data.done_count,
+    );
   }
 
   goToTodoUrl(e) {

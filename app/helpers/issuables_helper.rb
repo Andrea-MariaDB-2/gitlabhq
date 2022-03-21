@@ -80,7 +80,7 @@ module IssuablesHelper
   def users_dropdown_label(selected_users)
     case selected_users.length
     when 0
-      "Unassigned"
+      _('Unassigned')
     when 1
       selected_users[0].name
     else
@@ -133,7 +133,7 @@ module IssuablesHelper
   end
   # rubocop: enable CodeReuse/ActiveRecord
 
-  def milestone_dropdown_label(milestone_title, default_label = "Milestone")
+  def milestone_dropdown_label(milestone_title, default_label = _('Milestone'))
     title =
       case milestone_title
       when Milestone::Upcoming.name then Milestone::Upcoming.title
@@ -188,7 +188,12 @@ module IssuablesHelper
   end
 
   def issuables_state_counter_text(issuable_type, state, display_count)
-    titles = { opened: "Open" }
+    titles = {
+      opened: _("Open"),
+      closed: _("Closed"),
+      merged: _("Merged"),
+      all: _("All")
+    }
     state_title = titles[state] || state.to_s.humanize
     html = content_tag(:span, state_title)
 
@@ -196,10 +201,7 @@ module IssuablesHelper
 
     count = issuables_count_for_state(issuable_type, state)
     if count != -1
-      html << " " << content_tag(:span,
-        format_count(issuable_type, count, Gitlab::IssuablesCountForState::THRESHOLD),
-        class: 'badge badge-muted badge-pill gl-badge gl-tab-counter-badge sm'
-      )
+      html << " " << gl_badge_tag(format_count(issuable_type, count, Gitlab::IssuablesCountForState::THRESHOLD), { variant: :muted, size: :sm }, { class: "gl-tab-counter-badge gl-display-none gl-sm-display-inline-flex" })
     end
 
     html.html_safe
@@ -257,7 +259,8 @@ module IssuablesHelper
       zoomMeetingUrl: ZoomMeeting.canonical_meeting_url(issuable),
       sentryIssueIdentifier: SentryIssue.find_by(issue: issuable)&.sentry_issue_identifier, # rubocop:disable CodeReuse/ActiveRecord
       iid: issuable.iid.to_s,
-      isHidden: issue_hidden?(issuable)
+      isHidden: issue_hidden?(issuable),
+      canCreateIncident: create_issue_type_allowed?(issuable.project, :incident)
     }
   end
 
@@ -284,9 +287,7 @@ module IssuablesHelper
   end
 
   def issuables_count_for_state(issuable_type, state)
-    store_in_cache = parent.is_a?(Group) ? parent.cached_issues_state_count_enabled? : false
-
-    Gitlab::IssuablesCountForState.new(finder, store_in_redis_cache: store_in_cache)[state]
+    Gitlab::IssuablesCountForState.new(finder, store_in_redis_cache: true)[state]
   end
 
   def close_issuable_path(issuable)
@@ -373,7 +374,7 @@ module IssuablesHelper
       is_collapsed: is_collapsed,
       track_label: "right_sidebar",
       track_property: "update_todo",
-      track_event: "click_button",
+      track_action: "click_button",
       track_value: ""
     }
   end
@@ -442,7 +443,7 @@ module IssuablesHelper
   end
 
   def format_count(issuable_type, count, threshold)
-    if issuable_type == :issues && parent.is_a?(Group) && parent.cached_issues_state_count_enabled?
+    if issuable_type == :issues && parent.is_a?(Group)
       format_cached_count(threshold, count)
     else
       number_with_delimiter(count)

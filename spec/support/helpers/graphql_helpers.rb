@@ -374,6 +374,7 @@ module GraphqlHelpers
     allow_unlimited_graphql_depth if max_depth > 1
     allow_high_graphql_recursion
     allow_high_graphql_transaction_threshold
+    allow_high_graphql_query_size
 
     type = class_name.respond_to?(:kind) ? class_name : GitlabSchema.types[class_name.to_s]
     raise "#{class_name} is not a known type in the GitlabSchema" unless type
@@ -514,16 +515,20 @@ module GraphqlHelpers
     # Allows for array indexing, like this
     # ['project', 'boards', 'edges', 0, 'node', 'lists']
     keys.reduce(data) do |memo, key|
-      if memo.is_a?(Array)
-        key.is_a?(Integer) ? memo[key] : memo.flat_map { |e| Array.wrap(e[key]) }
+      if memo.is_a?(Array) && key.is_a?(Integer)
+        memo[key]
+      elsif memo.is_a?(Array)
+        memo.compact.flat_map do |e|
+          x = e[key]
+          x.nil? ? [x] : Array.wrap(x)
+        end
       else
         memo&.dig(key)
       end
     end
   end
 
-  # See note at graphql_data about memoization and multiple requests
-  def graphql_errors(body = json_response)
+  def graphql_errors(body = fresh_response_data)
     case body
     when Hash # regular query
       body['errors']
@@ -545,6 +550,12 @@ module GraphqlHelpers
 
   def expect_graphql_errors_to_be_empty
     expect(flattened_errors).to be_empty
+  end
+
+  # Helps migrate to the new GraphQL interpreter,
+  # https://gitlab.com/gitlab-org/gitlab/-/issues/210556
+  def expect_graphql_error_to_be_created(error_class, match_message = nil)
+    expect { yield }.to raise_error(error_class, match_message)
   end
 
   def flattened_errors
@@ -623,6 +634,10 @@ module GraphqlHelpers
 
   def allow_high_graphql_transaction_threshold
     stub_const("Gitlab::QueryLimiting::Transaction::THRESHOLD", 1000)
+  end
+
+  def allow_high_graphql_query_size
+    stub_const('GraphqlController::MAX_QUERY_SIZE', 10_000_000)
   end
 
   def node_array(data, extract_attribute = nil)

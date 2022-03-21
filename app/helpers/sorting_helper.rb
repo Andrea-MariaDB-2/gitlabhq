@@ -37,7 +37,8 @@ module SortingHelper
       sort_value_contacted_date    => sort_title_contacted_date,
       sort_value_relative_position => sort_title_relative_position,
       sort_value_size              => sort_title_size,
-      sort_value_expire_date       => sort_title_expire_date
+      sort_value_expire_date       => sort_title_expire_date,
+      sort_value_title             => sort_title_title
     }
   end
   # rubocop: enable Metrics/AbcSize
@@ -69,6 +70,15 @@ module SortingHelper
     options
   end
 
+  def forks_sort_options_hash
+    {
+      sort_value_recently_created => sort_title_created_date,
+      sort_value_oldest_created   => sort_title_created_date,
+      sort_value_latest_activity  => sort_title_latest_activity,
+      sort_value_oldest_activity  => sort_title_latest_activity
+    }
+  end
+
   def projects_sort_option_titles
     # Only used for the project filter search bar
     projects_sort_options_hash.merge({
@@ -89,6 +99,15 @@ module SortingHelper
       sort_value_oldest_created   => sort_value_recently_created,
       sort_value_name_desc        => sort_value_name,
       sort_value_stars_asc        => sort_value_stars_desc
+    }
+  end
+
+  def forks_reverse_sort_options_hash
+    {
+      sort_value_recently_created => sort_value_oldest_created,
+      sort_value_oldest_created   => sort_value_recently_created,
+      sort_value_latest_activity  => sort_value_oldest_activity,
+      sort_value_oldest_activity  => sort_value_latest_activity
     }
   end
 
@@ -188,7 +207,8 @@ module SortingHelper
       sort_value_due_date_later => sort_value_due_date,
       sort_value_merged_recently => sort_value_merged_date,
       sort_value_closed_recently => sort_value_closed_date,
-      sort_value_least_popular => sort_value_popularity
+      sort_value_least_popular => sort_value_popularity,
+      sort_value_title_desc => sort_value_title
     }
   end
 
@@ -205,7 +225,8 @@ module SortingHelper
       sort_value_closed_date => sort_value_closed_recently,
       sort_value_closed_earlier => sort_value_closed_recently,
       sort_value_popularity => sort_value_least_popular,
-      sort_value_most_popular => sort_value_least_popular
+      sort_value_most_popular => sort_value_least_popular,
+      sort_value_title => sort_value_title_desc
     }.merge(issuable_sort_option_overrides)
   end
 
@@ -299,6 +320,23 @@ module SortingHelper
     url = package_sort_path(sort: reverse_sort)
 
     sort_direction_button(url, reverse_sort, sort_value)
+  end
+
+  def forks_sort_direction_button(sort_value, without = [:state, :scope, :label_name, :milestone_id, :assignee_id, :author_id])
+    reverse_sort = forks_reverse_sort_options_hash[sort_value]
+    url = page_filter_path(sort: reverse_sort, without: without)
+
+    sort_direction_button(url, reverse_sort, sort_value)
+  end
+
+  def admin_users_sort_options(path_params)
+    users_sort_options_hash.map do |value, text|
+      {
+        value: value,
+        text: text,
+        href: admin_users_path(sort: value, **path_params)
+      }
+    end
   end
 end
 

@@ -1,6 +1,6 @@
 #import "~/graphql_shared/fragments/pageInfo.fragment.graphql"
 
-query getProjects(
+query accessTokensGetProjects(
   $search: String = ""
   $after: String = ""
   $first: Int = null
@@ -22,6 +22,7 @@ query getProjects(
       avatarUrl
     }
     pageInfo {
+      __typename
       ...PageInfo
     }
   }

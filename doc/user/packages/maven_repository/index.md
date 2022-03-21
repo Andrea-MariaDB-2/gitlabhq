@@ -6,8 +6,7 @@ info: To determine the technical writer assigned to the Stage/Group associated w
 
 # Maven packages in the Package Repository **(FREE)**
 
-> - [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/5811) in GitLab Premium 11.3.
-> - [Moved](https://gitlab.com/gitlab-org/gitlab/-/issues/221259) to GitLab Free in 13.3.
+> [Moved](https://gitlab.com/gitlab-org/gitlab/-/issues/221259) from GitLab Premium to GitLab Free in 13.3.
 
 Publish [Maven](https://maven.apache.org) artifacts in your project's Package Registry.
 Then, install the packages whenever you need to use them as a dependency.
@@ -222,8 +221,8 @@ The `name` must be `Private-Token`.
 
 ### Authenticate with a deploy token in Maven
 
-> - [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/213566) deploy token authentication in [GitLab Premium](https://about.gitlab.com/pricing/) 13.0.
-> - [Moved](https://gitlab.com/gitlab-org/gitlab/-/issues/221259) to GitLab Free in 13.3.
+> - [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/213566) deploy token authentication in GitLab 13.0.
+> - [Moved](https://gitlab.com/gitlab-org/gitlab/-/issues/221259) from GitLab Premium to GitLab Free in 13.3.
 
 To use a deploy token, add this section to your
 [`settings.xml`](https://maven.apache.org/settings.html) file.
@@ -264,7 +263,7 @@ The `name` must be `Job-Token`.
         <httpHeaders>
           <property>
             <name>Job-Token</name>
-            <value>${env.CI_JOB_TOKEN}</value>
+            <value>${CI_JOB_TOKEN}</value>
           </property>
         </httpHeaders>
       </configuration>
@@ -418,8 +417,7 @@ repositories {
 
 ### Group-level Maven endpoint
 
-> - [Introduced](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/8798) in [GitLab Premium](https://about.gitlab.com/pricing/) 11.7.
-> - [Moved](https://gitlab.com/gitlab-org/gitlab/-/issues/221259) to GitLab Free in 13.3.
+> [Moved](https://gitlab.com/gitlab-org/gitlab/-/issues/221259) from GitLab Premium to GitLab Free in 13.3.
 
 If you rely on many packages, it might be inefficient to include the `repository` section
 with a unique URL for each package. Instead, you can use the group-level endpoint for
@@ -476,8 +474,7 @@ repositories {
 
 ### Instance-level Maven endpoint
 
-> - [Introduced](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/8274) in [GitLab Premium](https://about.gitlab.com/pricing/) 11.7.
-> - [Moved](https://gitlab.com/gitlab-org/gitlab/-/issues/221259) to GitLab Free in 13.3.
+> [Moved](https://gitlab.com/gitlab-org/gitlab/-/issues/221259) from GitLab Premium to GitLab Free in 13.3.
 
 If you rely on many packages, it might be inefficient to include the `repository` section
 with a unique URL for each package. Instead, you can use the instance-level endpoint for
@@ -619,7 +616,7 @@ To delete these older package versions, consider using the Packages API or the U
 
 #### Do not allow duplicate Maven packages
 
-> [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/296895) in GitLab Free 13.9.
+> [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/296895) in GitLab 13.9.
 
 To prevent users from publishing duplicate Maven packages, you can use the [GraphQl API](../../../api/graphql/reference/index.md#packagesettings) or the UI.
 
@@ -728,7 +725,7 @@ You can create a new package each time the `main` branch is updated.
            <httpHeaders>
              <property>
                <name>Job-Token</name>
-               <value>${env.CI_JOB_TOKEN}</value>
+               <value>${CI_JOB_TOKEN}</value>
              </property>
            </httpHeaders>
          </configuration>
@@ -745,17 +742,17 @@ You can create a new package each time the `main` branch is updated.
    <repositories>
      <repository>
        <id>gitlab-maven</id>
-       <url>${env.CI_API_V4_URL}/projects/${env.CI_PROJECT_ID}/packages/maven</url>
+       <url>${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/maven</url>
      </repository>
    </repositories>
    <distributionManagement>
      <repository>
        <id>gitlab-maven</id>
-       <url>${CI_API_V4_URL}/projects/${env.CI_PROJECT_ID}/packages/maven</url>
+       <url>${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/maven</url>
      </repository>
      <snapshotRepository>
        <id>gitlab-maven</id>
-       <url>${CI_API_V4_URL}/projects/${env.CI_PROJECT_ID}/packages/maven</url>
+       <url>${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/maven</url>
      </snapshotRepository>
    </distributionManagement>
    ```
@@ -806,7 +803,7 @@ When the pipeline is successful, the package is created.
 The version string is validated by using the following regex.
 
 ```ruby
-\A(\.?[\w\+-]+\.?)+\z
+\A(?!.*\.\.)[\w+.-]+\z
 ```
 
 You can play around with the regex and try your version strings on [this regular expression editor](https://rubular.com/r/rrLQqUXjfKEoL6).

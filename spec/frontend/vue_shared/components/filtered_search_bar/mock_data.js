@@ -5,11 +5,9 @@ import { OPERATOR_IS_ONLY } from '~/vue_shared/components/filtered_search_bar/co
 import AuthorToken from '~/vue_shared/components/filtered_search_bar/tokens/author_token.vue';
 import BranchToken from '~/vue_shared/components/filtered_search_bar/tokens/branch_token.vue';
 import EmojiToken from '~/vue_shared/components/filtered_search_bar/tokens/emoji_token.vue';
-import EpicToken from '~/vue_shared/components/filtered_search_bar/tokens/epic_token.vue';
-import IterationToken from '~/vue_shared/components/filtered_search_bar/tokens/iteration_token.vue';
 import LabelToken from '~/vue_shared/components/filtered_search_bar/tokens/label_token.vue';
 import MilestoneToken from '~/vue_shared/components/filtered_search_bar/tokens/milestone_token.vue';
-import WeightToken from '~/vue_shared/components/filtered_search_bar/tokens/weight_token.vue';
+import ReleaseToken from '~/vue_shared/components/filtered_search_bar/tokens/release_token.vue';
 
 export const mockAuthor1 = {
   id: 1,
@@ -64,11 +62,6 @@ export const mockMilestones = [
   mockEscapedMilestone,
 ];
 
-export const mockEpics = [
-  { iid: 1, id: 1, title: 'Foo', group_full_path: 'gitlab-org' },
-  { iid: 2, id: 2, title: 'Bar', group_full_path: 'gitlab-org/design' },
-];
-
 export const mockEmoji1 = {
   name: 'thumbsup',
 };
@@ -101,15 +94,6 @@ export const mockAuthorToken = {
   fetchAuthors: Api.projectUsers.bind(Api),
 };
 
-export const mockIterationToken = {
-  type: 'iteration',
-  icon: 'iteration',
-  title: 'Iteration',
-  unique: true,
-  token: IterationToken,
-  fetchIterations: () => Promise.resolve(),
-};
-
 export const mockLabelToken = {
   type: 'label_name',
   icon: 'labels',
@@ -132,16 +116,12 @@ export const mockMilestoneToken = {
   fetchMilestones: () => Promise.resolve({ data: mockMilestones }),
 };
 
-export const mockEpicToken = {
-  type: 'epic_iid',
-  icon: 'clock',
-  title: 'Epic',
-  unique: true,
-  symbol: '&',
-  token: EpicToken,
-  operators: OPERATOR_IS_ONLY,
-  idProperty: 'iid',
-  fetchEpics: () => Promise.resolve({ data: mockEpics }),
+export const mockReleaseToken = {
+  type: 'release',
+  icon: 'rocket',
+  title: 'Release',
+  token: ReleaseToken,
+  fetchReleases: () => Promise.resolve(),
 };
 
 export const mockReactionEmojiToken = {
@@ -165,14 +145,6 @@ export const mockMembershipToken = {
     { value: 'exclude', title: 'Direct' },
     { value: 'only', title: 'Inherited' },
   ],
-};
-
-export const mockWeightToken = {
-  type: 'weight',
-  icon: 'weight',
-  title: 'Weight',
-  unique: true,
-  token: WeightToken,
 };
 
 export const mockMembershipTokenOptionsWithoutTitles = {
@@ -225,6 +197,11 @@ export const tokenValueConfidential = {
 export const tokenValuePlain = {
   type: 'filtered-search-term',
   value: { data: 'foo' },
+};
+
+export const tokenValueEmpty = {
+  type: 'filtered-search-term',
+  value: { data: '' },
 };
 
 export const tokenValueEpic = {

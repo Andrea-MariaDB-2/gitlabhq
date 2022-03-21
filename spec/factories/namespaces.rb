@@ -1,11 +1,23 @@
 # frozen_string_literal: true
 
 FactoryBot.define do
-  factory :namespace do
+  # This factory is called :namespace but actually maps (and always has) to User type
+  # See https://gitlab.com/gitlab-org/gitlab/-/merge_requests/74152#note_730034103 for context
+  factory :namespace, class: 'Namespaces::UserNamespace' do
     sequence(:name) { |n| "namespace#{n}" }
+    type { Namespaces::UserNamespace.sti_name }
+
     path { name.downcase.gsub(/\s/, '_') }
 
     owner { association(:user, strategy: :build, namespace: instance, username: path) }
+
+    after(:create) do |namespace, evaluator|
+      # simulating ::Namespaces::ProcessSyncEventsWorker because most tests don't run Sidekiq inline
+      # Note: we need to get refreshed `traversal_ids` it is updated via SQL query
+      #       in `Namespaces::Traversal::Linear#sync_traversal_ids` (see the NOTE in that method).
+      #       We cannot use `.reload` because it cleans other on-the-fly attributes.
+      namespace.create_ci_namespace_mirror!(traversal_ids: Namespace.find(namespace.id).traversal_ids) unless namespace.ci_namespace_mirror
+    end
 
     trait :with_aggregation_schedule do
       after(:create) do |namespace|

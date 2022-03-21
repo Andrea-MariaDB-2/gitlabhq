@@ -51,20 +51,10 @@ This should return a fully qualified path command with no other output.
 
 ### Lefthook configuration
 
-The current Lefthook configuration can be found in [`lefthook.yml`](https://gitlab.com/gitlab-org/gitlab/-/blob/master/lefthook.yml).
+Lefthook is configured with a combination of:
 
-Before you push your changes, Lefthook automatically runs the following checks:
-
-- Danger: Runs a subset of checks that `danger-review` runs on your merge requests.
-- ES lint: Run `yarn run lint:eslint` checks (with the [`.eslintrc.yml`](https://gitlab.com/gitlab-org/gitlab/-/blob/master/.eslintrc.yml) configuration) on the modified `*.{js,vue}` files. Tags: `frontend`, `style`.
-- HAML lint: Run `bundle exec haml-lint` checks (with the [`.haml-lint.yml`](https://gitlab.com/gitlab-org/gitlab/-/blob/master/.haml-lint.yml) configuration) on the modified `*.html.haml` files. Tags: `view`, `haml`, `style`.
-- Markdown lint: Run `yarn markdownlint` checks on the modified `*.md` files. Tags: `documentation`, `style`.
-- SCSS lint: Run `yarn lint:stylelint` checks (with the [`.stylelintrc`](https://gitlab.com/gitlab-org/gitlab/-/blob/master/.stylelintrc) configuration) on the modified `*.scss{,.css}` files. Tags: `stylesheet`, `css`, `style`.
-- RuboCop: Run `bundle exec rubocop` checks (with the [`.rubocop.yml`](https://gitlab.com/gitlab-org/gitlab/-/blob/master/.rubocop.yml) configuration) on the modified `*.rb` files. Tags: `backend`, `style`.
-- Vale: Run `vale` checks (with the [`.vale.ini`](https://gitlab.com/gitlab-org/gitlab/-/blob/master/.vale.ini) configuration) on the modified `*.md` files. Tags: `documentation`, `style`.
-- Documentation metadata: Run checks for the absence of [documentation metadata](../documentation/index.md#metadata).
-
-In addition to the default configuration, you can define a [local configuration](https://github.com/Arkweid/lefthook/blob/master/docs/full_guide.md#local-config).
+- Project configuration in [`lefthook.yml`](https://gitlab.com/gitlab-org/gitlab/-/blob/master/lefthook.yml).
+- Any [local configuration](https://github.com/Arkweid/lefthook/blob/master/docs/full_guide.md#local-config).
 
 ### Disable Lefthook temporarily
 
@@ -169,35 +159,32 @@ When the number of RuboCop exceptions exceed the default [`exclude-limit` of 15]
 we may want to resolve exceptions over multiple commits. To minimize confusion,
 we should track our progress through the exception list.
 
-When auto-generating the `.rubocop_todo.yml` exception list for a particular Cop,
-and more than 15 files are affected, we should add the exception list to
-a different file, `.rubocop_manual_todo.yml`.
-
-This ensures that our list isn't mistakenly removed by another auto generation of
-the `.rubocop_todo.yml`. This also allows us greater visibility into the exceptions
-which are currently being resolved.
-
-One way to generate the initial list is to run the `todo` auto generation,
-with `exclude limit` set to a high number.
+The preferred way to [generate the initial list or a list for specific RuboCop rules](../rake_tasks.md#generate-initial-rubocop-todo-list)
+is to run the Rake task `rubocop:todo:generate`:
 
 ```shell
-bundle exec rubocop --auto-gen-config --auto-gen-only-exclude --exclude-limit=100000
+# Initial list
+bundle exec rake rubocop:todo:generate
+
+# List for specific RuboCop rules
+bundle exec rake 'rubocop:todo:generate[Gitlab/NamespacedClass,Lint/Syntax]'
 ```
 
-You can then move the list from the freshly generated `.rubocop_todo.yml` for the Cop being actively
-resolved and place it in the `.rubocop_manual_todo.yml`. In this scenario, do not commit auto generated
-changes to the `.rubocop_todo.yml` as an `exclude limit` that is higher than 15 will make the
-`.rubocop_todo.yml` hard to parse.
+This Rake task creates or updates the exception list in `.rubocop_todo/`. For
+example, the configuration for the RuboCop rule `Gitlab/NamespacedClass` is
+located in `.rubocop_todo/gitlab/namespaced_class.yml`.
+
+Make sure to commit any changes in `.rubocop_todo/` after running the Rake task.
 
 ### Reveal existing RuboCop exceptions
 
 To reveal existing RuboCop exceptions in the code that have been excluded via `.rubocop_todo.yml` and
-`.rubocop_manual_todo.yml`, set the environment variable `REVEAL_RUBOCOP_TODO` to `1`.
+`.rubocop_todo/**/*.yml`, set the environment variable `REVEAL_RUBOCOP_TODO` to `1`.
 
 This allows you to reveal existing RuboCop exceptions during your daily work cycle and fix them along the way.
 
 NOTE:
-Permanent `Exclude`s should be defined in `.rubocop.yml` instead of `.rubocop_manual_todo.yml`.
+Define permanent `Exclude`s in `.rubocop.yml` instead of `.rubocop_todo/**/*.yml`.
 
 ## Database migrations
 

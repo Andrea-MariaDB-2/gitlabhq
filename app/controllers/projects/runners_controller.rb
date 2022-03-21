@@ -4,8 +4,6 @@ class Projects::RunnersController < Projects::ApplicationController
   before_action :authorize_admin_build!
   before_action :runner, only: [:edit, :update, :destroy, :pause, :resume, :show]
 
-  layout 'project_settings'
-
   feature_category :runner
 
   def index
@@ -16,7 +14,7 @@ class Projects::RunnersController < Projects::ApplicationController
   end
 
   def update
-    if Ci::UpdateRunnerService.new(@runner).update(runner_params)
+    if Ci::Runners::UpdateRunnerService.new(@runner).update(runner_params)
       redirect_to project_runner_path(@project, @runner), notice: _('Runner was successfully updated.')
     else
       render 'edit'
@@ -25,14 +23,14 @@ class Projects::RunnersController < Projects::ApplicationController
 
   def destroy
     if @runner.only_for?(project)
-      @runner.destroy
+      Ci::Runners::UnregisterRunnerService.new(@runner, current_user).execute
     end
 
     redirect_to project_runners_path(@project), status: :found
   end
 
   def resume
-    if Ci::UpdateRunnerService.new(@runner).update(active: true)
+    if Ci::Runners::UpdateRunnerService.new(@runner).update(active: true)
       redirect_to project_runners_path(@project), notice: _('Runner was successfully updated.')
     else
       redirect_to project_runners_path(@project), alert: _('Runner was not updated.')
@@ -40,7 +38,7 @@ class Projects::RunnersController < Projects::ApplicationController
   end
 
   def pause
-    if Ci::UpdateRunnerService.new(@runner).update(active: false)
+    if Ci::Runners::UpdateRunnerService.new(@runner).update(active: false)
       redirect_to project_runners_path(@project), notice: _('Runner was successfully updated.')
     else
       redirect_to project_runners_path(@project), alert: _('Runner was not updated.')

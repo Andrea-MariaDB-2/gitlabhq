@@ -15,6 +15,9 @@ import { BV_HIDE_TOOLTIP } from '~/lib/utils/constants';
 import { n__, s__, __ } from '~/locale';
 import sidebarEventHub from '~/sidebar/event_hub';
 import Tracking from '~/tracking';
+import { formatDate } from '~/lib/utils/datetime_utility';
+import glFeatureFlagMixin from '~/vue_shared/mixins/gl_feature_flags_mixin';
+import listQuery from 'ee_else_ce/boards/graphql/board_lists_deferred.query.graphql';
 import AccessorUtilities from '../../lib/utils/accessor';
 import { inactiveId, LIST, ListType, toggleFormEventPrefix } from '../constants';
 import eventHub from '../eventhub';
@@ -40,7 +43,7 @@ export default {
   directives: {
     GlTooltip: GlTooltipDirective,
   },
-  mixins: [Tracking.mixin()],
+  mixins: [Tracking.mixin(), glFeatureFlagMixin()],
   inject: {
     boardId: {
       default: '',
@@ -72,7 +75,7 @@ export default {
     },
   },
   computed: {
-    ...mapState(['activeId']),
+    ...mapState(['activeId', 'filterParams']),
     ...mapGetters(['isEpicBoard', 'isSwimlanesOn']),
     isLoggedIn() {
       return Boolean(this.currentUserId);
@@ -86,6 +89,9 @@ export default {
     listTitle() {
       return this.list?.label?.description || this.list?.assignee?.name || this.list.title || '';
     },
+    isIterationList() {
+      return this.listType === ListType.iteration;
+    },
     showListHeaderButton() {
       return !this.disabled && this.listType !== ListType.closed;
     },
@@ -96,7 +102,7 @@ export default {
       return this.listType === ListType.assignee && this.showListDetails;
     },
     showIterationListDetails() {
-      return this.listType === ListType.iteration && this.showListDetails;
+      return this.isIterationList && this.showListDetails;
     },
     showListDetails() {
       return !this.list.collapsed || !this.isSwimlanesHeader;
@@ -107,14 +113,11 @@ export default {
       }
       return false;
     },
-    itemsCount() {
-      return this.list.issuesCount;
-    },
     countIcon() {
       return 'issues';
     },
     itemsTooltipLabel() {
-      return n__(`%d issue`, `%d issues`, this.itemsCount);
+      return n__(`%d issue`, `%d issues`, this.boardLists?.issuesCount);
     },
     chevronTooltip() {
       return this.list.collapsed ? this.$options.i18n.expand : this.$options.i18n.collapse;
@@ -145,6 +148,23 @@ export default {
     },
     userCanDrag() {
       return !this.disabled && isListDraggable(this.list);
+    },
+    isLoading() {
+      return this.$apollo.queries.boardList.loading;
+    },
+  },
+  apollo: {
+    boardList: {
+      query: listQuery,
+      variables() {
+        return {
+          id: this.list.id,
+          filters: this.filterParams,
+        };
+      },
+      skip() {
+        return this.isEpicBoard;
+      },
     },
   },
   created() {
@@ -201,12 +221,22 @@ export default {
       });
     },
     addToLocalStorage() {
-      if (AccessorUtilities.isLocalStorageAccessSafe()) {
+      if (AccessorUtilities.canUseLocalStorage()) {
         localStorage.setItem(`${this.uniqueKey}.collapsed`, this.list.collapsed);
       }
     },
     updateListFunction() {
       this.updateList({ listId: this.list.id, collapsed: this.list.collapsed });
+    },
+    /**
+     * TODO: https://gitlab.com/gitlab-org/gitlab/-/issues/344619
+     * This method also exists as a utility function in ee/../iterations/utils.js
+     * Remove the duplication when the EE code is separated from this compoment.
+     */
+    getIterationPeriod({ startDate, dueDate }) {
+      const start = formatDate(startDate, 'mmm d, yyyy', true);
+      const due = formatDate(dueDate, 'mmm d, yyyy', true);
+      return `${start} - ${due}`;
     },
   },
 };
@@ -226,7 +256,7 @@ export default {
   >
     <h3
       :class="{
-        'user-can-drag': userCanDrag,
+        'gl-cursor-grab': userCanDrag,
         'gl-py-3 gl-h-full': list.collapsed && !isSwimlanesHeader,
         'gl-border-b-0': list.collapsed || isSwimlanesHeader,
         'gl-py-2': list.collapsed && isSwimlanesHeader,
@@ -346,10 +376,10 @@ export default {
           </gl-sprintf>
         </div>
         <div v-else>• {{ itemsTooltipLabel }}</div>
-        <div v-if="weightFeatureAvailable">
+        <div v-if="weightFeatureAvailable && !isLoading">
           •
           <gl-sprintf :message="__('%{totalWeight} total weight')">
-            <template #totalWeight>{{ list.totalWeight }}</template>
+            <template #totalWeight>{{ boardList.totalWeight }}</template>
           </gl-sprintf>
         </div>
       </gl-tooltip>
@@ -365,16 +395,20 @@ export default {
       >
         <span class="gl-display-inline-flex">
           <gl-tooltip :target="() => $refs.itemCount" :title="itemsTooltipLabel" />
-          <span ref="itemCount" class="issue-count-badge-count">
+          <span ref="itemCount" class="gl-display-inline-flex gl-align-items-center">
             <gl-icon class="gl-mr-2" :name="countIcon" />
-            <item-count :items-size="itemsCount" :max-issue-count="list.maxIssueCount" />
+            <item-count
+              v-if="!isLoading"
+              :items-size="isEpicBoard ? list.epicsCount : boardList.issuesCount"
+              :max-issue-count="list.maxIssueCount"
+            />
           </span>
           <!-- EE start -->
-          <template v-if="weightFeatureAvailable && !isEpicBoard">
+          <template v-if="weightFeatureAvailable && !isEpicBoard && !isLoading">
             <gl-tooltip :target="() => $refs.weightTooltip" :title="weightCountToolTip" />
             <span ref="weightTooltip" class="gl-display-inline-flex gl-ml-3">
               <gl-icon class="gl-mr-2" name="weight" />
-              {{ list.totalWeight }}
+              {{ boardList.totalWeight }}
             </span>
           </template>
           <!-- EE end -->
@@ -388,7 +422,7 @@ export default {
           v-gl-tooltip.hover
           :aria-label="$options.i18n.newIssue"
           :title="$options.i18n.newIssue"
-          class="issue-count-badge-add-button no-drag"
+          class="no-drag"
           icon="plus"
           @click="showNewIssueForm"
         />

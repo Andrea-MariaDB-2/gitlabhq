@@ -19,6 +19,17 @@ RSpec.describe 'User edit profile' do
     wait_for_requests if respond_to?(:wait_for_requests)
   end
 
+  def update_user_email
+    fill_in 'user_email', with: 'new-email@example.com'
+    click_button 'Update profile settings'
+  end
+
+  def confirm_password(password)
+    fill_in 'password-confirmation', with: password
+    click_button 'Confirm password'
+    wait_for_requests if respond_to?(:wait_for_requests)
+  end
+
   def visit_user
     visit user_path(user)
     wait_for_requests
@@ -32,7 +43,7 @@ RSpec.describe 'User edit profile' do
     fill_in 'user_skype', with: 'testskype'
     fill_in 'user_linkedin', with: 'testlinkedin'
     fill_in 'user_twitter', with: 'testtwitter'
-    fill_in 'user_website_url', with: 'testurl'
+    fill_in 'user_website_url', with: 'http://testurl.com'
     fill_in 'user_location', with: 'Ukraine'
     fill_in 'user_bio', with: 'I <3 GitLab :tada:'
     fill_in 'user_job_title', with: 'Frontend Engineer'
@@ -43,15 +54,27 @@ RSpec.describe 'User edit profile' do
       skype: 'testskype',
       linkedin: 'testlinkedin',
       twitter: 'testtwitter',
-      website_url: 'testurl',
+      website_url: 'http://testurl.com',
       bio: 'I <3 GitLab :tada:',
-      bio_html: '<p data-sourcepos="1:1-1:18" dir="auto">I &lt;3 GitLab <gl-emoji title="party popper" data-name="tada" data-unicode-version="6.0">🎉</gl-emoji></p>',
       job_title: 'Frontend Engineer',
       organization: 'GitLab'
     )
 
     expect(find('#user_location').value).to eq 'Ukraine'
     expect(page).to have_content('Profile was successfully updated')
+  end
+
+  it 'does not set secondary emails without user input' do
+    fill_in 'user_organization', with: 'GitLab'
+    submit_settings
+
+    user.reload
+    expect(page).to have_field('user_commit_email', with: '')
+    expect(page).to have_field('user_public_email', with: '')
+
+    User::SECONDARY_EMAIL_ATTRIBUTES.each do |attribute|
+      expect(user.read_attribute(attribute)).to be_blank
+    end
   end
 
   it 'shows an error if the full name contains an emoji', :js do
@@ -65,16 +88,53 @@ RSpec.describe 'User edit profile' do
     end
   end
 
-  describe 'when I change my email' do
+  it 'shows an error if the website url is not valid' do
+    fill_in 'user_website_url', with: 'admin@gitlab.com'
+    submit_settings
+
+    expect(user.reload).to have_attributes(
+      website_url: ''
+    )
+
+    expect(page).to have_content('Website url is not a valid URL')
+  end
+
+  describe 'when I change my email', :js do
     before do
       user.send_reset_password_instructions
+    end
+
+    it 'will prompt to confirm my password' do
+      expect(user.reset_password_token?).to be true
+
+      update_user_email
+
+      expect(page).to have_selector('[data-testid="password-prompt-modal"]')
+    end
+
+    context 'when prompted to confirm password' do
+      before do
+        update_user_email
+      end
+
+      it 'with the correct password successfully updates' do
+        confirm_password(user.password)
+
+        expect(page).to have_text("Profile was successfully updated")
+      end
+
+      it 'with the incorrect password fails to update' do
+        confirm_password("Fake password")
+
+        expect(page).to have_text("Invalid password")
+      end
     end
 
     it 'clears the reset password token' do
       expect(user.reset_password_token?).to be true
 
-      fill_in 'user_email', with: 'new-email@example.com'
-      submit_settings
+      update_user_email
+      confirm_password(user.password)
 
       user.reload
       expect(user.confirmation_token).not_to be_nil
@@ -501,14 +561,11 @@ RSpec.describe 'User edit profile' do
 
         page.find("a", text: "Nuku'alofa").click
 
-        tz = page.find('.user-time-preferences #user_timezone', visible: false)
-
-        expect(tz.value).to eq('Pacific/Tongatapu')
+        expect(page).to have_field(:user_timezone, with: 'Pacific/Tongatapu', type: :hidden)
       end
 
-      it 'timezone defaults to servers default' do
-        timezone_name = Time.zone.tzinfo.name
-        expect(page.find('.user-time-preferences #user_timezone', visible: false).value).to eq(timezone_name)
+      it 'timezone defaults to empty' do
+        expect(page).to have_field(:user_timezone, with: '', type: :hidden)
       end
     end
   end

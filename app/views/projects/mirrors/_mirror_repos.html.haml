@@ -10,7 +10,7 @@
       = expanded ? _('Collapse') : _('Expand')
     %p
       = _('Set up your project to automatically push and/or pull changes to/from another repository. Branches, tags, and commits will be synced automatically.')
-      = link_to _('How do I mirror repositories?'), help_page_path('user/project/repository/repository_mirroring'), target: '_blank', rel: 'noopener noreferrer'
+      = link_to _('How do I mirror repositories?'), help_page_path('user/project/repository/mirror/index.md'), target: '_blank', rel: 'noopener noreferrer'
 
   .settings-content
     - if mirror_settings_enabled
@@ -32,13 +32,14 @@
               = label_tag :only_protected_branches, _('Mirror only protected branches'), class: 'form-check-label'
               .form-text.text-muted
                 = _('If enabled, only protected branches will be mirrored.')
-                = link_to _('Learn more.'), help_page_path('user/project/repository/repository_mirroring', anchor: 'mirror-only-protected-branches'), target: '_blank', rel: 'noopener noreferrer'
+                = link_to _('Learn more.'), help_page_path('user/project/repository/mirror/index.md', anchor: 'mirror-only-protected-branches'), target: '_blank', rel: 'noopener noreferrer'
 
           .panel-footer
             = f.submit _('Mirror repository'), class: 'gl-button btn btn-confirm js-mirror-submit qa-mirror-repository-button', name: :update_remote_mirror
     - else
-      .gl-alert.gl-alert-info{ role: 'alert' }
-        = sprite_icon('information-o', css_class: 'gl-icon gl-alert-icon gl-alert-icon-no-title')
+      = render 'shared/global_alert',
+        dismissible: false,
+        variant: :info do
         .gl-alert-body
           = _('Mirror settings are only available to GitLab administrators.')
 
@@ -69,7 +70,7 @@
                   - if mirror.disabled?
                     = render 'projects/mirrors/disabled_mirror_badge'
                   - if mirror.last_error.present?
-                    .badge.mirror-error-badge{ data: { toggle: 'tooltip', html: 'true', qa_selector: 'mirror_error_badge' }, title: html_escape(mirror.last_error.try(:strip)) }= _('Error')
+                    = gl_badge_tag _('Error'), { variant: :danger }, { data: { toggle: 'tooltip', html: 'true', qa_selector: 'mirror_error_badge' }, title: html_escape(mirror.last_error.try(:strip)) }
                 %td.gl-display-flex
                   - if mirror_settings_enabled
                     %button.js-delete-mirror.qa-delete-mirror.rspec-delete-mirror.btn.btn-icon.gl-button.btn-danger.gl-mr-3{ type: 'button', data: { mirror_id: mirror.id, toggle: 'tooltip', container: 'body' }, title: _('Remove') }= sprite_icon('remove')

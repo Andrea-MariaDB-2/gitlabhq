@@ -3,7 +3,7 @@
 module QA
   RSpec.describe 'Create' do
     context 'Gitaly' do
-      describe 'Backend node recovery', :orchestrated, :gitaly_cluster, :skip_live_env, quarantine: { issue: 'https://gitlab.com/gitlab-org/gitlab/-/issues/322647', type: :flaky } do
+      describe 'Backend node recovery', :orchestrated, :gitaly_cluster, :skip_live_env do
         let(:praefect_manager) { Service::PraefectManager.new }
         let(:project) do
           Resource::Project.fabricate! do |project|
@@ -14,32 +14,22 @@ module QA
 
         before do
           # Reset the cluster in case previous tests left it in a bad state
-          praefect_manager.reset_primary_to_original
+          praefect_manager.start_all_nodes
         end
 
         after do
           # Leave the cluster in a suitable state for subsequent tests
-          praefect_manager.reset_primary_to_original
+          praefect_manager.start_all_nodes
         end
 
-        it 'recovers from dataloss', testcase: 'https://gitlab.com/gitlab-org/quality/testcases/-/quality/test_cases/1265' do
+        it 'recovers from dataloss', testcase: 'https://gitlab.com/gitlab-org/gitlab/-/quality/test_cases/347832' do
           # Create a new project with a commit and wait for it to replicate
           praefect_manager.wait_for_replication(project.id)
 
           # Stop the primary node to trigger failover, and then wait
           # for Gitaly to be ready for writes again
-          praefect_manager.trigger_failover_by_stopping_primary_node
-          praefect_manager.wait_for_new_primary
-          praefect_manager.wait_for_health_check_current_primary_node
-          praefect_manager.wait_for_gitaly_check
-
-          # Confirm that we have access to the repo after failover
-          Support::Waiter.wait_until(retry_on_exception: true, sleep_interval: 5) do
-            Resource::Repository::Commit.fabricate_via_api! do |commits|
-              commits.project = project
-              commits.sha = project.default_branch
-            end
-          end
+          praefect_manager.stop_primary_node
+          praefect_manager.wait_for_primary_node_health_check_failure
 
           # Push a commit to the new primary
           Resource::Repository::ProjectPush.fabricate! do |push|
@@ -59,6 +49,11 @@ module QA
 
           # Wait for automatic replication
           praefect_manager.wait_for_replication(project.id)
+
+          # Force switch to the old primary node
+          # This ensures that the commit was replicated
+          praefect_manager.stop_secondary_node
+          praefect_manager.stop_tertiary_node
 
           # Confirm that both commits are available
           expect(project.commits.map { |commit| commit[:message].chomp })

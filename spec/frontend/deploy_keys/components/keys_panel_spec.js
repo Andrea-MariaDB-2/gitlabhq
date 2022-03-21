@@ -1,9 +1,9 @@
 import { mount } from '@vue/test-utils';
+import data from 'test_fixtures/deploy_keys/keys.json';
 import deployKeysPanel from '~/deploy_keys/components/keys_panel.vue';
 import DeployKeysStore from '~/deploy_keys/store';
 
 describe('Deploy keys panel', () => {
-  const data = getJSONFixture('deploy_keys/keys.json');
   let wrapper;
 
   const findTableRowHeader = () => wrapper.find('.table-row-header');
@@ -37,7 +37,7 @@ describe('Deploy keys panel', () => {
     mountComponent();
     const tableHeader = findTableRowHeader();
 
-    expect(tableHeader).toExist();
+    expect(tableHeader.exists()).toBe(true);
     expect(tableHeader.text()).toContain('Deploy key');
     expect(tableHeader.text()).toContain('Project usage');
     expect(tableHeader.text()).toContain('Created');

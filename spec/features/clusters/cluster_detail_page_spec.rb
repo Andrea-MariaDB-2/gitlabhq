@@ -34,7 +34,21 @@ RSpec.describe 'Clusterable > Show page' do
     it 'does not show the environments tab' do
       visit cluster_path
 
-      expect(page).not_to have_selector('.js-cluster-nav-environments', text: 'Environments')
+      expect(page).not_to have_selector('[data-testid="cluster-environments-tab"]')
+    end
+
+    context 'content-security policy' do
+      it 'has AWS domains in the CSP' do
+        visit cluster_path
+
+        expect(response_headers['Content-Security-Policy']).to include(::Clusters::ClustersController::AWS_CSP_DOMAINS.join(' '))
+      end
+
+      it 'keeps existing connect-src in the CSP' do
+        visit cluster_path
+
+        expect(response_headers['Content-Security-Policy']).to include("connect-src #{Gitlab::ContentSecurityPolicy::Directives.connect_src}")
+      end
     end
   end
 

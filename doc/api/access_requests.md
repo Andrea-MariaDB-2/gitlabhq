@@ -1,13 +1,10 @@
 ---
 stage: Manage
-group: Access
+group: Authentication and Authorization
 info: "To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments"
-type: reference, api
 ---
 
-# Group and project access requests API
-
-> [Introduced](https://gitlab.com/gitlab-org/gitlab-foss/-/issues/18583) in GitLab 8.11.
+# Group and project access requests API **(FREE)**
 
 ## Valid access levels
 

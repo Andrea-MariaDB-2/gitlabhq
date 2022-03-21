@@ -59,6 +59,20 @@ RSpec.describe Ci::RunnersFinder do
           end
         end
 
+        context 'by active status' do
+          it 'with active set as false calls the corresponding scope on Ci::Runner with false' do
+            expect(Ci::Runner).to receive(:active).with(false).and_call_original
+
+            described_class.new(current_user: admin, params: { active: false }).execute
+          end
+
+          it 'with active set as true calls the corresponding scope on Ci::Runner with true' do
+            expect(Ci::Runner).to receive(:active).with(true).and_call_original
+
+            described_class.new(current_user: admin, params: { active: true }).execute
+          end
+        end
+
         context 'by runner type' do
           it 'calls the corresponding scope on Ci::Runner' do
             expect(Ci::Runner).to receive(:project_type).and_call_original
@@ -77,8 +91,8 @@ RSpec.describe Ci::RunnersFinder do
       end
 
       context 'sorting' do
-        let_it_be(:runner1) { create :ci_runner, created_at: '2018-07-12 07:00', contacted_at: 1.minute.ago }
-        let_it_be(:runner2) { create :ci_runner, created_at: '2018-07-12 08:00', contacted_at: 3.minutes.ago }
+        let_it_be(:runner1) { create :ci_runner, created_at: '2018-07-12 07:00', contacted_at: 1.minute.ago, token_expires_at: '2022-02-15 07:00' }
+        let_it_be(:runner2) { create :ci_runner, created_at: '2018-07-12 08:00', contacted_at: 3.minutes.ago, token_expires_at: '2022-02-15 06:00' }
         let_it_be(:runner3) { create :ci_runner, created_at: '2018-07-12 09:00', contacted_at: 2.minutes.ago }
 
         subject do
@@ -126,6 +140,22 @@ RSpec.describe Ci::RunnersFinder do
 
           it 'sorts by contacted_at descending' do
             is_expected.to eq [runner1, runner3, runner2]
+          end
+        end
+
+        context 'with sort param equal to token_expires_at_asc' do
+          let(:params) { { sort: 'token_expires_at_asc' } }
+
+          it 'sorts by contacted_at ascending' do
+            is_expected.to eq [runner2, runner1, runner3]
+          end
+        end
+
+        context 'with sort param equal to token_expires_at_desc' do
+          let(:params) { { sort: 'token_expires_at_desc' } }
+
+          it 'sorts by contacted_at descending' do
+            is_expected.to eq [runner3, runner1, runner2]
           end
         end
       end
@@ -263,7 +293,15 @@ RSpec.describe Ci::RunnersFinder do
               let(:extra_params) { { search: 'runner_project_search' } }
 
               it 'returns correct runner' do
-                expect(subject).to eq([runner_project_3])
+                expect(subject).to match_array([runner_project_3])
+              end
+            end
+
+            context 'by active status' do
+              let(:extra_params) { { active: false } }
+
+              it 'returns correct runner' do
+                expect(subject).to match_array([runner_sub_group_1])
               end
             end
 
@@ -271,7 +309,7 @@ RSpec.describe Ci::RunnersFinder do
               let(:extra_params) { { status_status: 'paused' } }
 
               it 'returns correct runner' do
-                expect(subject).to eq([runner_sub_group_1])
+                expect(subject).to match_array([runner_sub_group_1])
               end
             end
 
@@ -279,7 +317,7 @@ RSpec.describe Ci::RunnersFinder do
               let(:extra_params) { { tag_name: %w[runner_tag] } }
 
               it 'returns correct runner' do
-                expect(subject).to eq([runner_project_5])
+                expect(subject).to match_array([runner_project_5])
               end
             end
 

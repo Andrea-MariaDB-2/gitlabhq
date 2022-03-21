@@ -1,6 +1,6 @@
 import { GlLabel } from '@gitlab/ui';
 import { shallowMount, mount } from '@vue/test-utils';
-import Vue from 'vue';
+import Vue, { nextTick } from 'vue';
 import Vuex from 'vuex';
 
 import BoardCard from '~/boards/components/board_card.vue';
@@ -64,13 +64,13 @@ describe('Board card', () => {
   };
 
   const selectCard = async () => {
-    wrapper.trigger('mouseup');
-    await wrapper.vm.$nextTick();
+    wrapper.trigger('click');
+    await nextTick();
   };
 
   const multiSelectCard = async () => {
-    wrapper.trigger('mouseup', { ctrlKey: true });
-    await wrapper.vm.$nextTick();
+    wrapper.trigger('click', { ctrlKey: true });
+    await nextTick();
   };
 
   beforeEach(() => {
@@ -167,7 +167,7 @@ describe('Board card', () => {
       mountComponent({ item: { ...mockIssue, isLoading: true } });
 
       expect(wrapper.classes()).toContain('is-disabled');
-      expect(wrapper.classes()).not.toContain('user-can-drag');
+      expect(wrapper.classes()).not.toContain('gl-cursor-grab');
     });
   });
 
@@ -177,7 +177,7 @@ describe('Board card', () => {
       mountComponent();
 
       expect(wrapper.classes()).not.toContain('is-disabled');
-      expect(wrapper.classes()).toContain('user-can-drag');
+      expect(wrapper.classes()).toContain('gl-cursor-grab');
     });
   });
 });

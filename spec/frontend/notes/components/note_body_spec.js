@@ -1,5 +1,5 @@
 import { shallowMount } from '@vue/test-utils';
-import Vue from 'vue';
+import Vue, { nextTick } from 'vue';
 import Vuex from 'vuex';
 
 import { suggestionCommitMessage } from '~/diffs/store/getters';
@@ -46,9 +46,9 @@ describe('issue_note_body component', () => {
   });
 
   describe('isEditing', () => {
-    beforeEach((done) => {
+    beforeEach(async () => {
       vm.isEditing = true;
-      Vue.nextTick(done);
+      await nextTick();
     });
 
     it('renders edit form', () => {
@@ -58,7 +58,6 @@ describe('issue_note_body component', () => {
     it('adds autosave', () => {
       const autosaveKey = `autosave/Note/${note.noteable_type}/${note.id}`;
 
-      expect(vm.autosave).toExist();
       expect(vm.autosave.key).toEqual(autosaveKey);
     });
   });

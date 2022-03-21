@@ -11,10 +11,6 @@ module HashedStorage
     queue_namespace :hashed_storage
     feature_category :source_code_management
 
-    # Gitlab::HashedStorage::Migrator#migration_pending? depends on the
-    # queue size of this worker.
-    tags :needs_own_queue
-
     # @param [Integer] start initial ID of the batch
     # @param [Integer] finish last ID of the batch
     def perform(start, finish)

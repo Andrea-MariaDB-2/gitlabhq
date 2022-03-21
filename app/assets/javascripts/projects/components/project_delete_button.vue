@@ -1,12 +1,8 @@
 <script>
-import { GlAlert, GlSprintf } from '@gitlab/ui';
-import { __ } from '~/locale';
 import SharedDeleteButton from './shared/delete_button.vue';
 
 export default {
   components: {
-    GlSprintf,
-    GlAlert,
     SharedDeleteButton,
   },
   props: {
@@ -18,31 +14,38 @@ export default {
       type: String,
       required: true,
     },
-  },
-  strings: {
-    alertTitle: __('You are about to permanently delete this project'),
-    alertBody: __(
-      'Once a project is permanently deleted, it %{strongStart}cannot be recovered%{strongEnd}. Permanently deleting this project will %{strongStart}immediately delete%{strongEnd} its repositories and %{strongStart}all related resources%{strongEnd}, including issues, merge requests etc.',
-    ),
+    isFork: {
+      type: Boolean,
+      required: true,
+    },
+    issuesCount: {
+      type: Number,
+      required: true,
+    },
+    mergeRequestsCount: {
+      type: Number,
+      required: true,
+    },
+    forksCount: {
+      type: Number,
+      required: true,
+    },
+    starsCount: {
+      type: Number,
+      required: true,
+    },
   },
 };
 </script>
 
 <template>
-  <shared-delete-button v-bind="{ confirmPhrase, formPath }">
-    <template #modal-body>
-      <gl-alert
-        class="gl-mb-5"
-        variant="danger"
-        :title="$options.strings.alertTitle"
-        :dismissible="false"
-      >
-        <gl-sprintf :message="$options.strings.alertBody">
-          <template #strong="{ content }">
-            <strong>{{ content }}</strong>
-          </template>
-        </gl-sprintf>
-      </gl-alert>
-    </template>
-  </shared-delete-button>
+  <shared-delete-button
+    :confirm-phrase="confirmPhrase"
+    :form-path="formPath"
+    :is-fork="isFork"
+    :issues-count="issuesCount"
+    :merge-requests-count="mergeRequestsCount"
+    :forks-count="forksCount"
+    :stars-count="starsCount"
+  />
 </template>

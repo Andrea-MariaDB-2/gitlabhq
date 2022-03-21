@@ -41,7 +41,7 @@ module Routable
     has_one :route, as: :source, autosave: true, dependent: :destroy, inverse_of: :source # rubocop:disable Cop/ActiveRecordDependent
     has_many :redirect_routes, as: :source, autosave: true, dependent: :destroy # rubocop:disable Cop/ActiveRecordDependent
 
-    validates :route, presence: true
+    validates :route, presence: true, unless: -> { is_a?(Namespaces::ProjectNamespace) }
 
     scope :with_route, -> { includes(:route) }
 
@@ -185,9 +185,15 @@ module Routable
 
   def prepare_route
     return unless full_path_changed? || full_name_changed?
+    return if is_a?(Namespaces::ProjectNamespace)
 
     route || build_route(source: self)
     route.path = build_full_path
     route.name = build_full_name
+    route.namespace = if is_a?(Namespace)
+                        self
+                      elsif is_a?(Project)
+                        self.project_namespace
+                      end
   end
 end

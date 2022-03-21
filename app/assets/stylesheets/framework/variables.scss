@@ -52,6 +52,11 @@ $spacing-scale: (
   5: #{4 * $grid-size}
 );
 
+/* Will be moved to @gitlab/ui by https://gitlab.com/gitlab-org/gitlab-ui/-/issues/1709 */
+$gl-spacing-scale-48: 48 * $grid-size;
+$gl-spacing-scale-75: 75 * $grid-size;
+/* End gitlab-ui#1709 */
+
 /*
  * Why another sizing scale???
  * Great question, friend!
@@ -433,7 +438,7 @@ $browser-scrollbar-size: 10px;
 /*
  * Misc
  */
-$header-height: 40px;
+$header-height: var(--header-height, 40px);
 $header-zindex: 1000;
 $zindex-dropdown-menu: 300;
 $suggestion-header-height: 46px;
@@ -505,7 +510,7 @@ $line-removed-dark: #fac5cd !default;
  * would hide other layers (selected text, matching brackets).
  *
  * When the transparent colors get layered on white background, they create their
- * full opacity counterparts (computed with https://stackoverflow.com/a/12228643/606571):
+ * full opacity counterparts:
  *
  *  - white + $line-added-transparent = $line-added
  *  - white + $line-added-transparent + $line-added-dark-transparent = $line-added-dark
@@ -589,8 +594,6 @@ $gl-btn-vert-padding: 8px;
 $gl-btn-horz-padding: 12px;
 $gl-btn-small-font-size: 13px;
 $gl-btn-small-line-height: 18px;
-$gl-btn-xs-font-size: 13px;
-$gl-btn-xs-line-height: 13px;
 
 /*
 * Badges
@@ -609,6 +612,14 @@ $pagination-disabled-color: #cdcdcd;
  *  Status icons
  */
 $status-icon-size: 22px;
+
+
+/*
+* Social Icons
+*/
+$twitter: #1d9bf0;
+$skype: #0078d7;
+$linkedin: #2867b2;
 
 /*
  *  Award emoji
@@ -667,18 +678,18 @@ $issue-boards-filter-height: 68px;
 $issue-boards-filter-height-md: 110px;
 $issue-boards-filter-height-sm: 299px;
 $issue-boards-breadcrumbs-height-xs: 63px;
-$issue-board-list-difference-xs: $header-height + $issue-boards-breadcrumbs-height-xs;
-$issue-board-list-difference-sm: $header-height + $breadcrumb-min-height;
-$issue-board-list-difference-md: $issue-board-list-difference-sm + $issue-boards-filter-height-md;
-$issue-board-list-difference-lg: $issue-board-list-difference-sm + $issue-boards-filter-height;
+$issue-board-list-difference-xs: calc(#{$header-height} + #{$issue-boards-breadcrumbs-height-xs});
+$issue-board-list-difference-sm: calc(#{$header-height} + #{$breadcrumb-min-height});
+$issue-board-list-difference-md: calc(#{$issue-board-list-difference-sm} + #{$issue-boards-filter-height-md});
+$issue-board-list-difference-lg: calc(#{$issue-board-list-difference-sm} + #{$issue-boards-filter-height});
 /*
  The following heights are used in environment_logs.scss and are used for calculation of the log viewer height.
 */
 $environment-logs-breadcrumbs-height: 63px;
 $environment-logs-breadcrumbs-height-md: $breadcrumb-min-height;
 
-$environment-logs-difference-xs-up: $header-height + $environment-logs-breadcrumbs-height;
-$environment-logs-difference-md-up: $header-height + $environment-logs-breadcrumbs-height-md;
+$environment-logs-difference-xs-up: calc(#{$header-height} + #{$environment-logs-breadcrumbs-height});
+$environment-logs-difference-md-up: calc(#{$header-height} + #{$environment-logs-breadcrumbs-height-md});
 
 /*
 * Avatar
@@ -697,7 +708,7 @@ $blame-blue: #254e77;
 /*
 * Builds
 */
-$builds-trace-bg: #111;
+$builds-log-bg: #111;
 $job-log-highlight-height: 18px;
 $job-log-line-padding: 55px;
 $job-line-number-width: 50px;
@@ -714,7 +725,7 @@ $calendar-activity-colors: (
   #7fa8c9,
   #527ba0,
   #254e77,
-);
+) !default;
 
 /*
 * Commit Page
@@ -759,7 +770,6 @@ $help-shortcut-header-color: #333;
 */
 $issues-today-bg: #f3fff2 !default;
 $issues-today-border: #e1e8d5 !default;
-$compare-display-color: #888;
 
 /*
 * Label
@@ -868,21 +878,12 @@ $image-comment-cursor-left-offset: 12;
 $image-comment-cursor-top-offset: 12;
 
 /*
-Add GitLab Slack Application
-*/
-$add-to-slack-popup-max-width: 400px;
-$add-to-slack-gif-max-width: 850px;
-$add-to-slack-well-max-width: 750px;
-$add-to-slack-logo-size: 100px;
-
-/*
 Security & Compliance Carousel
 */
 $security-and-compliance-carousel-image-carousel-width: 1000px;
 $security-and-compliance-carousel-image-discover-button-width: 45%;
 $security-and-compliance-carousel-image-discover-buttons-max-width: 280px;
 $security-and-compliance-carousel-image-discover-footer-max-width: 500px;
-$security-and-compliance-carousel-image-discover-feedback-width: 30%;
 $security-and-compliance-carousel-image-discover-text-carousel-max-width: 650px;
 $security-and-compliance-carousel-image-discover-text-carousel-caption-height: 100%;
 $security-and-compliance-carousel-image-discover-text-carousel-caption-max-width: 500px;
@@ -933,8 +934,6 @@ Merge requests
 */
 $mr-tabs-height: 48px;
 $mr-version-controls-height: 56px;
-$mr-widget-margin-left: 40px;
-$mr-review-bar-height: calc(2rem + 13px);
 
 /*
 Compare Branches

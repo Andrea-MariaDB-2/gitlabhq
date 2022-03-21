@@ -1,6 +1,6 @@
 #import "ee_else_ce/boards/graphql/issue.fragment.graphql"
 
-mutation IssueMoveList(
+mutation issueMoveList(
   $projectPath: ID!
   $iid: String!
   $boardId: ID!
@@ -21,7 +21,7 @@ mutation IssueMoveList(
     }
   ) {
     issue {
-      ...IssueNode
+      ...Issue
     }
     errors
   }

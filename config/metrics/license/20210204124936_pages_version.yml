@@ -1,5 +1,5 @@
 ---
-data_category: optional
+data_category: operational
 key_path: gitlab_pages.version
 description: The version number of GitLab Pages
 product_section: ops
@@ -7,7 +7,8 @@ product_stage: release
 product_group: group::release
 product_category: pages
 value_type: string
-status: data_available
+status: active
+milestone: "<13.9"
 time_frame: none
 data_source: system
 distribution:

@@ -47,7 +47,7 @@ details:
 
 ![Shared runner details example](img/continuous_integration_shared_runner_details_v14_0.png)
 
-## Maximum artifacts size **(FREE SELF)**
+## Maximum artifacts size
 
 The maximum size of the [job artifacts](../../../administration/job_artifacts.md)
 can be set at:
@@ -55,31 +55,28 @@ can be set at:
 - The instance level.
 - [From GitLab 12.4](https://gitlab.com/gitlab-org/gitlab/-/issues/21688), the project and group level.
 
-The value is:
+For the setting on GitLab.com, see [Artifacts maximum size](../../gitlab_com/index.md#gitlab-cicd).
 
-- In *MB* and the default is 100MB per job.
-- [Set to 1G](../../gitlab_com/index.md#gitlab-cicd) on GitLab.com.
-
-To change it at the:
+The value is in MB and the default is 100MB per job. To change it at the:
 
 - Instance level:
 
   1. On the top bar, select **Menu > Admin**.
   1. On the left sidebar, select **Settings > CI/CD**.
   1. Change the value of maximum artifacts size (in MB).
-  1. Click **Save changes** for the changes to take effect.
+  1. Select **Save changes** for the changes to take effect.
 
 - Group level (this overrides the instance setting):
 
   1. Go to the group's **Settings > CI/CD > General Pipelines**.
   1. Change the value of **maximum artifacts size (in MB)**.
-  1. Click **Save changes** for the changes to take effect.
+  1. Select **Save changes** for the changes to take effect.
 
 - Project level (this overrides the instance and group settings):
 
   1. Go to the project's **Settings > CI/CD > General Pipelines**.
   1. Change the value of **maximum artifacts size (in MB)**.
-  1. Click **Save changes** for the changes to take effect.
+  1. Select **Save changes** for the changes to take effect.
 
 NOTE:
 The setting at all levels is only available to GitLab administrators.
@@ -94,7 +91,7 @@ and the default value is `30 days`.
 1. On the top bar, select **Menu > Admin**.
 1. On the left sidebar, select **Settings > CI/CD**.
 1. Change the value of default expiration time.
-1. Click **Save changes** for the changes to take effect.
+1. Select **Save changes** for the changes to take effect.
 
 This setting is set per job and can be overridden in
 [`.gitlab-ci.yml`](../../../ci/yaml/index.md#artifactsexpire_in).
@@ -126,7 +123,7 @@ To disable the setting:
 1. On the left sidebar, select **Settings > CI/CD**.
 1. Expand **Continuous Integration and Deployment**.
 1. Clear the **Keep the latest artifacts for all jobs in the latest successful pipelines** checkbox.
-1. Click **Save changes**
+1. Select **Save changes**
 
 When you disable the feature, the latest artifacts do not immediately expire.
 A new pipeline must run before the latest artifacts can expire and be deleted.
@@ -134,44 +131,9 @@ A new pipeline must run before the latest artifacts can expire and be deleted.
 NOTE:
 All application settings have a [customizable cache expiry interval](../../../administration/application_settings_cache.md) which can delay the settings affect.
 
-## Shared runners pipeline minutes quota **(PREMIUM SELF)**
+## Shared runners CI/CD minutes
 
-> [Moved](https://about.gitlab.com/blog/2021/01/26/new-gitlab-product-subscription-model/) to GitLab Premium in 13.9.
-
-If you have enabled shared runners for your GitLab instance, you can limit their
-usage by setting a maximum number of pipeline minutes that a group can use on
-shared runners per month. Setting this to `0` (default value) grants
-unlimited pipeline minutes. While build limits are stored as minutes, the
-counting is done in seconds. Usage resets on the first day of each month.
-On GitLab.com, the quota is calculated based on your
-[subscription plan](../../../subscriptions/gitlab_com/index.md#ci-pipeline-minutes).
-
-To change the pipelines minutes quota:
-
-1. On the top bar, select **Menu > Admin**.
-1. On the left sidebar, select **Settings > CI/CD**.
-1. Expand **Continuous Integration and Deployment**.
-1. In the **Pipeline minutes quota** box, enter the maximum number of minutes.
-1. Click **Save changes** for the changes to take effect.
-
-While the setting in the Admin Area has a global effect, as an administrator you can
-also change each group's pipeline minutes quota to override the global value.
-
-1. Navigate to the **Admin Area > Overview > Groups** and hit the **Edit**
-   button for the group you wish to change the pipeline minutes quota.
-1. In the **Pipeline Minutes Quota** box, enter the maximum number of minutes.
-1. Click **Save changes** for the changes to take effect.
-
-Once saved, you can see the build quota in the group settings.
-The quota can also be viewed in the project settings if shared runners
-are enabled.
-
-![Project admin information](img/admin_project_quota_view.png)
-
-You can see an overview of the pipeline minutes quota of all projects of
-a group in the **Usage Quotas** page available to the group page settings list.
-
-![Group pipelines quota](img/group_pipelines_quota.png)
+As an administrator you can set either a global or namespace-specific limit on the number of [CI/CD minutes](../../../ci/pipelines/cicd_minutes.md) you can use.
 
 ## Archive jobs
 
@@ -191,7 +153,7 @@ After that time passes, the jobs are archived and no longer able to be
 retried. Make it empty to never expire jobs. It has to be no less than 1 day,
 for example: <code>15 days</code>, <code>1 month</code>, <code>2 years</code>.
 
-As of June 22, 2020 the [value is set](../../gitlab_com/index.md#gitlab-cicd) to 3 months on GitLab.com. Jobs created before that date were archived after September 22, 2020.
+For the value set for GitLab.com, see [Scheduled job archiving](../../gitlab_com/index.md#gitlab-cicd).
 
 ## Protect CI/CD variables by default
 
@@ -216,13 +178,32 @@ of your GitLab instance (`.gitlab-ci.yml` if not set):
 
 It is also possible to specify a [custom CI/CD configuration file for a specific project](../../../ci/pipelines/settings.md#specify-a-custom-cicd-configuration-file).
 
+## Enable or disable the pipeline suggestion banner
+
+By default, a banner displays in merge requests with no pipeline suggesting a
+walkthrough on how to add one.
+
+![Suggest pipeline banner](img/suggest_pipeline_banner_v14_5.png)
+
+To enable or disable the banner:
+
+1. On the top bar, select **Menu > Admin**.
+1. On the left sidebar, select **Settings > CI/CD**.
+1. Select or clear the **Enable pipeline suggestion banner** checkbox.
+1. Select **Save changes**.
+
 ## Required pipeline configuration **(PREMIUM SELF)**
 
 WARNING:
-This feature is being re-evaluated in favor of a different
-[compliance solution](https://gitlab.com/groups/gitlab-org/-/epics/3156).
-We recommend that users who haven't yet implemented this feature wait for
-the new solution.
+Required pipeline configurations is in its end-of-life process for Premium users. It's
+[deprecated](https://gitlab.com/gitlab-org/gitlab/-/issues/352316) for use in GitLab 14.8,
+and planned to be unavailable for Premium users in GitLab 15.0. This feature is planned to continue
+to be available for Ultimate users. Ultimate users are not impacted by this deprecation and removal.
+
+NOTE:
+An alternative [compliance solution](../../project/settings/index.md#compliance-pipeline-configuration)
+is available. We recommend this alternative solution because it provides greater flexibility,
+allowing required pipelines to be assigned to specific compliance framework labels.
 
 You can set a [CI/CD template](../../../ci/examples/index.md#cicd-templates)
 as a required pipeline configuration for all projects on a GitLab instance. You can
@@ -249,7 +230,7 @@ To select a CI/CD template for the required pipeline configuration:
 1. On the left sidebar, select **Settings > CI/CD**.
 1. Expand the **Required pipeline configuration** section.
 1. Select a CI/CD template from the dropdown.
-1. Click **Save changes**.
+1. Select **Save changes**.
 
 ## Package Registry configuration
 
@@ -288,15 +269,14 @@ To set the maximum file size:
 1. Expand the **Package Registry** section.
 1. Find the package type you would like to adjust.
 1. Enter the maximum file size, in bytes.
-1. Click **Save size limits**.
+1. Select **Save size limits**.
 
-## Runner registration
+## Prevent users from registering runners
 
-> - [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/22225) in GitLab 14.1.
-> - [Deployed behind a feature flag](../../feature_flags.md), disabled by default.
-> - Disabled on GitLab.com.
-> - Not recommended for production use.
-> - To use in GitLab self-managed instances, ask a GitLab administrator to enable it. **(FREE SELF)**
+> [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/22225) in GitLab 14.1.
+
+FLAG:
+On self-managed GitLab, by default this feature is not available. To make it available, ask an administrator to [enable the feature flag](../../feature_flags.md) named `runner_registration_control`. On GitLab.com, this feature is not available.
 
 GitLab administrators can adjust who is allowed to register runners, by showing and hiding areas of the UI.
 
@@ -305,29 +285,14 @@ By default, all members of a project and group are able to register runners.
 To change this:
 
 1. On the top bar, select **Menu > Admin**.
-1. Go to **Settings > CI/CD**.
-1. Expand the **Runner registration** section.
-1. Select the desired options.
-1. Click **Save changes**.
+1. On the left sidebar, select **Settings > CI/CD**.
+1. Expand **Runner registration**.
+1. Clear the checkbox if you don't want to display runner registration
+   information in the UI for group or project members.
+1. Select **Save changes**.
 
-When the registration sections are hidden in the UI, members of the project or group that need to register runners must contact the administrators.
-
-This feature is currently behind a feature flag.
-To enable it:
-
-**In Omnibus installations:**
-
-1. Enter the Rails console:
-
-   ```shell
-   sudo gitlab-rails console
-   ```
-
-1. Flip the switch and enable the feature flag:
-
-   ```ruby
-   Feature.enable(:runner_registration_control)
-   ```
+WARNING:
+When the registration sections are hidden in the UI, members of the project or group that need to register runners must contact the administrators. If you plan to prevent registration, ensure users have access to the runners they need to run jobs.
 
 ## Troubleshooting
 

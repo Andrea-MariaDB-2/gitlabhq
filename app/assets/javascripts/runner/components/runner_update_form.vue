@@ -10,12 +10,12 @@ import {
 import {
   modelToUpdateMutationVariables,
   runnerToModel,
-} from 'ee_else_ce/runner/runner_details/runner_update_form_utils';
-import createFlash, { FLASH_TYPES } from '~/flash';
+} from 'ee_else_ce/runner/runner_update_form_utils';
+import { createAlert, VARIANT_SUCCESS } from '~/flash';
 import { __ } from '~/locale';
 import { captureException } from '~/runner/sentry_utils';
 import { ACCESS_LEVEL_NOT_PROTECTED, ACCESS_LEVEL_REF_PROTECTED, PROJECT_TYPE } from '../constants';
-import runnerUpdateMutation from '../graphql/runner_update.mutation.graphql';
+import runnerUpdateMutation from '../graphql/details/runner_update.mutation.graphql';
 
 export default {
   name: 'RunnerUpdateForm',
@@ -75,26 +75,23 @@ export default {
 
         if (errors?.length) {
           // Validation errors need not be thrown
-          createFlash({ message: errors[0] });
+          createAlert({ message: errors[0] });
           return;
         }
 
         this.onSuccess();
       } catch (error) {
         const { message } = error;
-        createFlash({ message });
 
-        this.reportToSentry(error);
+        createAlert({ message });
+        captureException({ error, component: this.$options.name });
       } finally {
         this.saving = false;
       }
     },
     onSuccess() {
-      createFlash({ message: __('Changes saved.'), type: FLASH_TYPES.SUCCESS });
+      createAlert({ message: __('Changes saved.'), variant: VARIANT_SUCCESS });
       this.model = runnerToModel(this.runner);
-    },
-    reportToSentry(error) {
-      captureException({ error, component: this.$options.name });
     },
   },
   ACCESS_LEVEL_NOT_PROTECTED,

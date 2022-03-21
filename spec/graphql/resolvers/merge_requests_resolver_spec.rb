@@ -172,6 +172,28 @@ RSpec.describe Resolvers::MergeRequestsResolver do
       end
     end
 
+    context 'with draft argument' do
+      before do
+        merge_request_4.update!(title: MergeRequest.wip_title(merge_request_4.title))
+      end
+
+      context 'with draft: true argument' do
+        it 'takes one argument' do
+          result = resolve_mr(project, draft: true)
+
+          expect(result).to contain_exactly(merge_request_4)
+        end
+      end
+
+      context 'with draft: false argument' do
+        it 'takes one argument' do
+          result = resolve_mr(project, draft: false)
+
+          expect(result).not_to contain_exactly(merge_request_1, merge_request_2, merge_request_3, merge_request_5, merge_request_6)
+        end
+      end
+    end
+
     context 'with label argument' do
       let_it_be(:label) { merge_request_6.labels.first }
       let_it_be(:with_label) { create(:labeled_merge_request, :closed, labels: [label], **common_attrs) }
@@ -218,6 +240,54 @@ RSpec.describe Resolvers::MergeRequestsResolver do
       end
     end
 
+    context 'with created_after and created_before arguments' do
+      before do
+        merge_request_1.update!(created_at: 4.days.ago)
+      end
+
+      let(:all_mrs) do
+        [merge_request_1, merge_request_2, merge_request_3, merge_request_4, merge_request_5, merge_request_6, merge_request_with_milestone]
+      end
+
+      it 'returns merge requests created within a given period' do
+        result = resolve_mr(project, created_after: 5.days.ago, created_before: 2.days.ago)
+
+        expect(result).to contain_exactly(
+          merge_request_1
+        )
+      end
+
+      it 'returns some values filtered with created_before' do
+        result = resolve_mr(project, created_before: 1.day.ago)
+
+        expect(result).to contain_exactly(merge_request_1)
+      end
+
+      it 'returns some values filtered with created_after' do
+        result = resolve_mr(project, created_after: 3.days.ago)
+
+        expect(result).to match_array(all_mrs - [merge_request_1])
+      end
+
+      it 'does not return anything for dates (even in the future) not matching any MRs' do
+        result = resolve_mr(project, created_after: 5.days.from_now)
+
+        expect(result).to be_empty
+      end
+
+      it 'does not return anything for dates not matching any MRs' do
+        result = resolve_mr(project, created_before: 15.days.ago)
+
+        expect(result).to be_empty
+      end
+
+      it 'does not return any values for an impossible set' do
+        result = resolve_mr(project, created_after: 5.days.ago, created_before: 6.days.ago)
+
+        expect(result).to be_empty
+      end
+    end
+
     context 'with milestone argument' do
       it 'filters merge requests by milestone title' do
         result = resolve_mr(project, milestone_title: milestone.title)
@@ -251,7 +321,7 @@ RSpec.describe Resolvers::MergeRequestsResolver do
     end
 
     describe 'sorting' do
-      let(:mrs) do
+      let_it_be(:mrs) do
         [
           merge_request_with_milestone, merge_request_6, merge_request_5, merge_request_4,
           merge_request_3, merge_request_2, merge_request_1
@@ -293,38 +363,44 @@ RSpec.describe Resolvers::MergeRequestsResolver do
         def merged_at(mr)
           nils_last(mr.metrics.merged_at)
         end
+      end
 
-        context 'when label filter is given and the optimized_issuable_label_filter feature flag is off' do
-          before do
-            stub_feature_flags(optimized_issuable_label_filter: false)
-          end
-
-          it 'does not raise PG::GroupingError' do
-            expect { resolve_mr(project, sort: :merged_at_desc, labels: %w[a b]) }.not_to raise_error
-          end
+      context 'when sorting by closed at' do
+        before do
+          merge_request_1.metrics.update!(latest_closed_at: 10.days.ago)
+          merge_request_3.metrics.update!(latest_closed_at: 5.days.ago)
         end
 
-        context 'when sorting by closed at' do
-          before do
-            merge_request_1.metrics.update!(latest_closed_at: 10.days.ago)
-            merge_request_3.metrics.update!(latest_closed_at: 5.days.ago)
-          end
+        it 'sorts merge requests ascending' do
+          expect(resolve_mr(project, sort: :closed_at_asc))
+            .to match_array(mrs)
+            .and be_sorted(->(mr) { [closed_at(mr), -mr.id] })
+        end
 
-          it 'sorts merge requests ascending' do
-            expect(resolve_mr(project, sort: :closed_at_asc))
-              .to match_array(mrs)
-              .and be_sorted(->(mr) { [closed_at(mr), -mr.id] })
-          end
+        it 'sorts merge requests descending' do
+          expect(resolve_mr(project, sort: :closed_at_desc))
+            .to match_array(mrs)
+            .and be_sorted(->(mr) { [-closed_at(mr), -mr.id] })
+        end
 
-          it 'sorts merge requests descending' do
-            expect(resolve_mr(project, sort: :closed_at_desc))
-              .to match_array(mrs)
-              .and be_sorted(->(mr) { [-closed_at(mr), -mr.id] })
-          end
+        def closed_at(mr)
+          nils_last(mr.metrics.latest_closed_at)
+        end
+      end
 
-          def closed_at(mr)
-            nils_last(mr.metrics.latest_closed_at)
-          end
+      context 'when sorting by title' do
+        let_it_be(:project) { create(:project, :repository) }
+        let_it_be(:mr1) { create(:merge_request, :unique_branches, title: 'foo', source_project: project) }
+        let_it_be(:mr2) { create(:merge_request, :unique_branches, title: 'bar', source_project: project) }
+        let_it_be(:mr3) { create(:merge_request, :unique_branches, title: 'baz', source_project: project) }
+        let_it_be(:mr4) { create(:merge_request, :unique_branches, title: 'Baz 2', source_project: project) }
+
+        it 'sorts issues ascending' do
+          expect(resolve_mr(project, sort: :title_asc).to_a).to eq [mr2, mr3, mr4, mr1]
+        end
+
+        it 'sorts issues descending' do
+          expect(resolve_mr(project, sort: :title_desc).to_a).to eq [mr1, mr4, mr3, mr2]
         end
       end
     end

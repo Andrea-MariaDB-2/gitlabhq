@@ -2,6 +2,7 @@
 
 class PurgeDependencyProxyCacheWorker
   include ApplicationWorker
+  include DependencyProxy::Expireable
 
   data_consistency :always
 
@@ -18,8 +19,8 @@ class PurgeDependencyProxyCacheWorker
 
     return unless valid?
 
-    @group.dependency_proxy_blobs.destroy_all # rubocop:disable Cop/DestroyAll
-    @group.dependency_proxy_manifests.destroy_all # rubocop:disable Cop/DestroyAll
+    expire_artifacts(@group.dependency_proxy_blobs)
+    expire_artifacts(@group.dependency_proxy_manifests)
   end
 
   private
@@ -27,6 +28,6 @@ class PurgeDependencyProxyCacheWorker
   def valid?
     return unless @group
 
-    can?(@current_user, :admin_group, @group) && @group.dependency_proxy_feature_available?
+    can?(@current_user, :admin_group, @group)
   end
 end

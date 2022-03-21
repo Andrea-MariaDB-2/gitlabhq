@@ -32,6 +32,8 @@ RSpec.describe API::Settings, 'Settings', :do_not_mock_admin_mode_setting do
       expect(json_response['dsa_key_restriction']).to eq(0)
       expect(json_response['ecdsa_key_restriction']).to eq(0)
       expect(json_response['ed25519_key_restriction']).to eq(0)
+      expect(json_response['ecdsa_sk_key_restriction']).to eq(0)
+      expect(json_response['ed25519_sk_key_restriction']).to eq(0)
       expect(json_response['performance_bar_allowed_group_id']).to be_nil
       expect(json_response['allow_local_requests_from_hooks_and_services']).to be(false)
       expect(json_response['allow_local_requests_from_web_hooks_and_services']).to be(false)
@@ -47,6 +49,11 @@ RSpec.describe API::Settings, 'Settings', :do_not_mock_admin_mode_setting do
       expect(json_response['personal_access_token_prefix']).to be_nil
       expect(json_response['admin_mode']).to be(false)
       expect(json_response['whats_new_variant']).to eq('all_tiers')
+      expect(json_response['user_deactivation_emails_enabled']).to be(true)
+      expect(json_response['suggest_pipeline_enabled']).to be(true)
+      expect(json_response['runner_token_expiration_interval']).to be_nil
+      expect(json_response['group_runner_token_expiration_interval']).to be_nil
+      expect(json_response['project_runner_token_expiration_interval']).to be_nil
     end
   end
 
@@ -109,6 +116,8 @@ RSpec.describe API::Settings, 'Settings', :do_not_mock_admin_mode_setting do
             dsa_key_restriction: 2048,
             ecdsa_key_restriction: 384,
             ed25519_key_restriction: 256,
+            ecdsa_sk_key_restriction: 256,
+            ed25519_sk_key_restriction: 256,
             enforce_terms: true,
             terms: 'Hello world!',
             performance_bar_allowed_group_path: group.full_path,
@@ -133,7 +142,10 @@ RSpec.describe API::Settings, 'Settings', :do_not_mock_admin_mode_setting do
             import_sources: 'github,bitbucket',
             wiki_page_max_content_bytes: 12345,
             personal_access_token_prefix: "GL-",
-            admin_mode: true
+            user_deactivation_emails_enabled: false,
+            admin_mode: true,
+            suggest_pipeline_enabled: false,
+            users_get_by_id_limit: 456
           }
 
         expect(response).to have_gitlab_http_status(:ok)
@@ -159,6 +171,8 @@ RSpec.describe API::Settings, 'Settings', :do_not_mock_admin_mode_setting do
         expect(json_response['dsa_key_restriction']).to eq(2048)
         expect(json_response['ecdsa_key_restriction']).to eq(384)
         expect(json_response['ed25519_key_restriction']).to eq(256)
+        expect(json_response['ecdsa_sk_key_restriction']).to eq(256)
+        expect(json_response['ed25519_sk_key_restriction']).to eq(256)
         expect(json_response['enforce_terms']).to be(true)
         expect(json_response['terms']).to eq('Hello world!')
         expect(json_response['performance_bar_allowed_group_id']).to eq(group.id)
@@ -184,6 +198,9 @@ RSpec.describe API::Settings, 'Settings', :do_not_mock_admin_mode_setting do
         expect(json_response['wiki_page_max_content_bytes']).to eq(12345)
         expect(json_response['personal_access_token_prefix']).to eq("GL-")
         expect(json_response['admin_mode']).to be(true)
+        expect(json_response['user_deactivation_emails_enabled']).to be(false)
+        expect(json_response['suggest_pipeline_enabled']).to be(false)
+        expect(json_response['users_get_by_id_limit']).to eq(456)
       end
     end
 
@@ -220,6 +237,45 @@ RSpec.describe API::Settings, 'Settings', :do_not_mock_admin_mode_setting do
 
       expect(response).to have_gitlab_http_status(:ok)
       expect(json_response['asset_proxy_allowlist']).to eq(['example.com', '*.example.com', 'localhost'])
+    end
+
+    it 'supports the deprecated `throttle_unauthenticated_*` attributes' do
+      put api('/application/settings', admin), params: {
+        throttle_unauthenticated_enabled: true,
+        throttle_unauthenticated_period_in_seconds: 123,
+        throttle_unauthenticated_requests_per_period: 456
+      }
+
+      expect(response).to have_gitlab_http_status(:ok)
+      expect(json_response).to include(
+        'throttle_unauthenticated_enabled' => true,
+        'throttle_unauthenticated_period_in_seconds' => 123,
+        'throttle_unauthenticated_requests_per_period' => 456,
+        'throttle_unauthenticated_web_enabled' => true,
+        'throttle_unauthenticated_web_period_in_seconds' => 123,
+        'throttle_unauthenticated_web_requests_per_period' => 456
+      )
+    end
+
+    it 'prefers the new `throttle_unauthenticated_web_*` attributes' do
+      put api('/application/settings', admin), params: {
+        throttle_unauthenticated_enabled: false,
+        throttle_unauthenticated_period_in_seconds: 0,
+        throttle_unauthenticated_requests_per_period: 0,
+        throttle_unauthenticated_web_enabled: true,
+        throttle_unauthenticated_web_period_in_seconds: 123,
+        throttle_unauthenticated_web_requests_per_period: 456
+      }
+
+      expect(response).to have_gitlab_http_status(:ok)
+      expect(json_response).to include(
+        'throttle_unauthenticated_enabled' => true,
+        'throttle_unauthenticated_period_in_seconds' => 123,
+        'throttle_unauthenticated_requests_per_period' => 456,
+        'throttle_unauthenticated_web_enabled' => true,
+        'throttle_unauthenticated_web_period_in_seconds' => 123,
+        'throttle_unauthenticated_web_requests_per_period' => 456
+      )
     end
 
     it 'disables ability to switch to legacy storage' do
@@ -478,15 +534,6 @@ RSpec.describe API::Settings, 'Settings', :do_not_mock_admin_mode_setting do
       end
     end
 
-    context "missing spam_check_api_key value when spam_check_endpoint_enabled is true" do
-      it "returns a blank parameter error message" do
-        put api("/application/settings", admin), params: { spam_check_endpoint_enabled: true, spam_check_endpoint_url: "https://example.com/spam_check" }
-
-        expect(response).to have_gitlab_http_status(:bad_request)
-        expect(json_response['error']).to eq('spam_check_api_key is missing')
-      end
-    end
-
     context "overly long spam_check_api_key" do
       it "fails to update the settings with too long spam_check_api_key" do
         put api("/application/settings", admin), params: { spam_check_api_key: "0123456789" * 500 }
@@ -550,6 +597,94 @@ RSpec.describe API::Settings, 'Settings', :do_not_mock_admin_mode_setting do
 
         expect(response).to have_gitlab_http_status(:bad_request)
         expect(json_response['error']).to eq('whats_new_variant does not have a valid value')
+      end
+    end
+
+    context 'sidekiq job limit settings' do
+      it 'updates the settings' do
+        settings = {
+          sidekiq_job_limiter_mode: 'track',
+          sidekiq_job_limiter_compression_threshold_bytes: 1,
+          sidekiq_job_limiter_limit_bytes: 2
+        }.stringify_keys
+
+        put api("/application/settings", admin), params: settings
+
+        expect(response).to have_gitlab_http_status(:ok)
+        expect(json_response.slice(*settings.keys)).to eq(settings)
+      end
+    end
+
+    context 'Sentry settings' do
+      let(:settings) do
+        {
+          sentry_enabled: true,
+          sentry_dsn: 'http://sentry.example.com',
+          sentry_clientside_dsn: 'http://sentry.example.com',
+          sentry_environment: 'production'
+        }
+      end
+
+      let(:attribute_names) { settings.keys.map(&:to_s) }
+
+      it 'includes the attributes in the API' do
+        get api('/application/settings', admin)
+
+        expect(response).to have_gitlab_http_status(:ok)
+        attribute_names.each do |attribute|
+          expect(json_response.keys).to include(attribute)
+        end
+      end
+
+      it 'allows updating the settings' do
+        put api('/application/settings', admin), params: settings
+
+        expect(response).to have_gitlab_http_status(:ok)
+        settings.each do |attribute, value|
+          expect(ApplicationSetting.current.public_send(attribute)).to eq(value)
+        end
+      end
+
+      context 'missing sentry_dsn value when sentry_enabled is true' do
+        it 'returns a blank parameter error message' do
+          put api('/application/settings', admin), params: { sentry_enabled: true }
+
+          expect(response).to have_gitlab_http_status(:bad_request)
+          message = json_response['message']
+          expect(message["sentry_dsn"]).to include(a_string_matching("can't be blank"))
+        end
+      end
+    end
+
+    context 'runner token expiration_intervals' do
+      it 'updates the settings' do
+        put api("/application/settings", admin), params: {
+          runner_token_expiration_interval: 3600,
+          group_runner_token_expiration_interval: 3600 * 2,
+          project_runner_token_expiration_interval: 3600 * 3
+        }
+
+        expect(response).to have_gitlab_http_status(:ok)
+        expect(json_response).to include(
+          'runner_token_expiration_interval' => 3600,
+          'group_runner_token_expiration_interval' => 3600 * 2,
+          'project_runner_token_expiration_interval' => 3600 * 3
+        )
+      end
+
+      it 'updates the settings with empty values' do
+        put api("/application/settings", admin), params: {
+          runner_token_expiration_interval: nil,
+          group_runner_token_expiration_interval: nil,
+          project_runner_token_expiration_interval: nil
+        }
+
+        expect(response).to have_gitlab_http_status(:ok)
+        expect(json_response).to include(
+          'runner_token_expiration_interval' => nil,
+          'group_runner_token_expiration_interval' => nil,
+          'project_runner_token_expiration_interval' => nil
+        )
       end
     end
   end

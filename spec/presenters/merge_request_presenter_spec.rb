@@ -162,10 +162,19 @@ RSpec.describe MergeRequestPresenter do
       end
     end
 
-    describe '#assign_to_closing_issues_link' do
+    describe '#assign_to_closing_issues_path' do
       subject do
         described_class.new(resource, current_user: user)
-          .assign_to_closing_issues_link
+          .assign_to_closing_issues_path
+      end
+
+      it { is_expected.to match("#{project.full_path}/-/merge_requests/#{resource.iid}/assign_related_issues") }
+    end
+
+    describe '#assign_to_closing_issues_count' do
+      subject do
+        described_class.new(resource, current_user: user)
+          .assign_to_closing_issues_count
       end
 
       before do
@@ -178,33 +187,28 @@ RSpec.describe MergeRequestPresenter do
         let(:issue) { create(:issue) }
         let(:assignable_issues) { [issue] }
 
-        it 'returns correct link with correct text' do
+        it 'returns correct count' do
           is_expected
-            .to match("#{project.full_path}/-/merge_requests/#{resource.iid}/assign_related_issues")
-
-          is_expected
-            .to match("Assign yourself to this issue")
+            .to match(1)
         end
       end
 
       context 'multiple closing issues' do
-        let(:issues) { create_list(:issue, 2) }
+        let(:issues) { build_list(:issue, 2) }
         let(:assignable_issues) { issues }
 
-        it 'returns correct link with correct text' do
+        it 'returns correct count' do
           is_expected
-            .to match("#{project.full_path}/-/merge_requests/#{resource.iid}/assign_related_issues")
-
-          is_expected
-            .to match("Assign yourself to these issues")
+            .to match(2)
         end
       end
 
       context 'no closing issue' do
         let(:assignable_issues) { [] }
 
-        it 'returns correct link with correct text' do
-          is_expected.to be_nil
+        it 'returns correct count' do
+          is_expected
+            .to match(0)
         end
       end
     end
@@ -631,5 +635,29 @@ RSpec.describe MergeRequestPresenter do
     subject { described_class.new(resource, current_user: user).api_unapprove_path }
 
     it { is_expected.to eq(expose_path("/api/v4/projects/#{project.id}/merge_requests/#{resource.iid}/unapprove")) }
+  end
+
+  describe '#pipeline_coverage_delta' do
+    subject { described_class.new(resource, current_user: user).pipeline_coverage_delta }
+
+    context 'when merge request has pipeline coverage delta' do
+      before do
+        allow(resource).to receive(:pipeline_coverage_delta).and_return(35.0)
+      end
+
+      it 'formats coverage into 2 decimal points' do
+        expect(subject).to eq('35.00')
+      end
+    end
+
+    context 'when merge request does not have pipeline coverage delta' do
+      before do
+        allow(resource).to receive(:pipeline_coverage_delta).and_return(nil)
+      end
+
+      it 'returns nil' do
+        expect(subject).to be_nil
+      end
+    end
   end
 end

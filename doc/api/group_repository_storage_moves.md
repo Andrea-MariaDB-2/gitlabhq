@@ -10,8 +10,8 @@ type: reference
 > [Introduced](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/53016) in GitLab 13.9.
 
 Group repositories can be moved between storages. This API can help you when
-[migrating to Gitaly Cluster](../administration/gitaly/index.md#migrate-to-gitaly-cluster), for
-example, or to migrate a [group wiki](../user/project/wiki/index.md#group-wikis).
+[migrating to Gitaly Cluster](../administration/gitaly/index.md#migrating-to-gitaly-cluster), for
+example, or to migrate a [group wiki](../user/project/wiki/group.md).
 
 As group repository storage moves are processed, they transition through different states. Values
 of `state` are:

@@ -1,10 +1,16 @@
 ---
 stage: Monitor
-group: Monitor
+group: Respond
 info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
 ---
 
-# Panel types for dashboards **(FREE)**
+# Panel types for dashboards (DEPRECATED) **(FREE)**
+
+> [Deprecated](https://gitlab.com/gitlab-org/gitlab/-/issues/346541) in GitLab 14.7.
+
+WARNING:
+This feature is in its end-of-life process. It is [deprecated](https://gitlab.com/gitlab-org/gitlab/-/issues/346541)
+for use in GitLab 14.7, and is planned for removal in GitLab 15.0.
 
 The below panel types are supported in monitoring dashboards.
 
@@ -62,12 +68,10 @@ panel_groups:
             query_range: 'http_requests_total'
             label: '# of Requests'
             unit: 'count'
-        metrics:
           - id: anomaly_requests_upper_limit
             query_range: 10000
             label: 'Max # of requests'
             unit: 'count'
-        metrics:
           - id: anomaly_requests_lower_limit
             query_range: 2000
             label: 'Min # of requests'
@@ -230,7 +234,7 @@ For example, if you have a query value of `53.6`, adding `%` as the unit results
 ## Gauge
 
 WARNING:
-This panel type is an _alpha_ feature, and is subject to change at any time
+This panel type is an [Alpha](../../../policy/alpha-beta-support.md#alpha-features) feature, and is subject to change at any time
 without prior notice!
 
 > [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/207044) in GitLab 13.3.

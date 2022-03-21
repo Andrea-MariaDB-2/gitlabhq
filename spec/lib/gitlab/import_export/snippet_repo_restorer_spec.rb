@@ -29,6 +29,9 @@ RSpec.describe Gitlab::ImportExport::SnippetRepoRestorer do
           expect(restorer.restore).to be_truthy
         end.to change { SnippetRepository.count }.by(1)
 
+        snippet.repository.expire_method_caches(%i(exists?))
+        expect(snippet.repository_exists?).to be_truthy
+
         blob = snippet.repository.blob_at(snippet.default_branch, snippet.file_name)
         expect(blob).not_to be_nil
         expect(blob.data).to eq(snippet.content)
@@ -67,7 +70,7 @@ RSpec.describe Gitlab::ImportExport::SnippetRepoRestorer do
     let!(:snippet_with_repo) { create(:project_snippet, :repository, project: project, author: user) }
     let(:bundle_path) { ::Gitlab::ImportExport.snippets_repo_bundle_path(shared.export_path) }
     let(:snippet_bundle_path) { File.join(bundle_path, "#{snippet_with_repo.hexdigest}.bundle") }
-    let(:result) { exporter.save }
+    let(:result) { exporter.save } # rubocop:disable Rails/SaveBang
     let(:repository) { snippet.repository }
 
     before do

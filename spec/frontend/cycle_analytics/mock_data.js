@@ -1,9 +1,22 @@
-import { getJSONFixture } from 'helpers/fixtures';
+import valueStreamAnalyticsStages from 'test_fixtures/projects/analytics/value_stream_analytics/stages.json';
+import issueStageFixtures from 'test_fixtures/projects/analytics/value_stream_analytics/events/issue.json';
+import planStageFixtures from 'test_fixtures/projects/analytics/value_stream_analytics/events/plan.json';
+import reviewStageFixtures from 'test_fixtures/projects/analytics/value_stream_analytics/events/review.json';
+import codeStageFixtures from 'test_fixtures/projects/analytics/value_stream_analytics/events/code.json';
+import testStageFixtures from 'test_fixtures/projects/analytics/value_stream_analytics/events/test.json';
+import stagingStageFixtures from 'test_fixtures/projects/analytics/value_stream_analytics/events/staging.json';
+
 import { TEST_HOST } from 'helpers/test_constants';
-import { DEFAULT_VALUE_STREAM, DEFAULT_DAYS_IN_PAST } from '~/cycle_analytics/constants';
+import {
+  DEFAULT_VALUE_STREAM,
+  PAGINATION_TYPE,
+  PAGINATION_SORT_DIRECTION_DESC,
+  PAGINATION_SORT_FIELD_END_EVENT,
+} from '~/cycle_analytics/constants';
 import { convertObjectPropsToCamelCase } from '~/lib/utils/common_utils';
 import { getDateInPast } from '~/lib/utils/datetime_utility';
 
+const DEFAULT_DAYS_IN_PAST = 30;
 export const createdBefore = new Date(2019, 0, 14);
 export const createdAfter = getDateInPast(createdBefore, DEFAULT_DAYS_IN_PAST);
 
@@ -12,27 +25,16 @@ export const deepCamelCase = (obj) => convertObjectPropsToCamelCase(obj, { deep:
 export const getStageByTitle = (stages, title) =>
   stages.find((stage) => stage.title && stage.title.toLowerCase().trim() === title) || {};
 
-const fixtureEndpoints = {
-  customizableCycleAnalyticsStagesAndEvents: 'projects/analytics/value_stream_analytics/stages',
-  stageEvents: (stage) => `projects/analytics/value_stream_analytics/events/${stage}`,
-  metricsData: 'projects/analytics/value_stream_analytics/summary',
-};
-
-export const metricsData = getJSONFixture(fixtureEndpoints.metricsData);
-
-export const customizableStagesAndEvents = getJSONFixture(
-  fixtureEndpoints.customizableCycleAnalyticsStagesAndEvents,
-);
-
 export const defaultStages = ['issue', 'plan', 'review', 'code', 'test', 'staging'];
 
-const stageFixtures = defaultStages.reduce((acc, stage) => {
-  const events = getJSONFixture(fixtureEndpoints.stageEvents(stage));
-  return {
-    ...acc,
-    [stage]: events,
-  };
-}, {});
+const stageFixtures = {
+  issue: issueStageFixtures,
+  plan: planStageFixtures,
+  review: reviewStageFixtures,
+  code: codeStageFixtures,
+  test: testStageFixtures,
+  staging: stagingStageFixtures,
+};
 
 export const summary = [
   { value: '20', title: 'New Issues' },
@@ -251,8 +253,27 @@ export const selectedProjects = [
   },
 ];
 
-export const rawValueStreamStages = customizableStagesAndEvents.stages;
+export const rawValueStreamStages = valueStreamAnalyticsStages.stages;
 
 export const valueStreamStages = rawValueStreamStages.map((s) =>
   convertObjectPropsToCamelCase(s, { deep: true }),
 );
+
+export const initialPaginationQuery = {
+  page: 15,
+  sort: PAGINATION_SORT_FIELD_END_EVENT,
+  direction: PAGINATION_SORT_DIRECTION_DESC,
+};
+
+export const initialPaginationState = {
+  ...initialPaginationQuery,
+  page: null,
+  hasNextPage: false,
+};
+
+export const basePaginationResult = {
+  pagination: PAGINATION_TYPE,
+  sort: PAGINATION_SORT_FIELD_END_EVENT,
+  direction: PAGINATION_SORT_DIRECTION_DESC,
+  page: null,
+};

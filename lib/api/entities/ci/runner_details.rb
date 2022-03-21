@@ -17,7 +17,7 @@ module API
           if options[:current_user].admin? # rubocop: disable Cop/UserAdmin
             runner.projects
           else
-            options[:current_user].authorized_projects.where(id: runner.projects)
+            options[:current_user].authorized_projects.where(id: runner.runner_projects.pluck(:project_id))
           end
         end
         # rubocop: enable CodeReuse/ActiveRecord
@@ -26,7 +26,7 @@ module API
           if options[:current_user].admin? # rubocop: disable Cop/UserAdmin
             runner.groups
           else
-            options[:current_user].authorized_groups.where(id: runner.groups)
+            options[:current_user].authorized_groups.where(id: runner.runner_namespaces.pluck(:namespace_id))
           end
         end
         # rubocop: enable CodeReuse/ActiveRecord

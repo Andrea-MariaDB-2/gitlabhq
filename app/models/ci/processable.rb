@@ -16,7 +16,7 @@ module Ci
     scope :with_needs, -> (names = nil) do
       needs = Ci::BuildNeed.scoped_build.select(1)
       needs = needs.where(name: names) if names
-      where('EXISTS (?)', needs).preload(:needs)
+      where('EXISTS (?)', needs)
     end
 
     scope :without_needs, -> (names = nil) do
@@ -58,7 +58,8 @@ module Ci
 
       after_transition any => ::Ci::Processable.completed_statuses do |processable|
         next unless processable.with_resource_group?
-        next unless processable.resource_group.release_resource_from(processable)
+
+        processable.resource_group.release_resource_from(processable)
 
         processable.run_after_commit do
           Ci::ResourceGroups::AssignResourceFromResourceGroupWorker

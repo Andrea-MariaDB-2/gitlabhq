@@ -144,6 +144,20 @@ RSpec.describe MergeRequest, factory_default: :keep do
       end
     end
 
+    describe '.attention' do
+      let_it_be(:merge_request5) { create(:merge_request, :unique_branches, assignees: [user2])}
+      let_it_be(:merge_request6) { create(:merge_request, :unique_branches, assignees: [user2])}
+
+      before do
+        assignee = merge_request6.find_assignee(user2)
+        assignee.update!(state: :reviewed)
+      end
+
+      it 'returns MRs that have any attention requests' do
+        expect(described_class.attention(user2)).to eq([merge_request2, merge_request5])
+      end
+    end
+
     describe '.drafts' do
       it 'returns MRs where draft == true' do
         expect(described_class.drafts).to eq([merge_request4])
@@ -177,6 +191,13 @@ RSpec.describe MergeRequest, factory_default: :keep do
 
     it 'returns the merge request title' do
       expect(subject.default_squash_commit_message).to eq(subject.title)
+    end
+
+    it 'uses template from target project' do
+      subject.target_project.squash_commit_template = 'Squashed branch %{source_branch} into %{target_branch}'
+
+      expect(subject.default_squash_commit_message)
+        .to eq('Squashed branch master into feature')
     end
   end
 
@@ -576,6 +597,21 @@ RSpec.describe MergeRequest, factory_default: :keep do
       it 'sorts asc when its closed_at' do
         merge_requests = described_class.sort_by_attribute(:closed_at)
         expect(merge_requests).to eq([older_mr, newer_mr])
+      end
+    end
+
+    context 'title' do
+      let_it_be(:first_mr) { create(:merge_request, :closed, title: 'One') }
+      let_it_be(:second_mr) { create(:merge_request, :closed, title: 'Two') }
+
+      it 'sorts asc' do
+        merge_requests = described_class.sort_by_attribute(:title_asc)
+        expect(merge_requests).to eq([first_mr, second_mr])
+      end
+
+      it 'sorts desc' do
+        merge_requests = described_class.sort_by_attribute(:title_desc)
+        expect(merge_requests).to eq([second_mr, first_mr])
       end
     end
   end
@@ -1132,7 +1168,7 @@ RSpec.describe MergeRequest, factory_default: :keep do
       end
 
       it 'returns the correct overflow count' do
-        allow(Commit).to receive(:max_diff_options).and_return(max_files: 2)
+        allow(Commit).to receive(:diff_max_files).and_return(2)
         set_compare(merge_request)
 
         expect(merge_request.diff_size).to eq('2+')
@@ -1347,26 +1383,37 @@ RSpec.describe MergeRequest, factory_default: :keep do
     subject { build_stubbed(:merge_request) }
 
     [
-      'WIP:', 'WIP: ', '[WIP]', '[WIP] ', ' [WIP] WIP: [WIP] WIP:',
-      'draft:', 'Draft: ', '[Draft]', '[DRAFT] ', 'Draft - '
-    ].each do |wip_prefix|
-      it "detects the '#{wip_prefix}' prefix" do
-        subject.title = "#{wip_prefix}#{subject.title}"
+      'draft:', 'Draft: ', '[Draft]', '[DRAFT] '
+    ].each do |draft_prefix|
+      it "detects the '#{draft_prefix}' prefix" do
+        subject.title = "#{draft_prefix}#{subject.title}"
 
         expect(subject.work_in_progress?).to eq true
       end
     end
 
-    it "detects merge request title just saying 'wip'" do
-      subject.title = "wip"
+    [
+      'WIP:', 'WIP: ', '[WIP]', '[WIP] ', ' [WIP] WIP: [WIP] WIP:',
+      "WIP ", "(WIP)",
+      "draft", "Draft", "Draft -", "draft - ", "Draft ", "draft "
+    ].each do |draft_prefix|
+      it "doesn't detect '#{draft_prefix}' at the start of the title as a draft" do
+        subject.title = "#{draft_prefix}#{subject.title}"
 
-      expect(subject.work_in_progress?).to eq true
+        expect(subject.work_in_progress?).to eq false
+      end
     end
 
-    it "detects merge request title just saying 'draft'" do
+    it "doesn't detect merge request title just saying 'wip'" do
+      subject.title = "wip"
+
+      expect(subject.work_in_progress?).to eq false
+    end
+
+    it "does not detect merge request title just saying 'draft'" do
       subject.title = "draft"
 
-      expect(subject.work_in_progress?).to eq true
+      expect(subject.work_in_progress?).to eq false
     end
 
     it 'does not detect WIP in the middle of the title' do
@@ -1426,29 +1473,30 @@ RSpec.describe MergeRequest, factory_default: :keep do
   describe "#wipless_title" do
     subject { build_stubbed(:merge_request) }
 
-    [
-      'WIP:', 'WIP: ', '[WIP]', '[WIP] ', '[WIP] WIP: [WIP] WIP:',
-      'draft:', 'Draft: ', '[Draft]', '[DRAFT] ', 'Draft - '
-    ].each do |wip_prefix|
-      it "removes the '#{wip_prefix}' prefix" do
+    ['draft:', 'Draft: ', '[Draft]', '[DRAFT] '].each do |draft_prefix|
+      it "removes a '#{draft_prefix}' prefix" do
         wipless_title = subject.title
-        subject.title = "#{wip_prefix}#{subject.title}"
+        subject.title = "#{draft_prefix}#{subject.title}"
 
         expect(subject.wipless_title).to eq wipless_title
       end
 
       it "is satisfies the #work_in_progress? method" do
-        subject.title = "#{wip_prefix}#{subject.title}"
+        subject.title = "#{draft_prefix}#{subject.title}"
         subject.title = subject.wipless_title
 
         expect(subject.work_in_progress?).to eq false
       end
     end
 
-    it 'removes only WIP prefix from the MR title' do
-      subject.title = 'WIP: Implement feature called WIP'
+    [
+      'WIP:', 'WIP: ', '[WIP]', '[WIP] ', '[WIP] WIP: [WIP] WIP:'
+    ].each do |wip_prefix|
+      it "doesn't remove a '#{wip_prefix}' prefix" do
+        subject.title = "#{wip_prefix}#{subject.title}"
 
-      expect(subject.wipless_title).to eq 'Implement feature called WIP'
+        expect(subject.wipless_title).to eq subject.title
+      end
     end
 
     it 'removes only draft prefix from the MR title' do
@@ -1501,6 +1549,42 @@ RSpec.describe MergeRequest, factory_default: :keep do
       subject.title = subject.wip_title
 
       expect(subject.work_in_progress?).to eq true
+    end
+  end
+
+  describe '#permits_force_push?' do
+    let_it_be(:merge_request) { build_stubbed(:merge_request) }
+
+    subject { merge_request.permits_force_push? }
+
+    context 'when source branch is not protected' do
+      before do
+        allow(ProtectedBranch).to receive(:protected?).and_return(false)
+      end
+
+      it { is_expected.to be_truthy }
+    end
+
+    context 'when source branch is protected' do
+      before do
+        allow(ProtectedBranch).to receive(:protected?).and_return(true)
+      end
+
+      context 'when force push is not allowed' do
+        before do
+          allow(ProtectedBranch).to receive(:allow_force_push?) { false }
+        end
+
+        it { is_expected.to be_falsey }
+      end
+
+      context 'when force push is allowed' do
+        before do
+          allow(ProtectedBranch).to receive(:allow_force_push?) { true }
+        end
+
+        it { is_expected.to be_truthy }
+      end
     end
   end
 
@@ -1626,6 +1710,22 @@ RSpec.describe MergeRequest, factory_default: :keep do
 
       expect(request.default_merge_commit_message)
         .not_to match("By removing all code\n\n")
+    end
+
+    it 'uses template from target project' do
+      request = build(:merge_request, title: 'Fix everything')
+      request.target_project.merge_commit_template = '%{title}'
+
+      expect(request.default_merge_commit_message)
+        .to eq('Fix everything')
+    end
+
+    it 'ignores template when include_description is true' do
+      request = build(:merge_request, title: 'Fix everything')
+      subject.target_project.merge_commit_template = '%{title}'
+
+      expect(request.default_merge_commit_message(include_description: true))
+        .to match("See merge request #{request.to_reference(full: true)}")
     end
   end
 
@@ -2893,6 +2993,8 @@ RSpec.describe MergeRequest, factory_default: :keep do
       params = {}
       merge_jid = 'hash-123'
 
+      allow(MergeWorker).to receive(:with_status).and_return(MergeWorker)
+
       expect(merge_request).to receive(:expire_etag_cache)
       expect(MergeWorker).to receive(:perform_async).with(merge_request.id, user_id, params) do
         merge_jid
@@ -2910,6 +3012,10 @@ RSpec.describe MergeRequest, factory_default: :keep do
     let(:rebase_jid) { 'rebase-jid' }
 
     subject(:execute) { merge_request.rebase_async(user_id) }
+
+    before do
+      allow(RebaseWorker).to receive(:with_status).and_return(RebaseWorker)
+    end
 
     it 'atomically enqueues a RebaseWorker job and updates rebase_jid' do
       expect(RebaseWorker)
@@ -3078,7 +3184,7 @@ RSpec.describe MergeRequest, factory_default: :keep do
     end
   end
 
-  describe '#mergeable_state?' do
+  shared_examples 'for mergeable_state' do
     subject { create(:merge_request) }
 
     it 'checks if merge request can be merged' do
@@ -3146,6 +3252,26 @@ RSpec.describe MergeRequest, factory_default: :keep do
           expect(subject.mergeable_state?(skip_discussions_check: true)).to be(true)
         end
       end
+    end
+  end
+
+  describe '#mergeable_state?' do
+    it_behaves_like 'for mergeable_state'
+
+    context 'when improved_mergeability_checks is off' do
+      before do
+        stub_feature_flags(improved_mergeability_checks: false)
+      end
+
+      it_behaves_like 'for mergeable_state'
+    end
+
+    context 'when merge state caching is off' do
+      before do
+        stub_feature_flags(mergeability_caching: false)
+      end
+
+      it_behaves_like 'for mergeable_state'
     end
   end
 
@@ -3424,84 +3550,6 @@ RSpec.describe MergeRequest, factory_default: :keep do
     end
   end
 
-  describe "#environments_for" do
-    let(:project)       { create(:project, :repository) }
-    let(:user)          { project.creator }
-    let(:merge_request) { create(:merge_request, source_project: project) }
-    let(:source_branch) { merge_request.source_branch }
-    let(:target_branch) { merge_request.target_branch }
-    let(:source_oid) { project.commit(source_branch).id }
-    let(:target_oid) { project.commit(target_branch).id }
-
-    before do
-      merge_request.source_project.add_maintainer(user)
-      merge_request.target_project.add_maintainer(user)
-    end
-
-    context 'with multiple environments' do
-      let(:environments) { create_list(:environment, 3, project: project) }
-
-      before do
-        create(:deployment, :success, environment: environments.first, ref: source_branch, sha: source_oid)
-        create(:deployment, :success, environment: environments.second, ref: target_branch, sha: target_oid)
-      end
-
-      it 'selects deployed environments' do
-        expect(merge_request.environments_for(user)).to contain_exactly(environments.first)
-      end
-
-      it 'selects latest deployed environment' do
-        latest_environment = create(:environment, project: project)
-        create(:deployment, :success, environment: latest_environment, ref: source_branch, sha: source_oid)
-
-        expect(merge_request.environments_for(user)).to eq([environments.first, latest_environment])
-        expect(merge_request.environments_for(user, latest: true)).to contain_exactly(latest_environment)
-      end
-    end
-
-    context 'with environments on source project' do
-      let(:source_project) { fork_project(project, nil, repository: true) }
-
-      let(:merge_request) do
-        create(:merge_request,
-               source_project: source_project, source_branch: 'feature',
-               target_project: project)
-      end
-
-      let(:source_environment) { create(:environment, project: source_project) }
-
-      before do
-        create(:deployment, :success, environment: source_environment, ref: 'feature', sha: merge_request.diff_head_sha)
-      end
-
-      it 'selects deployed environments', :sidekiq_might_not_need_inline do
-        expect(merge_request.environments_for(user)).to contain_exactly(source_environment)
-      end
-
-      context 'with environments on target project' do
-        let(:target_environment) { create(:environment, project: project) }
-
-        before do
-          create(:deployment, :success, environment: target_environment, tag: true, sha: merge_request.diff_head_sha)
-        end
-
-        it 'selects deployed environments', :sidekiq_might_not_need_inline do
-          expect(merge_request.environments_for(user)).to contain_exactly(source_environment, target_environment)
-        end
-      end
-    end
-
-    context 'without a diff_head_commit' do
-      before do
-        expect(merge_request).to receive(:diff_head_commit).and_return(nil)
-      end
-
-      it 'returns an empty array' do
-        expect(merge_request.environments_for(user)).to be_empty
-      end
-    end
-  end
-
   describe "#environments" do
     subject { merge_request.environments }
 
@@ -3519,7 +3567,7 @@ RSpec.describe MergeRequest, factory_default: :keep do
     let!(:job) { create(:ci_build, :with_deployment, :start_review_app, pipeline: pipeline, project: project) }
 
     it 'returns environments' do
-      is_expected.to eq(pipeline.environments)
+      is_expected.to eq(pipeline.environments_in_self_and_descendants.to_a)
       expect(subject.count).to be(1)
     end
 
@@ -3572,21 +3620,38 @@ RSpec.describe MergeRequest, factory_default: :keep do
   end
 
   describe '#update_diff_discussion_positions' do
-    let(:discussion) { create(:diff_note_on_merge_request, project: subject.project, noteable: subject).to_discussion }
-    let(:commit) { subject.project.commit(sample_commit.id) }
-    let(:old_diff_refs) { subject.diff_refs }
+    subject { create(:merge_request, source_project: project) }
 
-    before do
-      # Update merge_request_diff so that #diff_refs will return commit.diff_refs
-      allow(subject).to receive(:create_merge_request_diff) do
-        subject.merge_request_diffs.create!(
-          base_commit_sha: commit.parent_id,
-          start_commit_sha: commit.parent_id,
-          head_commit_sha: commit.sha
-        )
+    let(:project) { create(:project, :repository) }
+    let(:create_commit) { project.commit("913c66a37b4a45b9769037c55c2d238bd0942d2e") }
+    let(:modify_commit) { project.commit("874797c3a73b60d2187ed6e2fcabd289ff75171e") }
+    let(:edit_commit) { project.commit("570e7b2abdd848b95f2f578043fc23bd6f6fd24d") }
+    let(:discussion) { create(:diff_note_on_merge_request, noteable: subject, project: project, position: old_position).to_discussion }
+    let(:path) { "files/ruby/popen.rb" }
+    let(:new_line) { 9 }
 
-        subject.reload_merge_request_diff
-      end
+    let(:old_diff_refs) do
+      Gitlab::Diff::DiffRefs.new(
+        base_sha: create_commit.parent_id,
+        head_sha: modify_commit.sha
+      )
+    end
+
+    let(:new_diff_refs) do
+      Gitlab::Diff::DiffRefs.new(
+        base_sha: create_commit.parent_id,
+        head_sha: edit_commit.sha
+      )
+    end
+
+    let(:old_position) do
+      Gitlab::Diff::Position.new(
+        old_path: path,
+        new_path: path,
+        old_line: nil,
+        new_line: new_line,
+        diff_refs: old_diff_refs
+      )
     end
 
     it "updates diff discussion positions" do
@@ -3594,36 +3659,67 @@ RSpec.describe MergeRequest, factory_default: :keep do
         subject.project,
         subject.author,
         old_diff_refs: old_diff_refs,
-        new_diff_refs: commit.diff_refs,
+        new_diff_refs: new_diff_refs,
         paths: discussion.position.paths
       ).and_call_original
 
       expect_any_instance_of(Discussions::UpdateDiffPositionService).to receive(:execute).with(discussion).and_call_original
-      expect_any_instance_of(DiffNote).to receive(:save).once
 
       subject.update_diff_discussion_positions(old_diff_refs: old_diff_refs,
-                                               new_diff_refs: commit.diff_refs,
+                                               new_diff_refs: new_diff_refs,
+                                               current_user: subject.author)
+    end
+
+    it 'does not call the resolve method' do
+      expect(MergeRequests::ResolvedDiscussionNotificationService).not_to receive(:new)
+
+      subject.update_diff_discussion_positions(old_diff_refs: old_diff_refs,
+                                               new_diff_refs: new_diff_refs,
                                                current_user: subject.author)
     end
 
     context 'when resolve_outdated_diff_discussions is set' do
-      let(:project) { create(:project, :repository) }
-
-      subject { create(:merge_request, source_project: project) }
-
       before do
         discussion
 
         subject.project.update!(resolve_outdated_diff_discussions: true)
       end
 
-      it 'calls MergeRequests::ResolvedDiscussionNotificationService' do
-        expect_any_instance_of(MergeRequests::ResolvedDiscussionNotificationService)
-          .to receive(:execute).with(subject)
+      context 'when the active discussion is resolved in the update' do
+        it 'calls MergeRequests::ResolvedDiscussionNotificationService' do
+          expect_any_instance_of(MergeRequests::ResolvedDiscussionNotificationService)
+            .to receive(:execute).with(subject)
 
-        subject.update_diff_discussion_positions(old_diff_refs: old_diff_refs,
-                                                 new_diff_refs: commit.diff_refs,
-                                                 current_user: subject.author)
+          subject.update_diff_discussion_positions(old_diff_refs: old_diff_refs,
+                                                   new_diff_refs: new_diff_refs,
+                                                   current_user: subject.author)
+        end
+      end
+
+      context 'when the active discussion does not have resolved in the update' do
+        let(:new_line) { 16 }
+
+        it 'does not call the resolve method' do
+          expect(MergeRequests::ResolvedDiscussionNotificationService).not_to receive(:new)
+
+          subject.update_diff_discussion_positions(old_diff_refs: old_diff_refs,
+                                                   new_diff_refs: new_diff_refs,
+                                                   current_user: subject.author)
+        end
+      end
+
+      context 'when the active discussion was already resolved' do
+        before do
+          discussion.resolve!(subject.author)
+        end
+
+        it 'does not call the resolve method' do
+          expect(MergeRequests::ResolvedDiscussionNotificationService).not_to receive(:new)
+
+          subject.update_diff_discussion_positions(old_diff_refs: old_diff_refs,
+                                                   new_diff_refs: new_diff_refs,
+                                                   current_user: subject.author)
+        end
       end
     end
   end
@@ -3892,7 +3988,7 @@ RSpec.describe MergeRequest, factory_default: :keep do
         create_build(source_pipeline, 60.2, 'test:1')
         create_build(target_pipeline, 50, 'test:2')
 
-        expect(merge_request.pipeline_coverage_delta).to eq('10.20')
+        expect(merge_request.pipeline_coverage_delta).to be_within(0.001).of(10.2)
       end
     end
 
@@ -4141,6 +4237,29 @@ RSpec.describe MergeRequest, factory_default: :keep do
       expect { subject.target_project.repository.delete_refs(subject.ref_path) }.not_to raise_error
 
       subject.fetch_ref!
+      expect(subject.target_project.repository.ref_exists?(subject.ref_path)).to be_truthy
+    end
+  end
+
+  describe '#eager_fetch_ref!' do
+    let(:project) { create(:project, :repository) }
+
+    # We use build instead of create to test that an IID is allocated
+    subject { build(:merge_request, source_project: project) }
+
+    it 'fetches the ref correctly' do
+      expect(subject.iid).to be_nil
+
+      expect { subject.eager_fetch_ref! }.to change { subject.iid.to_i }.by(1)
+
+      expect(subject.target_project.repository.ref_exists?(subject.ref_path)).to be_truthy
+    end
+
+    it 'only fetches the ref once after saved' do
+      expect(subject.target_project.repository).to receive(:fetch_source_branch!).once.and_call_original
+
+      subject.save!
+
       expect(subject.target_project.repository.ref_exists?(subject.ref_path)).to be_truthy
     end
   end
@@ -4969,6 +5088,47 @@ RSpec.describe MergeRequest, factory_default: :keep do
 
     it 'returns merge requests from forks only' do
       expect(described_class.from_fork).to eq([fork_mr])
+    end
+  end
+
+  it_behaves_like 'it has loose foreign keys' do
+    let(:factory_name) { :merge_request }
+  end
+
+  context 'loose foreign key on merge_requests.head_pipeline_id' do
+    it_behaves_like 'cleanup by a loose foreign key' do
+      let!(:parent) { create(:ci_pipeline) }
+      let!(:model) { create(:merge_request, head_pipeline: parent) }
+    end
+  end
+
+  describe '#merge_request_reviewers_with' do
+    let_it_be(:reviewer1) { create(:user) }
+    let_it_be(:reviewer2) { create(:user) }
+
+    before do
+      subject.update!(reviewers: [reviewer1, reviewer2])
+    end
+
+    it 'returns reviewers' do
+      reviewers = subject.merge_request_reviewers_with([reviewer1.id])
+
+      expect(reviewers).to match_array([subject.merge_request_reviewers[0]])
+    end
+  end
+
+  describe '#merge_request_assignees_with' do
+    let_it_be(:assignee1) { create(:user) }
+    let_it_be(:assignee2) { create(:user) }
+
+    before do
+      subject.update!(assignees: [assignee1, assignee2])
+    end
+
+    it 'returns assignees' do
+      assignees = subject.merge_request_assignees_with([assignee1.id])
+
+      expect(assignees).to match_array([subject.merge_request_assignees[0]])
     end
   end
 end

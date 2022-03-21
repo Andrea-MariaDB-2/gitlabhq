@@ -136,23 +136,39 @@ the class name with `js-`.
 
 ## ES Module Syntax
 
-Use ES module syntax to import modules:
+For most JavaScript files, use ES module syntax to import or export from modules.
+Prefer named exports, as they improve name consistency.
+
+```javascript
+// bad (with exceptions, see below)
+export default SomeClass;
+import SomeClass from 'file';
+
+// good
+export { SomeClass };
+import { SomeClass } from 'file';
+```
+
+Using default exports is acceptable in a few particular circumstances:
+
+- Vue Single File Components (SFCs)
+- Vuex mutation files
+
+For more information, see [RFC 20](https://gitlab.com/gitlab-org/frontend/rfcs/-/issues/20).
+
+## CommonJS Module Syntax
+
+Our Node configuration requires CommonJS module syntax. Prefer named exports.
 
 ```javascript
 // bad
-const SomeClass = require('some_class');
-
-// good
-import SomeClass from 'some_class';
-
-// bad
 module.exports = SomeClass;
+const SomeClass = require('./some_class');
 
 // good
-export default SomeClass;
+module.exports = { SomeClass };
+const { SomeClass } = require('./some_class');
 ```
-
-We still use `require` in `scripts/` and `config/` files.
 
 ## Absolute vs relative paths for modules
 
@@ -188,24 +204,6 @@ are loaded dynamically with webpack.
 
 Do not use `innerHTML`, `append()` or `html()` to set content. It opens up too many
 vulnerabilities.
-
-## Avoid single-line conditional statements
-
-Indentation is important when scanning code as it gives a quick indication of the existence of branches, loops, and return points.
-This can help to quickly understand the control flow.
-
-```javascript
-// bad
-if (isThingNull) return '';
-
-if (isThingNull)
-  return '';
-
-// good
-if (isThingNull) {
-  return '';
-}
-```
 
 ## ESLint
 

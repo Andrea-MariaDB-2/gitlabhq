@@ -12,6 +12,7 @@ module Gitlab
 
     class InsufficientScopeError < AuthenticationError
       attr_reader :scopes
+
       def initialize(scopes)
         @scopes = scopes.map { |s| s.try(:name) || s }
       end
@@ -165,7 +166,7 @@ module Gitlab
 
         authorization_token, _options = token_and_options(current_request)
 
-        ::Clusters::AgentToken.find_by_token(authorization_token)
+        ::Clusters::AgentToken.active.find_by_token(authorization_token)
       end
 
       def find_runner_from_token
@@ -340,6 +341,10 @@ module Gitlab
 
       def git_lfs_request?
         Gitlab::PathRegex.repository_git_lfs_route_regex.match?(current_request.path)
+      end
+
+      def git_or_lfs_request?
+        git_request? || git_lfs_request?
       end
 
       def archive_request?

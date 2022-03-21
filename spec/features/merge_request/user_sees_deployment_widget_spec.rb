@@ -3,6 +3,8 @@
 require 'spec_helper'
 
 RSpec.describe 'Merge request > User sees deployment widget', :js do
+  include Spec::Support::Helpers::ModalHelpers
+
   describe 'when merge request has associated environments' do
     let(:user) { create(:user) }
     let(:project) { create(:project, :repository) }
@@ -13,6 +15,8 @@ RSpec.describe 'Merge request > User sees deployment widget', :js do
     let(:sha) { project.commit(ref).id }
     let(:pipeline) { create(:ci_pipeline, sha: sha, project: project, ref: ref) }
     let!(:manual) { }
+    let(:build) { create(:ci_build, :with_deployment, environment: environment.name, pipeline: pipeline) }
+    let!(:deployment) { build.deployment }
 
     before do
       merge_request.update!(merge_commit_sha: sha)
@@ -21,8 +25,9 @@ RSpec.describe 'Merge request > User sees deployment widget', :js do
     end
 
     context 'when deployment succeeded' do
-      let(:build) { create(:ci_build, :success, pipeline: pipeline) }
-      let!(:deployment) { create(:deployment, :succeed, environment: environment, sha: sha, ref: ref, deployable: build) }
+      before do
+        build.success!
+      end
 
       it 'displays that the environment is deployed' do
         visit project_merge_request_path(project, merge_request)
@@ -34,9 +39,8 @@ RSpec.describe 'Merge request > User sees deployment widget', :js do
 
       context 'when a user created a new merge request with the same SHA' do
         let(:pipeline2) { create(:ci_pipeline, sha: sha, project: project, ref: 'video') }
-        let(:build2) { create(:ci_build, :success, pipeline: pipeline2) }
         let(:environment2) { create(:environment, project: project) }
-        let!(:deployment2) { create(:deployment, environment: environment2, sha: sha, ref: 'video', deployable: build2) }
+        let!(:build2) { create(:ci_build, :with_deployment, :success, environment: environment2.name, pipeline: pipeline2) }
 
         it 'displays one environment which is related to the pipeline' do
           visit project_merge_request_path(project, merge_request)
@@ -50,8 +54,9 @@ RSpec.describe 'Merge request > User sees deployment widget', :js do
     end
 
     context 'when deployment failed' do
-      let(:build) { create(:ci_build, :failed, pipeline: pipeline) }
-      let!(:deployment) { create(:deployment, :failed, environment: environment, sha: sha, ref: ref, deployable: build) }
+      before do
+        build.drop!
+      end
 
       it 'displays that the deployment failed' do
         visit project_merge_request_path(project, merge_request)
@@ -63,8 +68,9 @@ RSpec.describe 'Merge request > User sees deployment widget', :js do
     end
 
     context 'when deployment running' do
-      let(:build) { create(:ci_build, :running, pipeline: pipeline) }
-      let!(:deployment) { create(:deployment, :running, environment: environment, sha: sha, ref: ref, deployable: build) }
+      before do
+        build.run!
+      end
 
       it 'displays that the running deployment' do
         visit project_merge_request_path(project, merge_request)
@@ -76,8 +82,8 @@ RSpec.describe 'Merge request > User sees deployment widget', :js do
     end
 
     context 'when deployment will happen' do
-      let(:build) { create(:ci_build, :created, pipeline: pipeline) }
-      let!(:deployment) { create(:deployment, environment: environment, sha: sha, ref: ref, deployable: build) }
+      let(:build) { create(:ci_build, :with_deployment, environment: environment.name, pipeline: pipeline) }
+      let!(:deployment) { build.deployment }
 
       it 'displays that the environment name' do
         visit project_merge_request_path(project, merge_request)
@@ -89,8 +95,9 @@ RSpec.describe 'Merge request > User sees deployment widget', :js do
     end
 
     context 'when deployment was cancelled' do
-      let(:build) { create(:ci_build, :canceled, pipeline: pipeline) }
-      let!(:deployment) { create(:deployment, :canceled, environment: environment, sha: sha, ref: ref, deployable: build) }
+      before do
+        build.cancel!
+      end
 
       it 'displays that the environment name' do
         visit project_merge_request_path(project, merge_request)
@@ -102,18 +109,20 @@ RSpec.describe 'Merge request > User sees deployment widget', :js do
     end
 
     context 'with stop action' do
-      let(:build) { create(:ci_build, :success, pipeline: pipeline) }
-      let!(:deployment) { create(:deployment, :succeed, environment: environment, sha: sha, ref: ref, deployable: build) }
       let(:manual) { create(:ci_build, :manual, pipeline: pipeline, name: 'close_app') }
 
       before do
+        stub_feature_flags(bootstrap_confirmation_modals: false)
+        build.success!
         deployment.update!(on_stop: manual.name)
         visit project_merge_request_path(project, merge_request)
         wait_for_requests
       end
 
       it 'does start build when stop button clicked' do
-        accept_confirm { find('.js-stop-env').click }
+        accept_gl_confirm(button_text: 'Stop environment') do
+          find('.js-stop-env').click
+        end
 
         expect(page).to have_content('close_app')
       end

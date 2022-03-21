@@ -4,14 +4,14 @@ group: Compliance
 info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
 ---
 
-# Personal access tokens API
+# Personal access tokens API **(FREE)**
 
 You can read more about [personal access tokens](../user/profile/personal_access_tokens.md#personal-access-tokens).
 
 ## List personal access tokens
 
-> - [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/227264) in [GitLab Ultimate](https://about.gitlab.com/pricing/) 13.3.
-> - [Moved](https://gitlab.com/gitlab-org/gitlab/-/issues/270200) to [GitLab Free](https://about.gitlab.com/pricing/) in 13.6.
+> - [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/227264) in GitLab 13.3.
+> - [Moved](https://gitlab.com/gitlab-org/gitlab/-/issues/270200) from GitLab Ultimate to GitLab Free in 13.6.
 
 Get a list of personal access tokens.
 
@@ -40,8 +40,9 @@ curl --header "PRIVATE-TOKEN: <your_access_token>" "https://gitlab.example.com/a
         "scopes": [
             "api"
         ],
-        "active": true,
         "user_id": 24,
+        "last_used_at": "2021-10-06T17:58:37.550Z",
+        "active": true,
         "expires_at": null
     }
 ]
@@ -61,8 +62,9 @@ curl --header "PRIVATE-TOKEN: <your_access_token>" "https://gitlab.example.com/a
         "scopes": [
             "api"
         ],
-        "active": true,
         "user_id": 3,
+        "last_used_at": "2021-10-06T17:58:37.550Z",
+        "active": true,
         "expires_at": null
     }
 ]
@@ -70,8 +72,8 @@ curl --header "PRIVATE-TOKEN: <your_access_token>" "https://gitlab.example.com/a
 
 ## Revoke a personal access token
 
-> - [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/216004) in [GitLab Ultimate](https://about.gitlab.com/pricing/) 13.3.
-> - [Moved](https://gitlab.com/gitlab-org/gitlab/-/issues/270200) to [GitLab Free](https://about.gitlab.com/pricing/) in 13.6.
+> - [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/216004) in GitLab 13.3.
+> - [Moved](https://gitlab.com/gitlab-org/gitlab/-/issues/270200) from GitLab Ultimate to GitLab Free in 13.6.
 
 Revoke a personal access token.
 
@@ -95,6 +97,6 @@ curl --request DELETE --header "PRIVATE-TOKEN: <your_access_token>" "https://git
 - `204: No Content` if successfully revoked.
 - `400 Bad Request` if not revoked successfully.
 
-## Create a personal access token (admin only)
+## Create a personal access token (administrator only)
 
 See the [Users API documentation](users.md#create-a-personal-access-token) for information on creating a personal access token.

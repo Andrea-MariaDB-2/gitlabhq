@@ -171,15 +171,17 @@ export default {
      * This watcher listens for updates to `filterValue` on
      * such instances. :(
      */
-    filterValue(value) {
-      const [firstVal] = value;
+    filterValue(newValue, oldValue) {
+      const [firstVal] = newValue;
       if (
         !this.initialRender &&
-        value.length === 1 &&
+        newValue.length === 1 &&
         firstVal.type === 'filtered-search-term' &&
         !firstVal.value.data
       ) {
-        this.$emit('onFilter', []);
+        const filtersCleared =
+          oldValue[0].type !== 'filtered-search-term' || oldValue[0].value.data !== '';
+        this.$emit('onFilter', [], filtersCleared);
       }
 
       // Set initial render flag to false
@@ -330,7 +332,7 @@ export default {
       v-if="showCheckbox"
       class="gl-align-self-center"
       :checked="checkboxChecked"
-      @input="$emit('checked-input', $event)"
+      @change="$emit('checked-input', $event)"
     >
       <span class="gl-sr-only">{{ __('Select all') }}</span>
     </gl-form-checkbox>

@@ -1,9 +1,3 @@
-.profile-avatar-form-option {
-  hr {
-    margin: 10px 0;
-  }
-}
-
 .avatar-image {
   margin-bottom: $grid-size;
 
@@ -21,41 +15,6 @@
   position: relative;
   top: 2px;
   display: inline-block;
-}
-
-.private-tokens-reset div.reset-action:not(:first-child) {
-  padding-top: 15px;
-}
-
-.oauth-buttons {
-  .btn-group {
-    margin-right: 10px;
-  }
-
-  .btn {
-    line-height: 40px;
-    height: 42px;
-    padding: 0 12px;
-
-    img {
-      width: 32px;
-      height: 32px;
-    }
-  }
-}
-
-// Profile > Account > Two Factor Authentication
-.two-factor-new {
-  .manual-instructions {
-    h3 {
-      margin-top: 0;
-    }
-
-    // Slightly increase the size of the details so they're easier to read
-    dl {
-      font-size: 1.1em;
-    }
-  }
 }
 
 .account-well {
@@ -191,10 +150,6 @@
   }
 }
 
-.personal-access-tokens-never-expires-label {
-  color: $note-disabled-comment-color;
-}
-
 .created-personal-access-token-container {
   .btn-clipboard {
     border: 1px solid $border-color;
@@ -266,8 +221,7 @@
   }
 }
 
-table.u2f-registrations,
-.webauthn-registrations {
+table.u2f-registrations {
   th:not(:last-child),
   td:not(:last-child) {
     border-right: solid 1px transparent;
@@ -375,16 +329,6 @@ table.u2f-registrations,
   }
 }
 
-.email-badge {
-  display: inline;
-  margin-right: $gl-padding / 2;
-
-  .email-badge-email {
-    display: inline;
-    margin-right: $gl-padding / 4;
-  }
-}
-
 .edit-user {
   svg {
     fill: $gl-text-color-secondary;
@@ -419,23 +363,22 @@ table.u2f-registrations,
   color: $gl-text-color-secondary;
 }
 
-.gitlab-slack-gif {
-  width: 100%;
-  max-width: $add-to-slack-gif-max-width;
+.gitlab-slack-body {
+  max-width: 420px;
 }
 
-.gitlab-slack-well {
-  background-color: $white;
-  box-shadow: none;
-  max-width: $add-to-slack-well-max-width;
+.gitlab-slack-slack-logo {
+  transform: scale(200%); // Slack logo SVG is scaled down 50% and has empty space around it
 }
 
-.gitlab-slack-logo {
-  width: $add-to-slack-logo-size;
-  height: $add-to-slack-logo-size;
+.skype-icon {
+  color: $skype;
 }
 
-.gitlab-slack-popup {
-  width: 100%;
-  max-width: $add-to-slack-popup-max-width;
+.linkedin-icon {
+  color: $linkedin;
+}
+
+.twitter-icon {
+  color: $twitter;
 }

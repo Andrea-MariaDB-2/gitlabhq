@@ -28,6 +28,12 @@ The following configuration options are also available:
 - Configuring the [number of `gitaly-ruby` workers](#configure-number-of-gitaly-ruby-workers).
 - Limiting [RPC concurrency](#limit-rpc-concurrency).
 
+## About the Gitaly token
+
+The token referred to throughout the Gitaly documentation is just an arbitrary password selected by
+the administrator. It is unrelated to tokens created for the GitLab API or other similar web API
+tokens.
+
 ## Run Gitaly on its own server
 
 By default, Gitaly is run on the same server as Gitaly clients and is
@@ -41,9 +47,8 @@ However, Gitaly can be deployed to its own server, which can benefit GitLab inst
 multiple machines.
 
 NOTE:
-When configured to run on their own servers, Gitaly servers
-[must be upgraded](https://docs.gitlab.com/omnibus/update/#upgrading-gitaly-servers) before Gitaly
-clients in your cluster.
+When configured to run on their own servers, Gitaly servers must be
+[upgraded](../../update/package/index.md) before Gitaly clients in your cluster.
 
 The process for setting up Gitaly on its own server is:
 
@@ -116,11 +121,6 @@ We assume your GitLab installation has three repository storages:
 - `storage2`.
 
 You can use as few as one server with one repository storage if desired.
-
-NOTE:
-The token referred to throughout the Gitaly documentation is just an arbitrary password selected by
-the administrator. It is unrelated to tokens created for the GitLab API or other similar web API
-tokens.
 
 ### Install Gitaly
 
@@ -340,10 +340,20 @@ disable enforcement. For more information, see the documentation on configuring
 1. Run `sudo -u git /home/git/gitaly/gitaly-hooks check /home/git/gitaly/config.toml`
    to confirm that Gitaly can perform callbacks to the GitLab internal API.
 
+WARNING:
+If directly copying repository data from a GitLab server to Gitaly, ensure that the metadata file,
+default path `/var/opt/gitlab/git-data/repositories/.gitaly-metadata`, is not included in the transfer.
+Copying this file causes GitLab to use the [Rugged patches](index.md#direct-access-to-git-in-gitlab) for repositories hosted on the Gitaly server,
+leading to `Error creating pipeline` and `Commit not found` errors, or stale data.
+
 ### Configure Gitaly clients
 
 As the final step, you must update Gitaly clients to switch from using local Gitaly service to use
 the Gitaly servers you just configured.
+
+NOTE:
+GitLab requires a `default` repository storage to be configured.
+[Read more about this limitation](#gitlab-requires-a-default-repository-storage).
 
 This can be risky because anything that prevents your Gitaly clients from reaching the Gitaly
 servers causes all Gitaly requests to fail. For example, any sort of network, firewall, or name
@@ -467,7 +477,7 @@ example:
 ```ruby
 git_data_dirs({
   'default' => { 'gitaly_address' => 'tcp://gitaly1.internal:8075' },
-  # Address of the GitLab server that has Gitaly running on it
+  # Address of the GitLab server that also has Gitaly running on it
   'storage1' => { 'gitaly_address' => 'tcp://gitlab.internal:8075', 'path' => '/mnt/gitlab/git-data' },
   'storage2' => { 'gitaly_address' => 'tcp://gitaly2.internal:8075' },
 })
@@ -483,6 +493,18 @@ gitaly['key_path'] = "/etc/gitlab/ssl/key.pem"
 
 `path` can be included only for storage shards on the local Gitaly server.
 If it's excluded, default Git storage directory is used for that storage shard.
+
+### GitLab requires a default repository storage
+
+When adding Gitaly servers to an environment, you might want to replace the original `default` Gitaly service. However, you can't
+reconfigure the GitLab application servers to remove the `default` entry from `git_data_dirs` because GitLab requires a
+`git_data_dirs` entry called `default`. [Read more](https://gitlab.com/gitlab-org/gitlab/-/issues/36175) about this limitation.
+
+To work around the limitation:
+
+1. Define an additional storage location on the new Gitaly service and configure the additional storage to be `default`.
+1. In the [Admin Area](../repository_storage_paths.md#configure-where-new-repositories-are-stored), set `default` to a weight of zero
+   to prevent repositories being stored there.
 
 ### Disable Gitaly where not required (optional)
 
@@ -600,7 +622,7 @@ To configure Gitaly with TLS:
 1. Save the file and [reconfigure GitLab](../restart_gitlab.md#omnibus-gitlab-reconfigure).
 1. Verify Gitaly traffic is being served over TLS by
    [observing the types of Gitaly connections](#observe-type-of-gitaly-connections).
-1. (Optional) Improve security by:
+1. Optional. Improve security by:
    1. Disabling non-TLS connections by commenting out or deleting `gitaly['listen_addr']` in
       `/etc/gitlab/gitlab.rb`.
    1. Saving the file.
@@ -676,7 +698,7 @@ To configure Gitaly with TLS:
 1. Save the file and [restart GitLab](../restart_gitlab.md#installations-from-source).
 1. Verify Gitaly traffic is being served over TLS by
    [observing the types of Gitaly connections](#observe-type-of-gitaly-connections).
-1. (Optional) Improve security by:
+1. Optional. Improve security by:
    1. Disabling non-TLS connections by commenting out or deleting `listen_addr` in
       `/home/git/gitaly/config.toml`.
    1. Saving the file.
@@ -1103,4 +1125,67 @@ Example:
   "system":"grpc",
   "time":"2021-03-25T14:57:53.543Z"
 }
+```
+
+## Repository consistency checks
+
+Gitaly runs repository consistency checks:
+
+- When triggering a repository check.
+- When changes are fetched from a mirrored repository.
+- When users push changes into repository.
+
+These consistency checks verify that a repository has all required objects and
+that these objects are valid objects. They can be categorized as:
+
+- Basic checks that assert that a repository doesn't become corrupt. This
+  includes connectivity checks and checks that objects can be parsed.
+- Security checks that recognize objects that are suitable to exploit past
+  security-related bugs in Git.
+- Cosmetic checks that verify that all object metadata is valid. Older Git
+  versions and other Git implementations may have produced objects with invalid
+  metadata, but newer versions can interpret these malformed objects.
+
+Removing malformed objects that fail the consistency checks requires a
+rewrite of the repository's history, which often can't be done. Therefore,
+Gitaly by default disables consistency checks for a range of cosmetic issues
+that don't negatively impact repository consistency.
+
+By default, Gitaly doesn't disable basic or security-related checks so
+to not distribute objects that can trigger known vulnerabilities in Git
+clients. This also limits the ability to import repositories containing such
+objects even if the project doesn't have malicious intent.
+
+### Override repository consistency checks
+
+Instance administrators can override consistency checks if they must
+process repositories that do not pass consistency checks.
+
+For Omnibus GitLab installations, edit `/etc/gitlab/gitlab.rb` and set the
+following keys (in this example, to disable the `hasDotgit` consistency check):
+
+```ruby
+ignored_git_errors = ["hasDotgit = ignore"]
+omnibus_gitconfig['system'] = {
+        "fsck" => ignored_git_errors,
+        "fetch.fsck" => ignored_git_errors,
+        "receive.fsck" => ignored_git_errors,
+}
+```
+
+For source installs, edit the Gitaly configuration (`gitaly.toml`) to do the
+equivalent:
+
+```toml
+[[git.config]]
+key = "fsck.hasDotgit"
+value = "ignore"
+
+[[git.config]]
+key = "fetch.fsck.hasDotgit"
+value = "ignore"
+
+[[git.config]]
+key = "receive.fsck.hasDotgit"
+value = "ignore"
 ```

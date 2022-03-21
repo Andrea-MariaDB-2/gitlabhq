@@ -52,9 +52,15 @@ class EnvironmentSerializer < BaseSerializer
   end
 
   def batch_load(resource)
-    resource = resource.preload(environment_associations)
+    resource = resource.preload(environment_associations.except(:last_deployment, :upcoming_deployment))
 
-    resource.all.to_a.tap do |environments|
+    Preloaders::Environments::DeploymentPreloader.new(resource)
+      .execute_with_union(:last_deployment, deployment_associations)
+
+    Preloaders::Environments::DeploymentPreloader.new(resource)
+      .execute_with_union(:upcoming_deployment, deployment_associations)
+
+    resource.to_a.tap do |environments|
       environments.each do |environment|
         # Batch loading the commits of the deployments
         environment.last_deployment&.commit&.try(:lazy_author)

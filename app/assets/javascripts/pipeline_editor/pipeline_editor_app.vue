@@ -1,8 +1,8 @@
 <script>
-import { GlLoadingIcon } from '@gitlab/ui';
+import { GlLoadingIcon, GlModal } from '@gitlab/ui';
 import { fetchPolicies } from '~/lib/graphql';
-import { queryToObject } from '~/lib/utils/url_utility';
-import { s__ } from '~/locale';
+import { mergeUrlParams, queryToObject, redirectTo } from '~/lib/utils/url_utility';
+import { __, s__ } from '~/locale';
 
 import { unwrapStagesWithNeeds } from '~/pipelines/components/unwrapping_utils';
 
@@ -11,56 +11,57 @@ import PipelineEditorEmptyState from './components/ui/pipeline_editor_empty_stat
 import PipelineEditorMessages from './components/ui/pipeline_editor_messages.vue';
 import {
   COMMIT_SHA_POLL_INTERVAL,
+  COMMIT_SUCCESS_WITH_REDIRECT,
   EDITOR_APP_STATUS_EMPTY,
-  EDITOR_APP_STATUS_ERROR,
   EDITOR_APP_STATUS_LOADING,
+  EDITOR_APP_STATUS_LINT_UNAVAILABLE,
+  EDITOR_APP_VALID_STATUSES,
   LOAD_FAILURE_UNKNOWN,
   STARTER_TEMPLATE_NAME,
 } from './constants';
-import getBlobContent from './graphql/queries/blob_content.graphql';
-import getCiConfigData from './graphql/queries/ci_config.graphql';
-import getAppStatus from './graphql/queries/client/app_status.graphql';
-import getCurrentBranch from './graphql/queries/client/current_branch.graphql';
-import getIsNewCiConfigFile from './graphql/queries/client/is_new_ci_config_file.graphql';
+import updateAppStatus from './graphql/mutations/client/update_app_status.mutation.graphql';
+import getBlobContent from './graphql/queries/blob_content.query.graphql';
+import getCiConfigData from './graphql/queries/ci_config.query.graphql';
+import getAppStatus from './graphql/queries/client/app_status.query.graphql';
+import getCurrentBranch from './graphql/queries/client/current_branch.query.graphql';
 import getTemplate from './graphql/queries/get_starter_template.query.graphql';
 import getLatestCommitShaQuery from './graphql/queries/latest_commit_sha.query.graphql';
 import PipelineEditorHome from './pipeline_editor_home.vue';
+
+const MR_SOURCE_BRANCH = 'merge_request[source_branch]';
+const MR_TARGET_BRANCH = 'merge_request[target_branch]';
 
 export default {
   components: {
     ConfirmUnsavedChangesDialog,
     GlLoadingIcon,
+    GlModal,
     PipelineEditorEmptyState,
     PipelineEditorHome,
     PipelineEditorMessages,
   },
-  inject: {
-    ciConfigPath: {
-      default: '',
-    },
-    projectFullPath: {
-      default: '',
-    },
-  },
+  inject: ['ciConfigPath', 'newMergeRequestPath', 'projectFullPath'],
   data() {
     return {
-      starterTemplateName: STARTER_TEMPLATE_NAME,
       ciConfigData: {},
+      currentCiFileContent: '',
       failureType: null,
       failureReasons: [],
       initialCiFileContent: '',
       isFetchingCommitSha: false,
+      isLintUnavailable: false,
       isNewCiConfigFile: false,
       lastCommittedContent: '',
-      currentCiFileContent: '',
-      successType: null,
+      shouldSkipStartScreen: false,
+      showFailure: false,
+      showResetConfirmationModal: false,
       showStartScreen: false,
       showSuccess: false,
-      showFailure: false,
       starterTemplate: '',
+      starterTemplateName: STARTER_TEMPLATE_NAME,
+      successType: null,
     };
   },
-
   apollo: {
     initialCiFileContent: {
       fetchPolicy: fetchPolicies.NETWORK_ONLY,
@@ -68,9 +69,10 @@ export default {
       // If it's a brand new file, we don't want to fetch the content.
       // Then when the user commits the first time, the query would run
       // to get the initial file content, but we already have it in `lastCommitedContent`
-      // so we skip the loading altogether.
-      skip({ isNewCiConfigFile, lastCommittedContent }) {
-        return isNewCiConfigFile || lastCommittedContent;
+      // so we skip the loading altogether. We also wait for the currentBranch
+      // to have been fetched
+      skip() {
+        return this.shouldSkipBlobContentQuery;
       },
       variables() {
         return {
@@ -103,7 +105,11 @@ export default {
           }
 
           if (!hasCIFile) {
-            this.showStartScreen = true;
+            if (this.shouldSkipStartScreen) {
+              this.setNewEmptyCiConfigFile();
+            } else {
+              this.showStartScreen = true;
+            }
           } else if (fileContent.length) {
             // If the file content is > 0, then we make sure to reset the
             // start screen flag during a refetch
@@ -123,8 +129,8 @@ export default {
     },
     ciConfigData: {
       query: getCiConfigData,
-      skip({ currentCiFileContent }) {
-        return !currentCiFileContent;
+      skip() {
+        return this.shouldSkipCiConfigQuery;
       },
       variables() {
         return {
@@ -141,10 +147,19 @@ export default {
         return { ...ciConfig, stages };
       },
       result({ data }) {
-        this.setAppStatus(data?.ciConfig?.status || EDITOR_APP_STATUS_ERROR);
+        if (data?.ciConfig?.status) {
+          this.setAppStatus(data.ciConfig.status);
+          if (this.isLintUnavailable) {
+            this.isLintUnavailable = false;
+          }
+        }
       },
       error() {
-        this.reportFailure(LOAD_FAILURE_UNKNOWN);
+        // We are not using `reportFailure` here because we don't
+        // need to bring attention to the linter being down. We let
+        // the user work on their file and if they look at their
+        // lint status, they will notice that the service is down
+        this.isLintUnavailable = true;
       },
       watchLoading(isLoading) {
         if (isLoading) {
@@ -154,9 +169,15 @@ export default {
     },
     appStatus: {
       query: getAppStatus,
+      update(data) {
+        return data.app.status;
+      },
     },
     commitSha: {
       query: getLatestCommitShaQuery,
+      skip({ currentBranch }) {
+        return !currentBranch;
+      },
       variables() {
         return {
           projectPath: this.projectFullPath,
@@ -164,22 +185,8 @@ export default {
         };
       },
       update(data) {
-        const pipelineNodes = data.project?.pipelines?.nodes ?? [];
+        const latestCommitSha = data?.project?.repository?.tree?.lastCommit?.sha;
 
-        // it's possible to query for the commit sha too early after an update
-        // (e.g. after committing a new branch, we might query for the commit sha
-        // but the pipeline nodes are still empty).
-        // in this case, we start polling until we get a commit sha.
-        if (pipelineNodes.length === 0) {
-          if (![EDITOR_APP_STATUS_LOADING, EDITOR_APP_STATUS_EMPTY].includes(this.appStatus)) {
-            this.$apollo.queries.commitSha.startPolling(COMMIT_SHA_POLL_INTERVAL);
-            return this.commitSha;
-          }
-
-          return '';
-        }
-
-        const latestCommitSha = pipelineNodes[0].sha;
         if (this.isFetchingCommitSha && latestCommitSha === this.commitSha) {
           this.$apollo.queries.commitSha.startPolling(COMMIT_SHA_POLL_INTERVAL);
           return this.commitSha;
@@ -189,12 +196,15 @@ export default {
         this.$apollo.queries.commitSha.stopPolling();
         return latestCommitSha;
       },
+      error() {
+        this.reportFailure(LOAD_FAILURE_UNKNOWN);
+      },
     },
     currentBranch: {
       query: getCurrentBranch,
-    },
-    isNewCiConfigFile: {
-      query: getIsNewCiConfigFile,
+      update(data) {
+        return data.workBranches?.current?.name;
+      },
     },
     starterTemplate: {
       query: getTemplate,
@@ -211,7 +221,7 @@ export default {
         return data.project?.ciTemplate?.content || '';
       },
       result({ data }) {
-        this.updateCiConfig(data.project?.ciTemplate?.content || '');
+        this.updateCiConfig(data?.project?.ciTemplate?.content || '');
       },
       error() {
         this.reportFailure(LOAD_FAILURE_UNKNOWN);
@@ -231,11 +241,26 @@ export default {
     isEmpty() {
       return this.currentCiFileContent === '';
     },
+    shouldSkipBlobContentQuery() {
+      return this.isNewCiConfigFile || this.lastCommittedContent || !this.currentBranch;
+    },
+    shouldSkipCiConfigQuery() {
+      return !this.currentCiFileContent || !this.commitSha;
+    },
   },
   i18n: {
-    tabEdit: s__('Pipelines|Edit'),
-    tabGraph: s__('Pipelines|Visualize'),
-    tabLint: s__('Pipelines|Lint'),
+    resetModal: {
+      actionPrimary: {
+        text: __('Reset file'),
+      },
+      actionCancel: {
+        text: __('Cancel'),
+      },
+      body: s__(
+        'Pipeline Editor|Are you sure you want to reset the file to its last committed version?',
+      ),
+      title: __('Discard changes'),
+    },
   },
   watch: {
     isEmpty(flag) {
@@ -243,28 +268,61 @@ export default {
         this.setAppStatus(EDITOR_APP_STATUS_EMPTY);
       }
     },
+    isLintUnavailable(flag) {
+      if (flag) {
+        // We cannot set this status directly in the `error`
+        // hook otherwise we get an infinite loop caused by apollo.
+        this.setAppStatus(EDITOR_APP_STATUS_LINT_UNAVAILABLE);
+      }
+    },
   },
   mounted() {
     this.loadTemplateFromURL();
+    this.checkShouldSkipStartScreen();
   },
   methods: {
+    checkShouldSkipStartScreen() {
+      const params = queryToObject(window.location.search);
+      this.shouldSkipStartScreen = Boolean(params?.add_new_config_file);
+    },
+    confirmReset() {
+      if (this.hasUnsavedChanges) {
+        this.showResetConfirmationModal = true;
+      }
+    },
     hideFailure() {
       this.showFailure = false;
     },
     hideSuccess() {
       this.showSuccess = false;
     },
+    loadTemplateFromURL() {
+      const templateName = queryToObject(window.location.search)?.template;
+
+      if (templateName) {
+        this.starterTemplateName = templateName;
+        this.setNewEmptyCiConfigFile();
+      }
+    },
+    redirectToNewMergeRequest(sourceBranch, targetBranch) {
+      const url = mergeUrlParams(
+        {
+          [MR_SOURCE_BRANCH]: sourceBranch,
+          [MR_TARGET_BRANCH]: targetBranch,
+        },
+        this.newMergeRequestPath,
+      );
+      redirectTo(url);
+    },
     async refetchContent() {
       this.$apollo.queries.initialCiFileContent.skip = false;
       await this.$apollo.queries.initialCiFileContent.refetch();
     },
     reportFailure(type, reasons = []) {
-      this.setAppStatus(EDITOR_APP_STATUS_ERROR);
-
-      window.scrollTo({ top: 0, behavior: 'smooth' });
       this.showFailure = true;
       this.failureType = type;
       this.failureReasons = reasons;
+      window.scrollTo({ top: 0, behavior: 'smooth' });
     },
     reportSuccess(type) {
       window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -272,15 +330,19 @@ export default {
       this.successType = type;
     },
     resetContent() {
+      this.showResetConfirmationModal = false;
       this.currentCiFileContent = this.lastCommittedContent;
     },
     setAppStatus(appStatus) {
-      this.$apollo.getClient().writeQuery({ query: getAppStatus, data: { appStatus } });
+      if (EDITOR_APP_VALID_STATUSES.includes(appStatus)) {
+        this.$apollo.mutate({
+          mutation: updateAppStatus,
+          variables: { appStatus },
+        });
+      }
     },
     setNewEmptyCiConfigFile() {
-      this.$apollo
-        .getClient()
-        .writeQuery({ query: getIsNewCiConfigFile, data: { isNewCiConfigFile: true } });
+      this.isNewCiConfigFile = true;
       this.showStartScreen = false;
     },
     showErrorAlert({ type, reasons = [] }) {
@@ -293,25 +355,25 @@ export default {
       this.isFetchingCommitSha = true;
       this.$apollo.queries.commitSha.refetch();
     },
-    updateOnCommit({ type }) {
+    async updateOnCommit({ type, params = {} }) {
       this.reportSuccess(type);
 
       if (this.isNewCiConfigFile) {
-        this.$apollo
-          .getClient()
-          .writeQuery({ query: getIsNewCiConfigFile, data: { isNewCiConfigFile: false } });
+        this.isNewCiConfigFile = false;
       }
 
       // Keep track of the latest committed content to know
       // if the user has made changes to the file that are unsaved.
       this.lastCommittedContent = this.currentCiFileContent;
-    },
-    loadTemplateFromURL() {
-      const templateName = queryToObject(window.location.search)?.template;
 
-      if (templateName) {
-        this.starterTemplateName = templateName;
-        this.setNewEmptyCiConfigFile();
+      if (type === COMMIT_SUCCESS_WITH_REDIRECT) {
+        const { sourceBranch, targetBranch } = params;
+        // This force update does 2 things for us:
+        // 1. It make sure `hasUnsavedChanges` is updated so
+        // we don't show a modal when the user creates an MR
+        // 2. Ensure the commit success banner is visible.
+        await this.$forceUpdate();
+        this.redirectToNewMergeRequest(sourceBranch, targetBranch);
       }
     },
   },
@@ -326,7 +388,7 @@ export default {
       @createEmptyConfigFile="setNewEmptyCiConfigFile"
       @refetchContent="refetchContent"
     />
-    <div v-else>
+    <div v-else class="gl-pr-10">
       <pipeline-editor-messages
         :failure-type="failureType"
         :failure-reasons="failureReasons"
@@ -339,15 +401,26 @@ export default {
       <pipeline-editor-home
         :ci-config-data="ciConfigData"
         :ci-file-content="currentCiFileContent"
-        :is-new-ci-config-file="isNewCiConfigFile"
         :commit-sha="commitSha"
+        :has-unsaved-changes="hasUnsavedChanges"
+        :is-new-ci-config-file="isNewCiConfigFile"
         @commit="updateOnCommit"
-        @resetContent="resetContent"
+        @resetContent="confirmReset"
         @showError="showErrorAlert"
         @refetchContent="refetchContent"
         @updateCiConfig="updateCiConfig"
         @updateCommitSha="updateCommitSha"
       />
+      <gl-modal
+        v-model="showResetConfirmationModal"
+        modal-id="reset-content"
+        :title="$options.i18n.resetModal.title"
+        :action-cancel="$options.i18n.resetModal.actionCancel"
+        :action-primary="$options.i18n.resetModal.actionPrimary"
+        @primary="resetContent"
+      >
+        {{ $options.i18n.resetModal.body }}
+      </gl-modal>
       <confirm-unsaved-changes-dialog :has-unsaved-changes="hasUnsavedChanges" />
     </div>
   </div>

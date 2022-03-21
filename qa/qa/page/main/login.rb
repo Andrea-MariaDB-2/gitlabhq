@@ -4,6 +4,8 @@ module QA
   module Page
     module Main
       class Login < Page::Base
+        include Layout::Flash
+
         view 'app/views/devise/passwords/edit.html.haml' do
           element :password_field
           element :password_confirmation_field
@@ -45,6 +47,10 @@ module QA
           has_element?(:sign_in_button)
         end
 
+        def on_login_page?
+          has_element?(:login_page, wait: 0)
+        end
+
         def sign_in_using_credentials(user: nil, skip_page_validation: false)
           # Don't try to log-in if we're already logged-in
           return if Page::Main::Menu.perform(&:signed_in?)
@@ -53,7 +59,7 @@ module QA
             set_initial_password_if_present
 
             if Runtime::User.ldap_user? && user && user.username != Runtime::User.ldap_username
-              raise 'If an LDAP user is provided, it must be used for sign-in', QA::Resource::User::InvalidUserError
+              raise QA::Resource::User::InvalidUserError, 'If an LDAP user is provided, it must be used for sign-in'
             end
 
             if Runtime::User.ldap_user?
@@ -152,6 +158,12 @@ module QA
           sign_in_using_credentials(user: user)
         end
 
+        def redirect_to_login_page(address)
+          Menu.perform(&:sign_out_if_signed_in)
+          desired_host = URI(Runtime::Scenario.send("#{address}_address")).host
+          Runtime::Browser.visit(address, Page::Main::Login) if desired_host != current_host
+        end
+
         private
 
         def sign_in_using_gitlab_credentials(user:, skip_page_validation: false)
@@ -163,6 +175,11 @@ module QA
           fill_element :login_field, user.username
           fill_element :password_field, user.password
           click_element :sign_in_button
+
+          Support::WaitForRequests.wait_for_requests
+
+          # For debugging invalid login attempts
+          has_notice?('Invalid login or password')
 
           Page::Main::Terms.perform do |terms|
             terms.accept_terms if terms.visible?

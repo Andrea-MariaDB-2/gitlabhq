@@ -3,6 +3,7 @@
 class Todo < ApplicationRecord
   include Sortable
   include FromUnion
+  include EachBatch
 
   # Time to wait for todos being removed when not visible for user anymore.
   # Prevents TODOs being removed by mistake, for example, removing access from a user
@@ -18,6 +19,7 @@ class Todo < ApplicationRecord
   DIRECTLY_ADDRESSED  = 7
   MERGE_TRAIN_REMOVED = 8 # This is an EE-only feature
   REVIEW_REQUESTED    = 9
+  ATTENTION_REQUESTED = 10
 
   ACTION_NAMES = {
     ASSIGNED => :assigned,
@@ -28,8 +30,11 @@ class Todo < ApplicationRecord
     APPROVAL_REQUIRED => :approval_required,
     UNMERGEABLE => :unmergeable,
     DIRECTLY_ADDRESSED => :directly_addressed,
-    MERGE_TRAIN_REMOVED => :merge_train_removed
+    MERGE_TRAIN_REMOVED => :merge_train_removed,
+    ATTENTION_REQUESTED => :attention_requested
   }.freeze
+
+  ACTIONS_MULTIPLE_ALLOWED = [Todo::MENTIONED, Todo::DIRECTLY_ADDRESSED].freeze
 
   belongs_to :author, class_name: "User"
   belongs_to :note
@@ -67,7 +72,7 @@ class Todo < ApplicationRecord
   scope :for_type, -> (type) { where(target_type: type) }
   scope :for_target, -> (id) { where(target_id: id) }
   scope :for_commit, -> (id) { where(commit_id: id) }
-  scope :with_entity_associations, -> { preload(:target, :author, :note, group: :route, project: [:route, { namespace: :route }]) }
+  scope :with_entity_associations, -> { preload(:target, :author, :note, group: :route, project: [:route, { namespace: [:route, :owner] }]) }
   scope :joins_issue_and_assignees, -> { left_joins(issue: :assignees) }
 
   enum resolved_by_action: { system_done: 0, api_all_done: 1, api_done: 2, mark_all_done: 3, mark_done: 4 }, _prefix: :resolved_by
@@ -187,6 +192,10 @@ class Todo < ApplicationRecord
 
   def review_requested?
     action == REVIEW_REQUESTED
+  end
+
+  def attention_requested?
+    action == ATTENTION_REQUESTED
   end
 
   def merge_train_removed?

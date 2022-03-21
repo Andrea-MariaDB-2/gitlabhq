@@ -50,7 +50,7 @@ describe('FeatureCard component', () => {
     expect(enableLinks.exists()).toBe(expectEnableAction);
     if (expectEnableAction) {
       expect(enableLinks).toHaveLength(1);
-      expect(enableLinks.at(0).props('category')).toBe('primary');
+      expect(enableLinks.at(0).props('category')).toBe('secondary');
     }
 
     const configureLinks = findConfigureLinks();
@@ -80,7 +80,11 @@ describe('FeatureCard component', () => {
 
   describe('basic structure', () => {
     beforeEach(() => {
-      feature = makeFeature();
+      feature = makeFeature({
+        type: 'sast',
+        available: true,
+        canEnableByMergeRequest: true,
+      });
       createComponent({ feature });
     });
 
@@ -97,6 +101,11 @@ describe('FeatureCard component', () => {
       expect(links.exists()).toBe(true);
       expect(links).toHaveLength(1);
     });
+
+    it('should catch and emit manage-via-mr-error', () => {
+      findManageViaMr().vm.$emit('error', 'There was a manage via MR error');
+      expect(wrapper.emitted('error')).toEqual([['There was a manage via MR error']]);
+    });
   });
 
   describe('status', () => {
@@ -104,7 +113,6 @@ describe('FeatureCard component', () => {
       context                                         | available | configured   | expectedStatus
       ${'a configured feature'}                       | ${true}   | ${true}      | ${'Enabled'}
       ${'an unconfigured feature'}                    | ${true}   | ${false}     | ${'Not enabled'}
-      ${'an available feature with unknown status'}   | ${true}   | ${undefined} | ${''}
       ${'an unavailable feature'}                     | ${false}  | ${false}     | ${'Available with Ultimate'}
       ${'an unavailable feature with unknown status'} | ${false}  | ${undefined} | ${'Available with Ultimate'}
     `('given $context', ({ available, configured, expectedStatus }) => {

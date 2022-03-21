@@ -15,7 +15,7 @@ RSpec.describe 'Auto-DevOps.gitlab-ci.yml' do
     describe 'the created pipeline' do
       let(:pipeline_branch) { default_branch }
       let(:project) { create(:project, :auto_devops, :custom_repo, files: { 'README.md' => '' }) }
-      let(:user) { project.owner }
+      let(:user) { project.first_owner }
       let(:service) { Ci::CreatePipelineService.new(project, user, ref: pipeline_branch ) }
       let(:pipeline) { service.execute!(:push).payload }
       let(:build_names) { pipeline.builds.pluck(:name) }
@@ -148,9 +148,7 @@ RSpec.describe 'Auto-DevOps.gitlab-ci.yml' do
         it_behaves_like 'no Kubernetes deployment job'
       end
 
-      context 'when the project has an active cluster' do
-        let!(:cluster) { create(:cluster, :project, :provided_by_gcp, projects: [project]) }
-
+      shared_examples 'pipeline with Kubernetes jobs' do
         describe 'deployment-related builds' do
           context 'on default branch' do
             it 'does not include rollout jobs besides production' do
@@ -233,6 +231,42 @@ RSpec.describe 'Auto-DevOps.gitlab-ci.yml' do
           end
         end
       end
+
+      context 'when a cluster is attached' do
+        before do
+          create(:cluster, :project, :provided_by_gcp, projects: [project])
+        end
+
+        it_behaves_like 'pipeline with Kubernetes jobs'
+
+        context 'when certificate_based_clusters FF is disabled' do
+          before do
+            stub_feature_flags(certificate_based_clusters: false)
+          end
+
+          it 'does not include production job' do
+            expect(build_names).not_to include('production')
+          end
+        end
+      end
+
+      context 'when project has an Agent' do
+        before do
+          create(:cluster_agent, project: project)
+        end
+
+        it_behaves_like 'pipeline with Kubernetes jobs'
+
+        context 'when certificate_based_clusters FF is disabled' do
+          before do
+            stub_feature_flags(certificate_based_clusters: false)
+          end
+
+          it 'includes production job' do
+            expect(build_names).to include('production')
+          end
+        end
+      end
     end
 
     describe 'buildpack detection' do
@@ -262,7 +296,7 @@ RSpec.describe 'Auto-DevOps.gitlab-ci.yml' do
 
       with_them do
         let(:project) { create(:project, :custom_repo, files: files) }
-        let(:user) { project.owner }
+        let(:user) { project.first_owner }
         let(:service) { Ci::CreatePipelineService.new(project, user, ref: default_branch ) }
         let(:pipeline) { service.execute(:push).payload }
         let(:build_names) { pipeline.builds.pluck(:name) }

@@ -133,7 +133,19 @@ Everything in `lib/api`.
 
 Everything that resides in `app/services`.
 
+Services should consider inheriting from:
+
+- `BaseContainerService` for services scoped by container (project or group)
+- `BaseProjectService` for services scoped to projects
+- `BaseGroupService` for services scoped to groups
+
+or, create a new base class and update the list above.
+
+Legacy classes inherited from `BaseService` for historical reasons.
+
 In Service classes the use of `execute` and `#execute` is preferred over `call` and `#call`.
+
+Classes that are not service objects should be [created elsewhere](directory_structure.md#use-namespaces-to-define-bounded-contexts), such as in `lib`.
 
 #### ServiceResponse
 
@@ -182,6 +194,8 @@ queries they produce.
 
 Everything in `app/presenters`, used for exposing complex data to a Rails view,
 without having to create many instance variables.
+
+See [the documentation](https://gitlab.com/gitlab-org/gitlab/-/blob/master/app/presenters/README.md) for more information.
 
 ### Serializers
 

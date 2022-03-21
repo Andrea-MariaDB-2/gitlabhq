@@ -1,11 +1,17 @@
 <script>
-/* eslint-disable vue/no-v-html */
-import { GlTooltipDirective, GlLink, GlButton, GlTooltip } from '@gitlab/ui';
+import {
+  GlTooltipDirective,
+  GlButton,
+  GlSafeHtmlDirective,
+  GlAvatarLink,
+  GlAvatarLabeled,
+  GlTooltip,
+} from '@gitlab/ui';
+import { isGid, getIdFromGraphQLId } from '~/graphql_shared/utils';
 import { glEmojiTag } from '../../emoji';
 import { __, sprintf } from '../../locale';
 import CiIconBadge from './ci_badge_link.vue';
 import TimeagoTooltip from './time_ago_tooltip.vue';
-import UserAvatarImage from './user_avatar/user_avatar_image.vue';
 
 /**
  * Renders header component for job and pipeline page based on UI mockups
@@ -18,13 +24,14 @@ export default {
   components: {
     CiIconBadge,
     TimeagoTooltip,
-    UserAvatarImage,
-    GlLink,
     GlButton,
+    GlAvatarLink,
+    GlAvatarLabeled,
     GlTooltip,
   },
   directives: {
     GlTooltip: GlTooltipDirective,
+    SafeHtml: GlSafeHtmlDirective,
   },
   EMOJI_REF: 'EMOJI_REF',
   props: {
@@ -37,8 +44,9 @@ export default {
       required: true,
     },
     itemId: {
-      type: Number,
-      required: true,
+      type: String,
+      required: false,
+      default: '',
     },
     time: {
       type: String,
@@ -86,6 +94,16 @@ export default {
     message() {
       return this.user?.status?.message;
     },
+    item() {
+      if (this.itemId) {
+        return `${this.itemName} #${this.itemId}`;
+      }
+
+      return this.itemName;
+    },
+    userId() {
+      return isGid(this.user?.id) ? getIdFromGraphQLId(this.user?.id) : this.user?.id;
+    },
   },
 
   methods: {
@@ -93,6 +111,7 @@ export default {
       this.$emit('clickedSidebarButton');
     },
   },
+  safeHtmlConfig: { ADD_TAGS: ['gl-emoji'] },
 };
 </script>
 
@@ -105,7 +124,7 @@ export default {
     <section class="header-main-content gl-mr-3">
       <ci-icon-badge :status="status" />
 
-      <strong data-testid="ci-header-item-text"> {{ itemName }} #{{ itemId }} </strong>
+      <strong data-testid="ci-header-item-text">{{ item }}</strong>
 
       <template v-if="shouldRenderTriggeredLabel">{{ __('triggered') }}</template>
       <template v-else>{{ __('created') }}</template>
@@ -115,24 +134,32 @@ export default {
       {{ __('by') }}
 
       <template v-if="user">
-        <gl-link
-          v-gl-tooltip
-          :href="userPath"
-          :title="user.email"
-          class="js-user-link commit-committer-link"
+        <gl-avatar-link
+          :data-user-id="userId"
+          :data-username="user.username"
+          :data-name="user.name"
+          :href="user.webUrl"
+          target="_blank"
+          class="js-user-link gl-vertical-align-middle gl-mx-2 gl-align-items-center"
         >
-          <user-avatar-image :img-src="avatarUrl" :img-alt="userAvatarAltText" :size="24" />
-          {{ user.name }}
-        </gl-link>
-        <gl-tooltip v-if="message" :target="() => $refs[$options.EMOJI_REF]">
-          {{ message }}
-        </gl-tooltip>
-        <span
-          v-if="statusTooltipHTML"
-          :ref="$options.EMOJI_REF"
-          :data-testid="message"
-          v-html="statusTooltipHTML"
-        ></span>
+          <gl-avatar-labeled
+            :size="24"
+            :src="avatarUrl"
+            :label="user.name"
+            class="gl-display-none gl-sm-display-inline-flex gl-mx-1"
+          />
+          <strong class="author gl-display-inline gl-sm-display-none!">@{{ user.username }}</strong>
+          <gl-tooltip v-if="message" :target="() => $refs[$options.EMOJI_REF]">
+            {{ message }}
+          </gl-tooltip>
+          <span
+            v-if="statusTooltipHTML"
+            :ref="$options.EMOJI_REF"
+            v-safe-html:[$options.safeHtmlConfig]="statusTooltipHTML"
+            class="gl-ml-2"
+            :data-testid="message"
+          ></span>
+        </gl-avatar-link>
       </template>
     </section>
 

@@ -7,28 +7,31 @@ const DEFERRED_LINK_CLASS = 'deferred-link';
 
 export default class PersistentUserCallout {
   constructor(container, options = container.dataset) {
-    const { dismissEndpoint, featureId, deferLinks } = options;
+    const { dismissEndpoint, featureId, groupId, deferLinks } = options;
     this.container = container;
     this.dismissEndpoint = dismissEndpoint;
     this.featureId = featureId;
+    this.groupId = groupId;
     this.deferLinks = parseBoolean(deferLinks);
+    this.closeButtons = this.container.querySelectorAll('.js-close');
 
     this.init();
   }
 
   init() {
-    const closeButton = this.container.querySelector('.js-close');
     const followLink = this.container.querySelector('.js-follow-link');
 
-    if (closeButton) {
-      this.handleCloseButtonCallout(closeButton);
+    if (this.closeButtons.length) {
+      this.handleCloseButtonCallout();
     } else if (followLink) {
       this.handleFollowLinkCallout(followLink);
     }
   }
 
-  handleCloseButtonCallout(closeButton) {
-    closeButton.addEventListener('click', (event) => this.dismiss(event));
+  handleCloseButtonCallout() {
+    this.closeButtons.forEach((closeButton) => {
+      closeButton.addEventListener('click', this.dismiss);
+    });
 
     if (this.deferLinks) {
       this.container.addEventListener('click', (event) => {
@@ -46,15 +49,19 @@ export default class PersistentUserCallout {
     followLink.addEventListener('click', (event) => this.registerCalloutWithLink(event));
   }
 
-  dismiss(event, deferredLinkOptions = null) {
+  dismiss = (event, deferredLinkOptions = null) => {
     event.preventDefault();
 
     axios
       .post(this.dismissEndpoint, {
         feature_name: this.featureId,
+        group_id: this.groupId,
       })
       .then(() => {
         this.container.remove();
+        this.closeButtons.forEach((closeButton) => {
+          closeButton.removeEventListener('click', this.dismiss);
+        });
 
         if (deferredLinkOptions) {
           const { href, target } = deferredLinkOptions;
@@ -68,7 +75,7 @@ export default class PersistentUserCallout {
           ),
         });
       });
-  }
+  };
 
   registerCalloutWithLink(event) {
     event.preventDefault();

@@ -15,30 +15,47 @@ module Gitlab
         directives = {
           'default_src' => "'self'",
           'base_uri' => "'self'",
-          'connect_src' => "'self'",
+          'connect_src' => ContentSecurityPolicy::Directives.connect_src,
           'font_src' => "'self'",
           'form_action' => "'self' https: http:",
           'frame_ancestors' => "'self'",
-          'frame_src' => "'self' https://www.google.com/recaptcha/ https://www.recaptcha.net/ https://content.googleapis.com https://content-compute.googleapis.com https://content-cloudbilling.googleapis.com https://content-cloudresourcemanager.googleapis.com",
+          'frame_src' => ContentSecurityPolicy::Directives.frame_src,
           'img_src' => "'self' data: blob: http: https:",
           'manifest_src' => "'self'",
           'media_src' => "'self'",
-          'script_src' => "'strict-dynamic' 'self' 'unsafe-inline' 'unsafe-eval' https://www.google.com/recaptcha/ https://www.recaptcha.net https://apis.google.com",
+          'script_src' => ContentSecurityPolicy::Directives.script_src,
           'style_src' => "'self' 'unsafe-inline'",
-          'worker_src' => "'self' blob: data:",
+          'worker_src' => "#{Gitlab::Utils.append_path(Gitlab.config.gitlab.url, 'assets/')} blob: data:",
           'object_src' => "'none'",
           'report_uri' => nil
         }
 
+        # connect_src with 'self' includes https/wss variations of the origin,
+        # however, safari hasn't covered this yet and we need to explicitly add
+        # support for websocket origins until Safari catches up with the specs
+        if Rails.env.development?
+          allow_webpack_dev_server(directives)
+          allow_letter_opener(directives)
+          allow_snowplow_micro(directives) if Gitlab::Tracking.snowplow_micro_enabled?
+          allow_customersdot(directives) if ENV['CUSTOMER_PORTAL_URL'].present?
+        end
+
+        allow_websocket_connections(directives)
+        allow_cdn(directives, Settings.gitlab.cdn_host) if Settings.gitlab.cdn_host.present?
+        allow_sentry(directives) if Gitlab.config.sentry&.enabled && Gitlab.config.sentry&.clientside_dsn
+        allow_framed_gitlab_paths(directives)
+
+        # The follow section contains workarounds to patch Safari's lack of support for CSP Level 3
+        # See https://gitlab.com/gitlab-org/gitlab/-/issues/343579
         # frame-src was deprecated in CSP level 2 in favor of child-src
         # CSP level 3 "undeprecated" frame-src and browsers fall back on child-src if it's missing
         # However Safari seems to read child-src first so we'll just keep both equal
-        directives['child_src'] = directives['frame_src']
+        append_to_directive(directives, 'child_src', directives['frame_src'])
 
-        allow_webpack_dev_server(directives) if Rails.env.development?
-        allow_cdn(directives, Settings.gitlab.cdn_host) if Settings.gitlab.cdn_host.present?
-        allow_customersdot(directives) if Rails.env.development? && ENV['CUSTOMER_PORTAL_URL'].present?
-        allow_sentry(directives) if Gitlab.config.sentry&.enabled && Gitlab.config.sentry&.clientside_dsn
+        # Safari also doesn't support worker-src and only checks child-src
+        # So for compatibility until it catches up to other browsers we need to
+        # append worker-src's content to child-src
+        append_to_directive(directives, 'child_src', directives['worker_src'])
 
         directives
       end
@@ -67,6 +84,22 @@ module Gitlab
         arguments.strip.split(' ').map(&:strip)
       end
 
+      def self.allow_websocket_connections(directives)
+        http_ports = [80, 443]
+        host = Gitlab.config.gitlab.host
+        port = Gitlab.config.gitlab.port
+        secure = Gitlab.config.gitlab.https
+        protocol = secure ? 'wss' : 'ws'
+
+        ws_url = "#{protocol}://#{host}"
+
+        unless http_ports.include?(port)
+          ws_url = "#{ws_url}:#{port}"
+        end
+
+        append_to_directive(directives, 'connect_src', ws_url)
+      end
+
       def self.allow_webpack_dev_server(directives)
         secure = Settings.webpack.dev_server['https']
         host_and_port = "#{Settings.webpack.dev_server['host']}:#{Settings.webpack.dev_server['port']}"
@@ -80,6 +113,8 @@ module Gitlab
         append_to_directive(directives, 'script_src', cdn_host)
         append_to_directive(directives, 'style_src', cdn_host)
         append_to_directive(directives, 'font_src', cdn_host)
+        append_to_directive(directives, 'worker_src', cdn_host)
+        append_to_directive(directives, 'frame_src', cdn_host)
       end
 
       def self.append_to_directive(directives, directive, text)
@@ -98,6 +133,23 @@ module Gitlab
         sentry_uri.user = nil
 
         append_to_directive(directives, 'connect_src', sentry_uri.to_s)
+      end
+
+      def self.allow_letter_opener(directives)
+        append_to_directive(directives, 'frame_src', Gitlab::Utils.append_path(Gitlab.config.gitlab.url, '/rails/letter_opener/'))
+      end
+
+      def self.allow_snowplow_micro(directives)
+        url = URI.join(Gitlab::Tracking::Destinations::SnowplowMicro.new.uri, '/').to_s
+        append_to_directive(directives, 'connect_src', url)
+      end
+
+      # Using 'self' in the CSP introduces several CSP bypass opportunities
+      # for this reason we list the URLs where GitLab frames itself instead
+      def self.allow_framed_gitlab_paths(directives)
+        ['/admin/', '/assets/', '/-/speedscope/index.html', '/-/sandbox/mermaid'].map do |path|
+          append_to_directive(directives, 'frame_src', Gitlab::Utils.append_path(Gitlab.config.gitlab.url, path))
+        end
       end
     end
   end

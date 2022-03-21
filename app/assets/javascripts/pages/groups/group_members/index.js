@@ -1,17 +1,14 @@
 import { groupMemberRequestFormatter } from '~/groups/members/utils';
-import groupsSelect from '~/groups_select';
 import initInviteGroupTrigger from '~/invite_members/init_invite_group_trigger';
-import initInviteMembersForm from '~/invite_members/init_invite_members_form';
+import initInviteGroupsModal from '~/invite_members/init_invite_groups_modal';
 import initInviteMembersModal from '~/invite_members/init_invite_members_modal';
 import initInviteMembersTrigger from '~/invite_members/init_invite_members_trigger';
 import { s__ } from '~/locale';
-import memberExpirationDate from '~/member_expiration_date';
 import { initMembersApp } from '~/members';
 import { MEMBER_TYPES } from '~/members/constants';
 import { groupLinkRequestFormatter } from '~/members/utils';
-import UsersSelect from '~/users_select';
 
-const SHARED_FIELDS = ['account', 'expires', 'maxRole', 'expiration', 'actions'];
+const SHARED_FIELDS = ['account', 'maxRole', 'expiration', 'actions'];
 
 initMembersApp(document.querySelector('.js-group-members-list-app'), {
   [MEMBER_TYPES.user]: {
@@ -21,7 +18,7 @@ initMembersApp(document.querySelector('.js-group-members-list-app'), {
     requestFormatter: groupMemberRequestFormatter,
     filteredSearchBar: {
       show: true,
-      tokens: ['two_factor', 'with_inherited_permissions'],
+      tokens: ['two_factor', 'with_inherited_permissions', 'enterprise'],
       searchParam: 'search',
       placeholder: s__('Members|Filter members'),
       recentSearchesStorageKey: 'group_members',
@@ -52,15 +49,7 @@ initMembersApp(document.querySelector('.js-group-members-list-app'), {
   },
 });
 
-groupsSelect();
-memberExpirationDate();
-memberExpirationDate('.js-access-expiration-date-groups');
 initInviteMembersModal();
+initInviteGroupsModal();
 initInviteMembersTrigger();
 initInviteGroupTrigger();
-
-// This is only used when `invite_members_group_modal` feature flag is disabled.
-// This can be removed when `invite_members_group_modal` feature flag is removed.
-initInviteMembersForm();
-
-new UsersSelect(); // eslint-disable-line no-new

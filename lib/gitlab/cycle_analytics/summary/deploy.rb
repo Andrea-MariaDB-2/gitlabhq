@@ -4,6 +4,10 @@ module Gitlab
   module CycleAnalytics
     module Summary
       class Deploy < Base
+        def identifier
+          :deploys
+        end
+
         def title
           n_('Deploy', 'Deploys', value.to_i)
         end
@@ -24,3 +28,5 @@ module Gitlab
     end
   end
 end
+
+Gitlab::CycleAnalytics::Summary::Deploy.prepend_mod_with('Gitlab::CycleAnalytics::Summary::Deploy')

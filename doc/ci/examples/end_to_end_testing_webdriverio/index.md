@@ -1,17 +1,15 @@
 ---
 stage: Verify
-group: Testing
+group: Pipeline Insights
 info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
 author: Vincent Tunru
 author_gitlab: Vinnl
-type: tutorial
-date: 2019-02-18
 description: 'Confidence checking your entire app every time a new feature is added can quickly become repetitive. Learn how to automate it with GitLab CI/CD.'
 ---
 
 <!-- vale off -->
 
-# End-to-end testing with GitLab CI/CD and WebdriverIO
+# End-to-end testing with GitLab CI/CD and WebdriverIO **(FREE)**
 
 [Review Apps](../../review_apps/index.md) are great: for every merge request
 (or branch, for that matter), the new code can be copied and deployed to a fresh production-like live
@@ -20,7 +18,7 @@ environment, reducing the effort to assess the impact of changes. Thus, when we 
 and it will immediately be clear that the application can still be properly built and deployed. After all, you can _see_ it
 running!
 
-<img src="img/deployed_dependency_update.png" alt="dependencies.io">
+![dependencies.io](img/deployed_dependency_update.png)
 
 However, looking at the freshly deployed code to check whether it still looks and behaves as
 expected is repetitive manual work, which means it is a prime candidate for automation. This is
@@ -33,7 +31,7 @@ to write such end-to-end tests, and how to set up GitLab CI/CD to automatically 
 against your new code, on a branch-by-branch basis. For the scope of this article, we will walk you
 through the process of setting up GitLab CI/CD for end-to-end testing JavaScript-based applications
 with WebdriverIO, but the general strategy should carry over to other languages.
-We assume you are familiar with GitLab, [GitLab CI/CD](../../README.md), [Review Apps](../../review_apps/index.md), and running your app locally, e.g., on `localhost:8000`.
+We assume you are familiar with GitLab, [GitLab CI/CD](../../index.md), [Review Apps](../../review_apps/index.md), and running your app locally, e.g., on `localhost:8000`.
 
 ## What to test
 
@@ -150,8 +148,8 @@ need to do for this:
 1. Update our WebdriverIO configuration to use those browsers to visit the review apps.
 
 For the scope of this article, we've defined an additional [CI/CD stage](../../yaml/index.md#stages)
-`confidence-check` that is executed _after_ the stage that deploys the review app. It uses the `node:latest` [Docker
-image](../../docker/using_docker_images.md). However, WebdriverIO fires up actual browsers
+`confidence-check` that is executed _after_ the stage that deploys the review app. It uses the `node:latest`
+[Docker image](../../docker/using_docker_images.md). However, WebdriverIO fires up actual browsers
 to interact with your application, so we need to install and run them.
 Furthermore, WebdriverIO uses Selenium as a common interface to control different browsers,
 so we need to install and run Selenium as well. Luckily, the Selenium project provides the Docker images

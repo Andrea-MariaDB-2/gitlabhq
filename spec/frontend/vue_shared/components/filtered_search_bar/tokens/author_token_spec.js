@@ -6,14 +6,12 @@ import {
 } from '@gitlab/ui';
 import { mount } from '@vue/test-utils';
 import MockAdapter from 'axios-mock-adapter';
+import { nextTick } from 'vue';
 import waitForPromises from 'helpers/wait_for_promises';
 import createFlash from '~/flash';
 import axios from '~/lib/utils/axios_utils';
 
-import {
-  DEFAULT_LABEL_ANY,
-  DEFAULT_NONE_ANY,
-} from '~/vue_shared/components/filtered_search_bar/constants';
+import { DEFAULT_NONE_ANY } from '~/vue_shared/components/filtered_search_bar/constants';
 import AuthorToken from '~/vue_shared/components/filtered_search_bar/tokens/author_token.vue';
 import BaseToken from '~/vue_shared/components/filtered_search_bar/tokens/base_token.vue';
 
@@ -57,7 +55,7 @@ function createComponent(options = {}) {
     provide: {
       portalName: 'fake target',
       alignSuggestions: function fakeAlignSuggestions() {},
-      suggestionsListClass: 'custom-class',
+      suggestionsListClass: () => 'custom-class',
     },
     data() {
       return { ...data };
@@ -112,6 +110,35 @@ describe('AuthorToken', () => {
         });
       });
 
+      // TODO: rm when completed https://gitlab.com/gitlab-org/gitlab/-/issues/345756
+      describe('when there are null users presents', () => {
+        const mockAuthorsWithNullUser = mockAuthors.concat([null]);
+
+        beforeEach(() => {
+          jest
+            .spyOn(wrapper.vm.config, 'fetchAuthors')
+            .mockResolvedValue({ data: mockAuthorsWithNullUser });
+
+          getBaseToken().vm.$emit('fetch-suggestions', 'root');
+        });
+
+        describe('when res.data is present', () => {
+          it('filters the successful response when null values are present', () => {
+            return waitForPromises().then(() => {
+              expect(getBaseToken().props('suggestions')).toEqual(mockAuthors);
+            });
+          });
+        });
+
+        describe('when response is an array', () => {
+          it('filters the successful response when null values are present', () => {
+            return waitForPromises().then(() => {
+              expect(getBaseToken().props('suggestions')).toEqual(mockAuthors);
+            });
+          });
+        });
+      });
+
       it('calls `createFlash` with flash error message when request fails', () => {
         jest.spyOn(wrapper.vm.config, 'fetchAuthors').mockRejectedValue({});
 
@@ -141,7 +168,7 @@ describe('AuthorToken', () => {
       const tokenSegments = wrapper.findAllComponents(GlFilteredSearchTokenSegment);
       const suggestionsSegment = tokenSegments.at(2);
       suggestionsSegment.vm.$emit('activate');
-      await wrapper.vm.$nextTick();
+      await nextTick();
     };
 
     it('renders base-token component', () => {
@@ -159,23 +186,22 @@ describe('AuthorToken', () => {
       });
     });
 
-    it('renders token item when value is selected', () => {
+    it('renders token item when value is selected', async () => {
       wrapper = createComponent({
         value: { data: mockAuthors[0].username },
         data: { authors: mockAuthors },
         stubs: { Portal: true },
       });
 
-      return wrapper.vm.$nextTick(() => {
-        const tokenSegments = wrapper.findAll(GlFilteredSearchTokenSegment);
+      await nextTick();
+      const tokenSegments = wrapper.findAll(GlFilteredSearchTokenSegment);
 
-        expect(tokenSegments).toHaveLength(3); // Author, =, "Administrator"
+      expect(tokenSegments).toHaveLength(3); // Author, =, "Administrator"
 
-        const tokenValue = tokenSegments.at(2);
+      const tokenValue = tokenSegments.at(2);
 
-        expect(tokenValue.findComponent(GlAvatar).props('src')).toBe(mockAuthors[0].avatar_url);
-        expect(tokenValue.text()).toBe(mockAuthors[0].name); // "Administrator"
-      });
+      expect(tokenValue.findComponent(GlAvatar).props('src')).toBe(mockAuthors[0].avatar_url);
+      expect(tokenValue.text()).toBe(mockAuthors[0].name); // "Administrator"
     });
 
     it('renders token value with correct avatarUrl from author object', async () => {
@@ -194,10 +220,12 @@ describe('AuthorToken', () => {
         stubs: { Portal: true },
       });
 
-      await wrapper.vm.$nextTick();
+      await nextTick();
 
       expect(getAvatarEl().props('src')).toBe(mockAuthors[0].avatar_url);
 
+      // setData usage is discouraged. See https://gitlab.com/groups/gitlab-org/-/epics/7330 for details
+      // eslint-disable-next-line no-restricted-syntax
       wrapper.setData({
         authors: [
           {
@@ -208,7 +236,7 @@ describe('AuthorToken', () => {
         ],
       });
 
-      await wrapper.vm.$nextTick();
+      await nextTick();
 
       expect(getAvatarEl().props('src')).toBe(mockAuthors[0].avatar_url);
     });
@@ -240,12 +268,12 @@ describe('AuthorToken', () => {
       const tokenSegments = wrapper.findAll(GlFilteredSearchTokenSegment);
       const suggestionsSegment = tokenSegments.at(2);
       suggestionsSegment.vm.$emit('activate');
-      await wrapper.vm.$nextTick();
+      await nextTick();
 
       expect(wrapper.find(GlDropdownDivider).exists()).toBe(false);
     });
 
-    it('renders `DEFAULT_LABEL_ANY` as default suggestions', async () => {
+    it('renders `DEFAULT_NONE_ANY` as default suggestions', async () => {
       wrapper = createComponent({
         active: true,
         config: { ...mockAuthorToken, preloadedAuthors: mockPreloadedAuthors },
@@ -256,8 +284,9 @@ describe('AuthorToken', () => {
 
       const suggestions = wrapper.findAll(GlFilteredSearchSuggestion);
 
-      expect(suggestions).toHaveLength(1 + currentUserLength);
-      expect(suggestions.at(0).text()).toBe(DEFAULT_LABEL_ANY.text);
+      expect(suggestions).toHaveLength(2 + currentUserLength);
+      expect(suggestions.at(0).text()).toBe(DEFAULT_NONE_ANY[0].text);
+      expect(suggestions.at(1).text()).toBe(DEFAULT_NONE_ANY[1].text);
     });
 
     it('emits listeners in the base-token', () => {
@@ -294,7 +323,7 @@ describe('AuthorToken', () => {
       it('does not show current user while searching', async () => {
         wrapper.findComponent(BaseToken).vm.handleInput({ data: 'foo' });
 
-        await wrapper.vm.$nextTick();
+        await nextTick();
 
         expect(wrapper.findComponent(GlFilteredSearchSuggestion).exists()).toBe(false);
       });

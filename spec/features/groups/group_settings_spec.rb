@@ -20,7 +20,7 @@ RSpec.describe 'Edit group settings' do
       update_path(new_group_path)
       visit new_group_full_path
 
-      expect(current_path).to eq(new_group_full_path)
+      expect(page).to have_current_path(new_group_full_path, ignore_query: true)
       expect(find('h1.home-panel-title')).to have_content(group.name)
     end
 
@@ -28,7 +28,7 @@ RSpec.describe 'Edit group settings' do
       update_path(new_group_path)
       visit old_group_full_path
 
-      expect(current_path).to eq(new_group_full_path)
+      expect(page).to have_current_path(new_group_full_path, ignore_query: true)
       expect(find('h1.home-panel-title')).to have_content(group.name)
     end
 
@@ -41,7 +41,7 @@ RSpec.describe 'Edit group settings' do
         update_path(new_group_path)
         visit new_subgroup_full_path
 
-        expect(current_path).to eq(new_subgroup_full_path)
+        expect(page).to have_current_path(new_subgroup_full_path, ignore_query: true)
         expect(find('h1.home-panel-title')).to have_content(subgroup.name)
       end
 
@@ -49,7 +49,7 @@ RSpec.describe 'Edit group settings' do
         update_path(new_group_path)
         visit old_subgroup_full_path
 
-        expect(current_path).to eq(new_subgroup_full_path)
+        expect(page).to have_current_path(new_subgroup_full_path, ignore_query: true)
         expect(find('h1.home-panel-title')).to have_content(subgroup.name)
       end
     end
@@ -71,7 +71,7 @@ RSpec.describe 'Edit group settings' do
         update_path(new_group_path)
         visit new_project_full_path
 
-        expect(current_path).to eq(new_project_full_path)
+        expect(page).to have_current_path(new_project_full_path, ignore_query: true)
         expect(find('.breadcrumbs')).to have_content(project.path)
       end
 
@@ -79,7 +79,7 @@ RSpec.describe 'Edit group settings' do
         update_path(new_group_path)
         visit old_project_full_path
 
-        expect(current_path).to eq(new_project_full_path)
+        expect(page).to have_current_path(new_project_full_path, ignore_query: true)
         expect(find('.breadcrumbs')).to have_content(project.path)
       end
     end
@@ -135,6 +135,69 @@ RSpec.describe 'Edit group settings' do
       visit edit_group_path(subgroup)
 
       expect(find(:css, '.group-root-path').text).to eq(group_url(subgroup.parent) + '/')
+    end
+  end
+
+  describe 'transfer group', :js do
+    let(:namespace_select) { page.find('[data-testid="transfer-group-namespace-select"]') }
+    let(:confirm_modal) { page.find('[data-testid="confirm-danger-modal"]') }
+
+    shared_examples 'can transfer the group' do
+      before do
+        selected_group.add_owner(user)
+      end
+
+      it 'can successfully transfer the group' do
+        visit edit_group_path(selected_group)
+
+        page.within('.js-group-transfer-form') do
+          namespace_select.find('button').click
+          namespace_select.find('.dropdown-menu p', text: target_group_name, match: :first).click
+
+          click_button 'Transfer group'
+        end
+
+        page.within(confirm_modal) do
+          expect(page).to have_text "You are going to transfer #{selected_group.name} to another namespace. Are you ABSOLUTELY sure?"
+
+          fill_in 'confirm_name_input', with: selected_group.name
+          click_button 'Confirm'
+        end
+
+        expect(page).to have_text "Group '#{selected_group.name}' was successfully transferred."
+        expect(current_url).to include(selected_group.reload.full_path)
+      end
+    end
+
+    context 'from a subgroup' do
+      let(:selected_group) { create(:group, path: 'foo-subgroup', parent: group) }
+
+      context 'to no parent group' do
+        let(:target_group_name) { 'No parent group' }
+
+        it_behaves_like 'can transfer the group'
+      end
+
+      context 'to a different parent group' do
+        let(:target_group) { create(:group, path: 'foo-parentgroup') }
+        let(:target_group_name) { target_group.name }
+
+        before do
+          target_group.add_owner(user)
+        end
+
+        it_behaves_like 'can transfer the group'
+      end
+    end
+
+    context 'from a root group' do
+      let(:selected_group) { create(:group, path: 'foo-rootgroup') }
+
+      context 'to a parent group' do
+        let(:target_group_name) { group.name }
+
+        it_behaves_like 'can transfer the group'
+      end
     end
   end
 

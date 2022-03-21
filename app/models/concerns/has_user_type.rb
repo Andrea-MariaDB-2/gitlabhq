@@ -28,6 +28,7 @@ module HasUserType
     scope :non_internal, -> { humans.or(where(user_type: NON_INTERNAL_USER_TYPES)) }
     scope :without_ghosts, -> { humans.or(where.not(user_type: :ghost)) }
     scope :without_project_bot, -> { humans.or(where.not(user_type: :project_bot)) }
+    scope :human_or_service_user, -> { humans.or(where(user_type: :service_user)) }
 
     enum user_type: USER_TYPES
 
@@ -44,5 +45,18 @@ module HasUserType
   # Ref: https://gitlab.com/gitlab-org/gitlab/-/issues/213945
   def internal?
     ghost? || (bot? && !project_bot?)
+  end
+
+  def redacted_name(viewing_user)
+    return self.name unless self.project_bot?
+
+    return self.name if self.groups.any? && viewing_user&.can?(:read_group, self.groups.first)
+
+    return self.name if viewing_user&.can?(:read_project, self.projects.first)
+
+    # If the requester does not have permission to read the project bot name,
+    # the API returns an arbitrary string. UI changes will be addressed in a follow up issue:
+    # https://gitlab.com/gitlab-org/gitlab/-/issues/346058
+    '****'
   end
 end

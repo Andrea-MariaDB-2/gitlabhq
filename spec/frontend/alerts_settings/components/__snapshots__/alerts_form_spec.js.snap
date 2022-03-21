@@ -12,6 +12,7 @@ exports[`Alert integration settings form default state should match the default 
     <gl-form-group-stub
       class="gl-pl-0"
       labeldescription=""
+      optionaltext="(optional)"
     >
       <gl-form-checkbox-stub
         checked="true"
@@ -28,6 +29,7 @@ exports[`Alert integration settings form default state should match the default 
       label-for="alert-integration-settings-issue-template"
       label-size="sm"
       labeldescription=""
+      optionaltext="(optional)"
     >
       <label
         class="gl-display-inline-flex"
@@ -51,9 +53,13 @@ exports[`Alert integration settings form default state should match the default 
       <gl-dropdown-stub
         block="true"
         category="primary"
+        clearalltext="Clear all"
+        clearalltextclass="gl-px-5"
         data-qa-selector="incident_templates_dropdown"
         headertext=""
         hideheaderborder="true"
+        highlighteditemstitle="Selected"
+        highlighteditemstitleclass="gl-px-5"
         id="alert-integration-settings-issue-template"
         size="medium"
         text="selecte_tmpl"
@@ -79,6 +85,7 @@ exports[`Alert integration settings form default state should match the default 
     <gl-form-group-stub
       class="gl-pl-0 gl-mb-5"
       labeldescription=""
+      optionaltext="(optional)"
     >
       <gl-form-checkbox-stub>
         <span>
@@ -90,6 +97,7 @@ exports[`Alert integration settings form default state should match the default 
     <gl-form-group-stub
       class="gl-pl-0 gl-mb-5"
       labeldescription=""
+      optionaltext="(optional)"
     >
       <gl-form-checkbox-stub
         checked="true"

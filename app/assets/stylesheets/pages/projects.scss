@@ -52,37 +52,6 @@
   }
 }
 
-// INFO Scoped to project_feature_setting and settings_panel components in app/assets/javascripts/pages/projects/shared/permissions/components
-.project-repo-select {
-  transition: background 2s ease-out;
-
-  &:disabled {
-    opacity: 0.5;
-    pointer-events: none;
-  }
-
-  .highlight-changes & {
-    background: $highlight-changes-color;
-    transition: none;
-  }
-}
-
-// INFO Scoped to project_feature_setting and settings_panel components in app/assets/javascripts/pages/projects/shared/permissions/components
-.project-feature-controls {
-  max-width: 432px;
-}
-
-// INFO Scoped to settings_panel component in app/assets/javascripts/pages/projects/shared/permissions/components
-.project-feature-setting-group {
-  .project-feature-controls {
-    max-width: 400px;
-  }
-}
-
-.nav > .project-buttons {
-  margin-top: 0;
-}
-
 .save-project-loader {
   margin-top: 50px;
   margin-bottom: 50px;
@@ -162,47 +131,6 @@
 
   .dropdown-menu {
     width: 240px;
-  }
-}
-
-.fork-thumbnail {
-  width: calc((100% / 2) - #{$gl-padding * 2});
-
-  @include media-breakpoint-up(md) {
-    width: calc((100% / 4) - #{$gl-padding * 2});
-  }
-
-  @include media-breakpoint-up(lg) {
-    width: calc((100% / 5) - #{$gl-padding * 2});
-  }
-
-  &:hover:not(.disabled),
-  &.forked {
-    background-color: $blue-50;
-    border-color: $blue-200;
-  }
-
-  .avatar-container,
-  .identicon {
-    float: none;
-    margin-left: auto;
-    margin-right: auto;
-  }
-
-  a.disabled {
-    opacity: 0.3;
-    cursor: not-allowed;
-  }
-}
-
-.fork-thumbnail-container {
-  display: flex;
-  flex-wrap: wrap;
-  margin-left: -$gl-padding;
-  margin-right: -$gl-padding;
-
-  > h5 {
-    width: 100%;
   }
 }
 
@@ -317,121 +245,6 @@
   }
 }
 
-.project-stats,
-.project-buttons {
-  .scrolling-tabs-container {
-    .scrolling-tabs {
-      margin-top: $gl-padding-8;
-      margin-bottom: $gl-padding-8 - $browser-scrollbar-size;
-      padding-bottom: $browser-scrollbar-size;
-      flex-wrap: wrap;
-      border-bottom: 0;
-    }
-
-    .fade-left,
-    .fade-right {
-      top: 0;
-      height: calc(100% - #{$browser-scrollbar-size});
-
-      svg {
-        top: 50%;
-        margin-top: -$gl-padding-8;
-      }
-    }
-
-    .nav {
-      flex-basis: 100%;
-
-      + .nav {
-        margin: $gl-padding-8 0;
-      }
-    }
-
-    @include media-breakpoint-down(md) {
-      flex-direction: column;
-
-      .nav {
-        flex-wrap: nowrap;
-      }
-
-      .nav:first-child {
-        margin-right: $gl-padding-8;
-      }
-    }
-  }
-
-  .nav {
-    > li {
-      display: inline-block;
-
-      &:not(:last-child) {
-        margin-right: $gl-padding;
-      }
-
-      &.right {
-        vertical-align: top;
-        margin-top: 0;
-
-        @include media-breakpoint-up(lg) {
-          float: right;
-        }
-      }
-    }
-
-    .stat-text,
-    .stat-link {
-      padding: $gl-btn-vert-padding 0;
-      background-color: transparent;
-      font-size: $gl-font-size;
-      line-height: $gl-btn-line-height;
-      color: $gl-text-color-secondary;
-      white-space: pre-wrap;
-    }
-
-    .stat-link {
-      border-bottom: 0;
-      color: $black;
-
-      &:hover,
-      &:focus {
-        text-decoration: underline;
-        border-bottom: 0;
-      }
-
-      .project-stat-value {
-        color: $gl-text-color;
-      }
-
-      .icon {
-        color: $gl-text-color-secondary;
-      }
-
-      .add-license-link {
-        &,
-        .icon {
-          color: $blue-600;
-        }
-      }
-    }
-
-    .btn {
-      margin-bottom: $gl-padding-8;
-      padding: $gl-btn-vert-padding $gl-btn-padding;
-      line-height: $gl-btn-line-height;
-
-      .icon {
-        top: 0;
-      }
-    }
-  }
-}
-
-.project-buttons {
-  .nav > li:not(:last-child) {
-    margin-right: $gl-padding-8;
-  }
-}
-
 .repository-languages-bar {
   height: 8px;
   margin-bottom: $gl-padding-8;
@@ -458,22 +271,6 @@
 
 pre.light-well {
   border-color: $well-light-border;
-}
-
-.git-empty {
-  margin-bottom: 7px;
-
-  h5 {
-    color: $gl-text-color;
-  }
-
-  .light-well {
-    border-radius: 2px;
-
-    color: $well-light-text-color;
-    font-size: 13px;
-    line-height: 1.6em;
-  }
 }
 
 /*
@@ -619,12 +416,6 @@ pre.light-well {
 
     .ci-status-link {
       display: inline-flex;
-    }
-  }
-
-  .star-button {
-    .icon {
-      top: 0;
     }
   }
 
@@ -935,16 +726,6 @@ pre.light-well {
   hr {
     margin: 32px 0;
     border-color: $border-color;
-  }
-}
-
-.project-ci-linter {
-  .ci-editor {
-    height: 400px;
-  }
-
-  .ci-template pre {
-    white-space: pre-wrap;
   }
 }
 

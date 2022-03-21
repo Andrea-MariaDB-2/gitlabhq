@@ -10,7 +10,7 @@
     = _('These runners are shared across projects in this group.')
     = _('Group runners can be managed with the %{link}.').html_safe % { link: link }
 
-  - if can?(current_user, :admin_pipeline, @group) && valid_runner_registrars.include?('group')
+  - if can?(current_user, :register_group_runners, @group)
     - if params[:ci_runner_templates]
       %hr
       = render partial: 'ci/runner/setup_runner_in_aws',
@@ -25,5 +25,5 @@
     %br
   - else
     = _('Please contact an admin to register runners.')
-    = link_to _('Learn more.'), help_page_path('user/admin_area/settings/continuous_integration', anchor: 'runner-registration'), target: '_blank', rel: 'noopener noreferrer'
+    = link_to _('Learn more.'), help_page_path('user/admin_area/settings/continuous_integration', anchor: 'prevent-users-from-registering-runners'), target: '_blank', rel: 'noopener noreferrer'
 

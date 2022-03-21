@@ -11,7 +11,7 @@ module Banzai
         def initialize(doc, context = nil, result = nil)
           super
 
-          @reference_cache = ReferenceCache.new(self, context)
+          @reference_cache = ReferenceCache.new(self, context, result)
         end
 
         # REFERENCE_PLACEHOLDER is used for re-escaping HTML text except found
@@ -205,6 +205,8 @@ module Banzai
               data_attributes = data_attributes_for(link_content || match, parent, object,
                                                     link_content: !!link_content,
                                                     link_reference: link_reference)
+              data_attributes[:reference_format] = matches[:format] if matches.names.include?("format")
+
               data = data_attribute(data_attributes)
 
               url =
@@ -213,6 +215,8 @@ module Banzai
                 else
                   url_for_object_cached(object, parent)
                 end
+
+              url.chomp!(matches[:format]) if matches.names.include?("format")
 
               content = link_content || object_link_text(object, matches)
 

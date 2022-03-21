@@ -12,7 +12,7 @@ common administration and operational processes.
 
 You can perform GitLab Rake tasks by using:
 
-- `gitlab-rake <raketask>` for [Omnibus GitLab](https://docs.gitlab.com/omnibus/README.html)
+- `gitlab-rake <raketask>` for [Omnibus GitLab](https://docs.gitlab.com/omnibus/index.html)
   installations.
 - `bundle exec rake <raketask>` for [source](../install/installation.md)
   installations.
@@ -26,7 +26,6 @@ The following Rake tasks are available for use with GitLab:
 | [Back up and restore](backup_restore.md)              | Back up, restore, and migrate GitLab instances between servers. |
 | [Clean up](cleanup.md)                                | Clean up unneeded items from GitLab instances. |
 | [Development](../development/rake_tasks.md)           | Tasks for GitLab contributors. |
-| [Doctor tasks](../administration/raketasks/doctor.md) | Checks for data integrity issues. |
 | [Elasticsearch](../integration/elasticsearch.md#gitlab-advanced-search-rake-tasks) | Maintain Elasticsearch in a GitLab instance. |
 | [Enable namespaces](features.md)                      | Enable usernames and namespaces for user projects. |
 | [General maintenance](../administration/raketasks/maintenance.md) | General maintenance and self-check tasks. |
@@ -34,7 +33,7 @@ The following Rake tasks are available for use with GitLab:
 | [GitHub import](../administration/raketasks/github_import.md) | Retrieve and import repositories from GitHub. |
 | [Import repositories](import.md)                      | Import bare repositories into your GitLab instance. |
 | [Import large project exports](../development/import_project.md#importing-via-a-rake-task) | Import large GitLab [project exports](../user/project/settings/import_export.md). |
-| [Integrity checks](../administration/raketasks/check.md) | Check the integrity of repositories, files, and LDAP. |
+| [Integrity checks](../administration/raketasks/check.md) | Check the integrity of repositories, files, LDAP, and more. |
 | [LDAP maintenance](../administration/raketasks/ldap.md) | [LDAP](../administration/auth/ldap/index.md)-related tasks. |
 | [List repositories](list_repos.md)                    | List all GitLab-managed Git repositories on disk. |
 | [Migrate snippets to Git](migrate_snippets.md)        | Migrate GitLab Snippets to Git repositories, and show the migration status. |
@@ -45,9 +44,21 @@ The following Rake tasks are available for use with GitLab:
 | [SMTP maintenance](../administration/raketasks/smtp.md) | SMTP-related tasks. |
 | [SPDX license list import](spdx.md)                   | Import a local copy of the [SPDX license list](https://spdx.org/licenses/) for matching [License Compliance policies](../user/compliance/license_compliance/index.md). |
 | [Repository storage](../administration/raketasks/storage.md) | List and migrate existing projects and attachments from legacy storage to hashed storage. |
+| [Reset user passwords](../security/reset_user_password.md#use-a-rake-task) | Reset user passwords using Rake. |
 | [Uploads migrate](../administration/raketasks/uploads/migrate.md) | Migrate uploads between local storage and object storage. |
 | [Uploads sanitize](../administration/raketasks/uploads/sanitize.md) | Remove EXIF data from images uploaded to earlier versions of GitLab. |
 | [Service Data](../administration/troubleshooting/gitlab_rails_cheat_sheet.md#generate-service-ping) | Generate and troubleshoot [Service Ping](../development/service_ping/index.md). |
 | [User management](user_management.md)                 | Perform user management tasks. |
 | [Webhooks administration](web_hooks.md)               | Maintain project webhooks. |
 | [X.509 signatures](x509_signatures.md)                | Update X.509 commit signatures, which can be useful if the certificate store changed. |
+
+To list all available Rake tasks:
+
+```shell
+# Omnibus GitLab
+sudo gitlab-rake -vT
+
+# Installations from source
+cd /home/git/gitlab
+sudo -u git -H bundle exec rake -vT RAILS_ENV=production
+```

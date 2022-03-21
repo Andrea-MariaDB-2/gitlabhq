@@ -1,7 +1,7 @@
 /* eslint-disable func-names, consistent-return, no-param-reassign */
 
 import $ from 'jquery';
-import Cookies from 'js-cookie';
+import { setCookie } from '~/lib/utils/common_utils';
 import { hide, fixTitle } from '~/tooltips';
 import createFlash from './flash';
 import axios from './lib/utils/axios_utils';
@@ -80,7 +80,7 @@ Sidebar.prototype.sidebarToggleClicked = function (e, triggered) {
   hide($this);
 
   if (!triggered) {
-    Cookies.set('collapsed_gutter', $('.right-sidebar').hasClass('right-sidebar-collapsed'));
+    setCookie('collapsed_gutter', $('.right-sidebar').hasClass('right-sidebar-collapsed'));
   }
 };
 
@@ -102,7 +102,7 @@ Sidebar.prototype.toggleTodo = function (e) {
     })
     .catch(() =>
       createFlash({
-        message: sprintf(__('There was an error %{message} todo.'), {
+        message: sprintf(__('There was an error %{message} to-do item.'), {
           message:
             ajaxType === 'post' ? s__('RightSidebar|adding a') : s__('RightSidebar|deleting the'),
         }),
@@ -111,7 +111,7 @@ Sidebar.prototype.toggleTodo = function (e) {
 };
 
 Sidebar.prototype.sidebarCollapseClicked = function (e) {
-  if ($(e.currentTarget).hasClass('dont-change-state')) {
+  if ($(e.currentTarget).hasClass('js-dont-change-state')) {
     return;
   }
   const sidebar = e.data;
@@ -126,12 +126,6 @@ Sidebar.prototype.openDropdown = function (blockOrName) {
     this.setCollapseAfterUpdate($block);
     this.toggleSidebar('open');
   }
-
-  // Wait for the sidebar to trigger('click') open
-  // so it doesn't cause our dropdown to close preemptively
-  setTimeout(() => {
-    $block.find('.js-sidebar-dropdown-toggle').trigger('click');
-  });
 };
 
 Sidebar.prototype.setCollapseAfterUpdate = function ($block) {

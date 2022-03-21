@@ -14,7 +14,7 @@ module Ci
     let!(:pending_job) { create(:ci_build, :pending, :queued, pipeline: pipeline) }
 
     describe '#execute' do
-      context 'checks database loadbalancing stickiness', :db_load_balancing do
+      context 'checks database loadbalancing stickiness' do
         subject { described_class.new(shared_runner).execute }
 
         before do
@@ -22,14 +22,14 @@ module Ci
         end
 
         it 'result is valid if replica did caught-up' do
-          expect(Gitlab::Database::LoadBalancing::Sticking).to receive(:all_caught_up?)
+          expect(ApplicationRecord.sticking).to receive(:all_caught_up?)
             .with(:runner, shared_runner.id) { true }
 
           expect(subject).to be_valid
         end
 
         it 'result is invalid if replica did not caught-up' do
-          expect(Gitlab::Database::LoadBalancing::Sticking).to receive(:all_caught_up?)
+          expect(ApplicationRecord.sticking).to receive(:all_caught_up?)
             .with(:runner, shared_runner.id) { false }
 
           expect(subject).not_to be_valid
@@ -40,12 +40,16 @@ module Ci
         context 'runner follow tag list' do
           it "picks build with the same tag" do
             pending_job.update!(tag_list: ["linux"])
+            pending_job.reload
+            pending_job.create_queuing_entry!
             specific_runner.update!(tag_list: ["linux"])
             expect(execute(specific_runner)).to eq(pending_job)
           end
 
           it "does not pick build with different tag" do
             pending_job.update!(tag_list: ["linux"])
+            pending_job.reload
+            pending_job.create_queuing_entry!
             specific_runner.update!(tag_list: ["win32"])
             expect(execute(specific_runner)).to be_falsey
           end
@@ -56,6 +60,8 @@ module Ci
 
           it "does not pick build with tag" do
             pending_job.update!(tag_list: ["linux"])
+            pending_job.reload
+            pending_job.create_queuing_entry!
             expect(execute(specific_runner)).to be_falsey
           end
 
@@ -83,6 +89,8 @@ module Ci
           context 'for specific runner' do
             it 'does not pick a build' do
               expect(execute(specific_runner)).to be_nil
+              expect(pending_job.reload).to be_failed
+              expect(pending_job.queuing_entry).to be_nil
             end
           end
         end
@@ -219,6 +227,8 @@ module Ci
           before do
             project.update!(shared_runners_enabled: true, group_runners_enabled: true)
             project.project_feature.update_attribute(:builds_access_level, ProjectFeature::DISABLED)
+
+            pending_job.reload.create_queuing_entry!
           end
 
           context 'and uses shared runner' do
@@ -236,7 +246,11 @@ module Ci
           context 'and uses project runner' do
             let(:build) { execute(specific_runner) }
 
-            it { expect(build).to be_nil }
+            it 'does not pick a build' do
+              expect(build).to be_nil
+              expect(pending_job.reload).to be_failed
+              expect(pending_job.queuing_entry).to be_nil
+            end
           end
         end
 
@@ -304,6 +318,8 @@ module Ci
         context 'disallow group runners' do
           before do
             project.update!(group_runners_enabled: false)
+
+            pending_job.reload.create_queuing_entry!
           end
 
           context 'group runner' do
@@ -724,33 +740,33 @@ module Ci
           stub_feature_flags(ci_pending_builds_queue_source: true)
         end
 
-        context 'with ci_queueing_denormalize_shared_runners_information enabled' do
+        context 'with ci_queuing_use_denormalized_data_strategy enabled' do
           before do
-            stub_feature_flags(ci_queueing_denormalize_shared_runners_information: true)
+            stub_feature_flags(ci_queuing_use_denormalized_data_strategy: true)
           end
 
           include_examples 'handles runner assignment'
         end
 
-        context 'with ci_queueing_denormalize_shared_runners_information disabled' do
+        context 'with ci_queuing_use_denormalized_data_strategy disabled' do
           before do
-            stub_feature_flags(ci_queueing_denormalize_shared_runners_information: false)
+            skip_if_multiple_databases_are_setup
+
+            stub_feature_flags(ci_queuing_use_denormalized_data_strategy: false)
+          end
+
+          around do |example|
+            allow_cross_joins_across_databases(url: 'https://gitlab.com/gitlab-org/gitlab/-/issues/332952') do
+              example.run
+            end
           end
 
           include_examples 'handles runner assignment'
         end
 
-        context 'with ci_queueing_denormalize_tags_information enabled' do
+        context 'with ci_queuing_use_denormalized_data_strategy enabled' do
           before do
-            stub_feature_flags(ci_queueing_denormalize_tags_information: true)
-          end
-
-          include_examples 'handles runner assignment'
-        end
-
-        context 'with ci_queueing_denormalize_tags_information disabled' do
-          before do
-            stub_feature_flags(ci_queueing_denormalize_tags_information: false)
+            stub_feature_flags(ci_queuing_use_denormalized_data_strategy: true)
           end
 
           include_examples 'handles runner assignment'
@@ -759,7 +775,15 @@ module Ci
 
       context 'when not using pending builds table' do
         before do
+          skip_if_multiple_databases_are_setup
+
           stub_feature_flags(ci_pending_builds_queue_source: false)
+        end
+
+        around do |example|
+          allow_cross_joins_across_databases(url: 'https://gitlab.com/gitlab-org/gitlab/-/issues/332952') do
+            example.run
+          end
         end
 
         include_examples 'handles runner assignment'
@@ -807,11 +831,17 @@ module Ci
         end
 
         context 'when project already has running jobs' do
-          let!(:build2) { create(:ci_build, :running, pipeline: pipeline, runner: shared_runner) }
-          let!(:build3) { create(:ci_build, :running, pipeline: pipeline, runner: shared_runner) }
+          let(:build2) { create(:ci_build, :running, pipeline: pipeline, runner: shared_runner) }
+          let(:build3) { create(:ci_build, :running, pipeline: pipeline, runner: shared_runner) }
+
+          before do
+            ::Ci::RunningBuild.upsert_shared_runner_build!(build2)
+            ::Ci::RunningBuild.upsert_shared_runner_build!(build3)
+          end
 
           it 'counts job queuing time histogram with expected labels' do
             allow(attempt_counter).to receive(:increment)
+
             expect(job_queue_duration_seconds).to receive(:observe)
               .with({ shared_runner: expected_shared_runner,
                       jobs_running_for_project: expected_jobs_running_for_project_third_job,
@@ -825,6 +855,14 @@ module Ci
       shared_examples 'metrics collector' do
         it_behaves_like 'attempt counter collector'
         it_behaves_like 'jobs queueing time histogram collector'
+
+        context 'when using denormalized data is disabled' do
+          before do
+            stub_feature_flags(ci_pending_builds_maintain_denormalized_data: false)
+          end
+
+          it_behaves_like 'jobs queueing time histogram collector'
+        end
       end
 
       context 'when shared runner is used' do
@@ -851,6 +889,16 @@ module Ci
         context 'when multiple metrics_shard tag is defined' do
           let(:runner) { create(:ci_runner, :instance, tag_list: %w(tag1 metrics_shard::shard_tag metrics_shard::shard_tag_2 tag2)) }
           let(:expected_shard) { 'shard_tag' }
+
+          it_behaves_like 'metrics collector'
+        end
+
+        context 'when max running jobs bucket size is exceeded' do
+          before do
+            stub_const('Gitlab::Ci::Queue::Metrics::JOBS_RUNNING_FOR_PROJECT_MAX_BUCKET', 1)
+          end
+
+          let(:expected_jobs_running_for_project_third_job) { '1+' }
 
           it_behaves_like 'metrics collector'
         end

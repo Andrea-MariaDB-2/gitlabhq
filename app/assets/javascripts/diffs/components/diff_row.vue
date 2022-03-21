@@ -1,5 +1,9 @@
 <script>
 /* eslint-disable vue/no-v-html */
+/**
+NOTE: This file uses v-html over v-safe-html for performance reasons, see:
+https://gitlab.com/gitlab-org/gitlab/-/merge_requests/57842
+* */
 import { memoize } from 'lodash';
 import { isLoggedIn } from '~/lib/utils/common_utils';
 import {
@@ -34,6 +38,11 @@ export default {
       required: true,
     },
     isCommented: {
+      type: Boolean,
+      required: false,
+      default: false,
+    },
+    coverageLoaded: {
       type: Boolean,
       required: false,
       default: false,
@@ -79,14 +88,15 @@ export default {
       if (!props.inline || !props.line.left) return {};
       return props.fileLineCoverage(props.filePath, props.line.left.new_line);
     },
-    (props) => [props.inline, props.filePath, props.line.left?.new_line].join(':'),
+    (props) =>
+      [props.inline, props.filePath, props.line.left?.new_line, props.coverageLoaded].join(':'),
   ),
   coverageStateRight: memoize(
     (props) => {
       if (!props.line.right) return {};
       return props.fileLineCoverage(props.filePath, props.line.right.new_line);
     },
-    (props) => [props.line.right?.new_line, props.filePath].join(':'),
+    (props) => [props.line.right?.new_line, props.filePath, props.coverageLoaded].join(':'),
   ),
   showCodequalityLeft: memoize(
     (props) => {
@@ -268,7 +278,9 @@ export default {
           ]"
           class="diff-td line_content with-coverage left-side"
           data-testid="left-content"
-          v-html="$options.lineContent(props.line.left)"
+          v-html="
+            $options.lineContent(props.line.left) /* v-html for performance, see top of file */
+          "
         ></div>
       </template>
       <template
@@ -390,7 +402,9 @@ export default {
             },
           ]"
           class="diff-td line_content with-coverage right-side parallel"
-          v-html="$options.lineContent(props.line.right)"
+          v-html="
+            $options.lineContent(props.line.right) /* v-html for performance, see top of file */
+          "
         ></div>
       </template>
       <template v-else>

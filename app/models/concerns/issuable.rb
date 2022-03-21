@@ -26,6 +26,7 @@ module Issuable
   include UpdatedAtFilterable
   include ClosedAtFilterable
   include VersionedDescription
+  include SortableTitle
 
   TITLE_LENGTH_MAX = 255
   TITLE_HTML_LENGTH_MAX = 800
@@ -42,7 +43,7 @@ module Issuable
 
   included do
     cache_markdown_field :title, pipeline: :single_line
-    cache_markdown_field :description, issuable_state_filter_enabled: true
+    cache_markdown_field :description, issuable_reference_expansion_enabled: true
 
     redact_field :description
 
@@ -60,9 +61,20 @@ module Issuable
         # We check first if we're loaded to not load unnecessarily.
         loaded? && to_a.all? { |note| note.association(:award_emoji).loaded? }
       end
+
+      def projects_loaded?
+        # We check first if we're loaded to not load unnecessarily.
+        loaded? && to_a.all? { |note| note.association(:project).loaded? }
+      end
+
+      def system_note_metadata_loaded?
+        # We check first if we're loaded to not load unnecessarily.
+        loaded? && to_a.all? { |note| note.association(:system_note_metadata).loaded? }
+      end
     end
 
     has_many :note_authors, -> { distinct }, through: :notes, source: :author
+    has_many :user_note_authors, -> { distinct.where("notes.system = false") }, through: :notes, source: :author
 
     has_many :label_links, as: :target, inverse_of: :target
     has_many :labels, through: :label_links
@@ -91,7 +103,6 @@ module Issuable
     scope :recent, -> { reorder(id: :desc) }
     scope :of_projects, ->(ids) { where(project_id: ids) }
     scope :opened, -> { with_state(:opened) }
-    scope :only_opened, -> { with_state(:opened) }
     scope :closed, -> { with_state(:closed) }
 
     # rubocop:disable GitlabSecurity/SqlInjection
@@ -115,20 +126,6 @@ module Issuable
       where(condition.arel.exists.not)
     end
     # rubocop:enable GitlabSecurity/SqlInjection
-
-    scope :without_particular_labels, ->(label_names) do
-      labels_table = Label.arel_table
-      label_links_table = LabelLink.arel_table
-      issuables_table = klass.arel_table
-      inner_query = label_links_table.project('true')
-                        .join(labels_table, Arel::Nodes::InnerJoin).on(labels_table[:id].eq(label_links_table[:label_id]))
-                        .where(label_links_table[:target_type].eq(name)
-                                   .and(label_links_table[:target_id].eq(issuables_table[:id]))
-                                   .and(labels_table[:title].in(label_names)))
-                        .exists.not
-
-      where(inner_query)
-    end
 
     scope :without_label, -> { joins("LEFT OUTER JOIN label_links ON label_links.target_type = '#{name}' AND label_links.target_id = #{table_name}.id").where(label_links: { id: nil }) }
     scope :with_label_ids, ->(label_ids) { joins(:label_links).where(label_links: { label_id: label_ids }) }
@@ -194,6 +191,12 @@ module Issuable
     end
 
     def supports_severity?
+      incident?
+    end
+
+    def supports_escalation?
+      return false unless ::Feature.enabled?(:incident_escalations, project)
+
       incident?
     end
 
@@ -293,6 +296,8 @@ module Issuable
         when 'popularity', 'popularity_desc', 'upvotes_desc'  then order_upvotes_desc
         when 'priority', 'priority_asc'                       then order_due_date_and_labels_priority(excluded_labels: excluded_labels)
         when 'priority_desc'                                  then order_due_date_and_labels_priority('DESC', excluded_labels: excluded_labels)
+        when 'title_asc'                                      then order_title_asc.with_order_id_desc
+        when 'title_desc'                                     then order_title_desc.with_order_id_desc
         else order_by(method)
         end
 
@@ -361,9 +366,10 @@ module Issuable
     end
 
     # Includes table keys in group by clause when sorting
-    # preventing errors in postgres
+    # preventing errors in Postgres
     #
-    # Returns an array of arel columns
+    # Returns an array of Arel columns
+    #
     def grouping_columns(sort)
       sort = sort.to_s
       grouping_columns = [arel_table[:id]]
@@ -382,9 +388,10 @@ module Issuable
     end
 
     # Includes all table keys in group by clause when sorting
-    # preventing errors in postgres when using CTE search optimisation
+    # preventing errors in Postgres when using CTE search optimization
     #
-    # Returns an array of arel columns
+    # Returns an array of Arel columns
+    #
     def issue_grouping_columns(use_cte: false)
       if use_cte
         attribute_names.map { |attr| arel_table[attr.to_sym] }
@@ -458,35 +465,52 @@ module Issuable
     false
   end
 
+  def hook_association_changes(old_associations)
+    changes = {}
+
+    old_labels = old_associations.fetch(:labels, labels)
+    old_assignees = old_associations.fetch(:assignees, assignees)
+    old_severity = old_associations.fetch(:severity, severity)
+
+    if old_labels != labels
+      changes[:labels] = [old_labels.map(&:hook_attrs), labels.map(&:hook_attrs)]
+    end
+
+    if old_assignees != assignees
+      changes[:assignees] = [old_assignees.map(&:hook_attrs), assignees.map(&:hook_attrs)]
+    end
+
+    if supports_severity? && old_severity != severity
+      changes[:severity] = [old_severity, severity]
+    end
+
+    if supports_escalation? && escalation_status
+      current_escalation_status = escalation_status.status_name
+      old_escalation_status = old_associations.fetch(:escalation_status, current_escalation_status)
+
+      if old_escalation_status != current_escalation_status
+        changes[:escalation_status] = [old_escalation_status, current_escalation_status]
+      end
+    end
+
+    if self.respond_to?(:total_time_spent)
+      old_total_time_spent = old_associations.fetch(:total_time_spent, total_time_spent)
+      old_time_change = old_associations.fetch(:time_change, time_change)
+
+      if old_total_time_spent != total_time_spent
+        changes[:total_time_spent] = [old_total_time_spent, total_time_spent]
+        changes[:time_change] = [old_time_change, time_change]
+      end
+    end
+
+    changes
+  end
+
   def to_hook_data(user, old_associations: {})
     changes = previous_changes
 
-    if old_associations
-      old_labels = old_associations.fetch(:labels, labels)
-      old_assignees = old_associations.fetch(:assignees, assignees)
-      old_severity = old_associations.fetch(:severity, severity)
-
-      if old_labels != labels
-        changes[:labels] = [old_labels.map(&:hook_attrs), labels.map(&:hook_attrs)]
-      end
-
-      if old_assignees != assignees
-        changes[:assignees] = [old_assignees.map(&:hook_attrs), assignees.map(&:hook_attrs)]
-      end
-
-      if supports_severity? && old_severity != severity
-        changes[:severity] = [old_severity, severity]
-      end
-
-      if self.respond_to?(:total_time_spent)
-        old_total_time_spent = old_associations.fetch(:total_time_spent, total_time_spent)
-        old_time_change = old_associations.fetch(:time_change, time_change)
-
-        if old_total_time_spent != total_time_spent
-          changes[:total_time_spent] = [old_total_time_spent, total_time_spent]
-          changes[:time_change] = [old_time_change, time_change]
-        end
-      end
+    if old_associations.present?
+      changes.merge!(hook_association_changes(old_associations))
     end
 
     Gitlab::HookData::IssuableBuilder.new(self).build(user: user, changes: changes)
@@ -536,6 +560,8 @@ module Issuable
     includes = []
     includes << :author unless notes.authors_loaded?
     includes << :award_emoji unless notes.award_emojis_loaded?
+    includes << :project unless notes.projects_loaded?
+    includes << :system_note_metadata unless notes.system_note_metadata_loaded?
 
     if includes.any?
       notes.includes(includes)
@@ -572,7 +598,7 @@ module Issuable
   ##
   # Overridden in MergeRequest
   #
-  def wipless_title_changed(old_title)
+  def draftless_title_changed(old_title)
     old_title != title
   end
 end

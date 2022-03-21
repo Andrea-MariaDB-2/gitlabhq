@@ -1,16 +1,14 @@
 /* eslint no-param-reassign: "off" */
 import MockAdapter from 'axios-mock-adapter';
 import $ from 'jquery';
-import GfmAutoComplete, { membersBeforeSave } from 'ee_else_ce/gfm_auto_complete';
-import { initEmojiMock } from 'helpers/emoji';
+import labelsFixture from 'test_fixtures/autocomplete_sources/labels.json';
+import GfmAutoComplete, { membersBeforeSave, highlighter } from 'ee_else_ce/gfm_auto_complete';
+import { initEmojiMock, clearEmojiMock } from 'helpers/emoji';
 import '~/lib/utils/jquery_at_who';
-import { getJSONFixture } from 'helpers/fixtures';
 import { TEST_HOST } from 'helpers/test_constants';
 import waitForPromises from 'helpers/wait_for_promises';
 import AjaxCache from '~/lib/utils/ajax_cache';
 import axios from '~/lib/utils/axios_utils';
-
-const labelsFixture = getJSONFixture('autocomplete_sources/labels.json');
 
 describe('GfmAutoComplete', () => {
   const fetchDataMock = { fetchData: jest.fn() };
@@ -574,6 +572,15 @@ describe('GfmAutoComplete', () => {
         }),
       ).toBe('<li><small>grp/proj#5</small> Some Issue</li>');
     });
+
+    it('escapes title in the template as it is user input', () => {
+      expect(
+        GfmAutoComplete.Issues.templateFunction({
+          id: 5,
+          title: '${search}<script>oh no $', // eslint-disable-line no-template-curly-in-string
+        }),
+      ).toBe('<li><small>5</small> &dollar;{search}&lt;script&gt;oh no &dollar;</li>');
+    });
   });
 
   describe('GfmAutoComplete.Members', () => {
@@ -608,16 +615,18 @@ describe('GfmAutoComplete', () => {
         ).toBe('<li>IMG my-group <small></small> <i class="icon"/></li>');
       });
 
-      it('should add escaped title if title is set', () => {
+      it('escapes title in the template as it is user input', () => {
         expect(
           GfmAutoComplete.Members.templateFunction({
             avatarTag: 'IMG',
             username: 'my-group',
-            title: 'MyGroup+',
+            title: '${search}<script>oh no $', // eslint-disable-line no-template-curly-in-string
             icon: '<i class="icon"/>',
             availabilityStatus: '',
           }),
-        ).toBe('<li>IMG my-group <small>MyGroup+</small> <i class="icon"/></li>');
+        ).toBe(
+          '<li>IMG my-group <small>&dollar;{search}&lt;script&gt;oh no &dollar;</small> <i class="icon"/></li>',
+        );
       });
 
       it('should add user availability status if availabilityStatus is set', () => {
@@ -782,11 +791,18 @@ describe('GfmAutoComplete', () => {
         ${'/unlabel ~'} | ${assignedLabels}
       `('$input shows $output.length labels', expectLabels);
     });
+
+    it('escapes title in the template as it is user input', () => {
+      const color = '#123456';
+      const title = '${search}<script>oh no $'; // eslint-disable-line no-template-curly-in-string
+
+      expect(GfmAutoComplete.Labels.templateFunction(color, title)).toBe(
+        '<li><span class="dropdown-label-box" style="background: #123456"></span> &dollar;{search}&lt;script&gt;oh no &dollar;</li>',
+      );
+    });
   });
 
   describe('emoji', () => {
-    let mock;
-
     const mockItem = {
       'atwho-at': ':',
       emoji: {
@@ -800,14 +816,14 @@ describe('GfmAutoComplete', () => {
     };
 
     beforeEach(async () => {
-      mock = await initEmojiMock();
+      await initEmojiMock();
 
       await new GfmAutoComplete({}).loadEmojiData({ atwho() {}, trigger() {} }, ':');
       if (!GfmAutoComplete.glEmojiTag) throw new Error('emoji not loaded');
     });
 
     afterEach(() => {
-      mock.restore();
+      clearEmojiMock();
     });
 
     describe('Emoji.templateFunction', () => {
@@ -827,6 +843,27 @@ describe('GfmAutoComplete', () => {
 
         expect(actual).toBe(expected);
       });
+    });
+  });
+
+  describe('milestones', () => {
+    it('escapes title in the template as it is user input', () => {
+      const expired = false;
+      const title = '${search}<script>oh no $'; // eslint-disable-line no-template-curly-in-string
+
+      expect(GfmAutoComplete.Milestones.templateFunction(title, expired)).toBe(
+        '<li>&dollar;{search}&lt;script&gt;oh no &dollar;</li>',
+      );
+    });
+  });
+
+  describe('highlighter', () => {
+    it('escapes regex', () => {
+      const li = '<li>couple (woman,woman) <gl-emoji data-name="couple_ww"></gl-emoji></li>';
+
+      expect(highlighter(li, ')')).toBe(
+        '<li> couple (woman,woman<strong>)</strong>  <gl-emoji data-name="couple_ww"></gl-emoji></li>',
+      );
     });
   });
 });

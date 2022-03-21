@@ -1,13 +1,14 @@
 ---
 stage: Create
 group: Editor
-info: "To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments"
-type: reference, api
+info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
 ---
 
 # Project wikis API **(FREE)**
 
-> [Introduced](https://gitlab.com/gitlab-org/gitlab-foss/-/merge_requests/13372) in GitLab 10.0.
+> - The `encoding` field was [added](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/81150) in GitLab 14.9.
+> - The `render_html` attribute was [added](https://gitlab.com/gitlab-org/gitlab/-/issues/336792) in GitLab 14.9.
+> - The `version` attribute was [added](https://gitlab.com/gitlab-org/gitlab/-/issues/336792) in GitLab 14.9.
 
 The project [wikis](../user/project/wiki/index.md) API is available only in APIv4.
 An API for [group wikis](group_wikis.md) is also available.
@@ -37,18 +38,21 @@ Example response:
     "content" : "Here is an instruction how to deploy this project.",
     "format" : "markdown",
     "slug" : "deploy",
-    "title" : "deploy"
+    "title" : "deploy",
+    "encoding": "UTF-8"
   },
   {
     "content" : "Our development process is described here.",
     "format" : "markdown",
     "slug" : "development",
-    "title" : "development"
+    "title" : "development",
+    "encoding": "UTF-8"
   },{
     "content" : "*  [Deploy](deploy)\n*  [Development](development)",
     "format" : "markdown",
     "slug" : "home",
-    "title" : "home"
+    "title" : "home",
+    "encoding": "UTF-8"
   }
 ]
 ```
@@ -65,6 +69,8 @@ GET /projects/:id/wikis/:slug
 | --------- | ------- | -------- | --------------------- |
 | `id`      | integer/string    | yes      | The ID or [URL-encoded path of the project](index.md#namespaced-path-encoding) |
 | `slug` | string  | yes       | URLencoded slug (a unique string) of the wiki page, such as `dir%2Fpage_name`  |
+| `render_html`      | boolean    | no      | Return the rendered HTML of the wiki page  |
+| `version`      | string    | no      | Wiki page version sha  |
 
 ```shell
 curl --header "PRIVATE-TOKEN: <your_access_token>" "https://gitlab.example.com/api/v4/projects/1/wikis/home"
@@ -77,7 +83,8 @@ Example response:
   "content" : "home page",
   "format" : "markdown",
   "slug" : "home",
-  "title" : "home"
+  "title" : "home",
+  "encoding": "UTF-8"
 }
 ```
 
@@ -108,7 +115,8 @@ Example response:
   "content" : "Hello world",
   "format" : "markdown",
   "slug" : "Hello",
-  "title" : "Hello"
+  "title" : "Hello",
+  "encoding": "UTF-8"
 }
 ```
 
@@ -140,7 +148,8 @@ Example response:
   "content" : "documentation",
   "format" : "markdown",
   "slug" : "Docs",
-  "title" : "Docs"
+  "title" : "Docs",
+  "encoding": "UTF-8"
 }
 ```
 

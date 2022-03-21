@@ -20,7 +20,7 @@ are very appreciative of the work done by translators and proofreaders!
 - Arabic
   - Proofreaders needed.
 - Bosnian
-  - Proofreaders needed.
+  - Haris Delalić - [GitLab](https://gitlab.com/haris.delalic), [Crowdin](https://crowdin.com/profile/haris.delalic)
 - Bulgarian
   - Lyubomir Vasilev - [Crowdin](https://crowdin.com/profile/lyubomirv)
 - Catalan
@@ -38,7 +38,7 @@ are very appreciative of the work done by translators and proofreaders!
   - Victor Wu - [GitLab](https://gitlab.com/_victorwu_), [Crowdin](https://crowdin.com/profile/victorwu)
   - Ivan Ip - [GitLab](https://gitlab.com/lifehome), [Crowdin](https://crowdin.com/profile/lifehome)
 - Croatian
-  - Proofreaders needed.
+  - Haris Delalić - [GitLab](https://gitlab.com/haris.delalic), [Crowdin](https://crowdin.com/profile/haris.delalic)
 - Czech
   - Jan Urbanec - [GitLab](https://gitlab.com/TatranskyMedved), [Crowdin](https://crowdin.com/profile/Tatranskymedved)
 - Danish
@@ -98,9 +98,11 @@ are very appreciative of the work done by translators and proofreaders!
   - Paulo George Gomes Bezerra - [GitLab](https://gitlab.com/paulobezerra), [Crowdin](https://crowdin.com/profile/paulogomes.rep)
   - André Gama - [GitLab](https://gitlab.com/andregamma), [Crowdin](https://crowdin.com/profile/ToeOficial)
   - Eduardo Addad de Oliveira - [GitLab](https://gitlab.com/eduardoaddad), [Crowdin](https://crowdin.com/profile/eduardoaddad)
+  - Horberlan Brito - [GitLab](https://gitlab.com/horberlan), [Crowdin](https://crowdin.com/profile/horberlan)
 - Romanian
-  - Mircea Pop - [GitLab](https://gitlab.com/eeex)[Crowdin](https://crowdin.com/profile/eex)
-  - Rareș Pița - [GitLab](https://gitlab.com/dlphin)[Crowdin](https://crowdin.com/profile/dlphin)
+  - Mircea Pop - [GitLab](https://gitlab.com/eeex), [Crowdin](https://crowdin.com/profile/eex)
+  - Rareș Pița - [GitLab](https://gitlab.com/dlphin), [Crowdin](https://crowdin.com/profile/dlphin)
+  - Nicolae Liviu - [GitLab](https://gitlab.com/nicklcanada), [Crowdin](https://crowdin.com/profile/nicklcanada)
 - Russian
   - Nikita Grylov - [GitLab](https://gitlab.com/nixel2007), [Crowdin](https://crowdin.com/profile/nixel2007)
   - Alexy Lustin - [GitLab](https://gitlab.com/allustin), [Crowdin](https://crowdin.com/profile/lustin)
@@ -109,7 +111,9 @@ are very appreciative of the work done by translators and proofreaders!
   - Andrey Komarov - [GitLab](https://gitlab.com/elkamarado), [Crowdin](https://crowdin.com/profile/kamarado)
   - Iaroslav Postovalov - [GitLab](https://gitlab.com/CMDR_Tvis), [Crowdin](https://crowdin.com/profile/CMDR_Tvis)
 - Serbian (Latin and Cyrillic)
-  - Proofreaders needed.
+  - Haris Delalić - [GitLab](https://gitlab.com/haris.delalic), [Crowdin](https://crowdin.com/profile/haris.delalic)
+- Sinhalese/Sinhala සිංහල
+  - හෙළබස (HelaBasa) - [GitLab](https://gitlab.com/helabasa), [Crowdin](https://crowdin.com/profile/helabasa)
 - Slovak
   - Proofreaders needed.
 - Spanish

@@ -1,7 +1,9 @@
 import { GlIcon, GlSprintf } from '@gitlab/ui';
 import { GlBreakpointInstance } from '@gitlab/ui/dist/utils';
+import { nextTick } from 'vue';
+import { createMockDirective, getBinding } from 'helpers/vue_mock_directive';
 import { shallowMountExtended } from 'helpers/vue_test_utils_helper';
-import PackageTags from '~/packages/shared/components/package_tags.vue';
+import PackageTags from '~/packages_and_registries/shared/components/package_tags.vue';
 import PackageTitle from '~/packages_and_registries/package_registry/components/details/package_title.vue';
 import {
   PACKAGE_TYPE_CONAN,
@@ -23,15 +25,18 @@ const packageWithTags = {
 describe('PackageTitle', () => {
   let wrapper;
 
-  function createComponent(packageEntity = packageWithTags) {
+  async function createComponent(packageEntity = packageWithTags) {
     wrapper = shallowMountExtended(PackageTitle, {
       propsData: { packageEntity },
       stubs: {
         TitleArea,
         GlSprintf,
       },
+      directives: {
+        GlResizeObserver: createMockDirective(),
+      },
     });
-    return wrapper.vm.$nextTick();
+    await nextTick();
   }
 
   const findTitleArea = () => wrapper.findComponent(TitleArea);
@@ -51,7 +56,7 @@ describe('PackageTitle', () => {
 
   describe('renders', () => {
     it('without tags', async () => {
-      await createComponent();
+      await createComponent({ ...packageData(), packageFiles: { nodes: packageFiles() } });
 
       expect(wrapper.element).toMatchSnapshot();
     });
@@ -64,10 +69,24 @@ describe('PackageTitle', () => {
 
     it('with tags on mobile', async () => {
       jest.spyOn(GlBreakpointInstance, 'isDesktop').mockReturnValue(false);
+
       await createComponent();
 
-      await wrapper.vm.$nextTick();
+      await nextTick();
 
+      expect(findPackageBadges()).toHaveLength(packageTags().length);
+    });
+
+    it('when the page is resized', async () => {
+      await createComponent();
+
+      expect(findPackageBadges()).toHaveLength(0);
+
+      jest.spyOn(GlBreakpointInstance, 'isDesktop').mockReturnValue(false);
+      const { value } = getBinding(wrapper.element, 'gl-resize-observer');
+      value();
+
+      await nextTick();
       expect(findPackageBadges()).toHaveLength(packageTags().length);
     });
   });

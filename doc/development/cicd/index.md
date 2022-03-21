@@ -7,16 +7,17 @@ type: index, concepts, howto
 
 # CI/CD development documentation **(FREE)**
 
-Development guides that are specific to CI/CD are listed here.
+Development guides that are specific to CI/CD are listed here:
 
-If you are creating new CI/CD templates, please read [the development guide for GitLab CI/CD templates](templates.md).
+- If you are creating new CI/CD templates, please read [the development guide for GitLab CI/CD templates](templates.md).
+- If you are adding a new keyword or changing the CI schema, check the [CI schema guide](schema.md)
 
 See the [CI/CD YAML reference documentation guide](cicd_reference_documentation_guide.md)
 to learn how to update the [reference page](../../ci/yaml/index.md).
 
 ## CI Architecture overview
 
-The following is a simplified diagram of the CI architecture. Some details are left out in order to focus on
+The following is a simplified diagram of the CI architecture. Some details are left out to focus on
 the main components.
 
 ![CI software architecture](img/ci_architecture.png)
@@ -27,9 +28,9 @@ On the left side we have the events that can trigger a pipeline based on various
 - A `git push` is the most common event that triggers a pipeline.
 - The [Web API](../../api/pipelines.md#create-a-new-pipeline).
 - A user clicking the "Run pipeline" button in the UI.
-- When a [merge request is created or updated](../../ci/pipelines/merge_request_pipelines.md#pipelines-for-merge-requests).
+- When a [merge request is created or updated](../../ci/pipelines/merge_request_pipelines.md).
 - When an MR is added to a [Merge Train](../../ci/pipelines/merge_trains.md#merge-trains).
-- A [scheduled pipeline](../../ci/pipelines/schedules.md#pipeline-schedules).
+- A [scheduled pipeline](../../ci/pipelines/schedules.md).
 - When project is [subscribed to an upstream project](../../ci/pipelines/multi_project_pipelines.md#trigger-a-pipeline-when-an-upstream-project-is-rebuilt).
 - When [Auto DevOps](../../topics/autodevops/index.md) is enabled.
 - When GitHub integration is used with [external pull requests](../../ci/ci_cd_for_external_repos/index.md#pipelines-for-external-pull-requests).
@@ -73,7 +74,7 @@ which picks the next job and assigns it to the runner. At this point the job tra
 For more details read [Job scheduling](#job-scheduling)).
 
 While a job is being executed, the runner sends logs back to the server as well any possible artifacts
-that need to be stored. Also, a job may depend on artifacts from previous jobs in order to run. In this
+that must be stored. Also, a job may depend on artifacts from previous jobs to run. In this
 case the runner downloads them using a dedicated API endpoint.
 
 Artifacts are stored in object storage, while metadata is kept in the database. An important example of artifacts
@@ -109,9 +110,14 @@ After the server receives the request it selects a `pending` job based on the [`
 
 Once all jobs are completed for the current stage, the server "unlocks" all the jobs from the next stage by changing their state to `pending`. These can now be picked by the scheduling algorithm when the runner requests new jobs, and continues like this until all stages are completed.
 
+If a job is not picked up by a runner in 24 hours it is automatically removed from
+the processing queue after that time. If a pending job is stuck, when there is no
+runner available that can process it, it is removed from the queue after 1 hour.
+In both cases the job's status is changed to `failed` with an appropriate failure reason.
+
 ### Communication between runner and GitLab server
 
-Once the runner is [registered](https://docs.gitlab.com/runner/register/) using the registration token, the server knows what type of jobs it can execute. This depends on:
+After the runner is [registered](https://docs.gitlab.com/runner/register/) using the registration token, the server knows what type of jobs it can execute. This depends on:
 
 - The type of runner it is registered as:
   - a shared runner
@@ -119,7 +125,7 @@ Once the runner is [registered](https://docs.gitlab.com/runner/register/) using 
   - a project specific runner
 - Any associated tags.
 
-The runner initiates the communication by requesting jobs to execute with `POST /api/v4/jobs/request`. Although this polling generally happens every few seconds we leverage caching via HTTP headers to reduce the server-side work load if the job queue doesn't change.
+The runner initiates the communication by requesting jobs to execute with `POST /api/v4/jobs/request`. Although polling happens every few seconds, we leverage caching through HTTP headers to reduce the server-side work load if the job queue doesn't change.
 
 This API endpoint runs [`Ci::RegisterJobService`](https://gitlab.com/gitlab-org/gitlab/-/blob/master/app/services/ci/register_job_service.rb), which:
 
@@ -157,7 +163,7 @@ On top of that, we have the following types of jobs:
 
 - `Ci::Build` ... The job to be executed by runners.
 - `Ci::Bridge` ... The job to trigger a downstream pipeline.
-- `GenericCommitStatus` ... The job to be executed in an external CI/CD system e.g. Jenkins.
+- `GenericCommitStatus` ... The job to be executed in an external CI/CD system, for example Jenkins.
 
 When you use the "Job" terminology in codebase, readers would
 assume that the class/object is any type of above.
@@ -169,18 +175,18 @@ We have a few inconsistencies in our codebase that should be refactored.
 For example, `CommitStatus` should be `Ci::Job` and `Ci::JobArtifact` should be `Ci::BuildArtifact`.
 See [this issue](https://gitlab.com/gitlab-org/gitlab/-/issues/16111) for the full refactoring plan.
 
-## CI Minutes
+## CI/CD Minutes
 
-This diagram shows how the [CI minutes](../../subscriptions/gitlab_com/index.md#ci-pipeline-minutes)
+This diagram shows how the [CI/CD minutes](../../ci/pipelines/cicd_minutes.md)
 feature and its components work.
 
-![CI Minutes architecture](img/ci_minutes.png)
+![CI/CD minutes architecture](img/ci_minutes.png)
 <!-- Editable diagram available at https://app.diagrams.net/?libs=general;flowchart#G1XjLPvJXbzMofrC3eKRyDEk95clV6ypOb -->
 
 Watch a walkthrough of this feature in details in the video below.
 
 <div class="video-fallback">
-  See the video: <a href="https://www.youtube.com/watch?v=NmdWRGT8kZg">CI Minutes - architectural overview</a>.
+  See the video: <a href="https://www.youtube.com/watch?v=NmdWRGT8kZg">CI/CD minutes - architectural overview</a>.
 </div>
 <figure class="video-container">
   <iframe src="https://www.youtube.com/embed/NmdWRGT8kZg" frameborder="0" allowfullscreen="true"> </iframe>

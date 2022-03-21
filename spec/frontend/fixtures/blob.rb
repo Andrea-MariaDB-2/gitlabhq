@@ -7,15 +7,12 @@ RSpec.describe Projects::BlobController, '(JavaScript fixtures)', type: :control
 
   let(:namespace) { create(:namespace, name: 'frontend-fixtures' )}
   let(:project) { create(:project, :repository, namespace: namespace, path: 'branches-project') }
-  let(:user) { project.owner }
+  let(:user) { project.first_owner }
 
   render_views
 
-  before(:all) do
-    clean_frontend_fixtures('blob/')
-  end
-
   before do
+    stub_feature_flags(refactor_blob_viewer: false) # This fixture is only used by the legacy (non-refactored) blob viewer
     sign_in(user)
     allow(SecureRandom).to receive(:hex).and_return('securerandomhex:thereisnospoon')
   end
@@ -38,7 +35,7 @@ RSpec.describe Projects::BlobController, '(JavaScript fixtures)', type: :control
     get(:show, params: {
       namespace_id: project.namespace,
       project_id: project,
-      id: 'master/README.md'
+      id: "#{project.default_branch}/README.md"
     })
 
     expect(response).to be_successful

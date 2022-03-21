@@ -7,8 +7,12 @@ info: To determine the technical writer assigned to the Stage/Group associated w
 
 # Requirements Management **(ULTIMATE)**
 
-> - [Introduced](https://gitlab.com/groups/gitlab-org/-/epics/2703) in [GitLab Ultimate](https://about.gitlab.com/pricing/) 12.10.
-> - The ability to add and edit a requirement's long description [introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/224622) in [GitLab Ultimate](https://about.gitlab.com/pricing/) 13.5.
+NOTE:
+In 14.4, Requirements was moved under **Issues**.
+
+> - [Introduced](https://gitlab.com/groups/gitlab-org/-/epics/2703) in GitLab 12.10.
+> - The ability to add and edit a requirement's long description [introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/224622) in GitLab 13.5.
+> - [Moved under Issues](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/70748) in 14.4
 
 With requirements, you can set criteria to check your products against. They can be based on users,
 stakeholders, system, software, or anything else you find important to capture.
@@ -34,11 +38,13 @@ see [GitLab Requirements Traceability Walkthrough](https://youtu.be/VIiuTQYFVa0)
 A paginated list of requirements is available in each project, and there you
 can create a new requirement.
 
-Users with Reporter or higher [permissions](../../permissions.md) can create requirements.
+Prerequisite:
+
+- You must have at least the Reporter role.
 
 To create a requirement:
 
-1. In a project, go to **Requirements**.
+1. In a project, go to **Issues > Requirements**.
 1. Select **New requirement**.
 1. Enter a title and description and select **Create requirement**.
 
@@ -58,11 +64,13 @@ next to the requirement title.
 
 ## Edit a requirement
 
-> The ability to mark a requirement as Satisfied [introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/218607) in [GitLab Ultimate](https://about.gitlab.com/pricing/) 13.5.
+> The ability to mark a requirement as Satisfied [introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/218607) in GitLab 13.5.
 
 You can edit a requirement from the requirements list page.
 
-Users with Reporter or higher [permissions](../../permissions.md) can edit requirements.
+Prerequisite:
+
+- You must have at least the Reporter role.
 
 To edit a requirement:
 
@@ -76,7 +84,9 @@ To edit a requirement:
 You can archive an open requirement while
 you're in the **Open** tab.
 
-Users with Reporter or higher [permissions](../../permissions.md) can archive requirements.
+Prerequisite:
+
+- You must have at least the Reporter role.
 
 To archive a requirement, select **Archive** (**{archive}**).
 
@@ -86,7 +96,9 @@ As soon as a requirement is archived, it no longer appears in the **Open** tab.
 
 You can view the list of archived requirements in the **Archived** tab.
 
-Users with Reporter or higher [permissions](../../permissions.md) can reopen archived requirements.
+Prerequisite:
+
+- You must have at least the Reporter role.
 
 ![archived requirements list](img/requirements_archived_list_view_v13_1.png)
 
@@ -96,7 +108,7 @@ As soon as a requirement is reopened, it no longer appears in the **Archived** t
 
 ## Search for a requirement
 
-> - [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/212543) in [GitLab Ultimate](https://about.gitlab.com/pricing/) 13.1.
+> - [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/212543) in GitLab 13.1.
 > - Searching by status [introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/224614) in GitLab 13.10.
 
 You can search for a requirement from the requirements list page based on the following criteria:
@@ -107,7 +119,7 @@ You can search for a requirement from the requirements list page based on the fo
 
 To search for a requirement:
 
-1. In a project, go to  **Requirements > List**.
+1. In a project, go to **Issues > Requirements > List**.
 1. Select the **Search or filter results** field. A dropdown menu appears.
 1. Select the requirement author or status from the dropdown or enter plain text to search by requirement title.
 1. Press <kbd>Enter</kbd> on your keyboard to filter the list.
@@ -119,10 +131,10 @@ You can also sort the requirements list by:
 
 ## Allow requirements to be satisfied from a CI job
 
-> - [Introduced](https://gitlab.com/groups/gitlab-org/-/epics/2859) in [GitLab Ultimate](https://about.gitlab.com/pricing/) 13.1.
-> - [Added](https://gitlab.com/gitlab-org/gitlab/-/issues/215514) ability to specify individual requirements and their statuses in [GitLab Ultimate](https://about.gitlab.com/pricing/) 13.2.
+> - [Introduced](https://gitlab.com/groups/gitlab-org/-/epics/2859) in GitLab 13.1.
+> - [Added](https://gitlab.com/gitlab-org/gitlab/-/issues/215514) ability to specify individual requirements and their statuses in GitLab 13.2.
 
-GitLab supports [requirements test reports](../../../ci/yaml/index.md#artifactsreportsrequirements) now.
+GitLab supports [requirements test reports](../../../ci/yaml/artifacts_reports.md#artifactsreportsrequirements) now.
 You can add a job to your CI pipeline that, when triggered, marks all existing
 requirements as Satisfied (you may manually satisfy a requirement in the edit form [edit a requirement](#edit-a-requirement)).
 
@@ -205,12 +217,12 @@ requirements_confirmation:
 
 > [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/246857) in GitLab 13.7.
 
+You must have at least the Reporter role.
+
 You can import requirements to a project by uploading a [CSV file](https://en.wikipedia.org/wiki/Comma-separated_values)
 with the columns `title` and `description`.
 
 After the import, the user uploading the CSV file is set as the author of the imported requirements.
-
-Users with Reporter or higher [permissions](../../permissions.md) can import requirements.
 
 ### Import the file
 
@@ -222,7 +234,7 @@ Before you import your file:
 
 To import requirements:
 
-1. In a project, go to **Requirements**.
+1. In a project, go to **Issues > Requirements**.
    - If the project already has existing requirements, select the import icon (**{import}**) in the
      top right.
    - For a project without any requirements, select **Import CSV** in the middle of the page.
@@ -277,11 +289,13 @@ By exporting requirements, you and your team can import them into another tool o
 your customers. Exporting requirements can aid collaboration with higher-level systems, as well as
 audit and regulatory compliance tasks.
 
-Users with Reporter or higher [permissions](../../permissions.md) can export requirements.
+Prerequisite:
+
+- You must have at least the Reporter role.
 
 To export requirements:
 
-1. In a project, go to **Requirements**.
+1. In a project, go to **Issues > Requirements**.
 1. In the top right, select the **Export as CSV** icon (**{export}**).
 
    A confirmation modal appears.

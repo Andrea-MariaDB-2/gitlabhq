@@ -66,7 +66,7 @@ class MergeRequestDiff < ApplicationRecord
     joins(:merge_request).where(merge_requests: { target_project_id: project_id })
   end
 
-  scope :recent, -> { order(id: :desc).limit(100) }
+  scope :recent, -> (limit = 100) { order(id: :desc).limit(limit) }
 
   scope :files_in_database, -> do
     where(stored_externally: [false, nil]).where(arel_table[:files_count].gt(0))
@@ -515,7 +515,7 @@ class MergeRequestDiff < ApplicationRecord
 
     transaction do
       MergeRequestDiffFile.where(merge_request_diff_id: id).delete_all
-      Gitlab::Database.main.bulk_insert('merge_request_diff_files', rows) # rubocop:disable Gitlab/BulkInsert
+      ApplicationRecord.legacy_bulk_insert('merge_request_diff_files', rows) # rubocop:disable Gitlab/BulkInsert
       save!
     end
 
@@ -535,7 +535,7 @@ class MergeRequestDiff < ApplicationRecord
 
     transaction do
       MergeRequestDiffFile.where(merge_request_diff_id: id).delete_all
-      Gitlab::Database.main.bulk_insert('merge_request_diff_files', rows) # rubocop:disable Gitlab/BulkInsert
+      ApplicationRecord.legacy_bulk_insert('merge_request_diff_files', rows) # rubocop:disable Gitlab/BulkInsert
       update!(stored_externally: false)
     end
 
@@ -595,7 +595,7 @@ class MergeRequestDiff < ApplicationRecord
     rows = build_external_merge_request_diff_files(rows) if use_external_diff?
 
     # Faster inserts
-    Gitlab::Database.main.bulk_insert('merge_request_diff_files', rows) # rubocop:disable Gitlab/BulkInsert
+    ApplicationRecord.legacy_bulk_insert('merge_request_diff_files', rows) # rubocop:disable Gitlab/BulkInsert
   end
 
   def build_external_diff_tempfile(rows)
@@ -710,7 +710,7 @@ class MergeRequestDiff < ApplicationRecord
     end
 
     CommitCollection
-      .new(merge_request.source_project, commits, merge_request.source_branch)
+      .new(merge_request.target_project, commits, merge_request.target_branch)
   end
 
   def save_diffs
@@ -719,7 +719,7 @@ class MergeRequestDiff < ApplicationRecord
     if compare.commits.empty?
       new_attributes[:state] = :empty
     else
-      diff_collection = compare.diffs(Commit.max_diff_options(project: merge_request.project))
+      diff_collection = compare.diffs(Commit.max_diff_options)
       new_attributes[:real_size] = diff_collection.real_size
 
       if diff_collection.any?

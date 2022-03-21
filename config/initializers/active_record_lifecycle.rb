@@ -5,7 +5,7 @@
 if defined?(ActiveRecord::Base) && !Gitlab::Runtime.sidekiq?
   Gitlab::Cluster::LifecycleEvents.on_worker_start do
     ActiveSupport.on_load(:active_record) do
-      ActiveRecord::Base.establish_connection
+      ActiveRecord::Base.establish_connection # rubocop: disable Database/EstablishConnection
 
       Gitlab::AppLogger.debug("ActiveRecord connection established")
     end
@@ -14,7 +14,7 @@ end
 
 if defined?(ActiveRecord::Base)
   Gitlab::Cluster::LifecycleEvents.on_before_fork do
-    raise 'ActiveRecord connection not established. Unable to start.' unless Gitlab::Database.main.exists?
+    raise 'ActiveRecord connection not established. Unable to start.' unless ApplicationRecord.database.exists?
 
     # the following is highly recommended for Rails + "preload_app true"
     # as there's no need for the master process to hold a connection

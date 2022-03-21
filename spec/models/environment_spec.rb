@@ -39,7 +39,7 @@ RSpec.describe Environment, :use_clean_rails_memory_store_caching do
     it 'ensures environment tier when a new object is created' do
       environment = build(:environment, name: 'gprd', tier: nil)
 
-      expect { environment.save }.to change { environment.tier }.from(nil).to('production')
+      expect { environment.save! }.to change { environment.tier }.from(nil).to('production')
     end
 
     it 'ensures environment tier when an existing object is updated' do
@@ -282,6 +282,13 @@ RSpec.describe Environment, :use_clean_rails_memory_store_caching do
       'DEV'                | described_class.tiers[:development]
       'development'        | described_class.tiers[:development]
       'trunk'              | described_class.tiers[:development]
+      'dev'                | described_class.tiers[:development]
+      'review/app'         | described_class.tiers[:development]
+      'PRODUCTION'         | described_class.tiers[:production]
+      'prod'               | described_class.tiers[:production]
+      'prod-east-2'        | described_class.tiers[:production]
+      'us-prod-east'       | described_class.tiers[:production]
+      'fe-production'      | described_class.tiers[:production]
       'test'               | described_class.tiers[:testing]
       'TEST'               | described_class.tiers[:testing]
       'testing'            | described_class.tiers[:testing]
@@ -290,6 +297,7 @@ RSpec.describe Environment, :use_clean_rails_memory_store_caching do
       'production-test'    | described_class.tiers[:testing]
       'test-production'    | described_class.tiers[:testing]
       'QC'                 | described_class.tiers[:testing]
+      'qa-env-2'           | described_class.tiers[:testing]
       'gstg'               | described_class.tiers[:staging]
       'staging'            | described_class.tiers[:staging]
       'stage'              | described_class.tiers[:staging]
@@ -298,6 +306,10 @@ RSpec.describe Environment, :use_clean_rails_memory_store_caching do
       'Pre-production'     | described_class.tiers[:staging]
       'pre'                | described_class.tiers[:staging]
       'Demo'               | described_class.tiers[:staging]
+      'staging'            | described_class.tiers[:staging]
+      'pre-prod'           | described_class.tiers[:staging]
+      'blue-kit-stage'     | described_class.tiers[:staging]
+      'pre-prod'           | described_class.tiers[:staging]
       'gprd'               | described_class.tiers[:production]
       'gprd-cny'           | described_class.tiers[:production]
       'production'         | described_class.tiers[:production]
@@ -307,6 +319,8 @@ RSpec.describe Environment, :use_clean_rails_memory_store_caching do
       'production/eu'      | described_class.tiers[:production]
       'PRODUCTION/EU'      | described_class.tiers[:production]
       'productioneu'       | described_class.tiers[:production]
+      'store-produce'      | described_class.tiers[:production]
+      'unproductive'       | described_class.tiers[:production]
       'production/www.gitlab.com' | described_class.tiers[:production]
       'prod'               | described_class.tiers[:production]
       'PROD'               | described_class.tiers[:production]
@@ -314,6 +328,7 @@ RSpec.describe Environment, :use_clean_rails_memory_store_caching do
       'canary'             | described_class.tiers[:other]
       'other'              | described_class.tiers[:other]
       'EXP'                | described_class.tiers[:other]
+      'something-else'     | described_class.tiers[:other]
     end
 
     with_them do
@@ -412,17 +427,17 @@ RSpec.describe Environment, :use_clean_rails_memory_store_caching do
 
       context 'in the same branch' do
         it 'returns true' do
-          expect(environment.includes_commit?(RepoHelpers.sample_commit)).to be true
+          expect(environment.includes_commit?(RepoHelpers.sample_commit.id)).to be true
         end
       end
 
       context 'not in the same branch' do
         before do
-          deployment.update(sha: project.commit('feature').id)
+          deployment.update!(sha: project.commit('feature').id)
         end
 
         it 'returns false' do
-          expect(environment.includes_commit?(RepoHelpers.sample_commit)).to be false
+          expect(environment.includes_commit?(RepoHelpers.sample_commit.id)).to be false
         end
       end
     end
@@ -496,7 +511,7 @@ RSpec.describe Environment, :use_clean_rails_memory_store_caching do
     context 'when no other actions' do
       context 'environment is available' do
         before do
-          environment.update(state: :available)
+          environment.update!(state: :available)
         end
 
         it do
@@ -508,7 +523,7 @@ RSpec.describe Environment, :use_clean_rails_memory_store_caching do
 
       context 'environment is already stopped' do
         before do
-          environment.update(state: :stopped)
+          environment.update!(state: :stopped)
         end
 
         it do
@@ -691,6 +706,28 @@ RSpec.describe Environment, :use_clean_rails_memory_store_caching do
     end
   end
 
+  describe '#last_deployable' do
+    subject { environment.last_deployable }
+
+    context 'does not join across databases' do
+      let(:pipeline_a) { create(:ci_pipeline, project: project) }
+      let(:pipeline_b) { create(:ci_pipeline, project: project) }
+      let(:ci_build_a) { create(:ci_build, project: project, pipeline: pipeline_a) }
+      let(:ci_build_b) { create(:ci_build, project: project, pipeline: pipeline_b) }
+
+      before do
+        create(:deployment, :success, project: project, environment: environment, deployable: ci_build_a)
+        create(:deployment, :failed, project: project, environment: environment, deployable: ci_build_b)
+      end
+
+      it 'when called' do
+        with_cross_joins_prevented do
+          expect(subject.id).to eq(ci_build_a.id)
+        end
+      end
+    end
+  end
+
   describe '#last_visible_deployment' do
     subject { environment.last_visible_deployment }
 
@@ -729,6 +766,54 @@ RSpec.describe Environment, :use_clean_rails_memory_store_caching do
         let!(:deployment) { create(:deployment, :canceled, environment: environment) }
 
         it { is_expected.to eq(deployment) }
+      end
+    end
+  end
+
+  describe '#last_visible_deployable' do
+    subject { environment.last_visible_deployable }
+
+    context 'does not join across databases' do
+      let(:pipeline_a) { create(:ci_pipeline, project: project) }
+      let(:pipeline_b) { create(:ci_pipeline, project: project) }
+      let(:ci_build_a) { create(:ci_build, project: project, pipeline: pipeline_a) }
+      let(:ci_build_b) { create(:ci_build, project: project, pipeline: pipeline_b) }
+
+      before do
+        create(:deployment, :success, project: project, environment: environment, deployable: ci_build_a)
+        create(:deployment, :failed, project: project, environment: environment, deployable: ci_build_b)
+      end
+
+      it 'for direct call' do
+        with_cross_joins_prevented do
+          expect(subject.id).to eq(ci_build_b.id)
+        end
+      end
+
+      it 'for preload' do
+        environment.reload
+
+        with_cross_joins_prevented do
+          ActiveRecord::Associations::Preloader.new.preload(environment, [last_visible_deployable: []])
+          expect(subject.id).to eq(ci_build_b.id)
+        end
+      end
+    end
+
+    context 'call after preload' do
+      it 'fetches from association cache' do
+        pipeline = create(:ci_pipeline, project: project)
+        ci_build = create(:ci_build, project: project, pipeline: pipeline)
+        create(:deployment, :failed, project: project, environment: environment, deployable: ci_build)
+
+        environment.reload
+        ActiveRecord::Associations::Preloader.new.preload(environment, [last_visible_deployable: []])
+
+        query_count = ActiveRecord::QueryRecorder.new do
+          expect(subject.id).to eq(ci_build.id)
+        end.count
+
+        expect(query_count).to eq(0)
       end
     end
   end
@@ -777,6 +862,35 @@ RSpec.describe Environment, :use_clean_rails_memory_store_caching do
       expect(last_pipeline).to eq(failed_pipeline)
     end
 
+    context 'does not join across databases' do
+      let(:pipeline_a) { create(:ci_pipeline, project: project) }
+      let(:pipeline_b) { create(:ci_pipeline, project: project) }
+      let(:ci_build_a) { create(:ci_build, project: project, pipeline: pipeline_a) }
+      let(:ci_build_b) { create(:ci_build, project: project, pipeline: pipeline_b) }
+
+      before do
+        create(:deployment, :success, project: project, environment: environment, deployable: ci_build_a)
+        create(:deployment, :failed, project: project, environment: environment, deployable: ci_build_b)
+      end
+
+      subject { environment.last_visible_pipeline }
+
+      it 'for direct call' do
+        with_cross_joins_prevented do
+          expect(subject.id).to eq(pipeline_b.id)
+        end
+      end
+
+      it 'for preload' do
+        environment.reload
+
+        with_cross_joins_prevented do
+          ActiveRecord::Associations::Preloader.new.preload(environment, [last_visible_pipeline: []])
+          expect(subject.id).to eq(pipeline_b.id)
+        end
+      end
+    end
+
     context 'for the environment' do
       it 'returns the last pipeline' do
         pipeline = create(:ci_pipeline, project: project, user: user, sha: commit.sha)
@@ -815,6 +929,23 @@ RSpec.describe Environment, :use_clean_rails_memory_store_caching do
         end
       end
     end
+
+    context 'call after preload' do
+      it 'fetches from association cache' do
+        pipeline = create(:ci_pipeline, project: project)
+        ci_build = create(:ci_build, project: project, pipeline: pipeline)
+        create(:deployment, :failed, project: project, environment: environment, deployable: ci_build)
+
+        environment.reload
+        ActiveRecord::Associations::Preloader.new.preload(environment, [last_visible_pipeline: []])
+
+        query_count = ActiveRecord::QueryRecorder.new do
+          expect(environment.last_visible_pipeline.id).to eq(pipeline.id)
+        end.count
+
+        expect(query_count).to eq(0)
+      end
+    end
   end
 
   describe '#upcoming_deployment' do
@@ -828,6 +959,12 @@ RSpec.describe Environment, :use_clean_rails_memory_store_caching do
 
     context 'when environment has a running deployment' do
       let!(:deployment) { create(:deployment, :running, environment: environment, project: project) }
+
+      it { is_expected.to eq(deployment) }
+    end
+
+    context 'when environment has a blocked deployment' do
+      let!(:deployment) { create(:deployment, :blocked, environment: environment, project: project) }
 
       it { is_expected.to eq(deployment) }
     end
@@ -1386,7 +1523,7 @@ RSpec.describe Environment, :use_clean_rails_memory_store_caching do
       deployment = create(:deployment, :success, environment: environment, project: project)
       deployment.create_ref
 
-      expect { environment.destroy }.to change { project.commit(deployment.ref_path) }.to(nil)
+      expect { environment.destroy! }.to change { project.commit(deployment.ref_path) }.to(nil)
     end
   end
 
@@ -1401,7 +1538,7 @@ RSpec.describe Environment, :use_clean_rails_memory_store_caching do
       end
 
       it 'returns the environments count grouped by state with zero value' do
-        environment2.update(state: 'stopped')
+        environment2.update!(state: 'stopped')
         expect(project.environments.count_by_state).to eq({ stopped: 3, available: 0 })
       end
     end
@@ -1592,6 +1729,38 @@ RSpec.describe Environment, :use_clean_rails_memory_store_caching do
       expect(environment).to receive(:clear_reactive_cache!)
 
       subject
+    end
+  end
+
+  describe '#should_link_to_merge_requests?' do
+    subject { environment.should_link_to_merge_requests? }
+
+    context 'when environment is foldered' do
+      context 'when environment is production tier' do
+        let(:environment) { create(:environment, project: project, name: 'production/aws') }
+
+        it { is_expected.to eq(true) }
+      end
+
+      context 'when environment is development tier' do
+        let(:environment) { create(:environment, project: project, name: 'review/feature') }
+
+        it { is_expected.to eq(false) }
+      end
+    end
+
+    context 'when environment is unfoldered' do
+      context 'when environment is production tier' do
+        let(:environment) { create(:environment, project: project, name: 'production') }
+
+        it { is_expected.to eq(true) }
+      end
+
+      context 'when environment is development tier' do
+        let(:environment) { create(:environment, project: project, name: 'development') }
+
+        it { is_expected.to eq(true) }
+      end
     end
   end
 end

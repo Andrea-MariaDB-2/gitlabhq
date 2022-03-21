@@ -6,7 +6,7 @@ comments: false
 type: index
 ---
 
-# Services
+# Services **(FREE)**
 
 The `services` keyword defines a Docker image that runs during a `job`
 linked to the Docker image that the image keyword defines. This allows
@@ -259,9 +259,12 @@ test:
 | `name`       | yes, when used with any other option  | 9.4 | Full name of the image to use. If the full image name includes a registry hostname, use the `alias` option to define a shorter service access name. For more information, see [Accessing the services](#accessing-the-services). |
 | `entrypoint` | no     | 9.4 |Command or script to execute as the container's entrypoint. It's translated to Docker's `--entrypoint` option while creating the container. The syntax is similar to [`Dockerfile`'s `ENTRYPOINT`](https://docs.docker.com/engine/reference/builder/#entrypoint) directive, where each shell token is a separate string in the array. |
 | `command`    | no       | 9.4 |Command or script that should be used as the container's command. It's translated to arguments passed to Docker after the image's name. The syntax is similar to [`Dockerfile`'s `CMD`](https://docs.docker.com/engine/reference/builder/#cmd) directive, where each shell token is a separate string in the array. |
-| `alias` (1)     | no       | 9.4 |Additional alias that can be used to access the service from the job's container. Read [Accessing the services](#accessing-the-services) for more information. |
+| `alias` (1)     | no       | 9.4 | Additional alias that can be used to access the service from the job's container. Read [Accessing the services](#accessing-the-services) for more information. |
+| `variables` (2)     | no       | 14.5 | Additional environment variables that are passed exclusively to the service. The syntax is the same as [Job Variables](../variables/index.md). |
 
 (1) Alias support for the Kubernetes executor was [introduced](https://gitlab.com/gitlab-org/gitlab-runner/-/issues/2229) in GitLab Runner 12.8, and is only available for Kubernetes version 1.7 or later.
+
+(2) Service variables support for the Docker and the Kubernetes executor was [introduced](https://gitlab.com/gitlab-org/gitlab-runner/-/merge_requests/3158) in GitLab Runner 14.8.
 
 ## Starting multiple services from the same image
 
@@ -386,7 +389,7 @@ time.
 ## Debug a job locally
 
 The following commands are run without root privileges. You should be
-able to run Docker with your regular user account.
+able to run Docker with your user account.
 
 First start with creating a file named `build_script`:
 
@@ -435,3 +438,7 @@ docker rm -f -v build service-mysql service-postgres
 This forcefully (`-f`) removes the `build` container, the two service
 containers, and all volumes (`-v`) that were created with the container
 creation.
+
+## Security when using services containers
+
+Docker privileged mode applies to services. This means that the service image container can access the host system. You should use container images from trusted sources only.

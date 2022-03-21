@@ -22,20 +22,24 @@ function parseDatasetToProps(data) {
     editProjectPath,
     learnMorePath,
     triggerEvents,
+    sections,
     fields,
     inheritFromId,
     integrationLevel,
     cancelPath,
     testPath,
     resetPath,
+    formPath,
     vulnerabilitiesIssuetype,
     jiraIssueTransitionAutomatic,
     jiraIssueTransitionId,
+    redirectTo,
     ...booleanAttributes
   } = data;
   const {
     showActive,
     activated,
+    activateDisabled,
     editable,
     canTest,
     commitEvents,
@@ -51,12 +55,14 @@ function parseDatasetToProps(data) {
   return {
     initialActivated: activated,
     showActive,
+    activateDisabled,
     type,
     cancelPath,
     editable,
     canTest,
     testPath,
     resetPath,
+    formPath,
     triggerFieldsProps: {
       initialTriggerCommit: commitEvents,
       initialTriggerMergeRequest: mergeRequestEvents,
@@ -78,42 +84,47 @@ function parseDatasetToProps(data) {
     },
     learnMorePath,
     triggerEvents: JSON.parse(triggerEvents),
+    sections: JSON.parse(sections, { deep: true }),
     fields: convertObjectPropsToCamelCase(JSON.parse(fields), { deep: true }),
     inheritFromId: parseInt(inheritFromId, 10),
     integrationLevel,
     id: parseInt(id, 10),
+    redirectTo,
   };
 }
 
-export default (el, defaultEl) => {
-  if (!el) {
+export default function initIntegrationSettingsForm() {
+  const customSettingsEl = document.querySelector('.js-vue-integration-settings');
+  const defaultSettingsEl = document.querySelector('.js-vue-default-integration-settings');
+
+  if (!customSettingsEl) {
     return null;
   }
 
-  const props = parseDatasetToProps(el.dataset);
+  const customSettingsProps = parseDatasetToProps(customSettingsEl.dataset);
   const initialState = {
     defaultState: null,
-    customState: props,
+    customState: customSettingsProps,
   };
-  if (defaultEl) {
-    initialState.defaultState = Object.freeze(parseDatasetToProps(defaultEl.dataset));
+  if (defaultSettingsEl) {
+    initialState.defaultState = Object.freeze(parseDatasetToProps(defaultSettingsEl.dataset));
   }
 
   // Here, we capture the "helpHtml", so we can pass it to the Vue component
   // to position it where ever it wants.
   // Because this node is a _child_ of `el`, it will be removed when the Vue component is mounted,
   // so we don't need to manually remove it.
-  const helpHtml = el.querySelector('.js-integration-help-html')?.innerHTML;
+  const helpHtml = customSettingsEl.querySelector('.js-integration-help-html')?.innerHTML;
 
   return new Vue({
-    el,
+    el: customSettingsEl,
+    name: 'IntegrationEditRoot',
     store: createStore(initialState),
+    provide: {
+      helpHtml,
+    },
     render(createElement) {
-      return createElement(IntegrationForm, {
-        props: {
-          helpHtml,
-        },
-      });
+      return createElement(IntegrationForm);
     },
   });
-};
+}

@@ -12,12 +12,11 @@ import {
   GlTooltipDirective,
 } from '@gitlab/ui';
 import getAlertsQuery from '~/graphql_shared/queries/get_alerts.query.graphql';
+import { sortObjectToString } from '~/lib/utils/table_utility';
 import { fetchPolicies } from '~/lib/graphql';
-import { convertToSnakeCase } from '~/lib/utils/text_utility';
 import { joinPaths, visitUrl } from '~/lib/utils/url_utility';
-import { s__, __ } from '~/locale';
+import { s__, __, n__ } from '~/locale';
 import AlertStatus from '~/vue_shared/alert_details/components/alert_status.vue';
-import AlertsDeprecationWarning from '~/vue_shared/components/alerts_deprecation_warning.vue';
 import {
   tdClass,
   thClass,
@@ -26,7 +25,6 @@ import {
 } from '~/vue_shared/components/paginated_table_with_search_and_tabs/constants';
 import PaginatedTableWithSearchAndTabs from '~/vue_shared/components/paginated_table_with_search_and_tabs/paginated_table_with_search_and_tabs.vue';
 import TimeAgo from '~/vue_shared/components/time_ago_tooltip.vue';
-import glFeatureFlagMixin from '~/vue_shared/mixins/gl_feature_flags_mixin';
 import { ALERTS_STATUS_TABS, SEVERITY_LEVELS, trackAlertListViewsOptions } from '../constants';
 import getAlertsCountByStatus from '../graphql/queries/get_count_by_status.query.graphql';
 
@@ -34,8 +32,11 @@ const TH_TEST_ID = { 'data-testid': 'alert-management-severity-sort' };
 
 const TWELVE_HOURS_IN_MS = 12 * 60 * 60 * 1000;
 
+const MAX_VISIBLE_ASSIGNEES = 4;
+
 export default {
   trackAlertListViewsOptions,
+  MAX_VISIBLE_ASSIGNEES,
   i18n: {
     noAlertsMsg: s__(
       'AlertManagement|No alerts available to display. See %{linkStart}enabling alert management%{linkEnd} for more information on adding alerts to the list.',
@@ -98,7 +99,6 @@ export default {
   severityLabels: SEVERITY_LEVELS,
   statusTabs: ALERTS_STATUS_TABS,
   components: {
-    AlertsDeprecationWarning,
     GlAlert,
     GlLoadingIcon,
     GlTable,
@@ -115,7 +115,6 @@ export default {
   directives: {
     GlTooltip: GlTooltipDirective,
   },
-  mixins: [glFeatureFlagMixin()],
   inject: ['projectPath', 'textQuery', 'assigneeUsernameQuery', 'populatingAlertsHelpUrl'],
   apollo: {
     alerts: {
@@ -214,11 +213,8 @@ export default {
   },
   methods: {
     fetchSortedData({ sortBy, sortDesc }) {
-      const sortingDirection = sortDesc ? 'DESC' : 'ASC';
-      const sortingColumn = convertToSnakeCase(sortBy).toUpperCase();
-
       this.pagination = initialPaginationState;
-      this.sort = `${sortingColumn}_${sortingDirection}`;
+      this.sort = sortObjectToString({ sortBy, sortDesc });
     },
     navigateToAlertDetails({ iid }, index, { metaKey }) {
       return visitUrl(joinPaths(window.location.pathname, iid, 'details'), metaKey);
@@ -262,6 +258,13 @@ export default {
       this.serverErrorMessage = '';
       this.isErrorAlertDismissed = true;
     },
+    assigneesBadgeSrOnlyText(item) {
+      return n__(
+        '%d additional assignee',
+        '%d additional assignees',
+        item.assignees.nodes.length - MAX_VISIBLE_ASSIGNEES,
+      );
+    },
   },
 };
 </script>
@@ -276,8 +279,6 @@ export default {
         </template>
       </gl-sprintf>
     </gl-alert>
-
-    <alerts-deprecation-warning v-if="!glFeatures.managedAlertsDeprecation" />
 
     <paginated-table-with-search-and-tabs
       :show-error-msg="showErrorMsg"
@@ -371,10 +372,11 @@ export default {
                 <gl-avatars-inline
                   :avatars="item.assignees.nodes"
                   :collapsed="true"
-                  :max-visible="4"
+                  :max-visible="$options.MAX_VISIBLE_ASSIGNEES"
                   :avatar-size="24"
                   badge-tooltip-prop="name"
                   :badge-tooltip-max-chars="100"
+                  :badge-sr-only-text="assigneesBadgeSrOnlyText(item)"
                 >
                   <template #avatar="{ avatar }">
                     <gl-avatar-link

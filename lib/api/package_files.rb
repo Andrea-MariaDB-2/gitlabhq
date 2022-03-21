@@ -28,7 +28,10 @@ module API
         package = ::Packages::PackageFinder
           .new(user_project, params[:package_id]).execute
 
-        present paginate(package.package_files), with: ::API::Entities::PackageFile
+        package_files = package.installable_package_files
+                               .preload_pipelines.order_id_asc
+
+        present paginate(package_files), with: ::API::Entities::PackageFile
       end
 
       desc 'Remove a package file' do
@@ -47,11 +50,14 @@ module API
 
         not_found! unless package
 
-        package_file = package.package_files.find_by_id(params[:package_file_id])
+        package_file = package.installable_package_files
+                              .find_by_id(params[:package_file_id])
 
         not_found! unless package_file
 
-        destroy_conditionally!(package_file)
+        destroy_conditionally!(package_file) do |package_file|
+          package_file.pending_destruction!
+        end
       end
     end
   end

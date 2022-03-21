@@ -27,10 +27,24 @@ RSpec.describe FeatureFlags::UpdateService do
       expect(subject[:status]).to eq(:success)
     end
 
-    it 'syncs the feature flag to Jira' do
-      expect(::JiraConnect::SyncFeatureFlagsWorker).to receive(:perform_async).with(Integer, Integer)
+    context 'when Jira Connect subscription does not exist' do
+      it 'does not sync the feature flag to Jira' do
+        expect(::JiraConnect::SyncFeatureFlagsWorker).not_to receive(:perform_async)
 
-      subject
+        subject
+      end
+    end
+
+    context 'when Jira Connect subscription exists' do
+      before do
+        create(:jira_connect_subscription, namespace: project.namespace)
+      end
+
+      it 'syncs the feature flag to Jira' do
+        expect(::JiraConnect::SyncFeatureFlagsWorker).to receive(:perform_async).with(Integer, Integer)
+
+        subject
+      end
     end
 
     it 'creates audit event with correct message' do
@@ -116,7 +130,7 @@ RSpec.describe FeatureFlags::UpdateService do
 
       it 'executes hooks' do
         hook = create(:project_hook, :all_events_enabled, project: project)
-        expect(WebHookWorker).to receive(:perform_async).with(hook.id, an_instance_of(Hash), 'feature_flag_hooks')
+        expect(WebHookWorker).to receive(:perform_async).with(hook.id, an_instance_of(Hash), 'feature_flag_hooks', an_instance_of(Hash))
 
         subject
       end

@@ -46,8 +46,14 @@ module WorkerAttributes
       set_class_attribute(:feature_category, :not_owned)
     end
 
+    # Special case: if a worker is not owned, get the feature category
+    # (if present) from the calling context.
     def get_feature_category
-      get_class_attribute(:feature_category)
+      feature_category = get_class_attribute(:feature_category)
+
+      return feature_category unless feature_category == :not_owned
+
+      Gitlab::ApplicationContext.current_context_attribute('meta.feature_category') || feature_category
     end
 
     def feature_category_not_owned?
@@ -92,17 +98,6 @@ module WorkerAttributes
 
       set_class_attribute(:data_consistency_feature_flag, feature_flag) if feature_flag
       set_class_attribute(:data_consistency, data_consistency)
-
-      validate_worker_attributes!
-    end
-
-    def validate_worker_attributes!
-      # Since the deduplication should always take into account the latest binary replication pointer into account,
-      # not the first one, the deduplication will not work with sticky or delayed.
-      # Follow up issue to improve this: https://gitlab.com/gitlab-org/gitlab/-/issues/325291
-      if idempotent? && utilizes_load_balancing_capabilities?
-        raise ArgumentError, "Class can't be marked as idempotent if data_consistency is not set to :always"
-      end
     end
 
     # If data_consistency is not set to :always, worker will try to utilize load balancing capabilities and use the replica
@@ -147,8 +142,6 @@ module WorkerAttributes
 
     def idempotent!
       set_class_attribute(:idempotent, true)
-
-      validate_worker_attributes!
     end
 
     def idempotent?

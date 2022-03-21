@@ -9,7 +9,9 @@ module Integrations
       :add_pusher,
       :alert_events,
       :api_key,
+      :api_token,
       :api_url,
+      :archive_trace_events,
       :bamboo_url,
       :branches_to_be_notified,
       :labels_to_be_notified,
@@ -28,6 +30,7 @@ module Integrations
       :datadog_site,
       :datadog_env,
       :datadog_service,
+      :datadog_tags,
       :default_irc_uri,
       :device,
       :disable_diffs,
@@ -74,7 +77,8 @@ module Integrations
       :url,
       :user_key,
       :username,
-      :webhook
+      :webhook,
+      :zentao_product_xid
     ].freeze
 
     def integration_params

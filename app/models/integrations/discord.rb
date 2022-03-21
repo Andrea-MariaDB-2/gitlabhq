@@ -4,8 +4,6 @@ require "discordrb/webhooks"
 
 module Integrations
   class Discord < BaseChatNotification
-    include ActionView::Helpers::UrlHelper
-
     ATTACHMENT_REGEX = /: (?<entry>.*?)\n - (?<name>.*)\n*/.freeze
 
     def title
@@ -21,7 +19,7 @@ module Integrations
     end
 
     def help
-      docs_link = link_to _('How do I set up this service?'), Rails.application.routes.url_helpers.help_page_url('user/project/integrations/discord_notifications'), target: '_blank', rel: 'noopener noreferrer'
+      docs_link = ActionController::Base.helpers.link_to _('How do I set up this service?'), Rails.application.routes.url_helpers.help_page_url('user/project/integrations/discord_notifications'), target: '_blank', rel: 'noopener noreferrer'
       s_('Send notifications about project events to a Discord channel. %{docs_link}').html_safe % { docs_link: docs_link.html_safe }
     end
 
@@ -41,7 +39,12 @@ module Integrations
       [
         { type: "text", name: "webhook", placeholder: "https://discordapp.com/api/webhooks/…", help: "URL to the webhook for the Discord channel." },
         { type: "checkbox", name: "notify_only_broken_pipelines" },
-        { type: 'select', name: 'branches_to_be_notified', choices: branch_choices }
+        {
+          type: 'select',
+          name: 'branches_to_be_notified',
+          title: s_('Integrations|Branches for which notifications are to be sent'),
+          choices: branch_choices
+        }
       ]
     end
 

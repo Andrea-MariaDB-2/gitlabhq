@@ -1,11 +1,11 @@
 ---
 stage: Manage
-group: Access
+group: Authentication and Authorization
 info: To determine the technical writer assigned to the Stage/Group associated with this page, see https://about.gitlab.com/handbook/engineering/ux/technical-writing/#assignments
 type: howto
 ---
 
-# Moderate users
+# Moderate users **(FREE SELF)**
 
 GitLab administrators can moderate user access by approving, blocking, banning, or deactivating
 users.
@@ -17,7 +17,7 @@ pending approval state because an administrator has enabled any of the following
 
 - [Require admin approval for new sign-ups](settings/sign_up_restrictions.md#require-administrator-approval-for-new-sign-ups) setting.
 - [User cap](settings/sign_up_restrictions.md#user-cap).
-- [Block auto-created users (OmniAuth)](../../integration/omniauth.md#initial-omniauth-configuration)
+- [Block auto-created users (OmniAuth)](../../integration/omniauth.md#configure-initial-settings)
 - [Block auto-created users (LDAP)](../../administration/auth/ldap/index.md#basic-configuration-settings)
 
 When a user registers for an account while this setting is enabled:
@@ -53,7 +53,7 @@ To approve or reject a user sign up:
 1. On the top bar, select **Menu > Admin**.
 1. On the left sidebar, select **Overview > Users**.
 1. Select the **Pending approval** tab.
-1. (Optional) Select a user.
+1. Optional. Select a user.
 1. Select the **{settings}** **User administration** dropdown.
 1. Select **Approve** or **Reject**.
 
@@ -73,11 +73,11 @@ In order to completely prevent access of a user to the GitLab instance,
 administrators can choose to block the user.
 
 Users can be blocked [via an abuse report](review_abuse_reports.md#blocking-users),
-or directly from the Admin Area. To do this:
+by removing them in LDAP, or directly from the Admin Area. To do this:
 
 1. On the top bar, select **Menu > Admin**.
 1. On the left sidebar, select **Overview > Users**.
-1. (Optional) Select a user.
+1. Optional. Select a user.
 1. Select the **{settings}** **User administration** dropdown.
 1. Select **Block**.
 
@@ -100,8 +100,8 @@ A blocked user can be unblocked from the Admin Area. To do this:
 
 1. On the top bar, select **Menu > Admin**.
 1. On the left sidebar, select **Overview > Users**.
-1. Select on the **Blocked** tab.
-1. (Optional) Select a user.
+1. Select the **Blocked** tab.
+1. Optional. Select a user.
 1. Select the **{settings}** **User administration** dropdown.
 1. Select **Unblock**.
 
@@ -110,6 +110,16 @@ The user's state is set to active and they consume a
 
 NOTE:
 Users can also be unblocked using the [GitLab API](../../api/users.md#unblock-user).
+
+The unblock option may be unavailable for LDAP users. To enable the unblock option,
+the LDAP identity first needs to be deleted:
+
+1. On the top bar, select **Menu > Admin**.
+1. On the left sidebar, select **Overview > Users**.
+1. Select the **Blocked** tab.
+1. Select a user.
+1. Select the **Identities** tab.
+1. Find the LDAP provider and select **Delete**.
 
 ## Activate and deactivate users
 
@@ -137,15 +147,19 @@ A deactivated user:
 
 Personal projects, and group and user history of the deactivated user are left intact.
 
+NOTE:
+Users are notified about account deactivation if
+[user deactivation emails](settings/email.md#user-deactivation-emails) are enabled.
+
 A user can be deactivated from the Admin Area. To do this:
 
 1. On the top bar, select **Menu > Admin**.
 1. On the left sidebar, select **Overview > Users**.
-1. (Optional) Select a user.
+1. Optional. Select a user.
 1. Select the **{settings}** **User administration** dropdown.
 1. Select **Deactivate**.
 
-For the deactivation option to be visible to an admin, the user:
+For the deactivation option to be visible to an administrator, the user:
 
 - Must be currently active.
 - Must not have signed in, or have any activity, in the last 90 days.
@@ -181,7 +195,7 @@ To do this:
 1. On the top bar, select **Menu > Admin**.
 1. On the left sidebar, select **Overview > Users**.
 1. Select the **Deactivated** tab.
-1. (Optional) Select a user.
+1. Optional. Select a user.
 1. Select the **{settings}** **User administration** dropdown.
 1. Select **Activate**.
 
@@ -194,9 +208,15 @@ Users can also be activated using the [GitLab API](../../api/users.md#activate-u
 
 ## Ban and unban users
 
-> [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/327353) in GitLab 14.2.
+> - [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/327353) in GitLab 14.2 [with a flag](../../administration/feature_flags.md) named `ban_user_feature_flag`. Disabled by default.
+> - [Enabled by default](https://gitlab.com/gitlab-org/gitlab/-/issues/330667) in GitLab 14.8.
 
-GitLab administrators can ban and unban users. Banned users are blocked, and their issues are hidden. 
+FLAG:
+On self-managed GitLab, by default this feature is available.
+To hide the feature, ask an administrator to [disable the feature flag](../../administration/feature_flags.md) named `ban_user_feature_flag`.
+On GitLab.com, this feature is available to GitLab.com administrators only.
+
+GitLab administrators can ban and unban users. Banned users are blocked, and their issues are hidden.
 The banned user's comments are still displayed. Hiding a banned user's comments is [tracked in this issue](https://gitlab.com/gitlab-org/gitlab/-/issues/327356).
 
 ### Ban a user
@@ -207,7 +227,7 @@ Users can be banned using the Admin Area. To do this:
 
 1. On the top bar, select **Menu > Admin**.
 1. On the left sidebar, select **Overview > Users**.
-1. (Optional) Select a user.
+1. Optional. Select a user.
 1. Select the **{settings}** **User administration** dropdown.
 1. Select **Ban user**.
 
@@ -220,7 +240,7 @@ A banned user can be unbanned using the Admin Area. To do this:
 1. On the top bar, select **Menu > Admin**.
 1. On the left sidebar, select **Overview > Users**.
 1. Select the **Banned** tab.
-1. (Optional) Select a user.
+1. Optional. Select a user.
 1. Select the **{settings}** **User administration** dropdown.
 1. Select **Unban user**.
 

@@ -9,6 +9,7 @@ const DEFAULT_PROPS = {
     username: 'root',
     name: 'Administrator',
     location: 'Vienna',
+    localTime: '2:30 PM',
     bot: false,
     bio: null,
     workInformation: null,
@@ -31,10 +32,11 @@ describe('User Popover Component', () => {
     wrapper.destroy();
   });
 
-  const findUserStatus = () => wrapper.find('.js-user-status');
+  const findUserStatus = () => wrapper.findByTestId('user-popover-status');
   const findTarget = () => document.querySelector('.js-user-link');
   const findUserName = () => wrapper.find(UserNameWithStatus);
   const findSecurityBotDocsLink = () => wrapper.findByTestId('user-popover-bot-docs-link');
+  const findUserLocalTime = () => wrapper.findByTestId('user-popover-local-time');
 
   const createWrapper = (props = {}, options = {}) => {
     wrapper = mountExtended(UserPopover, {
@@ -71,7 +73,6 @@ describe('User Popover Component', () => {
 
       expect(wrapper.text()).toContain(DEFAULT_PROPS.user.name);
       expect(wrapper.text()).toContain(DEFAULT_PROPS.user.username);
-      expect(wrapper.text()).toContain(DEFAULT_PROPS.user.location);
     });
 
     it('shows icon for location', () => {
@@ -94,7 +95,7 @@ describe('User Popover Component', () => {
     const bio = 'My super interesting bio';
 
     it('should show only bio if work information is not available', () => {
-      const user = { ...DEFAULT_PROPS.user, bio, bioHtml: bio };
+      const user = { ...DEFAULT_PROPS.user, bio };
 
       createWrapper({ user });
 
@@ -117,7 +118,6 @@ describe('User Popover Component', () => {
       const user = {
         ...DEFAULT_PROPS.user,
         bio,
-        bioHtml: bio,
         workInformation: 'Frontend Engineer at GitLab',
       };
 
@@ -127,16 +127,15 @@ describe('User Popover Component', () => {
       expect(findWorkInformation().text()).toBe('Frontend Engineer at GitLab');
     });
 
-    it('should not encode special characters in bio', () => {
+    it('should encode special characters in bio', () => {
       const user = {
         ...DEFAULT_PROPS.user,
-        bio: 'I like CSS',
-        bioHtml: 'I like <b>CSS</b>',
+        bio: 'I like <b>CSS</b>',
       };
 
       createWrapper({ user });
 
-      expect(findBio().html()).toContain('I like <b>CSS</b>');
+      expect(findBio().html()).toContain('I like &lt;b&gt;CSS&lt;/b&gt;');
     });
 
     it('shows icon for bio', () => {
@@ -163,6 +162,25 @@ describe('User Popover Component', () => {
       expect(
         wrapper.findAll(GlIcon).filter((icon) => icon.props('name') === 'work').length,
       ).toEqual(1);
+    });
+  });
+
+  describe('local time', () => {
+    it('should show local time when it is available', () => {
+      createWrapper();
+
+      expect(findUserLocalTime().exists()).toBe(true);
+    });
+
+    it('should not show local time when it is not available', () => {
+      const user = {
+        ...DEFAULT_PROPS.user,
+        localTime: null,
+      };
+
+      createWrapper({ user });
+
+      expect(findUserLocalTime().exists()).toBe(false);
     });
   });
 
@@ -250,6 +268,25 @@ describe('User Popover Component', () => {
       const securityBotDocsLink = findSecurityBotDocsLink();
       expect(securityBotDocsLink.exists()).toBe(true);
       expect(securityBotDocsLink.attributes('href')).toBe(SECURITY_BOT_USER.websiteUrl);
+      expect(securityBotDocsLink.text()).toBe('Learn more about GitLab Security Bot');
+    });
+
+    it("does not show a link to the bot's documentation if there is no website_url", () => {
+      createWrapper({ user: { ...SECURITY_BOT_USER, websiteUrl: null } });
+      const securityBotDocsLink = findSecurityBotDocsLink();
+      expect(securityBotDocsLink.exists()).toBe(false);
+    });
+
+    it("doesn't escape user's name", () => {
+      createWrapper({ user: { ...SECURITY_BOT_USER, name: '%<>\';"' } });
+      const securityBotDocsLink = findSecurityBotDocsLink();
+      expect(securityBotDocsLink.text()).toBe('Learn more about %<>\';"');
+    });
+
+    it('does not display local time', () => {
+      createWrapper({ user: SECURITY_BOT_USER });
+
+      expect(findUserLocalTime().exists()).toBe(false);
     });
   });
 });

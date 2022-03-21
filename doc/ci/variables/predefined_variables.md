@@ -14,17 +14,20 @@ Some variables are only available with more recent versions of [GitLab Runner](h
 You can [output the values of all variables available for a job](index.md#list-all-environment-variables)
 with a `script` command.
 
-There are also [Kubernetes-specific deployment variables](../../user/project/clusters/deploy_to_cluster.md#deployment-variables).
+There are also [Kubernetes-specific deployment variables (deprecated)](../../user/project/clusters/deploy_to_cluster.md#deployment-variables).
+
+There are also a number of [variables you can use to configure runner behavior](../runners/configure_runners.md#configure-runner-behavior-with-variables) globally or for individual jobs.
 
 | Variable                                 | GitLab | Runner | Description |
 |------------------------------------------|--------|--------|-------------|
 | `CHAT_CHANNEL`                           | 10.6   | all    | The Source chat channel that triggered the [ChatOps](../chatops/index.md) command. |
 | `CHAT_INPUT`                             | 10.6   | all    | The additional arguments passed with the [ChatOps](../chatops/index.md) command. |
+| `CHAT_USER_ID`                           | 14.4   | all    | The chat service's user ID of the user who triggered the [ChatOps](../chatops/index.md) command. |
 | `CI`                                     | all    | 0.4    | Available for all jobs executed in CI/CD. `true` when available. |
 | `CI_API_V4_URL`                          | 11.7   | all    | The GitLab API v4 root URL. |
 | `CI_BUILDS_DIR`                          | all    | 11.10  | The top-level directory where builds are executed. |
 | `CI_COMMIT_AUTHOR`                       | 13.11  | all    | The author of the commit in `Name <email>` format. |
-| `CI_COMMIT_BEFORE_SHA`                   | 11.2   | all    | The previous latest commit present on a branch. Is always `0000000000000000000000000000000000000000` in pipelines for merge requests. |
+| `CI_COMMIT_BEFORE_SHA`                   | 11.2   | all    | The previous latest commit present on a branch. Is always `0000000000000000000000000000000000000000` in merge request pipelines. |
 | `CI_COMMIT_BRANCH`                       | 12.6   | 0.5    | The commit branch name. Available in branch pipelines, including pipelines for the default branch. Not available in merge request pipelines or tag pipelines. |
 | `CI_COMMIT_DESCRIPTION`                  | 10.8   | all    | The description of the commit. If the title is shorter than 100 characters, the message without the first line. |
 | `CI_COMMIT_MESSAGE`                      | 10.8   | all    | The full commit message. |
@@ -59,11 +62,13 @@ There are also [Kubernetes-specific deployment variables](../../user/project/clu
 | `CI_JOB_ID`                              | 9.0    | all    | The internal ID of the job, unique across all jobs in the GitLab instance. |
 | `CI_JOB_IMAGE`                           | 12.9   | 12.9   | The name of the Docker image running the job. |
 | `CI_JOB_JWT`                             | 12.10  | all    | A RS256 JSON web token to authenticate with third party systems that support JWT authentication, for example [HashiCorp's Vault](../secrets/index.md). |
+| `CI_JOB_JWT_V1`                          | 14.6   | all    | The same value as `CI_JOB_JWT`. |
+| `CI_JOB_JWT_V2`                          | 14.6   | all    | [**alpha:**](../../policy/alpha-beta-support.md#alpha-features) A newly formatted RS256 JSON web token to increase compatibility. Similar to `CI_JOB_JWT`, except the issuer (`iss`) claim is changed from `gitlab.com` to `https://gitlab.com`, `sub` has changed from `job_id` to a string that contains the project path, and an `aud` claim is added. Format is subject to change. Be aware, the `aud` field is a constant value. Trusting JWTs in multiple relying parties can lead to [one RP sending a JWT to another one and acting maliciously as a job](https://gitlab.com/gitlab-org/gitlab/-/merge_requests/72555#note_769112331).  |
 | `CI_JOB_MANUAL`                          | 8.12   | all    | `true` if a job was started manually. |
 | `CI_JOB_NAME`                            | 9.0    | 0.5    | The name of the job. |
 | `CI_JOB_STAGE`                           | 9.0    | 0.5    | The name of the job's stage. |
 | `CI_JOB_STATUS`                          | all    | 13.5   | The status of the job as each runner stage is executed. Use with [`after_script`](../yaml/index.md#after_script). Can be `success`, `failed`, or `canceled`. |
-| `CI_JOB_TOKEN`                           | 9.0    | 1.2    | A token to authenticate with [certain API endpoints](../../api/index.md#gitlab-cicd-job-token). The token is valid as long as the job is running. |
+| `CI_JOB_TOKEN`                           | 9.0    | 1.2    | A token to authenticate with [certain API endpoints](../jobs/ci_job_token.md). The token is valid as long as the job is running. |
 | `CI_JOB_URL`                             | 11.1   | 0.5    | The job details URL. |
 | `CI_JOB_STARTED_AT`                      | 13.10  | all    | The UTC datetime when a job started, in [ISO 8601](https://tools.ietf.org/html/rfc3339#appendix-A) format. |
 | `CI_KUBERNETES_ACTIVE`                   | 13.0   | all    | Only available if the pipeline has a Kubernetes cluster available for deployments. `true` when available. |
@@ -74,7 +79,7 @@ There are also [Kubernetes-specific deployment variables](../../user/project/clu
 | `CI_PAGES_URL`                           | 11.8   | all    | The URL for a GitLab Pages site. Always a subdomain of `CI_PAGES_DOMAIN`. |
 | `CI_PIPELINE_ID`                         | 8.10   | all    | The instance-level ID of the current pipeline. This ID is unique across all projects on the GitLab instance. |
 | `CI_PIPELINE_IID`                        | 11.0   | all    | The project-level IID (internal ID) of the current pipeline. This ID is unique only within the current project. |
-| `CI_PIPELINE_SOURCE`                     | 10.0   | all    | How the pipeline was triggered. Can be `push`, `web`, `schedule`, `api`, `external`, `chat`, `webide`, `merge_request_event`, `external_pull_request_event`, `parent_pipeline`, [`trigger`, or `pipeline`](../triggers/index.md#authentication-tokens). |
+| `CI_PIPELINE_SOURCE`                     | 10.0   | all    | How the pipeline was triggered. Can be `push`, `web`, `schedule`, `api`, `external`, `chat`, `webide`, `merge_request_event`, `external_pull_request_event`, `parent_pipeline`, [`trigger`, or `pipeline`](../triggers/index.md#configure-cicd-jobs-to-run-in-triggered-pipelines). |
 | `CI_PIPELINE_TRIGGERED`                  | all    | all    | `true` if the job was [triggered](../triggers/index.md). |
 | `CI_PIPELINE_URL`                        | 11.1   | 0.5    | The URL for the pipeline details. |
 | `CI_PIPELINE_CREATED_AT`                 | 13.10  | all    | The UTC datetime when the pipeline was created, in [ISO 8601](https://tools.ietf.org/html/rfc3339#appendix-A) format. |
@@ -83,7 +88,7 @@ There are also [Kubernetes-specific deployment variables](../../user/project/clu
 | `CI_PROJECT_ID`                          | all    | all    | The ID of the current project. This ID is unique across all projects on the GitLab instance. |
 | `CI_PROJECT_NAME`                        | 8.10   | 0.5    | The name of the directory for the project. For example if the project URL is `gitlab.example.com/group-name/project-1`, `CI_PROJECT_NAME` is `project-1`. |
 | `CI_PROJECT_NAMESPACE`                   | 8.10   | 0.5    | The project namespace (username or group name) of the job. |
-| `CI_PROJECT_PATH_SLUG`                   | 9.3    | all    | `$CI_PROJECT_PATH` in lowercase with characters that are not `a-z` or `0-9` replaced with `-`. Use in URLs and domain names. |
+| `CI_PROJECT_PATH_SLUG`                   | 9.3    | all    | `$CI_PROJECT_PATH` in lowercase with characters that are not `a-z` or `0-9` replaced with `-` and shortened to 63 bytes. Use in URLs and domain names. |
 | `CI_PROJECT_PATH`                        | 8.10   | 0.5    | The project namespace with the project name included. |
 | `CI_PROJECT_REPOSITORY_LANGUAGES`        | 12.3   | all    | A comma-separated, lowercase list of the languages used in the repository. For example `ruby,javascript,html,css`. |
 | `CI_PROJECT_ROOT_NAMESPACE`              | 13.2   | 0.5    | The root project namespace (username or group name) of the job. For example, if `CI_PROJECT_NAMESPACE` is `root-group/child-group/grandchild-group`, `CI_PROJECT_ROOT_NAMESPACE` is `root-group`. |
@@ -121,7 +126,7 @@ There are also [Kubernetes-specific deployment variables](../../user/project/clu
 | `GITLAB_USER_ID`                         | 8.12   | all    | The ID of the user who started the job. |
 | `GITLAB_USER_LOGIN`                      | 10.0   | all    | The username of the user who started the job. |
 | `GITLAB_USER_NAME`                       | 10.0   | all    | The name of the user who started the job. |
-| `TRIGGER_PAYLOAD`                        | 13.9   | all    | The webhook payload. Only available when a pipeline is [triggered with a webhook](../triggers/index.md#using-webhook-payload-in-the-triggered-pipeline). |
+| `TRIGGER_PAYLOAD`                        | 13.9   | all    | The webhook payload. Only available when a pipeline is [triggered with a webhook](../triggers/index.md#use-a-webhook-payload). |
 
 ## Predefined variables for merge request pipelines
 
@@ -143,12 +148,12 @@ These variables are available when:
 | `CI_MERGE_REQUEST_PROJECT_URL`         | 11.6   | all    | The URL of the project of the merge request. For example, `http://192.168.10.15:3000/namespace/awesome-project`. |
 | `CI_MERGE_REQUEST_REF_PATH`            | 11.6   | all    | The ref path of the merge request. For example, `refs/merge-requests/1/head`. |
 | `CI_MERGE_REQUEST_SOURCE_BRANCH_NAME`  | 11.6   | all    | The source branch name of the merge request. |
-| `CI_MERGE_REQUEST_SOURCE_BRANCH_SHA`   | 11.9   | all    | The HEAD SHA of the source branch of the merge request. The variable is empty in merge request pipelines. The SHA is present only in [merged results pipelines](../pipelines/pipelines_for_merged_results.md). **(PREMIUM)** |
+| `CI_MERGE_REQUEST_SOURCE_BRANCH_SHA`   | 11.9   | all    | The HEAD SHA of the source branch of the merge request. The variable is empty in merge request pipelines. The SHA is present only in [merged results pipelines](../pipelines/merged_results_pipelines.md). |
 | `CI_MERGE_REQUEST_SOURCE_PROJECT_ID`   | 11.6   | all    | The ID of the source project of the merge request. |
 | `CI_MERGE_REQUEST_SOURCE_PROJECT_PATH` | 11.6   | all    | The path of the source project of the merge request. |
 | `CI_MERGE_REQUEST_SOURCE_PROJECT_URL`  | 11.6   | all    | The URL of the source project of the merge request. |
 | `CI_MERGE_REQUEST_TARGET_BRANCH_NAME`  | 11.6   | all    | The target branch name of the merge request. |
-| `CI_MERGE_REQUEST_TARGET_BRANCH_SHA`   | 11.9   | all    | The HEAD SHA of the target branch of the merge request. The variable is empty in merge request pipelines. The SHA is present only in [merged results pipelines](../pipelines/pipelines_for_merged_results.md). **(PREMIUM)** |
+| `CI_MERGE_REQUEST_TARGET_BRANCH_SHA`   | 11.9   | all    | The HEAD SHA of the target branch of the merge request. The variable is empty in merge request pipelines. The SHA is present only in [merged results pipelines](../pipelines/merged_results_pipelines.md). |
 | `CI_MERGE_REQUEST_TITLE`               | 11.9   | all    | The title of the merge request. |
 | `CI_MERGE_REQUEST_EVENT_TYPE`          | 12.3   | all    | The event type of the merge request. Can be `detached`, `merged_result` or `merge_train`. |
 | `CI_MERGE_REQUEST_DIFF_ID`             | 13.7   | all    | The version of the merge request diff. |

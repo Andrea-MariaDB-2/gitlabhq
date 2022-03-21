@@ -6,8 +6,8 @@ info: To determine the technical writer assigned to the Stage/Group associated w
 
 # PyPI packages in the Package Registry **(FREE)**
 
-> - [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/208747) in GitLab Premium 12.10.
-> - [Moved](https://gitlab.com/gitlab-org/gitlab/-/issues/221259) to GitLab Free in 13.3.
+> - [Introduced](https://gitlab.com/gitlab-org/gitlab/-/issues/208747) in GitLab 12.10.
+> - [Moved](https://gitlab.com/gitlab-org/gitlab/-/issues/221259) from GitLab Premium to GitLab Free in 13.3.
 
 Publish PyPI packages in your project's Package Registry. Then install the
 packages whenever you need to use them as a dependency.
@@ -254,7 +254,9 @@ Prerequisites:
 - The maximum allowed package size is 5 GB.
 - You can't upload the same version of a package multiple times. If you try,
   you receive the error `400 Bad Request`.
-- You cannot publish PyPI packages to a group, only to a project.
+- PyPI packages are published using your projectID.
+- If your project is in a group, PyPI packages published to your project registry are also available
+  at the group-level registry (see [Install from the group level](#install-from-the-group-level)).
 
 You can then [publish a package by using twine](#publish-a-pypi-package-by-using-twine).
 
@@ -406,6 +408,16 @@ characters are removed.
 
 A `pip install` request for `my.package` looks for packages that match any of
 the three characters, such as `my-package`, `my_package`, and `my....package`.
+
+## Troubleshooting
+
+To improve performance, PyPI caches files related to a package. Note that PyPI doesn't remove data by
+itself. The cache grows as new packages are installed. If you encounter issues, clear the cache with
+this command:
+
+```shell
+pip cache purge
+```
 
 ## Supported CLI commands
 

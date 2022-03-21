@@ -1,16 +1,17 @@
 # frozen_string_literal: true
 
 class MergeRequestPresenter < Gitlab::View::Presenter::Delegated
-  include ActionView::Helpers::UrlHelper
   include GitlabRoutingHelper
   include MarkupHelper
   include TreeHelper
   include ChecksCollaboration
   include Gitlab::Utils::StrongMemoize
 
+  delegator_override_with Gitlab::Utils::StrongMemoize # This module inclusion is expected. See https://gitlab.com/gitlab-org/gitlab/-/issues/352884.
+
   APPROVALS_WIDGET_BASE_TYPE = 'base'
 
-  presents :merge_request
+  presents ::MergeRequest, as: :merge_request
 
   def ci_status
     if pipeline
@@ -134,7 +135,7 @@ class MergeRequestPresenter < Gitlab::View::Presenter::Delegated
       pipeline: :gfm,
       author: author,
       project: project,
-      issuable_state_filter_enabled: true
+      issuable_reference_expansion_enabled: true
     )
   end
 
@@ -144,11 +145,15 @@ class MergeRequestPresenter < Gitlab::View::Presenter::Delegated
       pipeline: :gfm,
       author: author,
       project: project,
-      issuable_state_filter_enabled: true
+      issuable_reference_expansion_enabled: true
     )
   end
 
-  def assign_to_closing_issues_link
+  def assign_to_closing_issues_path
+    assign_related_issues_project_merge_request_path(project, merge_request)
+  end
+
+  def assign_to_closing_issues_count
     # rubocop: disable CodeReuse/ServiceClass
     issues = MergeRequests::AssignIssuesService.new(project: project,
                                                     current_user: current_user,
@@ -156,14 +161,7 @@ class MergeRequestPresenter < Gitlab::View::Presenter::Delegated
                                                       merge_request: merge_request,
                                                       closes_issues: closing_issues
                                                     }).assignable_issues
-    path = assign_related_issues_project_merge_request_path(project, merge_request)
-    if issues.present?
-      if issues.count > 1
-        link_to _('Assign yourself to these issues'), path, method: :post
-      else
-        link_to _('Assign yourself to this issue'), path, method: :post
-      end
-    end
+    issues.count
     # rubocop: enable CodeReuse/ServiceClass
   end
 
@@ -183,6 +181,7 @@ class MergeRequestPresenter < Gitlab::View::Presenter::Delegated
       .can_push_to_branch?(source_branch)
   end
 
+  delegator_override :can_remove_source_branch?
   def can_remove_source_branch?
     source_branch_exists? && merge_request.can_remove_source_branch?(current_user)
   end
@@ -202,6 +201,7 @@ class MergeRequestPresenter < Gitlab::View::Presenter::Delegated
     end
   end
 
+  delegator_override :subscribed?
   def subscribed?
     merge_request.subscribed?(current_user, merge_request.target_project)
   end
@@ -250,6 +250,13 @@ class MergeRequestPresenter < Gitlab::View::Presenter::Delegated
     end
   end
 
+  delegator_override :pipeline_coverage_delta
+  def pipeline_coverage_delta
+    return unless merge_request.pipeline_coverage_delta.present?
+
+    '%.2f' % merge_request.pipeline_coverage_delta
+  end
+
   private
 
   def cached_can_be_reverted?
@@ -278,6 +285,11 @@ class MergeRequestPresenter < Gitlab::View::Presenter::Delegated
 
   def user_can_fork_project?
     can?(current_user, :fork_project, project)
+  end
+
+  # Avoid including ActionView::Helpers::UrlHelper
+  def link_to(*args)
+    ApplicationController.helpers.link_to(*args)
   end
 end
 

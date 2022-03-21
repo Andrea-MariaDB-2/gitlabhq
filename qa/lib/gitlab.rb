@@ -1,20 +1,14 @@
 # frozen_string_literal: true
 
+require 'chemlab/library'
+require 'zeitwerk'
+
+loader = Zeitwerk::Loader.new
+loader.push_dir(__dir__)
+loader.ignore("#{__dir__}/gitlab/**/*.stub.rb") # ignore page stubs
+loader.setup
+
 # Chemlab Page Libraries for GitLab
 module Gitlab
-  module Page
-    module Main
-      autoload :Login, 'gitlab/page/main/login'
-    end
-
-    module Subscriptions
-      autoload :New, 'gitlab/page/subscriptions/new'
-    end
-
-    module Group
-      module Settings
-        autoload :Billing, 'gitlab/page/group/settings/billing'
-      end
-    end
-  end
+  include Chemlab::Library
 end

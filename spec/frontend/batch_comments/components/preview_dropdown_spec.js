@@ -1,4 +1,4 @@
-import Vue from 'vue';
+import Vue, { nextTick } from 'vue';
 import Vuex from 'vuex';
 import { shallowMountExtended } from 'helpers/vue_test_utils_helper';
 import PreviewDropdown from '~/batch_comments/components/preview_dropdown.vue';
@@ -7,7 +7,7 @@ Vue.use(Vuex);
 
 let wrapper;
 
-const toggleActiveFileByHash = jest.fn();
+const setCurrentFileHash = jest.fn();
 const scrollToDraft = jest.fn();
 
 function factory({ viewDiffsFileByFile = false, draftsCount = 1, sortedDrafts = [] } = {}) {
@@ -16,7 +16,7 @@ function factory({ viewDiffsFileByFile = false, draftsCount = 1, sortedDrafts = 
       diffs: {
         namespaced: true,
         actions: {
-          toggleActiveFileByHash,
+          setCurrentFileHash,
         },
         state: {
           viewDiffsFileByFile,
@@ -49,9 +49,9 @@ describe('Batch comments preview dropdown', () => {
 
       wrapper.findByTestId('preview-item').vm.$emit('click');
 
-      await Vue.nextTick();
+      await nextTick();
 
-      expect(toggleActiveFileByHash).toHaveBeenCalledWith(expect.anything(), 'hash');
+      expect(setCurrentFileHash).toHaveBeenCalledWith(expect.anything(), 'hash');
       expect(scrollToDraft).toHaveBeenCalledWith(expect.anything(), { id: 1, file_hash: 'hash' });
     });
 
@@ -63,7 +63,7 @@ describe('Batch comments preview dropdown', () => {
 
       wrapper.findByTestId('preview-item').vm.$emit('click');
 
-      await Vue.nextTick();
+      await nextTick();
 
       expect(scrollToDraft).toHaveBeenCalledWith(expect.anything(), { id: 1 });
     });

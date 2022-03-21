@@ -19,14 +19,14 @@ Database reviewers are domain experts who have substantial experience with datab
 A database review is required whenever an application update [touches the database](../database_review.md#general-process).
 
 The database reviewer is tasked with reviewing the database specific updates and
-making sure that any queries or modifications will perform without issues
+making sure that any queries or modifications perform without issues
 at the scale of GitLab.com.
 
 For more information on the database review process, check the [database review guidelines](../database_review.md).
 
 ## How to apply for becoming a database reviewer
 
-Team members are encouraged to self-identify as database domain experts and add it to their [team profile](https://gitlab.com/gitlab-com/www-gitlab-com/-/blob/master/data/team.yml)
+Team members are encouraged to self-identify as database domain experts, and add it to their profile YAML file:
 
 ```yaml
 projects:
@@ -34,10 +34,11 @@ projects:
     - reviewer database
 ```
 
-Assign the MR which adds your expertise to the `team.yml` file to a database maintainer
-or the [Database Team's Engineering Manager](https://about.gitlab.com/handbook/engineering/development/enablement/database/).
+Create the merge request [using the "Database reviewer" template](https://gitlab.com/gitlab-com/www-gitlab-com/-/blob/master/.gitlab/merge_request_templates/Database%20reviewer.md),
+adding your expertise your profile YAML file. Assign to a database maintainer or the
+[Database Team's Engineering Manager](https://about.gitlab.com/handbook/engineering/development/enablement/database/).
 
-Once the `team.yml` update is merged, the [Reviewer roulette](../code_review.md#reviewer-roulette)
+After the `team.yml` update is merged, the [Reviewer roulette](../code_review.md#reviewer-roulette)
 may recommend you as a database reviewer.
 
 ## Resources for database reviewers
@@ -71,8 +72,9 @@ topics and use cases. The most frequently required during database reviewing are
 - [Migrations style guide](../migration_style_guide.md) for creating safe SQL migrations.
 - [Avoiding downtime in migrations](../avoiding_downtime_in_migrations.md).
 - [SQL guidelines](../sql.md) for working with SQL queries.
+- [Guidelines for JiHu contributions with database migrations](https://about.gitlab.com/handbook/ceo/chief-of-staff-team/jihu-support/jihu-database-change-process.html)
 
-## How to apply for becoming a database maintainer
+## How to apply to become a database maintainer
 
 Once a database reviewer feels confident on switching to a database maintainer,
 they can update their [team profile](https://gitlab.com/gitlab-com/www-gitlab-com/-/blob/master/data/team.yml)

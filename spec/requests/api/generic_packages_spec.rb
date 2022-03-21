@@ -170,17 +170,6 @@ RSpec.describe API::GenericPackages do
       end
     end
 
-    context 'generic_packages feature flag is disabled' do
-      it 'responds with 404 Not Found' do
-        stub_feature_flags(generic_packages: false)
-        project.add_developer(user)
-
-        authorize_upload_file(workhorse_headers.merge(personal_access_token_header))
-
-        expect(response).to have_gitlab_http_status(:not_found)
-      end
-    end
-
     def authorize_upload_file(request_headers, package_name: 'mypackage', file_name: 'myfile.tar.gz')
       url = "/projects/#{project.id}/packages/generic/#{package_name}/0.0.1/#{file_name}/authorize"
 
@@ -297,6 +286,37 @@ RSpec.describe API::GenericPackages do
           end
         end
 
+        context 'with select' do
+          context 'with a valid value' do
+            context 'package_file' do
+              let(:params) { super().merge(select: 'package_file') }
+
+              it 'returns a package file' do
+                headers = workhorse_headers.merge(auth_header)
+
+                upload_file(params, headers)
+
+                aggregate_failures do
+                  expect(response).to have_gitlab_http_status(:ok)
+                  expect(json_response).to have_key('id')
+                end
+              end
+            end
+          end
+
+          context 'with an invalid value' do
+            let(:params) { super().merge(select: 'invalid_value') }
+
+            it 'returns a package file' do
+              headers = workhorse_headers.merge(auth_header)
+
+              upload_file(params, headers)
+
+              expect(response).to have_gitlab_http_status(:bad_request)
+            end
+          end
+        end
+
         context 'with a status' do
           context 'valid status' do
             let(:params) { super().merge(status: 'hidden') }
@@ -393,6 +413,33 @@ RSpec.describe API::GenericPackages do
         subject { upload_file(params, workhorse_headers.merge(personal_access_token_header)) }
 
         it_behaves_like 'a package tracking event', described_class.name, 'push_package'
+      end
+
+      context 'with existing package' do
+        let_it_be(:package_name) { 'mypackage' }
+        let_it_be(:package_version) { '1.2.3' }
+        let_it_be_with_reload(:existing_package) { create(:generic_package, name: package_name, version: package_version, project: project) }
+
+        let(:headers) { workhorse_headers.merge(personal_access_token_header) }
+
+        it 'does not create a new package' do
+          expect { upload_file(params, headers, package_name: package_name, package_version: package_version) }
+            .to change { project.packages.generic.count }.by(0)
+            .and change { Packages::PackageFile.count }.by(1)
+
+          expect(response).to have_gitlab_http_status(:created)
+        end
+
+        context 'marked as pending_destruction' do
+          it 'does create a new package' do
+            existing_package.pending_destruction!
+            expect { upload_file(params, headers, package_name: package_name, package_version: package_version) }
+              .to change { project.packages.generic.count }.by(1)
+              .and change { Packages::PackageFile.count }.by(1)
+
+            expect(response).to have_gitlab_http_status(:created)
+          end
+        end
       end
 
       it 'rejects request without a file from workhorse' do
@@ -537,6 +584,27 @@ RSpec.describe API::GenericPackages do
       with_them do
         it "responds with #{params[:expected_status]}" do
           download_file(deploy_token_auth_header)
+
+          expect(response).to have_gitlab_http_status(expected_status)
+        end
+      end
+    end
+
+    context 'with package status' do
+      where(:package_status, :expected_status) do
+        :default      | :success
+        :hidden       | :success
+        :error        | :not_found
+      end
+
+      with_them do
+        before do
+          project.add_developer(user)
+          package.update!(status: package_status)
+        end
+
+        it "responds with #{params[:expected_status]}" do
+          download_file(personal_access_token_header)
 
           expect(response).to have_gitlab_http_status(expected_status)
         end

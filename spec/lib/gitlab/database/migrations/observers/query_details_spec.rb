@@ -2,21 +2,17 @@
 require 'spec_helper'
 
 RSpec.describe Gitlab::Database::Migrations::Observers::QueryDetails do
-  subject { described_class.new(observation) }
+  subject { described_class.new(observation, directory_path, connection) }
 
-  let(:observation) { Gitlab::Database::Migrations::Observation.new(migration_version, migration_name) }
-  let(:connection) { ActiveRecord::Base.connection }
+  let(:connection) { ActiveRecord::Migration.connection }
+  let(:observation) { Gitlab::Database::Migrations::Observation.new(version: migration_version, name: migration_name) }
   let(:query) { "select date_trunc('day', $1::timestamptz) + $2 * (interval '1 hour')" }
   let(:query_binds) { [Time.current, 3] }
   let(:directory_path) { Dir.mktmpdir }
-  let(:log_file) { "#{directory_path}/#{migration_version}_#{migration_name}-query-details.json" }
+  let(:log_file) { "#{directory_path}/query-details.json" }
   let(:query_details) { Gitlab::Json.parse(File.read(log_file)) }
   let(:migration_version) { 20210422152437 }
   let(:migration_name) { 'test' }
-
-  before do
-    stub_const('Gitlab::Database::Migrations::Instrumentation::RESULT_DIR', directory_path)
-  end
 
   after do
     FileUtils.remove_entry(directory_path)

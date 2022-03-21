@@ -1,8 +1,7 @@
 # frozen_string_literal: true
 
 module QA
-  # TODO: Remove :requires_admin meta when the `Runtime::Feature.enable` method call is removed
-  RSpec.describe 'Plan', :smoke, :reliable, :requires_admin do
+  RSpec.describe 'Plan', :smoke do
     describe 'mention' do
       let(:user) { Resource::User.fabricate_or_use(Runtime::Env.gitlab_qa_username_1, Runtime::Env.gitlab_qa_password_1) }
       let(:project) do
@@ -14,7 +13,6 @@ module QA
 
       before do
         Flow::Login.sign_in
-        Runtime::Feature.enable(:invite_members_group_modal, project: project)
 
         project.add_member(user)
 
@@ -23,7 +21,7 @@ module QA
         end.visit!
       end
 
-      it 'mentions another user in an issue', testcase: 'https://gitlab.com/gitlab-org/quality/testcases/-/quality/test_cases/1186' do
+      it 'mentions another user in an issue', testcase: 'https://gitlab.com/gitlab-org/gitlab/-/quality/test_cases/347988' do
         Page::Project::Issue::Show.perform do |show|
           at_username = "@#{user.username}"
 

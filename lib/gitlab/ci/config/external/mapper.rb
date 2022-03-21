@@ -19,7 +19,6 @@ module Gitlab
 
           Error = Class.new(StandardError)
           AmbigiousSpecificationError = Class.new(Error)
-          DuplicateIncludesError = Class.new(Error)
           TooManyIncludesError = Class.new(Error)
 
           def initialize(values, context)
@@ -30,6 +29,18 @@ module Gitlab
           def process
             return [] if locations.empty?
 
+            logger.instrument(:config_mapper_process) do
+              process_without_instrumentation
+            end
+          end
+
+          private
+
+          attr_reader :locations, :context
+
+          delegate :expandset, :logger, to: :context
+
+          def process_without_instrumentation
             locations
               .compact
               .map(&method(:normalize_location))
@@ -41,14 +52,14 @@ module Gitlab
               .map(&method(:select_first_matching))
           end
 
-          private
-
-          attr_reader :locations, :context
-
-          delegate :expandset, to: :context
+          def normalize_location(location)
+            logger.instrument(:config_mapper_normalize) do
+              normalize_location_without_instrumentation(location)
+            end
+          end
 
           # convert location if String to canonical form
-          def normalize_location(location)
+          def normalize_location_without_instrumentation(location)
             if location.is_a?(String)
               expanded_location = expand_variables(location)
               normalize_location_string(expanded_location)
@@ -58,9 +69,12 @@ module Gitlab
           end
 
           def verify_rules(location)
-            # Behaves like there is no `rules`
-            return location unless ::Feature.enabled?(:ci_include_rules, context.project, default_enabled: :yaml)
+            logger.instrument(:config_mapper_rules) do
+              verify_rules_without_instrumentation(location)
+            end
+          end
 
+          def verify_rules_without_instrumentation(location)
             return unless Rules.new(location[:rules]).evaluate(context).pass?
 
             location
@@ -75,6 +89,12 @@ module Gitlab
           end
 
           def expand_wildcard_paths(location)
+            logger.instrument(:config_mapper_wildcards) do
+              expand_wildcard_paths_without_instrumentation(location)
+            end
+          end
+
+          def expand_wildcard_paths_without_instrumentation(location)
             # We only support local files for wildcard paths
             return location unless location[:local] && location[:local].include?('*')
 
@@ -92,23 +112,32 @@ module Gitlab
           end
 
           def verify_duplicates!(location)
+            logger.instrument(:config_mapper_verify) do
+              verify_max_includes_and_add_location!(location)
+            end
+          end
+
+          def verify_max_includes_and_add_location!(location)
             if expandset.count >= MAX_INCLUDES
               raise TooManyIncludesError, "Maximum of #{MAX_INCLUDES} nested includes are allowed!"
             end
 
-            # We scope location to context, as this allows us to properly support
-            # relative includes, and similarly looking relative in another project
-            # does not trigger duplicate error
+            # Scope location to context to allow support of
+            # relative includes
             scoped_location = location.merge(
               context_project: context.project,
               context_sha: context.sha)
 
-            unless expandset.add?(scoped_location)
-              raise DuplicateIncludesError, "Include `#{location.to_json}` was already included!"
-            end
+            expandset.add(scoped_location)
           end
 
           def select_first_matching(location)
+            logger.instrument(:config_mapper_select) do
+              select_first_matching_without_instrumentation(location)
+            end
+          end
+
+          def select_first_matching_without_instrumentation(location)
             matching = FILE_CLASSES.map do |file_class|
               file_class.new(location, context)
             end.select(&:matching?)
@@ -119,6 +148,12 @@ module Gitlab
           end
 
           def expand_variables(data)
+            logger.instrument(:config_mapper_variables) do
+              expand_variables_without_instrumentation(data)
+            end
+          end
+
+          def expand_variables_without_instrumentation(data)
             if data.is_a?(String)
               expand(data)
             else
@@ -140,7 +175,7 @@ module Gitlab
           end
 
           def expand(data)
-            ExpandVariables.expand(data, context.variables)
+            ExpandVariables.expand(data, -> { context.variables_hash })
           end
         end
       end

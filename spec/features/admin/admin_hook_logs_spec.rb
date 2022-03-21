@@ -17,8 +17,8 @@ RSpec.describe 'Admin::HookLogs' do
     hook_log
     visit edit_admin_hook_path(system_hook)
 
-    expect(page).to have_content('Recent Deliveries')
-    expect(page).to have_content(hook_log.url)
+    expect(page).to have_content('Recent events')
+    expect(page).to have_link('View details', href: admin_hook_hook_log_path(system_hook, hook_log))
   end
 
   it 'show hook log details' do
@@ -39,6 +39,6 @@ RSpec.describe 'Admin::HookLogs' do
     click_link 'View details'
     click_link 'Resend Request'
 
-    expect(current_path).to eq(edit_admin_hook_path(system_hook))
+    expect(page).to have_current_path(edit_admin_hook_path(system_hook), ignore_query: true)
   end
 end

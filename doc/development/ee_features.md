@@ -11,8 +11,17 @@ info: To determine the technical writer assigned to the Stage/Group associated w
 - **Write documentation.**: Add documentation to the `doc/` directory. Describe
   the feature and include screenshots, if applicable. Indicate [what editions](documentation/styleguide/index.md#product-tier-badges)
   the feature applies to.
-- **Submit a MR to the `www-gitlab-com` project.**: Add the new feature to the
+<!-- markdownlint-disable MD044 -->
+- **Submit a MR to the [`www-gitlab-com`](https://gitlab.com/gitlab-com/www-gitlab-com) project.**: Add the new feature to the
   [EE features list](https://about.gitlab.com/features/).
+<!-- markdownlint-enable MD044 -->
+
+## Act as SaaS
+
+When developing locally, there are times when you need your instance to act like the SaaS version of the product.
+In those instances, you can simulate SaaS by exporting an environment variable as seen below:
+
+`export GITLAB_SIMULATE_SAAS=1`
 
 ## Act as CE when unlicensed
 
@@ -23,7 +32,33 @@ when no license is active. So EE features always should be guarded by
 `project.feature_available?` or `group.licensed_feature_available?` (or
 `License.feature_available?` if it is a system-wide feature).
 
-Frontend features should be guarded by pushing a flag from the backend by [using `push_licensed_feature`](licensed_feature_availability.md#restricting-frontend-features), and checked using `this.glFeatures.someFeature` in the frontend.
+Frontend features should be guarded by pushing a flag from the backend by [using `push_licensed_feature`](licensed_feature_availability.md#restricting-frontend-features), and checked using `this.glFeatures.someFeature` in the frontend. For example:
+
+```html
+<script>
+import glFeatureFlagMixin from '~/vue_shared/mixins/gl_feature_flags_mixin';
+
+export default {
+  mixins: [glFeatureFlagMixin()],
+  components: {
+    EEComponent: () => import('ee_component/components/test.vue'),
+  },
+  computed: {
+    shouldRenderComponent() {
+      return this.glFeatures.myEEFeature;
+    }
+  },
+};
+</script>
+
+<template>
+  <div>
+    <ee-component v-if="shouldRenderComponent"/>
+  </div>
+</template>
+```
+
+Look in `ee/app/models/license.rb` for the names of the licensed features.
 
 CE specs should remain untouched as much as possible and extra specs
 should be added for EE. Licensed features can be stubbed using the
@@ -40,7 +75,7 @@ By default, merge request pipelines for development run in an EE-context only. I
 developing features that differ between FOSS and EE, you may wish to run pipelines in a
 FOSS context as well.
 
-To run pipelines in both contexts, include `RUN AS-IF-FOSS` in the merge request title.
+To run pipelines in both contexts, add the `~"pipeline:run-as-if-foss"` label to the merge request.
 
 See the [As-if-FOSS jobs](pipelines.md#as-if-foss-jobs) pipelines documentation for more information.
 
@@ -409,6 +444,69 @@ resolve when you add the indentation to the equation.
 EE-specific views should be placed in `ee/app/views/`, using extra
 sub-directories if appropriate.
 
+#### Using `render_if_exists`
+
+Instead of using regular `render`, we should use `render_if_exists`, which
+doesn't render anything if it cannot find the specific partial. We use this
+so that we could put `render_if_exists` in CE, keeping code the same between
+CE and EE.
+
+The advantages of this:
+
+- Very clear hints about where we're extending EE views while reading CE code.
+
+The disadvantage of this:
+
+- If we have typos in the partial name, it would be silently ignored.
+
+##### Caveats
+
+The `render_if_exists` view path argument must be relative to `app/views/` and `ee/app/views`.
+Resolving an EE template path that is relative to the CE view path doesn't work.
+
+```haml
+- # app/views/projects/index.html.haml
+
+= render_if_exists 'button' # Will not render `ee/app/views/projects/_button` and will quietly fail
+= render_if_exists 'projects/button' # Will render `ee/app/views/projects/_button`
+```
+
+#### Using `render_ce`
+
+For `render` and `render_if_exists`, they search for the EE partial first,
+and then CE partial. They would only render a particular partial, not all
+partials with the same name. We could take the advantage of this, so that
+the same partial path (for example, `shared/issuable/form/default_templates`) could
+be referring to the CE partial in CE (that is,
+`app/views/shared/issuable/form/_default_templates.html.haml`), while EE
+partial in EE (that is,
+`ee/app/views/shared/issuable/form/_default_templates.html.haml`). This way,
+we could show different things between CE and EE.
+
+However sometimes we would also want to reuse the CE partial in EE partial
+because we might just want to add something to the existing CE partial. We
+could workaround this by adding another partial with a different name, but it
+would be tedious to do so.
+
+In this case, we could as well just use `render_ce` which would ignore any EE
+partials. One example would be
+`ee/app/views/shared/issuable/form/_default_templates.html.haml`:
+
+```haml
+- if @project.feature_available?(:issuable_default_templates)
+  = render_ce 'shared/issuable/form/default_templates'
+- elsif show_promotions?
+  = render 'shared/promotions/promote_issue_templates'
+```
+
+In the above example, we can't use
+`render 'shared/issuable/form/default_templates'` because it would find the
+same EE partial, causing infinite recursion. Instead, we could use `render_ce`
+so it ignores any partials in `ee/` and then it would render the CE partial
+(that is, `app/views/shared/issuable/form/_default_templates.html.haml`)
+for the same path (that is, `shared/issuable/form/default_templates`). This way
+we could easily wrap around the CE partial.
+
 ### Code in `lib/gitlab/background_migration/`
 
 When you create EE-only background migrations, you have to plan for users that
@@ -489,69 +587,6 @@ module EE
   end
 end
 ```
-
-#### Using `render_if_exists`
-
-Instead of using regular `render`, we should use `render_if_exists`, which
-doesn't render anything if it cannot find the specific partial. We use this
-so that we could put `render_if_exists` in CE, keeping code the same between
-CE and EE.
-
-The advantages of this:
-
-- Very clear hints about where we're extending EE views while reading CE code.
-
-The disadvantage of this:
-
-- If we have typos in the partial name, it would be silently ignored.
-
-##### Caveats
-
-The `render_if_exists` view path argument must be relative to `app/views/` and `ee/app/views`.
-Resolving an EE template path that is relative to the CE view path doesn't work.
-
-```haml
-- # app/views/projects/index.html.haml
-
-= render_if_exists 'button' # Will not render `ee/app/views/projects/_button` and will quietly fail
-= render_if_exists 'projects/button' # Will render `ee/app/views/projects/_button`
-```
-
-#### Using `render_ce`
-
-For `render` and `render_if_exists`, they search for the EE partial first,
-and then CE partial. They would only render a particular partial, not all
-partials with the same name. We could take the advantage of this, so that
-the same partial path (for example, `shared/issuable/form/default_templates`) could
-be referring to the CE partial in CE (that is,
-`app/views/shared/issuable/form/_default_templates.html.haml`), while EE
-partial in EE (that is,
-`ee/app/views/shared/issuable/form/_default_templates.html.haml`). This way,
-we could show different things between CE and EE.
-
-However sometimes we would also want to reuse the CE partial in EE partial
-because we might just want to add something to the existing CE partial. We
-could workaround this by adding another partial with a different name, but it
-would be tedious to do so.
-
-In this case, we could as well just use `render_ce` which would ignore any EE
-partials. One example would be
-`ee/app/views/shared/issuable/form/_default_templates.html.haml`:
-
-```haml
-- if @project.feature_available?(:issuable_default_templates)
-  = render_ce 'shared/issuable/form/default_templates'
-- elsif show_promotions?
-  = render 'shared/promotions/promote_issue_templates'
-```
-
-In the above example, we can't use
-`render 'shared/issuable/form/default_templates'` because it would find the
-same EE partial, causing infinite recursion. Instead, we could use `render_ce`
-so it ignores any partials in `ee/` and then it would render the CE partial
-(that is, `app/views/shared/issuable/form/_default_templates.html.haml`)
-for the same path (that is, `shared/issuable/form/default_templates`). This way
-we could easily wrap around the CE partial.
 
 ### Code in `lib/`
 
@@ -1078,6 +1113,48 @@ export default {
 
 - **EE extra HTML**
   - For the templates that have extra HTML in EE we should move it into a new component and use the `ee_else_ce` dynamic import
+
+#### Testing modules using EE/CE aliases
+
+When writing Frontend tests, if the module under test imports other modules with `ee_else_ce/...` and these modules are also needed by the relevant test, then the relevant test **must** import these modules with `ee_else_ce/...`. This avoids unexpected EE or FOSS failures, and helps ensure the EE behaves like CE when it is unlicensed.
+
+For example:
+
+```vue
+<script>
+// ~/foo/component_under_test.vue
+
+import FriendComponent from 'ee_else_ce/components/friend.vue;'
+
+export default {
+  name: 'ComponentUnderTest',
+  components: { FriendComponent }.
+}
+</script>
+
+<template>
+  <friend-component />
+</template>
+```
+
+```javascript
+// spec/frontend/foo/component_under_test_spec.js
+
+// ...
+// because we referenced the component using ee_else_ce we have to do the same in the spec.
+import Friend from 'ee_else_ce/components/friend.vue;'
+
+describe('ComponentUnderTest', () => {
+  const findFriend = () => wrapper.find(Friend);
+
+  it('renders friend', () => {
+    // This would fail in CE if we did `ee/component...`
+    // and would fail in EE if we did `~/component...`
+    expect(findFriend().exists()).toBe(true);
+  });
+});
+
+```
 
 ### Non Vue Files
 
