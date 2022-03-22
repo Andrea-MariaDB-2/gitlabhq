@@ -1,4 +1,4 @@
-FROM python:3.6
+FROM python:3.9.5
 
 # Edit with mysql-client, postgresql-client, sqlite3, etc. for your needs.
 # Or delete entirely if not needed.
